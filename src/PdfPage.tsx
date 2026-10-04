@@ -415,8 +415,9 @@ export function PdfPage({ pdf, page, paneId, pane, rotation, active, tool, lineS
           new Promise<never>((_, reject) => { timeoutId = window.setTimeout(() => { timedOut = true; reject(new Error('PDF 페이지 표시가 20초 안에 끝나지 않았습니다. 다시 시도해 주세요.')); renderTask?.cancel?.() }, 20000) }),
         ])
         if (cancelled || sequence !== renderSequence.current) return
-        if ([...pdfPage.objs].some(([, data]) => data === null)) {
-          throw new Error(`${page}페이지 이미지 일부를 해독하지 못했습니다. PDF.js 이미지 자산을 불러오지 못했거나 이미지 형식이 지원되지 않을 수 있습니다.`)
+        const failedImages = [...pdfPage.objs].filter(([objectId, data]) => objectId.startsWith('img_') && data === null)
+        if (failedImages.length) {
+          throw new Error(`${page}페이지의 이미지 ${failedImages.length}개를 해독하지 못했습니다. PDF.js 이미지 자산을 확인하고 PDF를 다시 열어 주세요.`)
         }
         const target = canvasRef.current
         const targetContext = target?.getContext('2d', { alpha: false })
