@@ -21,10 +21,12 @@ import { canHidePageSelection, completePageList, nextVisiblePageAfterHide, toggl
 type Size = { width: number; height: number }
 type WorkAction = { before: PageWorkRecord; after: PageWorkRecord }
 type PageHistory = { actions: WorkAction[]; cursor: number }
-type CounterSessionState = { documentId: string; visible: boolean; values: number[]; editingIndex: number | null; draft: string }
+type CounterSessionState = { documentId: string; visible: boolean; values: number[]; editingIndex: number | null; draft: string; popoverPosition: CounterPopoverPosition | null }
+type CounterPopoverPosition = { x: number; y: number }
+type CounterPopoverDrag = { pointerId: number; offsetX: number; offsetY: number; width: number; height: number }
 
 function createCounterSession(documentId: string): CounterSessionState {
-  return { documentId, visible: false, values: [0, 0, 0, 0, 0], editingIndex: null, draft: '' }
+  return { documentId, visible: false, values: [0, 0, 0, 0, 0], editingIndex: null, draft: '', popoverPosition: null }
 }
 
 const defaultProgressSettings: ProgressSettings = {
@@ -287,6 +289,9 @@ export default function Viewer() {
   const reportMode = searchParams.get('report') === '1'
   const areaRef = useRef<HTMLDivElement>(null)
   const thumbnailRailRef = useRef<HTMLDivElement>(null)
+  const counterPopoverAreaRef = useRef<HTMLElement>(null)
+  const counterPopoverRef = useRef<HTMLElement>(null)
+  const counterPopoverDragRef = useRef<CounterPopoverDrag | null>(null)
   const snapshotRef = useRef<ViewerSnapshot | null>(null)
   const saveTimer = useRef<number | undefined>(undefined)
   const pageWorksFrameRef = useRef<number | undefined>(undefined)
@@ -306,7 +311,7 @@ export default function Viewer() {
   const [loadedId, setLoadedId] = useState('')
   const [savedCounterSession, setSavedCounterSession] = useState(() => createCounterSession(id))
   const counterSession = savedCounterSession.documentId === id ? savedCounterSession : createCounterSession(id)
-  const { visible: counterPanelVisible, values: counterValues, editingIndex: editingCounterIndex, draft: counterDraft } = counterSession
+  const { visible: counterPanelVisible, values: counterValues, editingIndex: editingCounterIndex, draft: counterDraft, popoverPosition: counterPopoverPosition } = counterSession
   const counterInputRef = useRef<HTMLInputElement>(null)
   const cancelCounterBlur = useRef(false)
   const [pages, setPages] = useState<PageRecord[]>([])
@@ -607,6 +612,42 @@ export default function Viewer() {
     }))
   }
 
+  function beginCounterPopoverDrag(event: ReactPointerEvent<HTMLElement>) {
+    if (event.pointerType === 'mouse' && event.button !== 0) return
+    const panel = counterPopoverRef.current
+    const area = counterPopoverAreaRef.current
+    if (!panel || !area) return
+    event.preventDefault()
+    event.stopPropagation()
+    event.currentTarget.setPointerCapture(event.pointerId)
+    const panelBounds = panel.getBoundingClientRect()
+    const areaBounds = area.getBoundingClientRect()
+    counterPopoverDragRef.current = {
+      pointerId: event.pointerId,
+      offsetX: event.clientX - panelBounds.left,
+      offsetY: event.clientY - panelBounds.top,
+      width: panelBounds.width,
+      height: panelBounds.height,
+    }
+    updateCounterSession((current) => ({ ...current, popoverPosition: { x: panelBounds.left - areaBounds.left, y: panelBounds.top - areaBounds.top } }))
+  }
+
+  function moveCounterPopover(event: ReactPointerEvent<HTMLElement>) {
+    const drag = counterPopoverDragRef.current
+    const area = counterPopoverAreaRef.current
+    if (!drag || drag.pointerId !== event.pointerId || !area) return
+    event.preventDefault()
+    event.stopPropagation()
+    const bounds = area.getBoundingClientRect()
+    const x = clamp(event.clientX - bounds.left - drag.offsetX, 8, Math.max(8, bounds.width - drag.width - 8))
+    const y = clamp(event.clientY - bounds.top - drag.offsetY, 8, Math.max(8, bounds.height - drag.height - 8))
+    updateCounterSession((current) => ({ ...current, popoverPosition: { x, y } }))
+  }
+
+  function finishCounterPopoverDrag(event: ReactPointerEvent<HTMLElement>) {
+    if (counterPopoverDragRef.current?.pointerId === event.pointerId) counterPopoverDragRef.current = null
+  }
+
   function rotatePage(paneId: PaneId, pageNumber: number) {
     const legacyRotation = workRef.current[pageNumber]?.rotation ?? 0
     changePane(paneId, (current) => {
@@ -887,7 +928,7 @@ export default function Viewer() {
           {reportMode && <button className="viewer-action" onClick={() => setSearchParams({})}><ArrowLeft size={16} /><span>도안으로 돌아가기</span></button>}
         </div>
       </header>
-      <section className={'pdf-work-area' + (reportMode ? ' report-work-area' : '')}>
+      <section ref={counterPopoverAreaRef} className={'pdf-work-area' + (reportMode ? ' report-work-area' : '')}>
         <div className={'pdf-document-area ' + (reportMode ? '' : snapshot.split ? (orientation === 'wide' ? 'split-wide' : 'split-tall') : 'single-pane')} ref={areaRef}>
         {reportMode ? <KnittingReport documentId={id} fileName={documentName} /> : snapshot.split ? <>
           <div className="split-section" style={orientation === 'wide' ? { flex: '0 0 ' + splitBasis(displayedRatio) } : { width: '100%', flex: '0 0 ' + splitBasis(displayedRatio) }}>{renderPane('primary', snapshot.primary, snapshot.activePane === 'primary')}</div>
@@ -896,7 +937,18 @@ export default function Viewer() {
         </> : renderPane('primary', snapshot.primary, true)}
         {!reportMode && techniquePopoverIndex !== null && techniqueSlots[techniquePopoverIndex] && <TechniquePopover pdf={pdf} slots={techniqueSlots} slotIndex={techniquePopoverIndex} onNavigate={setTechniquePopoverIndex} onClose={() => setTechniquePopoverIndex(null)} />}
         </div>
-        {!reportMode && counterPanelVisible && <aside id="viewer-number-counters" className="number-counter-panel" aria-label="숫자 카운터" onPointerDown={(event) => event.stopPropagation()} onKeyDown={(event) => event.stopPropagation()}>
+        {!reportMode && counterPanelVisible && <aside
+          ref={counterPopoverRef}
+          id="viewer-number-counters"
+          className="number-counter-panel"
+          aria-label="숫자 카운터"
+          style={counterPopoverPosition ? { left: counterPopoverPosition.x, top: counterPopoverPosition.y, right: 'auto' } : undefined}
+          onPointerDown={(event) => event.stopPropagation()}
+          onKeyDown={(event) => event.stopPropagation()}
+        >
+          <header className="number-counter-header" title="드래그해 위치 이동" onPointerDown={beginCounterPopoverDrag} onPointerMove={moveCounterPopover} onPointerUp={finishCounterPopoverDrag} onPointerCancel={finishCounterPopoverDrag} onLostPointerCapture={finishCounterPopoverDrag}>
+            <strong>숫자 카운터</strong><span>드래그해 이동</span>
+          </header>
           {counterValues.map((value, index) => <div className="number-counter-row" key={index}>
             <button type="button" className="number-counter-step" aria-label={'카운터 ' + (index + 1) + ' 감소'} disabled={value <= 0} onClick={() => adjustCounter(index, -1)}>−</button>
             {editingCounterIndex === index
