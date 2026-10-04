@@ -54,3 +54,13 @@ export function resizeColorworkGrid(grid: ColorworkGrid, settings: ColorworkSett
   }
   return { grid: { ...grid, ...settings, columns, rows, cells }, droppedCells }
 }
+
+export function resizeColorworkGridDisplay(grid: ColorworkGrid, pageSize: { width: number; height: number }, delta: { x: number; y: number }) {
+  const width = grid.displayWidth * pageSize.width
+  const height = grid.displayHeight * pageSize.height
+  const scaleDelta = (delta.x * width + delta.y * height) / (width * width + height * height)
+  const minimumScale = Math.max(Math.min(120, pageSize.width) / width, Math.min(100, pageSize.height) / height)
+  const maximumScale = Math.min((1 - grid.x) * pageSize.width / width, (1 - grid.y) * pageSize.height / height)
+  const scale = Math.min(maximumScale, Math.max(Math.min(minimumScale, maximumScale), 1 + scaleDelta))
+  return { ...grid, displayWidth: grid.displayWidth * scale, displayHeight: grid.displayHeight * scale }
+}

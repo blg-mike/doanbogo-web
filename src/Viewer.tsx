@@ -621,6 +621,14 @@ export default function Viewer() {
     }, true)
   }
 
+  async function hidePage(pageNumber: number) {
+    try {
+      await applyPageVisibility([pageNumber], true)
+    } catch (error) {
+      console.warn('[PDF] Page could not be hidden.', error)
+    }
+  }
+
   function schedulePageWorksRender() {
     if (pageWorksFrameRef.current !== undefined) return
     pageWorksFrameRef.current = requestAnimationFrame(() => {
@@ -846,6 +854,8 @@ export default function Viewer() {
       onCenter={(x, y) => saveCenter(paneId, x, y)}
       onZoom={(zoom) => changePane(paneId, (current) => ({ ...current, zoom }), true)}
       onRotate={() => rotatePage(paneId, pane.page)}
+      onHidePage={() => { void hidePage(pane.page) }}
+      canHidePage={pdf!.numPages - hiddenNumbers.size > 1}
       onColorworkRequestHandled={finishColorworkRequest}
       onTextToolConsumed={() => setTool('pan')}
       pageLinks={pdfLinksByPage[pane.page]}
@@ -965,8 +975,10 @@ export default function Viewer() {
               {tool !== 'text' && <label title="투명도"><span>투명도</span><input aria-label="필기 투명도" type="range" min="10" max="100" value={Math.round(activeAnnotationStyle.opacity * 100)} onChange={(event) => changeAnnotationStyle(tool as 'pen' | 'line' | 'highlight', { opacity: Number(event.currentTarget.value) / 100 })} /></label>}
               {tool === 'text' && <label title="글자 크기"><span>글자</span><input aria-label="글자 크기" type="range" min="10" max="48" value={activeAnnotationStyle.fontSize} onChange={(event) => changeAnnotationStyle('text', { fontSize: Number(event.currentTarget.value) })} /></label>}
             </div>}
-            <span className="control-separator" />
-            <button className="viewer-tool" aria-label="진행선 설정" title="가로·세로 진행선 설정" disabled={!pageWorks[activePage]} onClick={() => setProgressDialog(true)}><SlidersHorizontal size={17} /><span>진행선</span></button>
+            {!activeColorworkGrid?.visible && <>
+              <span className="control-separator" />
+              <button className="viewer-tool" aria-label="진행선 설정" title="가로·세로 진행선 설정" disabled={!pageWorks[activePage]} onClick={() => setProgressDialog(true)}><SlidersHorizontal size={17} /><span>진행선</span></button>
+            </>}
             <span className="control-separator" />
             <button className="viewer-tool compact-tool" aria-label="실행 취소" title="실행 취소" disabled={!canUndo} onClick={() => undoRedo('undo')}><Undo2 size={17} /></button>
             <button className="viewer-tool compact-tool" aria-label="다시 실행" title="다시 실행" disabled={!canRedo} onClick={() => undoRedo('redo')}><Redo2 size={17} /></button>

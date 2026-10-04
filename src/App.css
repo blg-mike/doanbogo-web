@@ -191,9 +191,10 @@
 .pane-error { padding: 20px; text-align: center; }
 .page-work-loading { position: absolute; z-index: 6; inset: 0; display: grid; place-items: center; color: #798498; background: rgba(231,233,237,.82); font-size: 12px; }
 .pdf-view-controls { position: absolute; z-index: 7; right: 16px; bottom: 16px; display: flex; flex-direction: column; align-items: stretch; gap: 5px; padding: 6px; border: 1px solid #dfe5ed; border-radius: 12px; background: rgba(255,255,255,.96); box-shadow: 0 3px 14px rgba(27,35,51,.18); }
-.pdf-rotate-button { width: 34px; height: 30px; align-self: flex-end; display: grid; place-items: center; padding: 0; border: 1px solid #e8ecf2; border-radius: 8px; color: #596a83; background: #fff; cursor: pointer; }
-.pdf-rotate-button:hover:not(:disabled) { color: var(--blue); background: #f4f8ff; }
-.pdf-rotate-button:disabled { opacity: .42; cursor: default; }
+.pdf-rotate-row { display: flex; justify-content: flex-end; gap: 5px; }
+.pdf-hide-page-button, .pdf-rotate-button { width: 34px; height: 30px; display: grid; place-items: center; padding: 0; border: 1px solid #e8ecf2; border-radius: 8px; color: #596a83; background: #fff; cursor: pointer; }
+.pdf-hide-page-button:hover:not(:disabled), .pdf-rotate-button:hover:not(:disabled) { color: var(--blue); background: #f4f8ff; }
+.pdf-hide-page-button:disabled, .pdf-rotate-button:disabled { opacity: .42; cursor: default; }
 .pdf-zoom-row { display: flex; align-items: center; gap: 2px; }
 .pdf-zoom-row .zoom-button { width: 30px; height: 30px; }
 .pdf-zoom-row .zoom-value { min-width: 39px; font-size: 10px; }
@@ -342,10 +343,7 @@
 .colorwork-row-numbers span { overflow: hidden; text-align: center; white-space: nowrap; }
 .colorwork-delete-button { position: static; flex: 0 0 20px; width: 20px; height: 20px; margin-left: 3px; }
 .page-colorwork-canvas { flex: 1 1 auto; display: block; width: 100%; min-width: 0; min-height: 0; touch-action: none; cursor: crosshair; }
-.colorwork-resize-x, .colorwork-resize-y, .colorwork-resize-both { position: absolute; z-index: 1; padding: 0; border: 1px solid #fff; border-radius: 5px; background: #2673e8; box-shadow: 0 1px 4px rgba(23,56,105,.35); touch-action: none; }
-.colorwork-resize-x { top: 50%; right: -6px; width: 12px; height: 34px; transform: translate(50%,-50%); cursor: ew-resize; }
-.colorwork-resize-y { right: 50%; bottom: -6px; width: 34px; height: 12px; transform: translate(50%,50%); cursor: ns-resize; }
-.colorwork-resize-both { right: -6px; bottom: -6px; width: 16px; height: 16px; transform: translate(50%,50%); cursor: nwse-resize; }
+.colorwork-resize-both { position: absolute; z-index: 1; right: -6px; bottom: -6px; width: 18px; height: 18px; padding: 0; border: 1px solid #fff; border-radius: 5px; background: #2673e8; box-shadow: 0 1px 4px rgba(23,56,105,.35); touch-action: none; cursor: nwse-resize; }
 .page-note { position: absolute; z-index: 1; display: flex; flex-direction: column; overflow: visible; pointer-events: auto; touch-action: none; }
 .page-note.selected { z-index: 2; outline: 1px dashed #2673e8; background: rgba(255,255,255,.86); box-shadow: 0 1px 5px rgba(25,55,95,.16); }
 .text-style-toolbar { position: absolute; z-index: 4; display: flex; flex-wrap: wrap; align-items: center; gap: 9px; box-sizing: border-box; width: max-content; max-width: calc(100% - 8px); min-height: 39px; padding: 5px 8px; border: 1px solid #dfe6ef; border-radius: 9px; color: #526179; background: rgba(255,255,255,.98); box-shadow: 0 3px 12px rgba(28,45,70,.2); font-family: inherit; pointer-events: auto; }

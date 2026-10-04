@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { createColorworkGrid, defaultColorworkSettings, getColorworkDimensions, resizeColorworkGrid } from './colorwork'
+import { createColorworkGrid, defaultColorworkSettings, getColorworkDimensions, resizeColorworkGrid, resizeColorworkGridDisplay } from './colorwork'
 
 describe('colorwork chart grid', () => {
   it('calculates stitch and row counts from chart size and 10 cm gauge', () => {
@@ -41,5 +41,16 @@ describe('colorwork chart grid', () => {
 
     expect(resized.grid.cells).toEqual([{ color: '#ff0000', opacity: 1 }])
     expect(resized.droppedCells).toBe(1)
+  })
+
+  it('resizes the overlay from pixel drag deltas while preserving its aspect ratio', () => {
+    const grid = createColorworkGrid(defaultColorworkSettings)
+    const resized = resizeColorworkGridDisplay(grid, { width: 600, height: 800 }, { x: 80, y: 80 })
+
+    expect(resized.displayWidth).toBeGreaterThan(grid.displayWidth)
+    expect(resized.displayHeight).toBeGreaterThan(grid.displayHeight)
+    expect(resized.displayWidth * 600 / (resized.displayHeight * 800)).toBeCloseTo(
+      grid.displayWidth * 600 / (grid.displayHeight * 800),
+    )
   })
 })
