@@ -194,8 +194,8 @@
 .pane-error { padding: 20px; text-align: center; }
 .page-work-loading { position: absolute; z-index: 6; inset: 0; display: grid; place-items: center; color: #798498; background: rgba(231,233,237,.82); font-size: 12px; }
 .pdf-view-controls { position: absolute; z-index: 7; right: 16px; bottom: 16px; display: flex; flex-direction: column; align-items: stretch; gap: 5px; padding: 6px; border: 1px solid #dfe5ed; border-radius: 12px; background: rgba(255,255,255,.96); box-shadow: 0 3px 14px rgba(27,35,51,.18); }
-.pdf-rotate-row { display: flex; justify-content: flex-end; gap: 5px; }
-.pdf-hide-page-button, .pdf-rotate-button { width: 34px; height: 30px; display: grid; place-items: center; padding: 0; border: 1px solid #e8ecf2; border-radius: 8px; color: #596a83; background: #fff; cursor: pointer; }
+.pdf-rotate-row { display: flex; gap: 5px; }
+.pdf-hide-page-button, .pdf-rotate-button { flex: 1 1 0; min-width: 0; height: 30px; display: grid; place-items: center; padding: 0; border: 1px solid #e8ecf2; border-radius: 8px; color: #596a83; background: #fff; cursor: pointer; }
 .pdf-hide-page-button:hover:not(:disabled), .pdf-rotate-button:hover:not(:disabled) { color: var(--blue); background: #f4f8ff; }
 .pdf-hide-page-button:disabled, .pdf-rotate-button:disabled { opacity: .42; cursor: default; }
 .pdf-zoom-row { display: flex; align-items: center; gap: 2px; }
