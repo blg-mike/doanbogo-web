@@ -26,7 +26,7 @@ async function loadPortableDocument(data: Uint8Array) {
     return { promise: fallbackTask.promise, dispose: () => fallbackTask.destroy() }
   }
 
-  let task: pdfjs.PDFDocumentLoadingTask
+  let task: pdfjs.PDFDocumentLoadingTask | undefined
   let fallbackTask: pdfjs.PDFDocumentLoadingTask | undefined
   let workerFailed = false
   let workerError: Error | undefined
@@ -63,11 +63,13 @@ async function loadPortableDocument(data: Uint8Array) {
     pdfjs.GlobalWorkerOptions.workerPort = previousWorkerPort
   }
 
-  const promise = Promise.race([task.promise, workerFailure]).catch(async (error) => {
+  const taskPromise = task.promise
+  const promise = Promise.race([taskPromise, workerFailure]).catch(async (error) => {
     removeWorkerListeners()
     if (!workerFailed) throw error
     worker.terminate()
-    void task.destroy().catch(() => {})
+    if (task) void task.destroy().catch(() => {})
+    task = undefined
     fallbackTask = await loadPortableFallback(data, workerError ?? error)
     return fallbackTask.promise
   }).then((document) => {
@@ -80,7 +82,7 @@ async function loadPortableDocument(data: Uint8Array) {
     dispose: async () => {
       try {
         if (fallbackTask) await fallbackTask.destroy()
-        else if (!workerFailed) await task.destroy()
+        else if (task) await task.destroy()
       } finally {
         worker.terminate()
       }
