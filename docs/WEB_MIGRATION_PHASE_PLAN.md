@@ -14,7 +14,7 @@
 - Phase 3 숨기기 팝업 썸네일 확대: 그리드 카드 최소 폭을 170px, 페이지 미리보기 높이를 210px로 늘리고 페이지 번호를 키웠다. 작은 화면에서는 열 수를 자동으로 줄인다.
 - Phase 4: PWA 오프라인 캐시를 구성했다. production preview에서 PDF를 추가하고 뷰어 상태를 저장한 뒤 오프라인 새로고침 후 PDF를 다시 렌더링했다. 이는 Android 태블릿 통과를 뜻하지 않는다.
 - Phase 4A: `npm run build:portable`로 `portable/index.html` 단일 파일을 만들고 Edge `file://`에서 실행·PDF 추가·임시 저장 안내·작업 파일 가져오기와 생성 PDF의 뷰어 canvas 렌더 완료를 확인했다. IndexedDB가 막힌 파일 실행에서는 메모리 임시 저장과 `.doanbogo` 백업을 사용한다.
-- Phase 5: `https://github.com/blg-mike/doanbogo-web`의 `main`에 `e271402`를 반영하고 GitHub Pages 배포를 완료했다. [공개 웹](https://blg-mike.github.io/doanbogo-web/)의 진입 페이지와 JS·CSS·manifest가 HTTP 200으로 응답한다. 공개 브라우저에서 PDF 조작 시나리오 검증은 남아 있다.
+- Phase 5: `https://github.com/blg-mike/doanbogo-web`의 `main`에 `8fc3bcb`를 반영했다. [GitHub Actions 배포](https://github.com/blg-mike/doanbogo-web/actions/runs/37211320524)가 성공했고, [공개 웹](https://blg-mike.github.io/doanbogo-web/)은 HTTP 200으로 응답한다. 공개 브라우저에서 PDF 조작 시나리오 검증은 남아 있다.
 - Phase 6: Phase 5 공개 검증과 Android 태블릿 테스트 뒤 진행한다.
 
 일반 웹 주소에서는 브라우저 IndexedDB에 자동 저장한다. 직접 파일 실행은 IndexedDB가 허용되면 자동 저장하고, 차단되면 메모리 임시 저장과 `.doanbogo` 가져오기·내보내기를 사용한다. 기존 Expo 앱 데이터 자동 이관은 구현 범위에 포함되지 않는다.
@@ -243,4 +243,4 @@ QR 픽셀 해독은 inline Worker로 옮겼다. 픽셀은 최대 1400px로 축�
 
 2026-10-04에 숨기기 팝업의 썸네일 그리드 최소 카드 폭을 기존 78px에서 170px로, PDF 미리보기 높이를 60px에서 210px로 늘렸다. 페이지 번호도 12px로 키워 썸네일에서 도안 내용을 더 쉽게 구분하도록 했다. 변경은 숨기기 팝업 그리드에만 적용되며 Viewer 하단의 가로 썸네일 크기는 유지한다. 넓은 화면에서는 한 줄에 표시되는 페이지 수가 줄고, 좁은 화면에서는 그리드 열 수가 자동으로 줄어든다. 썸네일 영역의 기존 스크롤·지연 렌더링을 그대로 사용한다.
 
-검증: `npm run typecheck`, `npm run lint`, `npm run build`, `npm run build:portable`, `git diff --check` 통과. portable HTML은 7,403.25 kB로 생성됐다. 일반 빌드는 PDF.js JavaScript 청크 1,750.65 kB의 기존 500 kB 초과 경고를 출력했다. 실제 PDF를 연 브라우저에서 팝업 썸네일 크기·화면별 그리드 배치는 미검증이다.
+검증: `npm run typecheck`, `npm run lint`, `npm run build`, `npm run build:portable`, `git diff --check` 통과. portable HTML은 7,403.25 kB로 생성됐다. 일반 빌드는 PDF.js JavaScript 청크 1,750.65 kB의 기존 500 kB 초과 경고를 출력했다. 커밋 `8fc3bcb`의 GitHub Actions 배포가 성공했고 공개 URL이 HTTP 200을 반환했다. 실제 PDF를 연 브라우저에서 팝업 썸네일 크기·화면별 그리드 배치는 미검증이다.

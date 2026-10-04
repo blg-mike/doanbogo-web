@@ -1,6 +1,6 @@
 # 웹 전환 검증 체크리스트
 
-기록일: 2026-10-04  
+기록일: 2026-10-05<br>
 프로젝트: React + TypeScript + Vite 웹, PDF.js, IndexedDB, PWA  
 기준 계획: WEB_MIGRATION_PHASE_PLAN.md
 
@@ -101,8 +101,8 @@
 
 ## 공개 및 앱 배포 대기 항목
 
-- GitHub 저장소 `https://github.com/blg-mike/doanbogo-web`의 `f57bb2e` 배포 Actions가 성공했다.
-- [공개 URL](https://blg-mike.github.io/doanbogo-web/)에서 HTTP 200과 사용자 PDF 업로드·9페이지 JPEG 2000 이미지 표시를 확인했다. 해당 PDF 15페이지 전체의 이미지 해독도 성공했다.
+- GitHub 저장소 `https://github.com/blg-mike/doanbogo-web`의 `8fc3bcb` 업데이트가 반영됐다. [GitHub Actions 배포](https://github.com/blg-mike/doanbogo-web/actions/runs/37211320524)가 성공했다.
+- [공개 URL](https://blg-mike.github.io/doanbogo-web/)은 배포 뒤 HTTP 200으로 응답했다. 이전 브라우저 확인에서는 사용자 PDF의 9페이지 JPEG 2000 이미지 표시와 전체 15페이지 이미지 해독을 통과했다.
 - 이전 Expo 앱에서 별도로 실패한 PDF는 파일을 받지 못해 미검증이며, Android 태블릿 브라우저도 확인되지 않았다.
 - Capacitor Android 패키징 및 APK 생성은 웹 공개 흐름 검증 뒤 진행한다.
 - 기존 Expo 앱 내부의 PDF·태그·페이지 작업 상태는 브라우저 IndexedDB로 자동 이전되지 않는다.
