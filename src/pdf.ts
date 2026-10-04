@@ -1,6 +1,7 @@
 import * as pdfjs from 'pdfjs-dist'
 import PdfWorker from 'pdfjs-dist/build/pdf.worker.min.mjs?worker&inline'
 import workerUrl from 'pdfjs-dist/build/pdf.worker.min.mjs?url'
+import { pdfBinaryResourceOptions } from './pdfBinaryResources'
 
 if (!import.meta.env.VITE_PORTABLE) pdfjs.GlobalWorkerOptions.workerSrc = workerUrl
 
@@ -14,7 +15,7 @@ async function loadPortableFallback(data: Uint8Array, reason: unknown) {
 
   const workerModule = await import('pdfjs-dist/build/pdf.worker.min.mjs')
   ;(globalThis as typeof globalThis & { pdfjsWorker?: typeof workerModule }).pdfjsWorker = workerModule
-  return pdfjs.getDocument({ data: data.slice() })
+  return pdfjs.getDocument({ data: data.slice(), ...pdfBinaryResourceOptions() })
 }
 
 async function loadPortableDocument(data: Uint8Array) {
@@ -54,7 +55,7 @@ async function loadPortableDocument(data: Uint8Array) {
   const previousWorkerPort = pdfjs.GlobalWorkerOptions.workerPort
   try {
     pdfjs.GlobalWorkerOptions.workerPort = worker
-    task = pdfjs.getDocument({ data: data.slice() })
+    task = pdfjs.getDocument({ data: data.slice(), ...pdfBinaryResourceOptions() })
   } catch (error) {
     removeWorkerListeners()
     worker.terminate()
@@ -97,7 +98,7 @@ async function loadDocument(blob: Blob) {
   }
 
   const url = URL.createObjectURL(blob)
-  const task = pdfjs.getDocument({ url })
+  const task = pdfjs.getDocument({ url, ...pdfBinaryResourceOptions() })
   return {
     promise: task.promise,
     dispose: async () => {

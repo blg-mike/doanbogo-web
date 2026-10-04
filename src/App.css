@@ -186,6 +186,8 @@
 .pdf-rotation-content { position: relative; flex: 0 0 auto; transform-origin: center; }
 .pdf-page-wrap canvas { display: block; max-width: none; background: #fff; box-shadow: 0 4px 18px rgba(27,35,51,.15); }
 .pane-loading, .pane-error { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; flex-direction: column; gap: 12px; color: #798498; background: rgba(231,233,237,.88); font-size: 12px; }
+.pane-loading-refresh { background: rgba(231,233,237,.08); pointer-events: none; }
+.pane-loading-refresh span { padding: 8px 12px; border-radius: 999px; background: rgba(255,255,255,.9); box-shadow: 0 2px 10px rgba(27,35,51,.12); }
 .pane-error { padding: 20px; text-align: center; }
 .page-work-loading { position: absolute; z-index: 6; inset: 0; display: grid; place-items: center; color: #798498; background: rgba(231,233,237,.82); font-size: 12px; }
 .pdf-view-controls { position: absolute; z-index: 7; right: 16px; bottom: 16px; display: flex; flex-direction: column; align-items: stretch; gap: 5px; padding: 6px; border: 1px solid #dfe5ed; border-radius: 12px; background: rgba(255,255,255,.96); box-shadow: 0 3px 14px rgba(27,35,51,.18); }

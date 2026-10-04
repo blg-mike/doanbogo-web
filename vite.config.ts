@@ -1,11 +1,32 @@
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import react from '@vitejs/plugin-react'
-import { defineConfig } from 'vite'
+import { defineConfig, type Plugin } from 'vite'
 import { VitePWA } from 'vite-plugin-pwa'
 import { viteSingleFile } from 'vite-plugin-singlefile'
 
 const repository = process.env.GITHUB_REPOSITORY?.split('/')[1]
+
+function pdfjsFallbackAssets(): Plugin {
+  const files = ['openjpeg_nowasm_fallback.js', 'jbig2_nowasm_fallback.js']
+  const sourceDirectory = join(process.cwd(), 'node_modules/pdfjs-dist/wasm')
+  return {
+    name: 'pdfjs-fallback-assets',
+    configureServer(server: import('vite').ViteDevServer) {
+      server.middlewares.use('/pdfjs/wasm', (request, response, next) => {
+        const filename = request.url?.split('?')[0]?.slice(1)
+        if (!filename || !files.includes(filename)) return next()
+        response.setHeader('Content-Type', 'text/javascript')
+        response.end(readFileSync(join(sourceDirectory, filename)))
+      })
+    },
+    generateBundle() {
+      for (const file of files) {
+        this.emitFile({ type: 'asset', fileName: 'pdfjs/wasm/' + file, source: readFileSync(join(sourceDirectory, file)) })
+      }
+    },
+  }
+}
 
 function inlinePortableAppIcons() {
   const icons = [
@@ -48,6 +69,7 @@ export default defineConfig(({ mode }) => {
     define: { 'import.meta.env.VITE_PORTABLE': JSON.stringify(portable) },
     plugins: [
       react(),
+      ...(!portable ? [pdfjsFallbackAssets()] : []),
       VitePWA({
         disable: portable,
         registerType: 'prompt',
@@ -55,7 +77,7 @@ export default defineConfig(({ mode }) => {
         includeAssets: ['pwa-192.png', 'pwa-512.png', 'pwa-maskable-512.png'],
         manifest: portable ? false : manifest,
         workbox: {
-          globPatterns: ['**/*.{js,css,html,ico,png,svg,mjs}'],
+          globPatterns: ['**/*.{js,css,html,ico,png,svg,mjs,bcmap,pfb,ttf,wasm}'],
         },
       }),
       ...(portable ? [inlinePortableAppIcons(), viteSingleFile({ removeViteModuleLoader: true })] : []),

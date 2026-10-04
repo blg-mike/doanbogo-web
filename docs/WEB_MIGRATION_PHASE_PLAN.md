@@ -23,7 +23,7 @@
 - 웹 프로젝트를 독립 Git 저장소로 관리한다. 승인된 계획·현재 기능표를 해당 저장소의 `docs/`에 포함하고 소스·lockfile·배포 workflow를 GitHub에 올린다.
 - 화면: 워크스페이스와 PDF 뷰어. 도안 관리·설정·숨김 관리는 부속 모달로 구현한다.
 - UI는 DOM/CSS로 옮기고 기존 색상·배치·기능 의미를 유지하면서 태블릿 터치와 데스크톱 마우스/키보드에 맞춘다.
-- PDF는 `pdfjs-dist`를 직접 사용한다. API·worker 버전을 맞추고 worker·필요한 PDF 자산을 웹 빌드에 함께 배포한다.
+- PDF는 `pdfjs-dist`를 직접 사용한다. API·worker 버전을 맞추고 worker·CMap·기본 글꼴·WASM 자산을 웹 빌드와 portable 단일 HTML에 함께 포함한다. JPEG 2000 이미지는 OpenJPEG WASM으로 해독하고 Pages 하위 경로와 PWA 캐시에서도 자산을 찾도록 한다.
 - 웹 저장은 IndexedDB에 PDF Blob과 메타데이터·작업 상태를 저장한다. 문서 식별자는 유지 가능한 ID를 사용하고 일시적인 Blob URL은 영구 저장하지 않는다.
 - GitHub Pages는 빌드 결과 `dist/`를 배포한다. 저장소 하위 경로에 맞는 Vite `base`와 해시 경로 `/#/viewer/:id`를 사용한다.
 - 사용자 PDF는 브라우저 또는 앱의 로컬 저장소에 보관한다. 서버 계정·업로드·동기화는 추가하지 않는다.

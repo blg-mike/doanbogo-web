@@ -1,11 +1,12 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, type PointerEvent as ReactPointerEvent, type RefObject } from 'react'
-import type { PDFDocumentProxy } from 'pdfjs-dist'
+import type { PDFDocumentProxy, RenderTask } from 'pdfjs-dist'
 import { Minus, Plus, RotateCw, Trash2 } from 'lucide-react'
 import type { AnnotationRecord, AnnotationStyle, AnnotationTool, ColorworkCell, ColorworkCreateRequest, ColorworkGrid, PageRotation, PageWorkRecord, PaneId, PaneSnapshot, ProgressGuide, ProgressSettings } from './types'
 import { createColorworkGrid } from './colorwork'
 import { textNoteBoxAt } from './textNote'
 import type { PdfQrLink } from './qr'
 import { inverseRotatePoint, rotatedPageSize } from './pageGeometry'
+import { acquireThumbnailCache, pdfRasterScale } from './pdfRenderResources'
 
 type Point = { x: number; y: number }
 type Size = { width: number; height: number }
@@ -27,23 +28,72 @@ type ColorworkStroke = {
 
 interface ThumbnailJob {
   cancelled: boolean
+  queued: boolean
+  preempted: boolean
   run: () => Promise<void>
   cancel: () => void
+  preempt: () => void
 }
 
 const thumbnailQueue: ThumbnailJob[] = []
 let activeThumbnails = 0
+let activePageRenders = 0
+let runningThumbnail: ThumbnailJob | null = null
+
+function enqueueThumbnail(job: ThumbnailJob) {
+  if (job.cancelled || job.queued) return
+  job.queued = true
+  thumbnailQueue.push(job)
+  pumpThumbnails()
+}
+
+function removeQueuedThumbnail(job: ThumbnailJob) {
+  if (!job.queued) return
+  const index = thumbnailQueue.indexOf(job)
+  if (index >= 0) thumbnailQueue.splice(index, 1)
+  job.queued = false
+}
 
 function pumpThumbnails() {
-  while (activeThumbnails < 2 && thumbnailQueue.length) {
+  while (activePageRenders === 0 && activeThumbnails < 1 && thumbnailQueue.length) {
     const job = thumbnailQueue.shift()!
+    job.queued = false
     if (job.cancelled) continue
     activeThumbnails++
+    runningThumbnail = job
     void job.run().finally(() => {
       activeThumbnails--
+      if (runningThumbnail === job) runningThumbnail = null
+      if (job.preempted && !job.cancelled) {
+        job.preempted = false
+        enqueueThumbnail(job)
+      }
       pumpThumbnails()
     })
   }
+}
+
+function prioritizePdfPageRender() {
+  activePageRenders++
+  runningThumbnail?.preempt()
+  let released = false
+  return () => {
+    if (released) return
+    released = true
+    activePageRenders--
+    pumpThumbnails()
+  }
+}
+
+function clearCanvas(canvas: HTMLCanvasElement) {
+  canvas.width = 0
+  canvas.height = 0
+}
+
+function copyCanvas(target: HTMLCanvasElement, source: HTMLCanvasElement) {
+  target.width = source.width
+  target.height = source.height
+  target.getContext('2d', { alpha: false })?.drawImage(source, 0, 0)
 }
 
 export function PdfThumbnail({ pdf, pageNumber, active, hidden, bookmarked, selected, root, onSelect }: {
@@ -60,6 +110,7 @@ export function PdfThumbnail({ pdf, pageNumber, active, hidden, bookmarked, sele
   const [visible, setVisible] = useState(false)
   const [ready, setReady] = useState(false)
   const observerTargetRef = useRef<HTMLSpanElement>(null)
+  const cacheSessionRef = useRef<ReturnType<typeof acquireThumbnailCache> | null>(null)
 
   useEffect(() => {
     const target = observerTargetRef.current
@@ -70,38 +121,84 @@ export function PdfThumbnail({ pdf, pageNumber, active, hidden, bookmarked, sele
   }, [root])
 
   useEffect(() => {
-    if (!canvas || !visible) return
-    let renderTask: ReturnType<PDFDocumentProxy['getPage']> extends Promise<infer P> ? P extends { render: (...args: never[]) => infer R } ? R : never : never
+    const session = acquireThumbnailCache(pdf)
+    cacheSessionRef.current = session
+    return () => {
+      session.release()
+      if (cacheSessionRef.current === session) cacheSessionRef.current = null
+    }
+  }, [pdf])
+
+  useEffect(() => {
+    if (!canvas) return
+    if (!visible) {
+      clearCanvas(canvas)
+      return
+    }
+    const cache = cacheSessionRef.current?.cache
+    const cached = cache?.get(pageNumber)
+    if (cached) {
+      copyCanvas(canvas, cached)
+      setReady(true)
+      return () => clearCanvas(canvas)
+    }
+    setReady(false)
+    let renderTask: RenderTask | undefined
     const job: ThumbnailJob = {
       cancelled: false,
+      queued: false,
+      preempted: false,
       run: async () => {
+        renderTask = undefined
         try {
           const page = await pdf.getPage(pageNumber)
-          if (job.cancelled) return
+          if (job.cancelled || job.preempted) return
           const base = page.getViewport({ scale: 1 })
           const viewport = page.getViewport({ scale: Math.min(116 / base.width, 76 / base.height) })
           canvas.width = Math.ceil(viewport.width)
           canvas.height = Math.ceil(viewport.height)
           const context = canvas.getContext('2d', { alpha: false })
-          if (!context || job.cancelled) return
-          renderTask = page.render({ canvas, canvasContext: context, viewport }) as typeof renderTask
+          if (!context || job.cancelled || job.preempted) {
+            if (job.preempted) clearCanvas(canvas)
+            return
+          }
+          renderTask = page.render({ canvas, canvasContext: context, viewport })
           await renderTask.promise
-          if (!job.cancelled) setReady(true)
+          if (job.cancelled) return
+          if (job.preempted) {
+            clearCanvas(canvas)
+            setReady(false)
+            return
+          }
+          const cachedCanvas = document.createElement('canvas')
+          cachedCanvas.width = canvas.width
+          cachedCanvas.height = canvas.height
+          cachedCanvas.getContext('2d', { alpha: false })?.drawImage(canvas, 0, 0)
+          cacheSessionRef.current?.cache.set(pageNumber, cachedCanvas)
+          setReady(true)
         } catch {
           // The page number stays selectable when a thumbnail cannot be rendered.
+          if (!job.cancelled) {
+            clearCanvas(canvas)
+            setReady(false)
+          }
         }
       },
       cancel: () => {
         job.cancelled = true
         renderTask?.cancel?.()
       },
+      preempt: () => {
+        if (job.cancelled || job.preempted) return
+        job.preempted = true
+        renderTask?.cancel?.()
+      },
     }
-    thumbnailQueue.push(job)
-    pumpThumbnails()
+    enqueueThumbnail(job)
     return () => {
       job.cancel()
-      const index = thumbnailQueue.indexOf(job)
-      if (index >= 0) thumbnailQueue.splice(index, 1)
+      removeQueuedThumbnail(job)
+      clearCanvas(canvas)
     }
   }, [canvas, pageNumber, pdf, visible])
 
@@ -114,7 +211,7 @@ export function PdfThumbnail({ pdf, pageNumber, active, hidden, bookmarked, sele
       onClick={onSelect}
     >
       <span className="page-thumbnail-image">
-        <canvas ref={setCanvas} aria-hidden="true" />
+        <canvas ref={setCanvas} width={0} height={0} aria-hidden="true" />
         {!ready && <span className="thumbnail-placeholder">{pageNumber}</span>}
         {hidden && <span className="thumbnail-badge">숨김</span>}
         {selected && <span className="thumbnail-selection-mark">✓</span>}
@@ -229,7 +326,7 @@ export function PdfPage({ pdf, page, paneId, pane, rotation, active, tool, lineS
   const colorworkStroke = useRef<ColorworkStroke | null>(null)
   const centerRef = useRef({ x: pane.centerX, y: pane.centerY })
   const renderSequence = useRef(0)
-  const resizeTimer = useRef<number | undefined>(undefined)
+  const lastRenderPage = useRef<{ page: number; rotation: PageRotation } | null>(null)
   const [size, setSize] = useState<Size>({ width: 0, height: 0 })
   const [displayedSize, setDisplayedSize] = useState<{ page: Size; css: Size } | null>(null)
   const [readyKey, setReadyKey] = useState('')
@@ -264,15 +361,14 @@ export function PdfPage({ pdf, page, paneId, pane, rotation, active, tool, lineS
     const element = scrollRef.current
     if (!element) return
     const measure = () => {
-      if (resizeTimer.current !== undefined) window.clearTimeout(resizeTimer.current)
-      resizeTimer.current = window.setTimeout(() => setSize({ width: element.clientWidth, height: element.clientHeight }), 120)
+      const next = { width: element.clientWidth, height: element.clientHeight }
+      setSize((current) => current.width === next.width && current.height === next.height ? current : next)
     }
     const observer = new ResizeObserver(measure)
     observer.observe(element)
     measure()
     return () => {
       observer.disconnect()
-      if (resizeTimer.current !== undefined) window.clearTimeout(resizeTimer.current)
     }
   }, [])
 
@@ -280,19 +376,35 @@ export function PdfPage({ pdf, page, paneId, pane, rotation, active, tool, lineS
     if (!size.width || !size.height) return
     const sequence = ++renderSequence.current
     let cancelled = false
+    let timedOut = false
     let renderTask: ReturnType<PDFDocumentProxy['getPage']> extends Promise<infer P> ? P extends { render: (...args: never[]) => infer R } ? R : never : never
     let timeoutId = 0
+    let debounceId = 0
+    let finishDebounce: (() => void) | undefined
+    let staging: HTMLCanvasElement | null = null
+    let releasePriority: (() => void) | undefined
+    const previousRenderPage = lastRenderPage.current
+    const renderImmediately = !previousRenderPage || previousRenderPage.page !== page || previousRenderPage.rotation !== rotation
+    lastRenderPage.current = { page, rotation }
     void (async () => {
       try {
+        if (!renderImmediately) {
+          await new Promise<void>((resolve) => {
+            finishDebounce = resolve
+            debounceId = window.setTimeout(resolve, 150)
+          })
+        }
+        if (cancelled || sequence !== renderSequence.current) return
+        releasePriority = prioritizePdfPageRender()
         const pdfPage = await pdf.getPage(page)
         if (cancelled) return
         const base = pdfPage.getViewport({ scale: 1 })
         const fitSize = rotatedPageSize(base, rotation)
         const fit = Math.min(Math.max(1, size.width - 24) / fitSize.width, Math.max(1, size.height - 24) / fitSize.height)
         const cssScale = Math.max(0.1, fit * pane.zoom)
-        const ratio = Math.min(window.devicePixelRatio || 1, 2)
-        const viewport = pdfPage.getViewport({ scale: cssScale * ratio })
-        const staging = document.createElement('canvas')
+        const rasterScale = pdfRasterScale(base.width, base.height, cssScale, window.devicePixelRatio || 1)
+        const viewport = pdfPage.getViewport({ scale: rasterScale })
+        staging = document.createElement('canvas')
         staging.width = Math.ceil(viewport.width)
         staging.height = Math.ceil(viewport.height)
         const context = staging.getContext('2d', { alpha: false })
@@ -300,9 +412,12 @@ export function PdfPage({ pdf, page, paneId, pane, rotation, active, tool, lineS
         renderTask = pdfPage.render({ canvas: staging, canvasContext: context, viewport }) as typeof renderTask
         await Promise.race([
           renderTask.promise,
-          new Promise<never>((_, reject) => { timeoutId = window.setTimeout(() => reject(new Error('PDF 페이지 표시가 20초 안에 끝나지 않았습니다. 다시 시도해 주세요.')), 20000) }),
+          new Promise<never>((_, reject) => { timeoutId = window.setTimeout(() => { timedOut = true; reject(new Error('PDF 페이지 표시가 20초 안에 끝나지 않았습니다. 다시 시도해 주세요.')); renderTask?.cancel?.() }, 20000) }),
         ])
         if (cancelled || sequence !== renderSequence.current) return
+        if ([...pdfPage.objs].some(([, data]) => data === null)) {
+          throw new Error(`${page}페이지 이미지 일부를 해독하지 못했습니다. PDF.js 이미지 자산을 불러오지 못했거나 이미지 형식이 지원되지 않을 수 있습니다.`)
+        }
         const target = canvasRef.current
         const targetContext = target?.getContext('2d', { alpha: false })
         if (!target || !targetContext) throw new Error('PDF 화면을 표시할 수 없습니다.')
@@ -315,15 +430,19 @@ export function PdfPage({ pdf, page, paneId, pane, rotation, active, tool, lineS
         setDisplayedSize({ page: { width: base.width, height: base.height }, css })
         setReadyKey(renderKey)
       } catch (cause) {
-        if (!cancelled && sequence === renderSequence.current && !(cause instanceof Error && cause.name === 'RenderingCancelledException')) {
-          setRenderError({ key: renderKey, message: cause instanceof Error ? cause.message : 'PDF 페이지를 표시하지 못했습니다.' })
+        if (!cancelled && sequence === renderSequence.current && (timedOut || !(cause instanceof Error && cause.name === 'RenderingCancelledException'))) {
+          setRenderError({ key: renderKey, message: timedOut ? 'PDF 페이지 표시가 20초 안에 끝나지 않았습니다. 다시 시도해 주세요.' : cause instanceof Error ? cause.message : 'PDF 페이지를 표시하지 못했습니다.' })
         }
       } finally {
         window.clearTimeout(timeoutId)
+        if (staging) clearCanvas(staging)
+        releasePriority?.()
       }
     })()
     return () => {
       cancelled = true
+      window.clearTimeout(debounceId)
+      finishDebounce?.()
       window.clearTimeout(timeoutId)
       renderTask?.cancel?.()
     }
@@ -668,9 +787,9 @@ export function PdfPage({ pdf, page, paneId, pane, rotation, active, tool, lineS
     const canvas = colorworkCanvasRef.current
     if (!grid?.visible || !canvas || !displayedSize) return
     if (!displayedSize.css.width || !displayedSize.css.height) return
-    const ratio = window.devicePixelRatio || 1
-    canvas.width = Math.max(1, Math.round(displayedSize.css.width * ratio))
-    canvas.height = Math.max(1, Math.round(displayedSize.css.height * ratio))
+    const ratio = pdfRasterScale(displayedSize.css.width, displayedSize.css.height, 1, window.devicePixelRatio || 1)
+    canvas.width = Math.max(1, Math.ceil(displayedSize.css.width * ratio))
+    canvas.height = Math.max(1, Math.ceil(displayedSize.css.height * ratio))
     const context = canvas.getContext('2d')
     if (!context) return
     context.clearRect(0, 0, canvas.width, canvas.height)
@@ -1250,7 +1369,7 @@ export function PdfPage({ pdf, page, paneId, pane, rotation, active, tool, lineS
           </div>
           </div>
         </div>
-        {readyKey !== renderKey && renderError?.key !== renderKey && <div className="pane-loading">PDF 페이지를 준비하고 있어요…</div>}
+        {readyKey !== renderKey && renderError?.key !== renderKey && <div className={'pane-loading' + (displayedSize ? ' pane-loading-refresh' : '')}><span>PDF 페이지를 준비하고 있어요…</span></div>}
         {renderError?.key === renderKey && <div className="pane-error">{renderError.message}<button onClick={() => { setRenderError(null); setRetry((current) => current + 1) }}>다시 시도</button></div>}
         {!workReady && <div className="page-work-loading">페이지 작업을 불러오는 중…</div>}
       </div>
