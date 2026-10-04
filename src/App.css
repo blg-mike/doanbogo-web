@@ -218,15 +218,25 @@
 .zoom-reset { height: 34px; display: inline-flex; align-items: center; gap: 5px; margin-left: 4px; padding: 0 8px; border: 0; border-radius: 8px; color: #738096; background: transparent; font-size: 10px; cursor: pointer; }
 .zoom-reset:hover { background: #f3f5f8; }
 .modal-heading .eyebrow { margin-bottom: 5px; }
-.hidden-pages-modal { width: min(100%, 760px); }
-.hidden-page-hint { margin: 0; padding: 0 18px; color: #8792a4; font-size: 11px; }
-.hidden-page-grid { max-height: 55vh; display: grid; grid-template-columns: repeat(auto-fill, minmax(78px, 1fr)); gap: 8px; overflow: auto; padding: 14px 18px; }
-.hidden-page-grid .page-thumbnail { width: 100%; }
-.hidden-page-actions { display: flex; align-items: center; justify-content: flex-end; gap: 8px; padding: 12px 18px 16px; border-top: 1px solid #eef1f5; }
-.hidden-page-actions > span { margin-right: auto; color: #8792a4; font-size: 11px; }
+.hidden-pages-modal { width: min(1520px, calc(100vw - 40px)); height: min(90vh, calc(100vh - 40px)); max-height: min(90vh, calc(100vh - 40px)); display: flex; flex-direction: column; overflow: hidden; }
+.hidden-pages-modal > .modal-heading { flex: 0 0 auto; }
+.hidden-page-tabs { display: flex; gap: 4px; flex: 0 0 auto; padding: 0 18px; border-bottom: 1px solid #eef1f5; }
+.hidden-page-tab { display: inline-flex; align-items: center; gap: 7px; padding: 11px 13px 10px; border: 0; border-bottom: 2px solid transparent; color: #78859a; background: transparent; font-size: 12px; cursor: pointer; }
+.hidden-page-tab[aria-selected="true"] { border-bottom-color: var(--blue); color: var(--blue); font-weight: 700; }
+.hidden-page-tab:disabled { cursor: default; }
+.hidden-page-tab span { min-width: 18px; padding: 2px 5px; border-radius: 9px; color: #6e7c91; background: #eef2f7; text-align: center; font-size: 9px; }
+.hidden-page-grid { min-height: 0; flex: 1 1 auto; display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 170px), 1fr)); align-content: start; gap: 12px; overflow: auto; padding: 16px 18px; }
+.hidden-page-grid .page-thumbnail { width: 100%; gap: 7px; padding: 7px; border-radius: 10px; }
+.hidden-page-grid .page-thumbnail-image { height: 210px; }
+.hidden-page-grid .page-thumbnail-number { font-size: 12px; line-height: 16px; }
+.hidden-page-actions { display: flex; align-items: center; justify-content: space-between; flex: 0 0 auto; gap: 12px; padding: 12px 18px 16px; border-top: 1px solid #eef1f5; }
+.hidden-page-selection-info { min-width: 0; display: flex; align-items: center; flex: 1 1 auto; flex-wrap: wrap; gap: 5px 12px; color: #8792a4; font-size: 11px; }
+.page-management-error { color: #bd3c4e; }
+.page-management-hint { color: #9b6711; }
+.hidden-page-action-buttons { display: flex; flex: 0 0 auto; gap: 8px; }
 .hidden-page-actions .primary-button, .hidden-page-actions .secondary-button { min-height: 36px; font-size: 11px; }
 .hidden-page-actions button:disabled { opacity: .45; cursor: not-allowed; }
-.no-hidden-pages { padding: 34px 20px; color: #909bad; text-align: center; font-size: 13px; }
+.no-hidden-pages { min-height: 0; display: grid; flex: 1 1 auto; place-items: center; padding: 34px 20px; color: #909bad; text-align: center; font-size: 13px; }
 .viewer-state { width: 100%; min-height: 100vh; display: flex; align-items: center; justify-content: center; flex-direction: column; gap: 13px; padding: 24px; background: #f8fafd; text-align: center; }
 .viewer-state h1 { margin: 0; font-size: 20px; }
 .viewer-state p { max-width: 480px; margin: 0; color: #7a8499; font-size: 13px; line-height: 1.6; }
@@ -303,6 +313,9 @@
 .pdf-svg-overlay.draw-mode { cursor: crosshair; }
 .pdf-svg-overlay.text-mode { cursor: text; }
 .pdf-svg-overlay text { user-select: none; }
+.pdf-guide-layer { position: absolute; z-index: 2; transform-origin: center; pointer-events: none; }
+.pdf-guide-svg { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; pointer-events: none; touch-action: none; }
+.pdf-guide-layer .guide-add-button, .pdf-guide-layer .guide-remove-button { pointer-events: auto; }
 .pdf-scroll-area:has(.draw-mode) { cursor: crosshair; }
 .pdf-scroll-area:has(.draw-mode):active { cursor: crosshair; }
 .guide-add-button, .guide-remove-button { position: absolute; z-index: 4; width: 28px; height: 28px; display: grid; place-items: center; padding: 0; border: 1px solid #d7e0ec; border-radius: 50%; color: #50617a; background: rgba(255,255,255,.96); box-shadow: 0 2px 8px rgba(27,35,51,.14); cursor: pointer; }
@@ -352,7 +365,7 @@
 .page-thumbnail { position: relative; flex: 0 0 88px; min-width: 0; display: flex; flex-direction: column; gap: 4px; padding: 4px; overflow: hidden; border: 1px solid #e7ebf1; border-radius: 8px; color: #748096; background: #fff; cursor: pointer; }
 .page-thumbnail:hover { border-color: #aac7f1; background: #f8fbff; }
 .page-thumbnail.active { border: 2px solid var(--blue); padding: 3px; color: var(--blue); background: #f3f7ff; }
-.page-thumbnail.hidden { opacity: .55; }
+.page-thumbnail.hidden .page-thumbnail-image canvas, .page-thumbnail.hidden .page-thumbnail-image .thumbnail-placeholder, .page-thumbnail.hidden .page-thumbnail-number { opacity: .5; }
 .page-thumbnail.selected { border: 2px solid #d29318; padding: 3px; background: #fffaf0; }
 .page-thumbnail-image { position: relative; height: 60px; min-height: 0; display: grid; place-items: center; overflow: hidden; background: #f0f2f5; }
 .page-thumbnail-image canvas { max-width: 100%; max-height: 100%; object-fit: contain; background: #fff; }
@@ -418,6 +431,9 @@
   .viewer-navigation { justify-content: center; min-height: 36px; }
 }
 @media (max-width: 760px) {
+  .hidden-page-actions { align-items: stretch; flex-direction: column; gap: 8px; padding: 10px 12px max(12px, env(safe-area-inset-bottom)); }
+  .hidden-page-action-buttons { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .hidden-page-action-buttons button { min-width: 0; padding: 0 6px; white-space: nowrap; }
   .technique-modal { height: 92vh; }
   .technique-slot-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; padding: 10px; }
   .technique-slot-main { grid-template-rows: 96px auto auto; }

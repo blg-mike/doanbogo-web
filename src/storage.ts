@@ -424,6 +424,8 @@ export async function getViewer(id: string, pageCount: number): Promise<ViewerSn
   if (saved) return {
     ...saved,
     splitInitialized: saved.splitInitialized ?? saved.split,
+    wideRatio: saved.wideRatio === 0.65 ? 0.5 : saved.wideRatio ?? 0.5,
+    tallRatio: saved.tallRatio === 0.65 ? 0.5 : saved.tallRatio ?? 0.5,
     primary: { ...saved.primary, page: Math.min(pageCount, Math.max(1, saved.primary.page)) },
     secondary: { ...saved.secondary, page: Math.min(pageCount, Math.max(1, saved.secondary.page)) },
   }
@@ -434,8 +436,8 @@ export async function getViewer(id: string, pageCount: number): Promise<ViewerSn
     activePane: 'primary',
     primary: { ...defaultPane },
     secondary: { ...defaultPane },
-    wideRatio: 0.65,
-    tallRatio: 0.65,
+    wideRatio: 0.5,
+    tallRatio: 0.5,
     updatedAt: Date.now(),
   }
 }

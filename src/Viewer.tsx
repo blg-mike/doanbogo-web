@@ -1,6 +1,7 @@
-import { useCallback, useEffect, useRef, useState, type FormEvent as ReactFormEvent, type PointerEvent as ReactPointerEvent } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent as ReactFormEvent, type PointerEvent as ReactPointerEvent } from 'react'
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import type { PDFDocumentProxy } from 'pdfjs-dist'
+import QrWorker from './qrDecode.worker?worker&inline'
 import { ArrowLeft, Bookmark, CaseSensitive, Check, Columns2, Eraser, Eye, EyeOff, Grid3X3, Hash, Highlighter, Minus, MousePointer2, Pencil, Plus, Redo2, SlidersHorizontal, Type, Undo2, X } from 'lucide-react'
 import yyLogo from './assets/yy-logo.png'
 import { PdfPage, PdfThumbnail } from './PdfPage'
@@ -11,7 +12,11 @@ import type { AnnotationSettings, AnnotationStyle, AnnotationTool, ColorworkCrea
 import { defaultColorworkSettings, getColorworkDimensions, resizeColorworkGrid } from './colorwork'
 import { clampCounterValue, counterValueFromInput } from './counter'
 import { TechniqueDialog, TechniquePopover } from './Technique'
-import { detectPdfQrLinks, extractPdfPageLinks, type PdfQrLink } from './qr'
+import { extractPdfPageLinks, type PdfQrLink } from './qr'
+import { captureAndEnqueueQrPixels } from './qrCapture'
+import { PageWorkPersistence } from './pageWorkPersistence'
+import { QrScanScheduler } from './qrScanScheduler'
+import { canHidePageSelection, completePageList, nextVisiblePageAfterHide, togglePageSelection } from './pageManagement'
 
 type Size = { width: number; height: number }
 type WorkAction = { before: PageWorkRecord; after: PageWorkRecord }
@@ -47,6 +52,17 @@ function splitBasis(ratio: number) {
   return 'calc(' + ratio * 100 + '% - ' + ratio * 14 + 'px)'
 }
 
+function cancelPageWorksFrame(frame: { current: number | undefined }) {
+  if (frame.current === undefined) return
+  cancelAnimationFrame(frame.current)
+  frame.current = undefined
+}
+
+function invalidateQrScans(generation: { current: number }, pending: { current: Set<string> }) {
+  generation.current++
+  pending.current.clear()
+}
+
 function blankWork(documentId: string, pageNumber: number): PageWorkRecord {
   return {
     documentId, pageNumber, horizontalPosition: 0.5, verticalPosition: 0.5, annotations: [],
@@ -55,28 +71,90 @@ function blankWork(documentId: string, pageNumber: number): PageWorkRecord {
   }
 }
 
-function HiddenPagesDialog({ pdf, pages, selected, onClose, onToggle, onRestoreSelected, onRestoreAll }: {
+function HiddenPagesDialog({ pdf, documentId, records, onClose, onApply }: {
   pdf: PDFDocumentProxy
-  pages: PageRecord[]
-  selected: Set<number>
+  documentId: string
+  records: PageRecord[]
   onClose: () => void
-  onToggle: (page: number) => void
-  onRestoreSelected: () => void
-  onRestoreAll: () => void
+  onApply: (pageNumbers: number[], hidden: boolean) => Promise<void>
 }) {
   const gridRef = useRef<HTMLDivElement>(null)
+  const [tab, setTab] = useState<'all' | 'hidden'>('all')
+  const [selected, setSelected] = useState<Set<number>>(() => new Set())
+  const [isSaving, setIsSaving] = useState(false)
+  const [error, setError] = useState('')
+  const pages = useMemo(() => completePageList(documentId, pdf.numPages, records), [documentId, pdf.numPages, records])
+  const hiddenPages = useMemo(() => pages.filter((page) => page.hidden), [pages])
+  const hiddenPageNumbers = useMemo(() => new Set(hiddenPages.map((page) => page.pageNumber)), [hiddenPages])
+  const selectedPageNumbers = [...selected]
+  const selectionIsHidden = selectedPageNumbers.length > 0 && hiddenPageNumbers.has(selectedPageNumbers[0])
+  const selectedVisiblePages = new Set(selectedPageNumbers.filter((pageNumber) => !hiddenPageNumbers.has(pageNumber)))
+  const hideWouldRemoveLastPage = tab === 'all' && !selectionIsHidden && !canHidePageSelection(pdf.numPages, hiddenPageNumbers, selected)
+  const pageList = tab === 'all' ? pages : hiddenPages
+
+  function changeTab(nextTab: 'all' | 'hidden') {
+    if (isSaving || nextTab === tab) return
+    setTab(nextTab)
+    setSelected(new Set())
+    setError('')
+  }
+
+  function toggleSelection(pageNumber: number) {
+    if (isSaving) return
+    setError('')
+    setSelected((current) => togglePageSelection(current, pageNumber, hiddenPageNumbers))
+  }
+
+  async function applySelected() {
+    if (isSaving || !selected.size) return
+    const hide = tab === 'all' && !selectionIsHidden
+    if (hide && !canHidePageSelection(pdf.numPages, hiddenPageNumbers, selected)) return
+    setIsSaving(true)
+    setError('')
+    try {
+      await onApply(selectedPageNumbers, hide)
+      setSelected(new Set())
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : '페이지 상태를 저장하지 못했습니다.')
+    } finally {
+      setIsSaving(false)
+    }
+  }
+
+  async function restoreAll() {
+    if (isSaving || !hiddenPages.length) return
+    setIsSaving(true)
+    setError('')
+    try {
+      await onApply(hiddenPages.map((page) => page.pageNumber), false)
+      setSelected(new Set())
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : '페이지 상태를 저장하지 못했습니다.')
+    } finally {
+      setIsSaving(false)
+    }
+  }
+
   return (
-    <div className="modal-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) onClose() }}>
-      <section className="modal-card hidden-pages-modal" role="dialog" aria-modal="true" aria-label="숨긴 페이지 관리">
-        <div className="modal-heading"><div><p className="eyebrow">PAGE MANAGEMENT</p><h2>숨긴 페이지</h2></div><button className="icon-button" aria-label="닫기" onClick={onClose}><X size={20} /></button></div>
-        {pages.length ? <>
-          <p className="hidden-page-hint">복구할 페이지를 선택하세요.</p>
-          <div className="hidden-page-grid" ref={gridRef}>{pages.map((page) => <PdfThumbnail
-            key={page.pageNumber} pdf={pdf} pageNumber={page.pageNumber} active={false} hidden bookmarked={page.bookmarked}
-            selected={selected.has(page.pageNumber)} root={gridRef} onSelect={() => onToggle(page.pageNumber)}
+    <div className="modal-backdrop" role="presentation" onMouseDown={(event) => { if (!isSaving && event.target === event.currentTarget) onClose() }}>
+      <section className="modal-card hidden-pages-modal" role="dialog" aria-modal="true" aria-label="숨기기">
+        <div className="modal-heading"><div><p className="eyebrow">PAGE MANAGEMENT</p><h2>숨기기</h2></div><button className="icon-button" aria-label="닫기" disabled={isSaving} onClick={onClose}><X size={20} /></button></div>
+        <div className="hidden-page-tabs" role="tablist" aria-label="페이지 상태">
+          <button type="button" role="tab" aria-selected={tab === 'all'} className="hidden-page-tab" disabled={isSaving} onClick={() => changeTab('all')}>전체페이지</button>
+          <button type="button" role="tab" aria-selected={tab === 'hidden'} className="hidden-page-tab" disabled={isSaving} onClick={() => changeTab('hidden')}>숨김페이지 <span>{hiddenPages.length}</span></button>
+        </div>
+        {pageList.length ? <div className="hidden-page-grid" ref={gridRef}>{pageList.map((page) => <PdfThumbnail
+            key={page.pageNumber} pdf={pdf} pageNumber={page.pageNumber} active={false} hidden={page.hidden} bookmarked={page.bookmarked}
+            selected={selected.has(page.pageNumber)} disabled={isSaving} root={gridRef} onSelect={() => toggleSelection(page.pageNumber)}
           />)}</div>
-          <div className="hidden-page-actions"><span>{selected.size}개 선택</span><button className="secondary-button" disabled={!selected.size} onClick={onRestoreSelected}><Eye size={16} />선택한 페이지 복구</button><button className="primary-button" onClick={onRestoreAll}><Eye size={16} />전체 복구</button></div>
-        </> : <div className="no-hidden-pages">숨긴 페이지가 없습니다.</div>}
+          : <div className="no-hidden-pages">숨긴 페이지가 없습니다.</div>}
+        <div className="hidden-page-actions">
+          <div className="hidden-page-selection-info"><span>{selected.size}개 선택</span>{error && <span className="page-management-error" role="alert">{error}</span>}{hideWouldRemoveLastPage && selectedVisiblePages.size > 0 && <span className="page-management-hint" role="status">최소 한 페이지는 표시 상태로 남아야 합니다.</span>}</div>
+          <div className="hidden-page-action-buttons">
+            <button type="button" className="secondary-button" disabled={isSaving || !selected.size || (tab === 'all' && !selectionIsHidden && hideWouldRemoveLastPage)} onClick={() => void applySelected()}>{tab === 'hidden' || selectionIsHidden ? <Eye size={16} /> : <EyeOff size={16} />}{tab === 'hidden' || selectionIsHidden ? '선택페이지 복구' : '선택페이지 숨김'}</button>
+            <button type="button" className="primary-button" disabled={isSaving || hiddenPages.length === 0} onClick={() => void restoreAll()}><Eye size={16} />전체 복구</button>
+          </div>
+        </div>
       </section>
     </div>
   )
@@ -211,13 +289,15 @@ export default function Viewer() {
   const thumbnailRailRef = useRef<HTMLDivElement>(null)
   const snapshotRef = useRef<ViewerSnapshot | null>(null)
   const saveTimer = useRef<number | undefined>(undefined)
-  const workTimers = useRef(new Map<number, number>())
+  const pageWorksFrameRef = useRef<number | undefined>(undefined)
+  const [pageWorkPersistence] = useState(() => new PageWorkPersistence(savePageWork))
   const workRef = useRef<Record<number, PageWorkRecord>>({})
   const pageWorkLoadRef = useRef(new Map<number, Promise<PageWorkRecord>>())
   const workDocumentIdRef = useRef(id)
   const historyRef = useRef(new Map<number, PageHistory>())
   const dragRef = useRef<{ pointerId: number; orientation: 'wide' | 'tall'; rect: DOMRect } | null>(null)
   const [documentName, setDocumentName] = useState('')
+  const displayDocumentName = documentName.replace(/\.pdf$/i, '')
   const [renameDialog, setRenameDialog] = useState(false)
   const [renameDraft, setRenameDraft] = useState('')
   const [renameError, setRenameError] = useState('')
@@ -230,6 +310,7 @@ export default function Viewer() {
   const counterInputRef = useRef<HTMLInputElement>(null)
   const cancelCounterBlur = useRef(false)
   const [pages, setPages] = useState<PageRecord[]>([])
+  const pageVisibilityActionRef = useRef(false)
   const [pageWorks, setPageWorks] = useState<Record<number, PageWorkRecord>>({})
   const [histories, setHistories] = useState<Record<number, PageHistory>>({})
   const [tool, setTool] = useState<AnnotationTool>('pan')
@@ -239,7 +320,6 @@ export default function Viewer() {
   const [colorworkBrushOpacity, setColorworkBrushOpacity] = useState(0.25)
   const [colorworkEraser, setColorworkEraser] = useState(false)
   const [pageDialog, setPageDialog] = useState(false)
-  const [selectedHiddenPages, setSelectedHiddenPages] = useState<Set<number>>(new Set())
   const [progressDialog, setProgressDialog] = useState(false)
   const [techniqueDialog, setTechniqueDialog] = useState(false)
   const [techniquePopoverIndex, setTechniquePopoverIndex] = useState<number | null>(null)
@@ -250,6 +330,7 @@ export default function Viewer() {
   const qrLinksRef = useRef(new Map<number, PdfQrLink[]>())
   const qrScanPendingRef = useRef(new Set<string>())
   const qrDocumentGenerationRef = useRef(0)
+  const qrSchedulerRef = useRef<QrScanScheduler | null>(null)
   const [loading, setLoading] = useState(true)
   const [loadError, setLoadError] = useState<{ id: string; message: string } | null>(null)
   const [splitPreview, setSplitPreview] = useState<number | null>(null)
@@ -261,7 +342,15 @@ export default function Viewer() {
     counterInputRef.current?.select()
   }, [editingCounterIndex])
 
+  const flushPendingPageWorks = useCallback(() => pageWorkPersistence.flushAll().catch((error: unknown) => {
+    console.warn('[PDF] Page work could not be saved.', error)
+  }), [pageWorkPersistence])
+
   const pushSnapshot = useCallback((next: ViewerSnapshot, immediate = false) => {
+    const previous = snapshotRef.current
+    if (previous && (previous.primary.page !== next.primary.page || previous.secondary.page !== next.secondary.page)) {
+      void flushPendingPageWorks()
+    }
     snapshotRef.current = next
     setSnapshot(next)
     if (saveTimer.current !== undefined) window.clearTimeout(saveTimer.current)
@@ -270,17 +359,11 @@ export default function Viewer() {
       return
     }
     saveTimer.current = window.setTimeout(() => void saveViewer(next), 350)
-  }, [])
+  }, [flushPendingPageWorks])
 
   const updateHistory = useCallback((page: number, history: PageHistory) => {
     historyRef.current.set(page, history)
     setHistories((current) => ({ ...current, [page]: history }))
-  }, [])
-
-  const flushPendingPageWorks = useCallback(() => {
-    workTimers.current.forEach((timer) => window.clearTimeout(timer))
-    workTimers.current.clear()
-    Object.values(workRef.current).forEach((work) => void savePageWork(work))
   }, [])
 
   const onPageRendered = useCallback((pageNumber: number, source: HTMLCanvasElement) => {
@@ -292,70 +375,57 @@ export default function Viewer() {
     if (!scanPdfLinks && !scanQr) return
     if (scanPdfLinks) pdfLinkPendingRef.current.add(scanKey)
     if (scanQr) qrScanPendingRef.current.add(scanKey)
-    let qrCanvas: HTMLCanvasElement | null = null
-    if (scanQr) {
-      const scale = Math.min(1, 1400 / Math.max(source.width, source.height))
-      qrCanvas = document.createElement('canvas')
-      qrCanvas.width = Math.max(1, Math.round(source.width * scale))
-      qrCanvas.height = Math.max(1, Math.round(source.height * scale))
-      const context = qrCanvas.getContext('2d', { alpha: false })
-      if (!context) {
-        qrScanPendingRef.current.delete(scanKey)
-        qrCanvas = null
-      } else {
-        context.drawImage(source, 0, 0, qrCanvas.width, qrCanvas.height)
-      }
-    }
-    window.setTimeout(() => void (async () => {
-      if (scanPdfLinks) {
-        try {
-          const pageProxy = await pdf.getPage(pageNumber)
-          const [annotations, content] = await Promise.all([
-            pageProxy.getAnnotations({ intent: 'display' }),
-            pageProxy.getTextContent(),
-          ])
-          const textRuns = content.items.flatMap((item) => 'str' in item ? [item] : [])
-          const links = extractPdfPageLinks(annotations, textRuns, pageProxy.getViewport({ scale: 1 }))
-          if (generation === qrDocumentGenerationRef.current) {
-            pdfLinkPagesRef.current.add(pageNumber)
-            setPdfLinksByPage((current) => ({ ...current, [pageNumber]: links }))
-          }
-        } catch {
-          if (generation === qrDocumentGenerationRef.current) {
-            pdfLinkPagesRef.current.add(pageNumber)
-            setPdfLinksByPage((current) => ({ ...current, [pageNumber]: [] }))
-          }
+    if (scanPdfLinks) window.setTimeout(() => void (async () => {
+      try {
+        const pageProxy = await pdf.getPage(pageNumber)
+        const [annotations, content] = await Promise.all([
+          pageProxy.getAnnotations({ intent: 'display' }),
+          pageProxy.getTextContent(),
+        ])
+        const textRuns = content.items.flatMap((item) => 'str' in item ? [item] : [])
+        const links = extractPdfPageLinks(annotations, textRuns, pageProxy.getViewport({ scale: 1 }))
+        if (generation === qrDocumentGenerationRef.current) {
+          pdfLinkPagesRef.current.add(pageNumber)
+          setPdfLinksByPage((current) => ({ ...current, [pageNumber]: links }))
         }
-      }
-      if (qrCanvas) {
-        try {
-          const links = detectPdfQrLinks(qrCanvas)
-          if (generation === qrDocumentGenerationRef.current) {
-            qrLinksRef.current.set(pageNumber, links)
-            setQrLinksByPage((current) => ({ ...current, [pageNumber]: links }))
-          }
-        } catch {
-          if (generation === qrDocumentGenerationRef.current) {
-            qrLinksRef.current.set(pageNumber, [])
-            setQrLinksByPage((current) => ({ ...current, [pageNumber]: [] }))
-          }
-        } finally {
-          qrCanvas.width = 0
-          qrCanvas.height = 0
+      } catch {
+        if (generation === qrDocumentGenerationRef.current) {
+          pdfLinkPagesRef.current.add(pageNumber)
+          setPdfLinksByPage((current) => ({ ...current, [pageNumber]: [] }))
         }
-      }
-      if (scanPdfLinks) pdfLinkPendingRef.current.delete(scanKey)
-      if (scanQr) {
-        qrScanPendingRef.current.delete(scanKey)
+      } finally {
+        pdfLinkPendingRef.current.delete(scanKey)
       }
     })(), 0)
+
+    if (scanQr) window.setTimeout(() => {
+      try {
+        const result = captureAndEnqueueQrPixels({
+          generation,
+          pageNumber,
+          source,
+          getCurrentGeneration: () => qrDocumentGenerationRef.current,
+          getScheduler: () => qrSchedulerRef.current,
+          createCanvas: () => document.createElement('canvas'),
+        })
+        if (result !== 'submitted') qrScanPendingRef.current.delete(scanKey)
+      } catch {
+        qrScanPendingRef.current.delete(scanKey)
+        if (generation === qrDocumentGenerationRef.current) {
+          qrLinksRef.current.set(pageNumber, [])
+          setQrLinksByPage((current) => ({ ...current, [pageNumber]: [] }))
+        }
+      }
+    }, 0)
   }, [pdf])
 
   useEffect(() => {
     workDocumentIdRef.current = id
     pageWorkLoadRef.current.clear()
+    cancelPageWorksFrame(pageWorksFrameRef)
     let disposed = false
     let closePdf: (() => Promise<void>) | undefined
+    let qrScheduler: QrScanScheduler | undefined
     void (async () => {
       const record = await getDocument(id)
       if (!record) throw new Error('이 PDF를 찾을 수 없습니다. 도안 목록에서 다시 열어 주세요.')
@@ -368,11 +438,22 @@ export default function Viewer() {
         return
       }
       closePdf = opened.dispose
-      qrDocumentGenerationRef.current++
+      invalidateQrScans(qrDocumentGenerationRef, qrScanPendingRef)
       pdfLinkPagesRef.current.clear()
       pdfLinkPendingRef.current.clear()
       qrLinksRef.current.clear()
-      qrScanPendingRef.current.clear()
+      qrScheduler = new QrScanScheduler(
+        () => new QrWorker(),
+        (request, links) => {
+          qrScanPendingRef.current.delete(request.generation + ':' + request.pageNumber)
+          if (request.generation !== qrDocumentGenerationRef.current) return
+          qrLinksRef.current.set(request.pageNumber, links)
+          setQrLinksByPage((current) => ({ ...current, [request.pageNumber]: links }))
+        },
+        (request) => qrScanPendingRef.current.delete(request.generation + ':' + request.pageNumber),
+      )
+      qrScheduler.setActivePage(restored[restored.activePane].page)
+      qrSchedulerRef.current = qrScheduler
       setPdfLinksByPage({})
       setQrLinksByPage({})
       setTechniqueDialog(false)
@@ -399,10 +480,14 @@ export default function Viewer() {
     })
     return () => {
       disposed = true
+      invalidateQrScans(qrDocumentGenerationRef, qrScanPendingRef)
+      qrSchedulerRef.current = null
+      qrScheduler?.dispose()
       if (saveTimer.current !== undefined) window.clearTimeout(saveTimer.current)
       const current = snapshotRef.current
       if (current) void saveViewer(current)
       flushPendingPageWorks()
+      cancelPageWorksFrame(pageWorksFrameRef)
       void closePdf?.()
     }
   }, [flushPendingPageWorks, id])
@@ -422,8 +507,7 @@ export default function Viewer() {
   }, [pdf, loading])
 
   const orientation = areaSize.width >= areaSize.height ? 'wide' : 'tall'
-  const ratio = snapshot ? (orientation === 'wide' ? snapshot.wideRatio : snapshot.tallRatio) : 0.65
-  const visibleCount = pdf ? pdf.numPages - pages.filter((page) => page.hidden).length : 0
+  const ratio = snapshot ? (orientation === 'wide' ? snapshot.wideRatio : snapshot.tallRatio) : 0.5
   const activePage = snapshot ? snapshot[snapshot.activePane].page : 1
   const pageState = pages.find((page) => page.pageNumber === activePage)
   const isBookmarked = Boolean(pageState?.bookmarked)
@@ -440,6 +524,24 @@ export default function Viewer() {
   const primaryPage = snapshot?.primary.page
   const secondaryPage = snapshot?.secondary.page
   const isSplit = snapshot?.split
+
+  useEffect(() => {
+    qrSchedulerRef.current?.setActivePage(activePage)
+  }, [activePage])
+
+  useEffect(() => {
+    const flushOnHidden = () => {
+      if (document.visibilityState === 'hidden') void flushPendingPageWorks()
+    }
+    const flushOnPageHide = () => { void flushPendingPageWorks() }
+    document.addEventListener('visibilitychange', flushOnHidden)
+    window.addEventListener('pagehide', flushOnPageHide)
+    return () => {
+      document.removeEventListener('visibilitychange', flushOnHidden)
+      window.removeEventListener('pagehide', flushOnPageHide)
+    }
+  }, [flushPendingPageWorks])
+
   const ensurePageWork = useCallback(async (page: number) => {
     const existing = workRef.current[page]
     if (existing) return existing
@@ -519,6 +621,14 @@ export default function Viewer() {
     }, true)
   }
 
+  function schedulePageWorksRender() {
+    if (pageWorksFrameRef.current !== undefined) return
+    pageWorksFrameRef.current = requestAnimationFrame(() => {
+      pageWorksFrameRef.current = undefined
+      setPageWorks(workRef.current)
+    })
+  }
+
   function setPageWork(work: PageWorkRecord, immediate: boolean, recordHistory = false, historyBefore?: PageWorkRecord) {
     const current = workRef.current[work.pageNumber]
     if (!current) return
@@ -530,18 +640,10 @@ export default function Viewer() {
       updateHistory(work.pageNumber, { actions, cursor: actions.length })
     }
     workRef.current = { ...workRef.current, [work.pageNumber]: work }
-    setPageWorks(workRef.current)
-    const pending = workTimers.current.get(work.pageNumber)
-    if (pending !== undefined) window.clearTimeout(pending)
-    if (immediate) {
-      workTimers.current.delete(work.pageNumber)
-      void savePageWork(work)
-    } else {
-      workTimers.current.set(work.pageNumber, window.setTimeout(() => {
-        workTimers.current.delete(work.pageNumber)
-        void savePageWork(workRef.current[work.pageNumber] ?? work)
-      }, 300))
-    }
+    schedulePageWorksRender()
+    void pageWorkPersistence.schedule(work, immediate).catch((error: unknown) => {
+      console.warn('[PDF] Page work could not be saved.', error)
+    })
   }
 
   function undoRedo(direction: 'undo' | 'redo') {
@@ -585,40 +687,40 @@ export default function Viewer() {
     setPages(await getPages(id))
   }
 
-  async function hideCurrentPage() {
-    if (!snapshot || !pdf || visibleCount <= 1) return
-    await setPageFlag(id, activePage, 'hidden', true)
-    const nextPages = await getPages(id)
-    setPages(nextPages)
-    const nextHidden = new Set(nextPages.filter((page) => page.hidden).map((page) => page.pageNumber))
-    let replacement = activePage + 1
-    while (replacement <= pdf.numPages && nextHidden.has(replacement)) replacement++
-    if (replacement > pdf.numPages) {
-      replacement = activePage - 1
-      while (replacement >= 1 && nextHidden.has(replacement)) replacement--
+  async function applyPageVisibility(pageNumbers: number[], hidden: boolean) {
+    if (pageVisibilityActionRef.current) throw new Error('페이지 변경을 처리 중입니다.')
+    pageVisibilityActionRef.current = true
+    try {
+      if (!pdf || !snapshotRef.current) throw new Error('PDF 페이지 상태를 불러오지 못했습니다.')
+      const requested = [...new Set(pageNumbers)]
+      if (requested.some((pageNumber) => !Number.isInteger(pageNumber) || pageNumber < 1 || pageNumber > pdf.numPages)) {
+        throw new Error('선택한 페이지를 확인하지 못했습니다.')
+      }
+      if (!requested.length) return
+
+      const requestedPages = new Set(requested)
+      const hiddenAfter = new Set(pages.filter((page) => page.hidden).map((page) => page.pageNumber))
+      for (const pageNumber of requested) {
+        if (hidden) hiddenAfter.add(pageNumber)
+        else hiddenAfter.delete(pageNumber)
+      }
+      if (pdf.numPages - hiddenAfter.size < 1) throw new Error('최소 한 페이지는 표시 상태로 남아야 합니다.')
+
+      const nextPages = completePageList(id, pdf.numPages, pages).map((page) => requestedPages.has(page.pageNumber) ? { ...page, hidden } : page)
+      await setPagesFlag(id, requested, 'hidden', hidden)
+      setPages(nextPages)
+      if (hidden) {
+        const actualHidden = new Set(nextPages.filter((page) => page.hidden).map((page) => page.pageNumber))
+        const relocatePane = (pane: PaneSnapshot) => {
+          if (!actualHidden.has(pane.page)) return pane
+          const nextPage = nextVisiblePageAfterHide(pane.page, pdf.numPages, actualHidden)
+          return nextPage === null ? pane : { ...pane, page: nextPage }
+        }
+        mutateSnapshot((current) => ({ ...current, primary: relocatePane(current.primary), secondary: relocatePane(current.secondary) }), true)
+      }
+    } finally {
+      pageVisibilityActionRef.current = false
     }
-    mutateSnapshot((current) => {
-      const primary = current.primary.page === activePage ? { ...current.primary, page: replacement } : current.primary
-      const secondary = current.secondary.page === activePage ? { ...current.secondary, page: replacement } : current.secondary
-      return { ...current, primary, secondary }
-    }, true)
-  }
-
-  async function restorePages(pageNumbers: number[]) {
-    if (!pageNumbers.length) return
-    await setPagesFlag(id, pageNumbers, 'hidden', false)
-    setPages(await getPages(id))
-    const restored = new Set(pageNumbers)
-    setSelectedHiddenPages((current) => new Set([...current].filter((page) => !restored.has(page))))
-  }
-
-  function toggleHiddenPage(page: number) {
-    setSelectedHiddenPages((current) => {
-      const next = new Set(current)
-      if (next.has(page)) next.delete(page)
-      else next.add(page)
-      return next
-    })
   }
 
   function toggleSplit() {
@@ -627,6 +729,8 @@ export default function Viewer() {
       ...current,
       split: !current.split,
       splitInitialized: true,
+      wideRatio: !current.split && !current.splitInitialized ? 0.5 : current.wideRatio,
+      tallRatio: !current.split && !current.splitInitialized ? 0.5 : current.tallRatio,
       activePane: 'primary',
       secondary: current.split || current.splitInitialized ? current.secondary : { ...current.secondary, page: current.primary.page, zoom: current.primary.zoom, centerX: current.primary.centerX, centerY: current.primary.centerY, rotations: { ...current.primary.rotations } },
     }), true)
@@ -762,13 +866,13 @@ export default function Viewer() {
       <header className="viewer-header">
         <div className="viewer-brand"><img src={yyLogo} alt="도안보고 로고" /><small>YY공동제작</small></div>
         <button className="viewer-back" aria-label="도안 목록으로" onClick={() => navigate('/')}><ArrowLeft size={20} /><span>내 도안</span></button>
-        <div className="viewer-title"><div className="viewer-title-name"><strong title={documentName}>{documentName}</strong><button type="button" className="viewer-title-edit" aria-label="PDF 이름 변경" title="PDF 이름 변경" onClick={() => { setRenameDraft(documentName.replace(/\.pdf$/i, '')); setRenameError(''); setRenameDialog(true) }}><Pencil size={14} /></button></div><span>{reportMode ? '뜨개보고서' : snapshot[snapshot.activePane].page + ' / ' + pdf.numPages + ' 페이지'}</span></div>
+        <div className="viewer-title"><div className="viewer-title-name"><strong title={displayDocumentName}>{displayDocumentName}</strong><button type="button" className="viewer-title-edit" aria-label="PDF 이름 변경" title="PDF 이름 변경" onClick={() => { setRenameDraft(displayDocumentName); setRenameError(''); setRenameDialog(true) }}><Pencil size={14} /></button></div><span>{reportMode ? '뜨개보고서' : snapshot[snapshot.activePane].page + ' / ' + pdf.numPages + ' 페이지'}</span></div>
         <div className="viewer-header-actions">
           {!reportMode && <>
             <button className={'viewer-action ' + (snapshot.split ? 'selected' : '')} onClick={toggleSplit}><Columns2 size={18} /><span>{snapshot.split ? '한 영역 보기' : '두 영역 보기'}</span></button>
             <button className="viewer-action" onClick={() => setTechniqueDialog(true)}><CaseSensitive size={17} /><span>기법</span></button>
-            <button className={'viewer-action ' + (counterPanelVisible ? 'selected' : '')} type="button" aria-label="숫자 카운터" title="숫자 카운터" aria-pressed={counterPanelVisible} onClick={() => updateCounterSession((current) => ({ ...current, visible: !current.visible }))}><Hash size={17} /><span>카운터</span></button>
-            <button className="viewer-action page-management-action" aria-label="페이지 관리" title="숨긴 페이지 복구" onClick={() => { setSelectedHiddenPages(new Set()); setPageDialog(true) }}><EyeOff size={17} /><span>페이지 관리</span><span className="hidden-count">{pages.filter((page) => page.hidden).length}</span></button>
+            <button className="viewer-action page-management-action" aria-label="숨기기" title="페이지 숨기기 및 복구" onClick={() => setPageDialog(true)}><EyeOff size={17} /><span>숨기기</span><span className="hidden-count">{pages.filter((page) => page.hidden).length}</span></button>
+            <button className={'viewer-action ' + (isBookmarked ? 'selected' : '')} type="button" aria-label={isBookmarked ? '북마크 해제' : '북마크'} title={isBookmarked ? '북마크 해제' : '북마크'} aria-pressed={isBookmarked} onClick={() => void toggleBookmark()}><Bookmark size={17} fill={isBookmarked ? 'currentColor' : 'none'} /><span>북마크</span></button>
           </>}
           {reportMode && <button className="viewer-action" onClick={() => setSearchParams({})}><ArrowLeft size={16} /><span>도안으로 돌아가기</span></button>}
         </div>
@@ -862,30 +966,28 @@ export default function Viewer() {
               {tool === 'text' && <label title="글자 크기"><span>글자</span><input aria-label="글자 크기" type="range" min="10" max="48" value={activeAnnotationStyle.fontSize} onChange={(event) => changeAnnotationStyle('text', { fontSize: Number(event.currentTarget.value) })} /></label>}
             </div>}
             <span className="control-separator" />
+            <button className="viewer-tool" aria-label="진행선 설정" title="가로·세로 진행선 설정" disabled={!pageWorks[activePage]} onClick={() => setProgressDialog(true)}><SlidersHorizontal size={17} /><span>진행선</span></button>
+            <span className="control-separator" />
             <button className="viewer-tool compact-tool" aria-label="실행 취소" title="실행 취소" disabled={!canUndo} onClick={() => undoRedo('undo')}><Undo2 size={17} /></button>
             <button className="viewer-tool compact-tool" aria-label="다시 실행" title="다시 실행" disabled={!canRedo} onClick={() => undoRedo('redo')}><Redo2 size={17} /></button>
-            <button className="viewer-tool" aria-label="진행선 설정" title="가로·세로 진행선 설정" disabled={!pageWorks[activePage]} onClick={() => setProgressDialog(true)}><SlidersHorizontal size={17} /><span>진행선</span></button>
           </div>
           <div className="viewer-navigation">
+            <button className={'viewer-tool ' + (counterPanelVisible ? 'active' : '')} type="button" aria-label="숫자 카운터" title="숫자 카운터" aria-pressed={counterPanelVisible} onClick={() => updateCounterSession((current) => ({ ...current, visible: !current.visible }))}><Hash size={17} /><span>카운터</span></button>
+            <span className="control-separator" />
             <button className="text-control" disabled={activePage <= 1} onClick={() => stepPage(-1)}>이전</button>
             <label className="page-jump"><input key={activePage} aria-label="페이지 번호 입력" type="number" min="1" max={pdf.numPages} defaultValue={activePage} onBlur={(event) => jumpToPage(event.currentTarget.value)} onKeyDown={(event) => { if (event.key === 'Enter') { jumpToPage(event.currentTarget.value); event.currentTarget.blur() } }} /><span>/ {pdf.numPages}</span></label>
             <button className="text-control" disabled={activePage >= pdf.numPages && hiddenNumbers.size === 0} onClick={() => stepPage(1)}>{activePage >= pdf.numPages ? '보고서' : '다음'}</button>
-            <span className="control-separator" />
-            <button className={'viewer-tool ' + (isBookmarked ? 'active' : '')} aria-label={isBookmarked ? '북마크 해제' : '북마크'} onClick={() => void toggleBookmark()}><Bookmark size={17} fill={isBookmarked ? 'currentColor' : 'none'} /><span>북마크</span></button>
-            <button className="viewer-tool" aria-label="페이지 숨김" disabled={visibleCount <= 1} onClick={() => void hideCurrentPage()}><EyeOff size={17} /><span>숨김</span></button>
-            <span className="control-separator" />
           </div>
         </section>}
       </section>
-      {renameDialog && <div className="modal-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) setRenameDialog(false) }}><section className="modal-card" role="dialog" aria-modal="true" aria-label="PDF 이름 변경"><div className="modal-heading"><h2>PDF 이름 변경</h2><button className="icon-button" aria-label="닫기" onClick={() => setRenameDialog(false)}><X size={20} /></button></div><form className="modal-form" onSubmit={(event) => void saveDocumentName(event)}><label htmlFor="viewer-pdf-name">PDF 이름</label><input id="viewer-pdf-name" autoFocus required maxLength={120} value={renameDraft} onChange={(event) => setRenameDraft(event.currentTarget.value)} /><p className="modal-copy">.pdf 확장자는 저장할 때 자동으로 붙습니다.</p>{renameError && <p className="rename-error" role="alert">{renameError}</p>}<div className="modal-actions"><button type="button" className="secondary-button" onClick={() => setRenameDialog(false)}>취소</button><button className="primary-button" type="submit"><Check size={17} />저장</button></div></form></section></div>}
+      {renameDialog && <div className="modal-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) setRenameDialog(false) }}><section className="modal-card" role="dialog" aria-modal="true" aria-label="PDF 이름 변경"><div className="modal-heading"><h2>PDF 이름 변경</h2><button className="icon-button" aria-label="닫기" onClick={() => setRenameDialog(false)}><X size={20} /></button></div><form className="modal-form" onSubmit={(event) => void saveDocumentName(event)}><label htmlFor="viewer-pdf-name">PDF 이름</label><input id="viewer-pdf-name" autoFocus required maxLength={120} value={renameDraft} onChange={(event) => setRenameDraft(event.currentTarget.value)} />{renameError && <p className="rename-error" role="alert">{renameError}</p>}<div className="modal-actions"><button type="button" className="secondary-button" onClick={() => setRenameDialog(false)}>취소</button><button className="primary-button" type="submit"><Check size={17} />저장</button></div></form></section></div>}
       {pageDialog && <HiddenPagesDialog
+        key={id}
         pdf={pdf}
-        pages={pages.filter((page) => page.hidden).sort((a, b) => a.pageNumber - b.pageNumber)}
-        selected={selectedHiddenPages}
+        documentId={id}
+        records={pages}
         onClose={() => setPageDialog(false)}
-        onToggle={toggleHiddenPage}
-        onRestoreSelected={() => void restorePages([...selectedHiddenPages])}
-        onRestoreAll={() => void restorePages(pages.filter((page) => page.hidden).map((page) => page.pageNumber))}
+        onApply={applyPageVisibility}
       />}
       {progressDialog && <ProgressSettingsDialog
         settings={progressSettings}

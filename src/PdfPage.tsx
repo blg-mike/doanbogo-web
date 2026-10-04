@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, type PointerEvent as ReactPointerEvent, type RefObject } from 'react'
-import type { PDFDocumentProxy, RenderTask } from 'pdfjs-dist'
+import type { PDFDocumentProxy, PDFPageProxy, RenderTask } from 'pdfjs-dist'
 import { Minus, Plus, RotateCw, Trash2 } from 'lucide-react'
 import type { AnnotationRecord, AnnotationStyle, AnnotationTool, ColorworkCell, ColorworkCreateRequest, ColorworkGrid, PageRotation, PageWorkRecord, PaneId, PaneSnapshot, ProgressGuide, ProgressSettings } from './types'
 import { createColorworkGrid } from './colorwork'
@@ -39,6 +39,7 @@ const thumbnailQueue: ThumbnailJob[] = []
 let activeThumbnails = 0
 let activePageRenders = 0
 let runningThumbnail: ThumbnailJob | null = null
+const failedImageCounts = new WeakMap<PDFPageProxy, number>()
 
 function enqueueThumbnail(job: ThumbnailJob) {
   if (job.cancelled || job.queued) return
@@ -96,13 +97,14 @@ function copyCanvas(target: HTMLCanvasElement, source: HTMLCanvasElement) {
   target.getContext('2d', { alpha: false })?.drawImage(source, 0, 0)
 }
 
-export function PdfThumbnail({ pdf, pageNumber, active, hidden, bookmarked, selected, root, onSelect }: {
+export function PdfThumbnail({ pdf, pageNumber, active, hidden, bookmarked, selected, disabled, root, onSelect }: {
   pdf: PDFDocumentProxy
   pageNumber: number
   active: boolean
   hidden: boolean
   bookmarked: boolean
   selected?: boolean
+  disabled?: boolean
   root: RefObject<HTMLDivElement | null>
   onSelect: () => void
 }) {
@@ -205,9 +207,10 @@ export function PdfThumbnail({ pdf, pageNumber, active, hidden, bookmarked, sele
   return (
     <button
       className={'page-thumbnail ' + (active ? 'active' : '') + (hidden ? ' hidden' : '') + (selected ? ' selected' : '')}
-      aria-label={pageNumber + '페이지 썸네일' + (hidden ? ', 숨김' : '') + (bookmarked ? ', 북마크' : '')}
+      aria-label={pageNumber + '페이지 썸네일' + (hidden ? ', 숨김' : '') + (bookmarked ? ', 북마크' : '') + (selected ? ', 선택됨' : '')}
       aria-current={active ? 'page' : undefined}
       aria-pressed={selected}
+      disabled={disabled}
       onClick={onSelect}
     >
       <span className="page-thumbnail-image">
@@ -329,6 +332,7 @@ export function PdfPage({ pdf, page, paneId, pane, rotation, active, tool, lineS
   const lastRenderPage = useRef<{ page: number; rotation: PageRotation } | null>(null)
   const [size, setSize] = useState<Size>({ width: 0, height: 0 })
   const [displayedSize, setDisplayedSize] = useState<{ page: Size; css: Size } | null>(null)
+  const [displayedRaster, setDisplayedRaster] = useState<{ pdf: PDFDocumentProxy; page: number } | null>(null)
   const [readyKey, setReadyKey] = useState('')
   const [renderError, setRenderError] = useState<{ key: string; message: string } | null>(null)
   const [retry, setRetry] = useState(0)
@@ -341,7 +345,7 @@ export function PdfPage({ pdf, page, paneId, pane, rotation, active, tool, lineS
     | null
   >(null)
   const drawPointer = useRef<number | null>(null)
-  const lineDrag = useRef<{ axis: 'horizontal' | 'vertical'; id: string } | null>(null)
+  const lineDrag = useRef<{ axis: 'horizontal' | 'vertical'; id: string; pointerId: number } | null>(null)
   const erasedIds = useRef(new Set<string>())
   const actionStartWork = useRef(work)
   const textDrag = useRef<{ id: string; pointerId: number; kind: 'move' | 'resize'; start: Point; original: { x: number; y: number; width: number; height: number }; before: PageWorkRecord } | null>(null)
@@ -381,6 +385,7 @@ export function PdfPage({ pdf, page, paneId, pane, rotation, active, tool, lineS
     let timeoutId = 0
     let debounceId = 0
     let finishDebounce: (() => void) | undefined
+    let cancelPending: (() => void) | undefined
     let staging: HTMLCanvasElement | null = null
     let releasePriority: (() => void) | undefined
     const previousRenderPage = lastRenderPage.current
@@ -396,8 +401,20 @@ export function PdfPage({ pdf, page, paneId, pane, rotation, active, tool, lineS
         }
         if (cancelled || sequence !== renderSequence.current) return
         releasePriority = prioritizePdfPageRender()
-        const pdfPage = await pdf.getPage(page)
-        if (cancelled) return
+        const cancelledRender = Symbol('cancelled')
+        const cancellationPromise = new Promise<typeof cancelledRender>((resolve) => {
+          cancelPending = () => resolve(cancelledRender)
+        })
+        const timeoutPromise = new Promise<never>((_, reject) => {
+          timeoutId = window.setTimeout(() => {
+            timedOut = true
+            reject(new Error('PDF 페이지 표시가 20초 안에 끝나지 않았습니다. 다시 시도해 주세요.'))
+            renderTask?.cancel?.()
+          }, 20000)
+        })
+        const pageResult = await Promise.race([pdf.getPage(page), timeoutPromise, cancellationPromise])
+        if (pageResult === cancelledRender || cancelled) return
+        const pdfPage = pageResult
         const base = pdfPage.getViewport({ scale: 1 })
         const fitSize = rotatedPageSize(base, rotation)
         const fit = Math.min(Math.max(1, size.width - 24) / fitSize.width, Math.max(1, size.height - 24) / fitSize.height)
@@ -410,14 +427,15 @@ export function PdfPage({ pdf, page, paneId, pane, rotation, active, tool, lineS
         const context = staging.getContext('2d', { alpha: false })
         if (!context) throw new Error('이 브라우저에서 PDF 화면을 만들 수 없습니다.')
         renderTask = pdfPage.render({ canvas: staging, canvasContext: context, viewport }) as typeof renderTask
-        await Promise.race([
-          renderTask.promise,
-          new Promise<never>((_, reject) => { timeoutId = window.setTimeout(() => { timedOut = true; reject(new Error('PDF 페이지 표시가 20초 안에 끝나지 않았습니다. 다시 시도해 주세요.')); renderTask?.cancel?.() }, 20000) }),
-        ])
+        await Promise.race([renderTask.promise, timeoutPromise, cancellationPromise])
         if (cancelled || sequence !== renderSequence.current) return
-        const failedImages = [...pdfPage.objs].filter(([objectId, data]) => objectId.startsWith('img_') && data === null)
-        if (failedImages.length) {
-          throw new Error(`${page}페이지의 이미지 ${failedImages.length}개를 해독하지 못했습니다. PDF.js 이미지 자산을 확인하고 PDF를 다시 열어 주세요.`)
+        let failedImageCount = failedImageCounts.get(pdfPage)
+        if (failedImageCount === undefined) {
+          failedImageCount = [...pdfPage.objs].filter(([objectId, data]) => objectId.startsWith('img_') && data === null).length
+          failedImageCounts.set(pdfPage, failedImageCount)
+        }
+        if (failedImageCount) {
+          throw new Error(`${page}페이지의 이미지 ${failedImageCount}개를 해독하지 못했습니다. PDF.js 이미지 자산을 확인하고 PDF를 다시 열어 주세요.`)
         }
         const target = canvasRef.current
         const targetContext = target?.getContext('2d', { alpha: false })
@@ -429,6 +447,7 @@ export function PdfPage({ pdf, page, paneId, pane, rotation, active, tool, lineS
         targetContext.drawImage(staging, 0, 0)
         const css = { width: base.width * cssScale, height: base.height * cssScale }
         setDisplayedSize({ page: { width: base.width, height: base.height }, css })
+        setDisplayedRaster({ pdf, page })
         setReadyKey(renderKey)
       } catch (cause) {
         if (!cancelled && sequence === renderSequence.current && (timedOut || !(cause instanceof Error && cause.name === 'RenderingCancelledException'))) {
@@ -445,6 +464,7 @@ export function PdfPage({ pdf, page, paneId, pane, rotation, active, tool, lineS
       window.clearTimeout(debounceId)
       finishDebounce?.()
       window.clearTimeout(timeoutId)
+      cancelPending?.()
       renderTask?.cancel?.()
     }
   }, [pdf, page, pane.zoom, rotation, size.width, size.height, retry, renderKey])
@@ -453,7 +473,7 @@ export function PdfPage({ pdf, page, paneId, pane, rotation, active, tool, lineS
     if (readyKey !== renderKey) return
     const canvas = canvasRef.current
     if (canvas) onPageRendered(page, canvas)
-  }, [pageLinks, qrLinks, readyKey, renderKey, page, onPageRendered])
+  }, [pageLinks, qrLinks, readyKey, renderKey, page, active, onPageRendered])
 
   useEffect(() => {
     const element = scrollRef.current
@@ -757,14 +777,19 @@ export function PdfPage({ pdf, page, paneId, pane, rotation, active, tool, lineS
     if (transform.kind === 'move') {
       after.x = Math.min(1 - after.displayWidth, Math.max(0, transform.before.x + dx))
       after.y = Math.min(1 - after.displayHeight, Math.max(0, transform.before.y + dy))
-    }
-    if (transform.kind === 'width' || transform.kind === 'both') {
-      const minimumWidth = Math.min(1, 120 / pageSize.width)
-      after.displayWidth = Math.min(1 - after.x, Math.max(minimumWidth, transform.before.displayWidth + dx))
-    }
-    if (transform.kind === 'height' || transform.kind === 'both') {
-      const minimumHeight = Math.min(1, 100 / pageSize.height)
-      after.displayHeight = Math.min(1 - after.y, Math.max(minimumHeight, transform.before.displayHeight + dy))
+    } else {
+      const width = transform.before.displayWidth * pageSize.width
+      const height = transform.before.displayHeight * pageSize.height
+      const scaleDelta = transform.kind === 'width'
+        ? dx / width
+        : transform.kind === 'height'
+          ? dy / height
+          : (dx * width + dy * height) / (width * width + height * height)
+      const minimumScale = Math.max(Math.min(120, pageSize.width) / width, Math.min(100, pageSize.height) / height)
+      const maximumScale = Math.min((1 - after.x) * pageSize.width / width, (1 - after.y) * pageSize.height / height)
+      const scale = Math.min(maximumScale, Math.max(Math.min(minimumScale, maximumScale), 1 + scaleDelta))
+      after.displayWidth = transform.before.displayWidth * scale
+      after.displayHeight = transform.before.displayHeight * scale
     }
     transform.after = after
     panel.style.left = after.x * pageSize.width + 'px'
@@ -1004,20 +1029,6 @@ export function PdfPage({ pdf, page, paneId, pane, rotation, active, tool, lineS
   }, [deleteText, selectedNoteId])
 
   function handleSvgPointerDown(event: ReactPointerEvent<SVGSVGElement>) {
-    const target = event.target as SVGElement
-    const axis = target.dataset.progress as 'horizontal' | 'vertical' | undefined
-    if (axis && tool !== 'text') {
-      setSelectedNoteId(null)
-      setEditingNoteId(null)
-      onActivate()
-      event.stopPropagation()
-      event.currentTarget.setPointerCapture(event.pointerId)
-      const id = target.dataset.guideId
-      if (!id) return
-      lineDrag.current = { axis, id }
-      actionStartWork.current = work
-      return
-    }
     if (tool === 'pan') {
       setTextPreviewPoint(null)
       return
@@ -1051,10 +1062,6 @@ export function PdfPage({ pdf, page, paneId, pane, rotation, active, tool, lineS
     const point = pointFromEvent(event, event.currentTarget, rotation)
     if (tool === 'text' && event.pointerType === 'mouse') setTextPreviewPoint(point)
     else setTextPreviewPoint(null)
-    if (lineDrag.current) {
-      updateGuide(lineDrag.current.axis, lineDrag.current.id, lineDrag.current.axis === 'horizontal' ? point.y : point.x, false)
-      return
-    }
     if (tool === 'eraser') {
       const found = work.annotations.filter((annotation) => {
         const points = annotation.points
@@ -1076,13 +1083,6 @@ export function PdfPage({ pdf, page, paneId, pane, rotation, active, tool, lineS
 
   function handleSvgPointerUp(event: ReactPointerEvent<SVGSVGElement>) {
     event.stopPropagation()
-    if (lineDrag.current) {
-      const drag = lineDrag.current
-      const point = pointFromEvent(event, event.currentTarget, rotation)
-      updateGuide(drag.axis, drag.id, drag.axis === 'horizontal' ? point.y : point.x, true)
-      lineDrag.current = null
-      return
-    }
     if (tool === 'eraser') {
       if (erasedIds.current.size) onWorkChange({ ...work, annotations: work.annotations.filter((annotation) => !erasedIds.current.has(annotation.id)) }, true, true, actionStartWork.current)
       erasedIds.current.clear()
@@ -1102,9 +1102,49 @@ export function PdfPage({ pdf, page, paneId, pane, rotation, active, tool, lineS
     onWorkChange({ ...work, annotations: [...work.annotations, annotation] }, true, true, actionStartWork.current)
   }
 
+  function handleGuidePointerDown(event: ReactPointerEvent<SVGSVGElement>) {
+    const target = event.target as SVGElement
+    const axis = target.dataset.progress as 'horizontal' | 'vertical' | undefined
+    const id = target.dataset.guideId
+    if (!axis || !id || tool === 'text') return
+    event.preventDefault()
+    event.stopPropagation()
+    setSelectedNoteId(null)
+    setEditingNoteId(null)
+    onActivate()
+    event.currentTarget.setPointerCapture(event.pointerId)
+    lineDrag.current = { axis, id, pointerId: event.pointerId }
+    actionStartWork.current = work
+  }
+
+  function handleGuidePointerMove(event: ReactPointerEvent<SVGSVGElement>) {
+    const drag = lineDrag.current
+    if (!drag || drag.pointerId !== event.pointerId) return
+    const point = pointFromEvent(event, event.currentTarget, 0)
+    updateGuide(drag.axis, drag.id, drag.axis === 'horizontal' ? point.y : point.x, false)
+  }
+
+  function handleGuidePointerUp(event: ReactPointerEvent<SVGSVGElement>) {
+    const drag = lineDrag.current
+    if (!drag || drag.pointerId !== event.pointerId) return
+    event.preventDefault()
+    event.stopPropagation()
+    const point = pointFromEvent(event, event.currentTarget, 0)
+    updateGuide(drag.axis, drag.id, drag.axis === 'horizontal' ? point.y : point.x, true)
+    lineDrag.current = null
+  }
+
   const pageSize = displayedSize?.page
   const cssSize = displayedSize?.css
   const rotatedCssSize = cssSize ? rotatedPageSize(cssSize, rotation) : null
+  const guidePageSize = pageSize ? rotatedPageSize(pageSize, rotation) : null
+  const guideLayerStyle = cssSize && rotatedCssSize ? {
+    left: (cssSize.width - rotatedCssSize.width) / 2,
+    top: (cssSize.height - rotatedCssSize.height) / 2,
+    width: rotatedCssSize.width,
+    height: rotatedCssSize.height,
+    transform: 'rotate(' + -rotation + 'deg)',
+  } : undefined
   const pageWrapStyle = rotatedCssSize ? {
     width: Math.max(size.width - 24, rotatedCssSize.width) + 24,
     height: Math.max(size.height - 24, rotatedCssSize.height) + 24,
@@ -1129,9 +1169,9 @@ export function PdfPage({ pdf, page, paneId, pane, rotation, active, tool, lineS
             <canvas ref={canvasRef} aria-label={'PDF ' + page + '페이지'} />
             {pageSize && cssSize && <>
             <svg
-              className={'pdf-svg-overlay ' + (tool === 'pan' ? 'pan-mode' : tool === 'text' ? 'text-mode' : 'draw-mode')}
-              viewBox={'0 0 ' + pageSize.width + ' ' + pageSize.height}
-              preserveAspectRatio="none"
+                className={'pdf-svg-overlay ' + (tool === 'pan' ? 'pan-mode' : tool === 'text' ? 'text-mode' : 'draw-mode')}
+                viewBox={'0 0 ' + pageSize.width + ' ' + pageSize.height}
+                preserveAspectRatio="none"
               onPointerDown={handleSvgPointerDown}
               onPointerMove={handleSvgPointerMove}
               onPointerLeave={() => setTextPreviewPoint(null)}
@@ -1139,14 +1179,6 @@ export function PdfPage({ pdf, page, paneId, pane, rotation, active, tool, lineS
               onPointerCancel={handleSvgPointerUp}
             >
               {tool !== 'pan' && <rect x="0" y="0" width={pageSize.width} height={pageSize.height} fill="transparent" pointerEvents="all" />}
-              {lineSettings.horizontal.visible && horizontalGuides.map((guide) => <g key={guide.id}>
-                <line x1="0" x2={pageSize.width} y1={guide.position * pageSize.height} y2={guide.position * pageSize.height} stroke={lineSettings.horizontal.color} strokeWidth={lineSettings.horizontal.thickness} strokeOpacity={lineSettings.horizontal.opacity} pointerEvents="none" />
-                <line data-progress="horizontal" data-guide-id={guide.id} x1="0" x2={pageSize.width} y1={guide.position * pageSize.height} y2={guide.position * pageSize.height} stroke="transparent" strokeWidth="24" pointerEvents="stroke" />
-              </g>)}
-              {lineSettings.vertical.visible && verticalGuides.map((guide) => <g key={guide.id}>
-                <line x1={guide.position * pageSize.width} x2={guide.position * pageSize.width} y1="0" y2={pageSize.height} stroke={lineSettings.vertical.color} strokeWidth={lineSettings.vertical.thickness} strokeOpacity={lineSettings.vertical.opacity} pointerEvents="none" />
-                <line data-progress="vertical" data-guide-id={guide.id} x1={guide.position * pageSize.width} x2={guide.position * pageSize.width} y1="0" y2={pageSize.height} stroke="transparent" strokeWidth="24" pointerEvents="stroke" />
-              </g>)}
               {work.annotations.filter((annotation) => annotation.type !== 'text').map((annotation) =>
                 <path key={annotation.id} d={annotationPath(annotation, pageSize.width, pageSize.height)} fill="none" stroke={annotation.style.color} strokeWidth={annotation.style.thickness} strokeOpacity={annotation.style.opacity} strokeLinecap="round" strokeLinejoin="round" style={{ mixBlendMode: annotation.type === 'highlight' ? 'multiply' : 'normal', pointerEvents: tool === 'text' ? 'auto' : 'none' }} />,
               )}
@@ -1358,19 +1390,41 @@ export function PdfPage({ pdf, page, paneId, pane, rotation, active, tool, lineS
                 onPointerCancel={finishColorworkStroke}
                 onLostPointerCapture={finishColorworkStroke}
               />
-              <button type="button" className="colorwork-resize-x" aria-label="컬러워크 가로 크기 조절" onPointerDown={(event) => beginColorworkTransform(event, 'width')} onPointerMove={moveColorworkTransform} onPointerUp={finishColorworkTransform} onPointerCancel={finishColorworkTransform} />
-              <button type="button" className="colorwork-resize-y" aria-label="컬러워크 세로 크기 조절" onPointerDown={(event) => beginColorworkTransform(event, 'height')} onPointerMove={moveColorworkTransform} onPointerUp={finishColorworkTransform} onPointerCancel={finishColorworkTransform} />
-              <button type="button" className="colorwork-resize-both" aria-label="컬러워크 가로·세로 크기 조절" onPointerDown={(event) => beginColorworkTransform(event, 'both')} onPointerMove={moveColorworkTransform} onPointerUp={finishColorworkTransform} onPointerCancel={finishColorworkTransform} />
+              <button type="button" className="colorwork-resize-x" aria-label="컬러워크 비율 유지하며 크기 조절" onPointerDown={(event) => beginColorworkTransform(event, 'width')} onPointerMove={moveColorworkTransform} onPointerUp={finishColorworkTransform} onPointerCancel={finishColorworkTransform} />
+              <button type="button" className="colorwork-resize-y" aria-label="컬러워크 비율 유지하며 크기 조절" onPointerDown={(event) => beginColorworkTransform(event, 'height')} onPointerMove={moveColorworkTransform} onPointerUp={finishColorworkTransform} onPointerCancel={finishColorworkTransform} />
+              <button type="button" className="colorwork-resize-both" aria-label="컬러워크 비율 유지하며 크기 조절" onPointerDown={(event) => beginColorworkTransform(event, 'both')} onPointerMove={moveColorworkTransform} onPointerUp={finishColorworkTransform} onPointerCancel={finishColorworkTransform} />
             </div>}
-            <button type="button" className="guide-remove-button guide-remove-horizontal" aria-label="마지막 가로선 삭제" title={horizontalGuides.length ? '마지막 가로선 삭제' : '삭제할 가로선 없음'} disabled={!horizontalGuides.length} onPointerDown={(event) => event.stopPropagation()} onClick={() => removeGuide('horizontal')}><Minus size={15} /></button>
-            <button type="button" className="guide-remove-button guide-remove-vertical" aria-label="마지막 세로선 삭제" title={verticalGuides.length ? '마지막 세로선 삭제' : '삭제할 세로선 없음'} disabled={!verticalGuides.length} onPointerDown={(event) => event.stopPropagation()} onClick={() => removeGuide('vertical')}><Minus size={15} /></button>
-            <button type="button" className="guide-add-button guide-add-vertical" aria-label="세로선 추가" title={verticalGuides.length >= 10 ? '세로선 최대 10개' : '세로선 추가'} disabled={verticalGuides.length >= 10} onPointerDown={(event) => event.stopPropagation()} onClick={() => addGuide('vertical')}><Plus size={15} /></button>
-            <button type="button" className="guide-add-button guide-add-horizontal" aria-label="가로선 추가" title={horizontalGuides.length >= 10 ? '가로선 최대 10개' : '가로선 추가'} disabled={horizontalGuides.length >= 10} onPointerDown={(event) => event.stopPropagation()} onClick={() => addGuide('horizontal')}><Plus size={15} /></button>
+            {guidePageSize && <div className="pdf-guide-layer" style={guideLayerStyle}>
+              <svg
+                className="pdf-guide-svg"
+                viewBox={'0 0 ' + guidePageSize.width + ' ' + guidePageSize.height}
+                preserveAspectRatio="none"
+                onPointerDown={handleGuidePointerDown}
+                onPointerMove={handleGuidePointerMove}
+                onPointerUp={handleGuidePointerUp}
+                onPointerCancel={handleGuidePointerUp}
+                onLostPointerCapture={handleGuidePointerUp}
+                aria-label="진행선"
+              >
+                {lineSettings.horizontal.visible && horizontalGuides.map((guide) => <g key={guide.id}>
+                  <line x1="0" x2={guidePageSize.width} y1={guide.position * guidePageSize.height} y2={guide.position * guidePageSize.height} stroke={lineSettings.horizontal.color} strokeWidth={lineSettings.horizontal.thickness} strokeOpacity={lineSettings.horizontal.opacity} pointerEvents="none" />
+                  <line data-progress="horizontal" data-guide-id={guide.id} x1="0" x2={guidePageSize.width} y1={guide.position * guidePageSize.height} y2={guide.position * guidePageSize.height} stroke="transparent" strokeWidth="24" pointerEvents={tool === 'text' ? 'none' : 'stroke'} />
+                </g>)}
+                {lineSettings.vertical.visible && verticalGuides.map((guide) => <g key={guide.id}>
+                  <line x1={guide.position * guidePageSize.width} x2={guide.position * guidePageSize.width} y1="0" y2={guidePageSize.height} stroke={lineSettings.vertical.color} strokeWidth={lineSettings.vertical.thickness} strokeOpacity={lineSettings.vertical.opacity} pointerEvents="none" />
+                  <line data-progress="vertical" data-guide-id={guide.id} x1={guide.position * guidePageSize.width} x2={guide.position * guidePageSize.width} y1="0" y2={guidePageSize.height} stroke="transparent" strokeWidth="24" pointerEvents={tool === 'text' ? 'none' : 'stroke'} />
+                </g>)}
+              </svg>
+              <button type="button" className="guide-remove-button guide-remove-horizontal" aria-label="마지막 가로선 삭제" title={horizontalGuides.length ? '마지막 가로선 삭제' : '삭제할 가로선 없음'} disabled={!horizontalGuides.length} onPointerDown={(event) => event.stopPropagation()} onClick={() => removeGuide('horizontal')}><Minus size={15} /></button>
+              <button type="button" className="guide-remove-button guide-remove-vertical" aria-label="마지막 세로선 삭제" title={verticalGuides.length ? '마지막 세로선 삭제' : '삭제할 세로선 없음'} disabled={!verticalGuides.length} onPointerDown={(event) => event.stopPropagation()} onClick={() => removeGuide('vertical')}><Minus size={15} /></button>
+              <button type="button" className="guide-add-button guide-add-vertical" aria-label="세로선 추가" title={verticalGuides.length >= 10 ? '세로선 최대 10개' : '세로선 추가'} disabled={verticalGuides.length >= 10} onPointerDown={(event) => event.stopPropagation()} onClick={() => addGuide('vertical')}><Plus size={15} /></button>
+              <button type="button" className="guide-add-button guide-add-horizontal" aria-label="가로선 추가" title={horizontalGuides.length >= 10 ? '가로선 최대 10개' : '가로선 추가'} disabled={horizontalGuides.length >= 10} onPointerDown={(event) => event.stopPropagation()} onClick={() => addGuide('horizontal')}><Plus size={15} /></button>
+            </div>}
             </>}
           </div>
           </div>
         </div>
-        {readyKey !== renderKey && renderError?.key !== renderKey && <div className={'pane-loading' + (displayedSize ? ' pane-loading-refresh' : '')}><span>PDF 페이지를 준비하고 있어요…</span></div>}
+        {readyKey !== renderKey && renderError?.key !== renderKey && <div className={'pane-loading' + (displayedRaster?.pdf === pdf && displayedRaster.page === page ? ' pane-loading-refresh' : '')}><span>PDF 페이지를 준비하고 있어요…</span></div>}
         {renderError?.key === renderKey && <div className="pane-error">{renderError.message}<button onClick={() => { setRenderError(null); setRetry((current) => current + 1) }}>다시 시도</button></div>}
         {!workReady && <div className="page-work-loading">페이지 작업을 불러오는 중…</div>}
       </div>
