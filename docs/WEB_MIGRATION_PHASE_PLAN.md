@@ -1,7 +1,7 @@
 # 도안보고 웹 전환 및 앱 배포 Phase Plan
 
 작성일: 2026-10-04  
-상태: 승인된 INDEX 뷰어 개선(전체 페이지 썸네일, 단일 보기 확장, 진행선·필기 도구, 크기 조절 중 렌더 안정화)을 구현하고 portable Edge file:// 검사에서 주요 흐름을 확인했다. Android 태블릿, 사용자 실패 PDF, GitHub 공개 검증과 Capacitor APK 실기기 검증은 대기 중이다. 상세 증거는 docs/WEB_MIGRATION_CHECKLIST.md를 참고한다.
+상태: 승인된 웹 뷰어 기능을 구현해 GitHub Pages에 배포했다. 공개 주소와 앱 진입 자산은 응답을 확인했으며, Android 태블릿·사용자 실패 PDF·공개 브라우저 상호작용·Capacitor APK 실기기 검증은 대기 중이다. 상세 증거는 docs/WEB_MIGRATION_CHECKLIST.md를 참고한다.
 
 ## 진행 현황 (2026-10-04)
 
@@ -10,7 +10,7 @@
 - Phase 3 INDEX 개선: 단일 보기는 작업 캔버스 전체 폭을 쓰고, 모든 페이지 썸네일을 가로 목록으로 제공한다. 진행선 2종과 펜·직선·형광펜·지우개·텍스트, 페이지별 저장·실행 취소/다시 실행을 추가했다. 분할 경계 조절 뒤 PDF 페이지를 debounce해 임시 캔버스에 렌더한다. portable Edge 자동 검사에서 페이지 선택, 필기 실행 취소/다시 실행, 설정 표시, 분할 비율 변경 후 로딩 종료를 확인했다.
 - Phase 4: PWA 오프라인 캐시를 구성했다. production preview에서 PDF를 추가하고 뷰어 상태를 저장한 뒤 오프라인 새로고침 후 PDF를 다시 렌더링했다. 이는 Android 태블릿 통과를 뜻하지 않는다.
 - Phase 4A: `npm run build:portable`로 `portable/index.html` 단일 파일을 만들고 Edge `file://`에서 실행·PDF 추가·임시 저장 안내·작업 파일 가져오기와 생성 PDF의 뷰어 canvas 렌더 완료를 확인했다. IndexedDB가 막힌 파일 실행에서는 메모리 임시 저장과 `.doanbogo` 백업을 사용한다.
-- Phase 5: GitHub Pages workflow와 저장소 하위 경로 빌드 설정을 준비했다. GitHub 저장소 URL과 공개 주소가 없어 업로드·공개 검증은 하지 않았다.
+- Phase 5: `https://github.com/blg-mike/doanbogo-web`의 `main`에 `e271402`를 반영하고 GitHub Pages 배포를 완료했다. [공개 웹](https://blg-mike.github.io/doanbogo-web/)의 진입 페이지와 JS·CSS·manifest가 HTTP 200으로 응답한다. 공개 브라우저에서 PDF 조작 시나리오 검증은 남아 있다.
 - Phase 6: Phase 5 공개 검증과 Android 태블릿 테스트 뒤 진행한다.
 
 일반 웹 주소에서는 브라우저 IndexedDB에 자동 저장한다. 직접 파일 실행은 IndexedDB가 허용되면 자동 저장하고, 차단되면 메모리 임시 저장과 `.doanbogo` 가져오기·내보내기를 사용한다. 기존 Expo 앱 데이터 자동 이관은 구현 범위에 포함되지 않는다.
@@ -150,7 +150,7 @@
 
 ### Phase 5 — GitHub 업로드와 GitHub Pages 공개 검증
 
-**선행 조건:** Phase 4의 핵심 시나리오 통과, 사용할 GitHub 저장소 URL 확정. 현재 기존 앱 저장소에는 GitHub remote가 설정돼 있지 않다.  
+**선행 조건:** Phase 4의 핵심 시나리오 통과, 사용할 GitHub 저장소 URL 확정. 웹 저장소 연결과 첫 Pages 배포는 완료했다.
 **목적:** 공유 가능한 검증 웹 주소와 재현 가능한 배포 경로를 만든다.
 
 - 웹 저장소에 소스·lockfile·실행 문서·검증표를 올린다. 개인 PDF·로컬 DB·서명 키·APK 빌드 출력은 저장소에 넣지 않는다.

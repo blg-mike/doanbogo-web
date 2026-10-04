@@ -88,8 +88,8 @@
 
 ## 공개 및 앱 배포 대기 항목
 
-- GitHub 저장소 URL을 연결하지 않았고 원격에 push하지 않았다.
-- GitHub Pages의 실제 공개 주소와 하위 경로는 미검증이다.
+- GitHub 저장소 `https://github.com/blg-mike/doanbogo-web`에 `e271402`를 push했고 Pages Actions 배포가 성공했다.
+- [공개 URL](https://blg-mike.github.io/doanbogo-web/)과 앱 JS·CSS·manifest의 HTTP 200 응답을 확인했다. 공개 브라우저에서 PDF 가져오기·뷰어 조작·새로고침·오프라인 흐름은 별도 검증이 남아 있다.
 - 사용자 실패 PDF와 Android 태블릿 브라우저는 확인되지 않았다.
 - Capacitor Android 패키징 및 APK 생성은 웹 공개 흐름 검증 뒤 진행한다.
 - 기존 Expo 앱 내부의 PDF·태그·페이지 작업 상태는 브라우저 IndexedDB로 자동 이전되지 않는다.

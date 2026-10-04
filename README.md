@@ -30,7 +30,7 @@ npm run build:portable
 
 portable 빌드는 PDF.js 처리 코드를 HTML에 포함하고 메인 스레드에서 실행합니다. PDF 처리가 일반 웹 빌드보다 느릴 수 있습니다. 브라우저가 `file://`에서 IndexedDB를 허용하면 자동 저장하고, 허용하지 않으면 임시 저장으로 실행합니다. 임시 저장 상태에서는 창을 닫기 전에 설정에서 `.doanbogo` 작업 파일을 내보내야 합니다. v7 작업 파일은 PDF 원본과 표지, 페이지별 작업 상태, 대바늘·코바늘 차트, 뜨개보고서와 사진을 보관하며 v1~v6 작업 파일도 가져올 수 있습니다.
 
-GitHub Actions는 **main** 브랜치 변경 시 검사, 빌드, GitHub Pages 배포를 실행합니다. 저장소 경로는 GitHub Actions 환경에서 자동으로 반영됩니다.
+GitHub Pages 공개 주소: [https://blg-mike.github.io/doanbogo-web/](https://blg-mike.github.io/doanbogo-web/) · 소스: [GitHub 저장소](https://github.com/blg-mike/doanbogo-web). `main` 브랜치 변경 시 GitHub Actions가 검사·빌드·배포하며 저장소 경로를 자동으로 반영합니다.
 
 ## 문서
 
