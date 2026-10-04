@@ -201,3 +201,9 @@
 | Pages 하위 경로에서 worker/뷰어 404 | Vite base·PWA scope·worker 경로 확인, 해시 라우팅, 공개 URL 검사 |
 | 웹과 APK의 데이터가 같을 것이라는 오해 | 브라우저·origin·앱 저장소별 분리와 재가져오기 기본 경로 명시 |
 | 기존 앱 데이터를 새 앱이 자동으로 못 읽음 | 기존 앱 보존, 별도 테스트 패키지, 대체 출시 전 명시적 이관 계획 |
+
+## 6. PDF.js JPEG 2000 렌더링 검증 기록
+
+2026-10-04에 PDF.js가 JPEG 2000 이미지 해독에 필요한 OpenJPEG WASM을 찾지 못해 일부 PDF 페이지의 이미지가 빈 상태로 표시되는 문제를 수정했다. CMap·기본 글꼴·WASM 자산을 일반 웹 빌드와 portable 단일 HTML에서 공급하고, Pages 하위 경로의 OpenJPEG 대체 자산과 PWA 캐시를 연결했다. 이미지 해독 실패 시에는 페이지 번호가 포함된 오류를 표시한다.
+
+제공된 15페이지 PDF를 Edge `file://` portable 실행과 GitHub Pages 공개 주소에서 각각 추가했다. 두 환경 모두 9페이지 도안이 표시됐고, PDF.js 전체 페이지 검사에서 이미지 해독 실패가 없었다. Actions 배포와 공개 URL HTTP 200, 브라우저 console/page error 없음도 확인했다. PDF 파일은 저장소에 추가하지 않았다. Android 태블릿 실기기 확인은 남아 있다.
