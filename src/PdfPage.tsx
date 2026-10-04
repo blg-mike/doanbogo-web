@@ -1,18 +1,18 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, type PointerEvent as ReactPointerEvent, type RefObject } from 'react'
 import type { PDFDocumentProxy } from 'pdfjs-dist'
-import { Plus, Trash2 } from 'lucide-react'
-import type { AnnotationRecord, AnnotationStyle, AnnotationTool, ColorworkCell, ColorworkCreateRequest, ColorworkGrid, PageWorkRecord, PaneId, PaneSnapshot, ProgressGuide, ProgressSettings } from './types'
+import { Minus, Plus, RotateCw, Trash2 } from 'lucide-react'
+import type { AnnotationRecord, AnnotationStyle, AnnotationTool, ColorworkCell, ColorworkCreateRequest, ColorworkGrid, PageRotation, PageWorkRecord, PaneId, PaneSnapshot, ProgressGuide, ProgressSettings } from './types'
 import { createColorworkGrid } from './colorwork'
 import { textNoteBoxAt } from './textNote'
 import type { PdfQrLink } from './qr'
+import { inverseRotatePoint, rotatedPageSize } from './pageGeometry'
 
 type Point = { x: number; y: number }
 type Size = { width: number; height: number }
 type ColorworkTransform = {
   pointerId: number
   kind: 'move' | 'width' | 'height' | 'both'
-  startX: number
-  startY: number
+  start: Point
   before: ColorworkGrid
   after: ColorworkGrid
   beforeWork: PageWorkRecord
@@ -137,12 +137,12 @@ function annotationPath(annotation: AnnotationRecord, width: number, height: num
   return points.map((point, index) => (index ? 'L ' : 'M ') + point.x + ' ' + point.y).join(' ')
 }
 
-function pointFromEvent(event: { clientX: number; clientY: number }, element: Element): Point {
+function pointFromEvent(event: { clientX: number; clientY: number }, element: Element, rotation: PageRotation): Point {
   const rect = element.getBoundingClientRect()
-  return {
+  return inverseRotatePoint({
     x: Math.min(1, Math.max(0, (event.clientX - rect.left) / Math.max(rect.width, 1))),
     y: Math.min(1, Math.max(0, (event.clientY - rect.top) / Math.max(rect.height, 1))),
-  }
+  }, rotation)
 }
 
 function distanceToSegment(point: Point, start: Point, end: Point, width: number, height: number) {
@@ -157,6 +157,11 @@ function distanceToSegment(point: Point, start: Point, end: Point, width: number
   const length = dx * dx + dy * dy
   const t = length ? Math.min(1, Math.max(0, ((px - ax) * dx + (py - ay) * dy) / length)) : 0
   return Math.hypot(px - (ax + t * dx), py - (ay + t * dy))
+}
+
+function regionsOverlap(first: PdfQrLink, second: PdfQrLink) {
+  return first.x < second.x + second.width && first.x + first.width > second.x &&
+    first.y < second.y + second.height && first.y + first.height > second.y
 }
 
 function guidesFor(work: PageWorkRecord, axis: 'horizontal' | 'vertical'): ProgressGuide[] {
@@ -184,31 +189,35 @@ function withTextBox(annotation: AnnotationRecord, pageHeight: number): Annotati
   return { ...annotation, points: [{ x: box.x, y: box.y }], boxWidth: box.width, boxHeight: box.height }
 }
 
-export function PdfPage({ pdf, page, paneId, pane, active, tool, lineSettings, annotationStyle, work, colorworkBrushColor, colorworkBrushOpacity, colorworkEraser, createColorworkRequest, qrEnabled, qrLinks, onPageRendered, onActivate, onWorkChange, onZoom, onCenter, onColorworkRequestHandled, onTextToolConsumed }: {
+export function PdfPage({ pdf, page, paneId, pane, rotation, active, tool, lineSettings, annotationStyle, work, workReady, colorworkBrushColor, colorworkBrushOpacity, colorworkEraser, createColorworkRequest, pageLinks, qrLinks, onPageRendered, onActivate, onWorkChange, onZoom, onRotate, onCenter, onColorworkRequestHandled, onTextToolConsumed }: {
   pdf: PDFDocumentProxy
   page: number
   paneId: PaneId
   pane: PaneSnapshot
+  rotation: PageRotation
   active: boolean
   tool: AnnotationTool
   lineSettings: ProgressSettings
   annotationStyle: AnnotationStyle
   work: PageWorkRecord
+  workReady: boolean
   colorworkBrushColor: string
   colorworkBrushOpacity: number
   colorworkEraser: boolean
   createColorworkRequest: ColorworkCreateRequest | null
-  qrEnabled: boolean
+  pageLinks: PdfQrLink[] | undefined
   qrLinks: PdfQrLink[] | undefined
   onPageRendered: (pageNumber: number, canvas: HTMLCanvasElement) => void
   onActivate: () => void
   onWorkChange: (work: PageWorkRecord, immediate: boolean, recordHistory?: boolean, historyBefore?: PageWorkRecord) => void
   onZoom: (zoom: number) => void
+  onRotate: () => void
   onCenter: (x: number, y: number) => void
   onColorworkRequestHandled: (id: string) => void
   onTextToolConsumed: () => void
 }) {
   const scrollRef = useRef<HTMLDivElement>(null)
+  const rotationLayerRef = useRef<HTMLDivElement>(null)
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const annotationLayerRef = useRef<HTMLDivElement>(null)
   const textInputRef = useRef<HTMLTextAreaElement>(null)
@@ -248,7 +257,7 @@ export function PdfPage({ pdf, page, paneId, pane, active, tool, lineSettings, a
   const [textPreviewPoint, setTextPreviewPoint] = useState<Point | null>(null)
   const [textToolbarPosition, setTextToolbarPosition] = useState<Point | null>(null)
   const [fontSizeDraft, setFontSizeDraft] = useState<{ id: string; value: string } | null>(null)
-  const renderKey = [page, pane.zoom, size.width, size.height].join(':')
+  const renderKey = [page, pane.zoom, rotation, size.width, size.height].join(':')
   const colorworkGrid = work.colorworkGrid?.visible ? work.colorworkGrid : null
 
   useEffect(() => {
@@ -278,7 +287,8 @@ export function PdfPage({ pdf, page, paneId, pane, active, tool, lineSettings, a
         const pdfPage = await pdf.getPage(page)
         if (cancelled) return
         const base = pdfPage.getViewport({ scale: 1 })
-        const fit = Math.min(Math.max(1, size.width - 24) / base.width, Math.max(1, size.height - 24) / base.height)
+        const fitSize = rotatedPageSize(base, rotation)
+        const fit = Math.min(Math.max(1, size.width - 24) / fitSize.width, Math.max(1, size.height - 24) / fitSize.height)
         const cssScale = Math.max(0.1, fit * pane.zoom)
         const ratio = Math.min(window.devicePixelRatio || 1, 2)
         const viewport = pdfPage.getViewport({ scale: cssScale * ratio })
@@ -317,13 +327,13 @@ export function PdfPage({ pdf, page, paneId, pane, active, tool, lineSettings, a
       window.clearTimeout(timeoutId)
       renderTask?.cancel?.()
     }
-  }, [pdf, page, pane.zoom, size.width, size.height, retry, renderKey])
+  }, [pdf, page, pane.zoom, rotation, size.width, size.height, retry, renderKey])
 
   useEffect(() => {
-    if (!active || !qrEnabled || qrLinks !== undefined || readyKey !== renderKey) return
+    if (readyKey !== renderKey) return
     const canvas = canvasRef.current
     if (canvas) onPageRendered(page, canvas)
-  }, [active, qrEnabled, qrLinks, readyKey, renderKey, page, onPageRendered])
+  }, [pageLinks, qrLinks, readyKey, renderKey, page, onPageRendered])
 
   useEffect(() => {
     const element = scrollRef.current
@@ -477,6 +487,14 @@ export function PdfPage({ pdf, page, paneId, pane, active, tool, lineSettings, a
     onWorkChange({ ...work, [key]: [...guides, guide] }, true, true, work)
   }
 
+  function removeGuide(axis: 'horizontal' | 'vertical') {
+    const guides = guidesFor(work, axis)
+    if (!guides.length) return
+    const key = axis === 'horizontal' ? 'horizontalGuides' : 'verticalGuides'
+    onActivate()
+    onWorkChange({ ...work, [key]: guides.slice(0, -1) }, true, true, work)
+  }
+
   function addText(point: Point) {
     if (editingNoteId !== null) finishTextEdit(editingNoteId)
     const before = currentWorkRef.current
@@ -496,10 +514,12 @@ export function PdfPage({ pdf, page, paneId, pane, active, tool, lineSettings, a
   }
 
   function colorworkCellAt(event: ReactPointerEvent<HTMLCanvasElement>, grid: ColorworkGrid) {
-    const rect = event.currentTarget.getBoundingClientRect()
+    const point = rotationLayerRef.current
+      ? pointFromEvent(event, rotationLayerRef.current, rotation)
+      : pointFromEvent(event, event.currentTarget, rotation)
     return {
-      column: Math.min(grid.columns - 1, Math.max(0, Math.floor((event.clientX - rect.left) / rect.width * grid.columns))),
-      row: Math.min(grid.rows - 1, Math.max(0, Math.floor((event.clientY - rect.top) / rect.height * grid.rows))),
+      column: Math.min(grid.columns - 1, Math.max(0, Math.floor(point.x * grid.columns))),
+      row: Math.min(grid.rows - 1, Math.max(0, Math.floor(point.y * grid.rows))),
     }
   }
 
@@ -588,11 +608,13 @@ export function PdfPage({ pdf, page, paneId, pane, active, tool, lineSettings, a
     event.stopPropagation()
     onActivate()
     event.currentTarget.setPointerCapture(event.pointerId)
+    const start = rotationLayerRef.current
+      ? pointFromEvent(event, rotationLayerRef.current, rotation)
+      : { x: 0, y: 0 }
     colorworkTransform.current = {
       pointerId: event.pointerId,
       kind,
-      startX: event.clientX,
-      startY: event.clientY,
+      start,
       before: grid,
       after: grid,
       beforeWork: work,
@@ -606,8 +628,11 @@ export function PdfPage({ pdf, page, paneId, pane, active, tool, lineSettings, a
     if (!transform || transform.pointerId !== event.pointerId || !pageSize || !panel) return
     event.preventDefault()
     event.stopPropagation()
-    const dx = (event.clientX - transform.startX) / pageSize.width
-    const dy = (event.clientY - transform.startY) / pageSize.height
+    const point = rotationLayerRef.current
+      ? pointFromEvent(event, rotationLayerRef.current, rotation)
+      : transform.start
+    const dx = point.x - transform.start.x
+    const dy = point.y - transform.start.y
     const after = { ...transform.before }
     if (transform.kind === 'move') {
       after.x = Math.min(1 - after.displayWidth, Math.max(0, transform.before.x + dx))
@@ -642,11 +667,10 @@ export function PdfPage({ pdf, page, paneId, pane, active, tool, lineSettings, a
     const grid = work.colorworkGrid
     const canvas = colorworkCanvasRef.current
     if (!grid?.visible || !canvas || !displayedSize) return
-    const rect = canvas.getBoundingClientRect()
-    if (!rect.width || !rect.height) return
+    if (!displayedSize.css.width || !displayedSize.css.height) return
     const ratio = window.devicePixelRatio || 1
-    canvas.width = Math.max(1, Math.round(rect.width * ratio))
-    canvas.height = Math.max(1, Math.round(rect.height * ratio))
+    canvas.width = Math.max(1, Math.round(displayedSize.css.width * ratio))
+    canvas.height = Math.max(1, Math.round(displayedSize.css.height * ratio))
     const context = canvas.getContext('2d')
     if (!context) return
     context.clearRect(0, 0, canvas.width, canvas.height)
@@ -698,18 +722,19 @@ export function PdfPage({ pdf, page, paneId, pane, active, tool, lineSettings, a
     const center = pointFromEvent({
       clientX: right > left ? (left + right) / 2 : pageRect.left + pageRect.width / 2,
       clientY: bottom > top ? (top + bottom) / 2 : pageRect.top + pageRect.height / 2,
-    }, pageLayer)
+    }, pageLayer, rotation)
+    const visiblePageSize = rotatedPageSize(displayedSize.css, rotation)
     const grid = {
       ...createColorworkGrid(createColorworkRequest.settings),
-      displayWidth: Math.min(1, visibleWidth * 0.6 / pageRect.width),
-      displayHeight: Math.min(1, visibleHeight * 0.6 / pageRect.height),
+      displayWidth: Math.min(1, visibleWidth * 0.6 / visiblePageSize.width),
+      displayHeight: Math.min(1, visibleHeight * 0.6 / visiblePageSize.height),
     }
     grid.x = Math.min(1 - grid.displayWidth, Math.max(0, center.x - grid.displayWidth / 2))
     grid.y = Math.min(1 - grid.displayHeight, Math.max(0, center.y - grid.displayHeight / 2))
     onActivate()
     onWorkChange({ ...work, colorworkGrid: grid }, true, true, work)
     onColorworkRequestHandled(createColorworkRequest.id)
-  }, [createColorworkRequest, displayedSize, paneId, page, work, onActivate, onWorkChange, onColorworkRequestHandled])
+  }, [createColorworkRequest, displayedSize, paneId, page, rotation, work, onActivate, onWorkChange, onColorworkRequestHandled])
 
   function updateText(id: string, value: string) {
     const current = currentWorkRef.current
@@ -800,7 +825,7 @@ export function PdfPage({ pdf, page, paneId, pane, active, tool, lineSettings, a
       id: annotation.id,
       pointerId: event.pointerId,
       kind,
-      start: pointFromEvent(event, layer),
+      start: pointFromEvent(event, layer, rotation),
       original: box,
       before: work,
     }
@@ -811,7 +836,7 @@ export function PdfPage({ pdf, page, paneId, pane, active, tool, lineSettings, a
     const drag = textDrag.current
     const layer = annotationLayerRef.current
     if (!drag || drag.pointerId !== event.pointerId || !layer || !displayedSize) return
-    const point = pointFromEvent(event, layer)
+    const point = pointFromEvent(event, layer, rotation)
     const dx = point.x - drag.start.x
     const dy = point.y - drag.start.y
     const box = drag.kind === 'move'
@@ -879,7 +904,7 @@ export function PdfPage({ pdf, page, paneId, pane, active, tool, lineSettings, a
     }
     onActivate()
     event.stopPropagation()
-    const point = pointFromEvent(event, event.currentTarget)
+    const point = pointFromEvent(event, event.currentTarget, rotation)
     if (tool === 'text') {
       if (event.pointerType === 'mouse') event.preventDefault()
       addText(point)
@@ -903,7 +928,7 @@ export function PdfPage({ pdf, page, paneId, pane, active, tool, lineSettings, a
   }
 
   function handleSvgPointerMove(event: ReactPointerEvent<SVGSVGElement>) {
-    const point = pointFromEvent(event, event.currentTarget)
+    const point = pointFromEvent(event, event.currentTarget, rotation)
     if (tool === 'text' && event.pointerType === 'mouse') setTextPreviewPoint(point)
     else setTextPreviewPoint(null)
     if (lineDrag.current) {
@@ -933,7 +958,7 @@ export function PdfPage({ pdf, page, paneId, pane, active, tool, lineSettings, a
     event.stopPropagation()
     if (lineDrag.current) {
       const drag = lineDrag.current
-      const point = pointFromEvent(event, event.currentTarget)
+      const point = pointFromEvent(event, event.currentTarget, rotation)
       updateGuide(drag.axis, drag.id, drag.axis === 'horizontal' ? point.y : point.x, true)
       lineDrag.current = null
       return
@@ -959,6 +984,11 @@ export function PdfPage({ pdf, page, paneId, pane, active, tool, lineSettings, a
 
   const pageSize = displayedSize?.page
   const cssSize = displayedSize?.css
+  const rotatedCssSize = cssSize ? rotatedPageSize(cssSize, rotation) : null
+  const pageWrapStyle = rotatedCssSize ? {
+    width: Math.max(size.width - 24, rotatedCssSize.width) + 24,
+    height: Math.max(size.height - 24, rotatedCssSize.height) + 24,
+  } : undefined
   const colorworkColumnCellWidth = colorworkGrid && cssSize ? colorworkGrid.displayWidth * cssSize.width / colorworkGrid.columns : 0
   const colorworkRowCellHeight = colorworkGrid && cssSize ? Math.max(1, (colorworkGrid.displayHeight * cssSize.height - 26) / colorworkGrid.rows) : 0
   const colorworkColumnFontSize = Math.min(10, Math.max(1, colorworkColumnCellWidth * 0.72))
@@ -973,7 +1003,8 @@ export function PdfPage({ pdf, page, paneId, pane, active, tool, lineSettings, a
     <div className={'pdf-pane ' + (active ? 'is-active' : '')} onPointerDown={onActivate}>
       <div className="pane-label">{active ? '현재 작업 영역' : '보조 영역'}</div>
       <div className="pdf-scroll-area" ref={scrollRef} onScroll={recordCenter} onPointerDown={pointerDown} onPointerMove={pointerMove} onPointerUp={pointerEnd} onPointerCancel={pointerEnd} onDoubleClick={doubleTap}>
-        <div className="pdf-page-wrap">
+        <div className="pdf-page-wrap" style={pageWrapStyle}>
+          <div ref={rotationLayerRef} className="pdf-rotation-content" style={cssSize ? { width: cssSize.width, height: cssSize.height, transform: 'rotate(' + rotation + 'deg)' } : undefined}>
           <div className="pdf-image-layer" style={cssSize ? { width: cssSize.width, height: cssSize.height } : undefined}>
             <canvas ref={canvasRef} aria-label={'PDF ' + page + '페이지'} />
             {pageSize && cssSize && <>
@@ -1134,7 +1165,18 @@ export function PdfPage({ pdf, page, paneId, pane, active, tool, lineSettings, a
                   </label>
                 </div>
               })()}
-              {active && tool === 'pan' && qrEnabled && qrLinks?.map((link, index) => <a
+              {tool === 'pan' && pageLinks?.map((link, index) => <a
+                key={'pdf-' + index}
+                className="page-pdf-link"
+                aria-label={'웹 링크 새 탭 열기 ' + (index + 1)}
+                title={link.href}
+                href={link.href}
+                target="_blank"
+                rel="noopener noreferrer"
+                style={{ left: link.x * cssSize.width, top: link.y * cssSize.height, width: link.width * cssSize.width, height: link.height * cssSize.height }}
+                onPointerDown={(event) => event.stopPropagation()}
+              />)}
+              {pageLinks !== undefined && qrLinks?.filter((link) => !pageLinks.some((pageLink) => regionsOverlap(pageLink, link))).map((link, index) => <a
                 key={index}
                 className="page-qr-link"
                 aria-label={'QR 링크 열기 ' + (index + 1)}
@@ -1200,13 +1242,25 @@ export function PdfPage({ pdf, page, paneId, pane, active, tool, lineSettings, a
               <button type="button" className="colorwork-resize-y" aria-label="컬러워크 세로 크기 조절" onPointerDown={(event) => beginColorworkTransform(event, 'height')} onPointerMove={moveColorworkTransform} onPointerUp={finishColorworkTransform} onPointerCancel={finishColorworkTransform} />
               <button type="button" className="colorwork-resize-both" aria-label="컬러워크 가로·세로 크기 조절" onPointerDown={(event) => beginColorworkTransform(event, 'both')} onPointerMove={moveColorworkTransform} onPointerUp={finishColorworkTransform} onPointerCancel={finishColorworkTransform} />
             </div>}
+            <button type="button" className="guide-remove-button guide-remove-horizontal" aria-label="마지막 가로선 삭제" title={horizontalGuides.length ? '마지막 가로선 삭제' : '삭제할 가로선 없음'} disabled={!horizontalGuides.length} onPointerDown={(event) => event.stopPropagation()} onClick={() => removeGuide('horizontal')}><Minus size={15} /></button>
+            <button type="button" className="guide-remove-button guide-remove-vertical" aria-label="마지막 세로선 삭제" title={verticalGuides.length ? '마지막 세로선 삭제' : '삭제할 세로선 없음'} disabled={!verticalGuides.length} onPointerDown={(event) => event.stopPropagation()} onClick={() => removeGuide('vertical')}><Minus size={15} /></button>
             <button type="button" className="guide-add-button guide-add-vertical" aria-label="세로선 추가" title={verticalGuides.length >= 10 ? '세로선 최대 10개' : '세로선 추가'} disabled={verticalGuides.length >= 10} onPointerDown={(event) => event.stopPropagation()} onClick={() => addGuide('vertical')}><Plus size={15} /></button>
             <button type="button" className="guide-add-button guide-add-horizontal" aria-label="가로선 추가" title={horizontalGuides.length >= 10 ? '가로선 최대 10개' : '가로선 추가'} disabled={horizontalGuides.length >= 10} onPointerDown={(event) => event.stopPropagation()} onClick={() => addGuide('horizontal')}><Plus size={15} /></button>
             </>}
           </div>
+          </div>
         </div>
         {readyKey !== renderKey && renderError?.key !== renderKey && <div className="pane-loading">PDF 페이지를 준비하고 있어요…</div>}
         {renderError?.key === renderKey && <div className="pane-error">{renderError.message}<button onClick={() => { setRenderError(null); setRetry((current) => current + 1) }}>다시 시도</button></div>}
+        {!workReady && <div className="page-work-loading">페이지 작업을 불러오는 중…</div>}
+      </div>
+      <div className="pdf-view-controls" role="group" aria-label="PDF 확대 및 회전" onPointerDown={(event) => event.stopPropagation()}>
+        <button type="button" className="pdf-rotate-button" aria-label="페이지 시계방향 90도 회전" title={'90도 회전 · 현재 ' + rotation + '도'} disabled={!workReady} onClick={onRotate}><RotateCw size={17} /></button>
+        <div className="pdf-zoom-row">
+          <button type="button" className="zoom-button" aria-label="축소" disabled={pane.zoom <= 1} onClick={() => onZoom(Math.max(1, Math.round((pane.zoom - 0.25) * 100) / 100))}><Minus size={16} /></button>
+          <span className="zoom-value">{Math.round(pane.zoom * 100)}%</span>
+          <button type="button" className="zoom-button" aria-label="확대" disabled={pane.zoom >= 5} onClick={() => onZoom(Math.min(5, Math.round((pane.zoom + 0.25) * 100) / 100))}><Plus size={16} /></button>
+        </div>
       </div>
     </div>
   )

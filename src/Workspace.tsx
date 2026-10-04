@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { BookOpen, Check, FilePlus2, Grid2X2, Grid3X3, List, MoreHorizontal, Search, Settings, SlidersHorizontal, X } from 'lucide-react'
 import yyLogo from './assets/yy-logo.png'
 import { createWorkspaceBackup, readWorkspaceBackup } from './backup'
-import { addDocument, deleteChart, deleteDocument, duplicateChart, duplicateDocument, getPreference, getStorageMode, importWorkspaceData, isQuotaError, listCharts, listDocuments, markChartOpened, markOpened, saveChart, savePreference, storageEstimate, subscribeStorageMode, updateTags, type StorageMode } from './storage'
+import { addDocument, deleteChart, deleteDocument, duplicateChart, duplicateDocument, getPreference, getStorageMode, importWorkspaceData, isQuotaError, listCharts, listDocuments, markChartOpened, markOpened, renameDocument, saveChart, savePreference, storageEstimate, subscribeStorageMode, updateTags, type StorageMode } from './storage'
 import { inspectPdf, pdfErrorMessage } from './pdf'
 import { chartSvg } from './charts'
 import type { ChartDocument, DocumentRecord, SortMode, ViewMode } from './types'
@@ -63,7 +63,9 @@ export default function Workspace() {
   const [selected, setSelected] = useState<DocumentRecord | null>(null)
   const [selectedChart, setSelectedChart] = useState<ChartDocument | null>(null)
   const [chartTitleDraft, setChartTitleDraft] = useState('')
-  const [dialog, setDialog] = useState<'menu' | 'tags' | 'delete' | 'chart-menu' | 'chart-delete' | 'chart-rename' | 'settings' | null>(null)
+  const [fileNameDraft, setFileNameDraft] = useState('')
+  const [renameError, setRenameError] = useState('')
+  const [dialog, setDialog] = useState<'menu' | 'rename' | 'tags' | 'delete' | 'chart-menu' | 'chart-delete' | 'chart-rename' | 'settings' | null>(null)
   const [tagDraft, setTagDraft] = useState('')
   const [loading, setLoading] = useState(false)
   const [notice, setNotice] = useState('')
@@ -196,6 +198,19 @@ export default function Workspace() {
     await refresh()
   }
 
+  async function saveDocumentName(event: FormEvent) {
+    event.preventDefault()
+    if (!selected) return
+    try {
+      await renameDocument(selected.id, fileNameDraft)
+      setDialog(null)
+      setSelected(null)
+      await refresh()
+    } catch (error) {
+      setRenameError(error instanceof Error ? error.message : 'PDF 이름을 변경하지 못했습니다.')
+    }
+  }
+
   async function saveChartTitle(event: FormEvent) {
     event.preventDefault()
     if (!selectedChart) return
@@ -272,18 +287,17 @@ export default function Workspace() {
         </div>
       </header>
       <section className="workspace-content">
-        <div className="welcome-row"><div><p className="eyebrow">MY LIBRARY</p><h1>내 도안</h1><p className="welcome-copy">PDF를 모아 보고, 나만의 뜨개 차트를 만들어 보세요.</p></div><div className="document-count">{documents.length}<span>개 도안</span></div></div>
+        <div className="welcome-row"><div><p className="eyebrow">MY LIBRARY</p><h1>내 도안</h1><p className="welcome-copy">PDF를 모아 보고, 도안 작업을 이어가세요.</p></div><div className="document-count">{documents.length}<span>개 도안</span></div></div>
         <div className="toolbar">
           <input ref={fileInput} type="file" accept="application/pdf,.pdf" multiple hidden onChange={(event) => void importFiles(event.currentTarget.files)} />
           <input ref={backupInput} type="file" accept=".doanbogo,application/zip" hidden onChange={(event) => void importWorkspace(event.currentTarget.files?.[0])} />
           <button className="primary-button" onClick={() => fileInput.current?.click()} disabled={loading}><FilePlus2 size={18} />{loading ? 'PDF 확인 중…' : 'PDF 추가'}</button>
-          <button className="chart-create-button" onClick={() => navigate('/charts/new')}><Grid3X3 size={17} />차트 만들기</button>
           <label className="sort-select"><SlidersHorizontal size={16} /><span className="sr-only">정렬</span><select value={sort} onChange={(event) => void changeSort(event.target.value as SortMode)}>{Object.entries(sortLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label>
           <div className="view-toggle" aria-label="보기 방식"><button className={view === 'cover' ? 'active' : ''} aria-label="표지 보기" onClick={() => void changeView('cover')}><Grid2X2 size={17} /></button><button className={view === 'list' ? 'active' : ''} aria-label="목록 보기" onClick={() => void changeView('list')}><List size={18} /></button></div>
         </div>
         {notice && <div className="notice" role="status"><span>{notice}</span><button aria-label="알림 닫기" onClick={() => setNotice('')}><X size={16} /></button></div>}
         {documents.length === 0 ? (
-          <section className="empty-state"><div className="empty-icon"><FilePlus2 size={27} /></div><h2>{query ? '검색 결과가 없습니다' : '아직 도안이 없습니다'}</h2><p>{query ? '이름이나 태그를 바꿔서 다시 검색해 보세요.' : 'PDF를 추가하거나 새 차트를 만들어 이곳에 모아 둘 수 있어요.'}</p>{!query && <div className="empty-actions"><button className="primary-button" onClick={() => fileInput.current?.click()}><FilePlus2 size={18} />첫 PDF 추가하기</button><button className="chart-create-button" onClick={() => navigate('/charts/new')}><Grid3X3 size={17} />차트 만들기</button></div>}</section>
+          <section className="empty-state"><div className="empty-icon"><FilePlus2 size={27} /></div><h2>{query ? '검색 결과가 없습니다' : '아직 도안이 없습니다'}</h2><p>{query ? '이름이나 태그를 바꿔서 다시 검색해 보세요.' : 'PDF를 추가해 이곳에 모아 둘 수 있어요.'}</p>{!query && <div className="empty-actions"><button className="primary-button" onClick={() => fileInput.current?.click()}><FilePlus2 size={18} />첫 PDF 추가하기</button></div>}</section>
         ) : (
           <section className={view === 'cover' ? 'document-grid' : 'document-list'} aria-label="도안 목록">
             {documents.map((item) => item.type === 'pdf' ? (
@@ -318,11 +332,13 @@ export default function Workspace() {
       </section>
 
       {dialog === 'menu' && selected && <Modal title="도안 관리" onClose={() => setDialog(null)}><div className="action-list">
+        <button onClick={() => { setFileNameDraft(selected.fileName.replace(/\.pdf$/i, '')); setRenameError(''); setDialog('rename') }}>이름 변경<span>워크스페이스와 뷰어에 표시되는 PDF 이름</span></button>
         <button onClick={() => { setTagDraft(selected.tags.join(', ')); setDialog('tags') }}>태그 편집<span>파일명 또는 태그 검색에 사용됩니다</span></button>
         <button onClick={() => void duplicateDocument(selected.id).then(() => { setDialog(null); void refresh(); setNotice('도안 사본을 만들었습니다.') }).catch(() => setNotice('도안 사본을 만들지 못했습니다.'))}>도안 복사<span>북마크와 작업 위치는 복사하지 않습니다</span></button>
         <button onClick={() => void shareOrDownload(selected).catch(() => setNotice('PDF를 공유하거나 다운로드하지 못했습니다.'))}>원본 PDF 공유 / 다운로드<span>지원하지 않는 기기에서는 파일을 다운로드합니다</span></button>
         <button className="danger-action" onClick={() => setDialog('delete')}>도안 삭제<span>PDF와 해당 작업 정보를 함께 삭제합니다</span></button>
       </div></Modal>}
+      {dialog === 'rename' && selected && <Modal title="PDF 이름 변경" onClose={() => setDialog('menu')}><form className="modal-form" onSubmit={(event) => void saveDocumentName(event)}><label htmlFor="pdf-name-draft">PDF 이름</label><input id="pdf-name-draft" autoFocus required maxLength={120} value={fileNameDraft} onChange={(event) => setFileNameDraft(event.currentTarget.value)} /><p className="modal-copy">.pdf 확장자는 저장할 때 자동으로 붙습니다.</p>{renameError && <p className="rename-error" role="alert">{renameError}</p>}<div className="modal-actions"><button type="button" className="secondary-button" onClick={() => setDialog('menu')}>취소</button><button className="primary-button" type="submit"><Check size={17} />저장</button></div></form></Modal>}
       {dialog === 'chart-menu' && selectedChart && <Modal title="차트 관리" onClose={() => setDialog(null)}><div className="action-list">
         <button onClick={() => { setChartTitleDraft(selectedChart.title); setDialog('chart-rename') }}>이름 변경<span>워크스페이스 카드에 표시되는 이름</span></button>
         <button onClick={() => void duplicateChart(selectedChart.id).then(() => { setDialog(null); void refresh(); setNotice('차트 사본을 만들었습니다.') }).catch(() => setNotice('차트 사본을 만들지 못했습니다.'))}>차트 복사<span>색칠, 기호와 레이어를 모두 복사합니다</span></button>

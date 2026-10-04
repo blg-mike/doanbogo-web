@@ -29,13 +29,20 @@ function isStringArray(value: unknown): value is string[] {
 }
 
 function isTechniqueSlots(value: unknown, pageCount: number): value is (TechniqueCropSlot | null)[] {
-  return Array.isArray(value) && value.length === 5 && value.every((slot) => {
+  return Array.isArray(value) && (value.length === 5 || value.length === 10) && value.every((slot) => {
     if (slot === null) return true
     if (!isObject(slot) || !Number.isSafeInteger(slot.pageNumber) || (slot.pageNumber as number) < 1 || (slot.pageNumber as number) > pageCount) return false
     const { x, y, width, height } = slot
     return [x, y, width, height].every(Number.isFinite) &&
       (x as number) >= 0 && (y as number) >= 0 && (width as number) > 0 && (height as number) > 0 &&
       (x as number) + (width as number) <= 1.000001 && (y as number) + (height as number) <= 1.000001
+  })
+}
+
+function isPaneRotations(value: unknown, pageCount: number) {
+  return value === undefined || isObject(value) && Object.entries(value).every(([page, rotation]) => {
+    const pageNumber = Number(page)
+    return Number.isSafeInteger(pageNumber) && pageNumber >= 1 && pageNumber <= pageCount && [0, 90, 180, 270].includes(rotation as number)
   })
 }
 
@@ -260,12 +267,15 @@ export async function readWorkspaceBackup(file: File): Promise<WorkspaceData> {
 
   const viewers = manifest.viewers.map((entry): ViewerSnapshot => {
     if (!isObject(entry) || typeof entry.documentId !== 'string' || !pageCounts.has(entry.documentId) ||
-      typeof entry.split !== 'boolean' || (entry.activePane !== 'primary' && entry.activePane !== 'secondary') ||
+      typeof entry.split !== 'boolean' || (entry.splitInitialized !== undefined && typeof entry.splitInitialized !== 'boolean') ||
+      (entry.activePane !== 'primary' && entry.activePane !== 'secondary') ||
       !isObject(entry.primary) || !isObject(entry.secondary) ||
       !Number.isFinite(entry.primary.page) || !Number.isFinite(entry.primary.zoom) ||
       !Number.isFinite(entry.primary.centerX) || !Number.isFinite(entry.primary.centerY) ||
       !Number.isFinite(entry.secondary.page) || !Number.isFinite(entry.secondary.zoom) ||
       !Number.isFinite(entry.secondary.centerX) || !Number.isFinite(entry.secondary.centerY) ||
+      !isPaneRotations(entry.primary.rotations, pageCounts.get(entry.documentId)!) ||
+      !isPaneRotations(entry.secondary.rotations, pageCounts.get(entry.documentId)!) ||
       !Number.isFinite(entry.wideRatio) || !Number.isFinite(entry.tallRatio) || !Number.isFinite(entry.updatedAt) ||
       (entry.progressSettings !== undefined && !isProgressSettings(entry.progressSettings)) ||
       (entry.annotationSettings !== undefined && !isAnnotationSettings(entry.annotationSettings)) ||
@@ -288,6 +298,7 @@ export async function readWorkspaceBackup(file: File): Promise<WorkspaceData> {
       !Number.isSafeInteger(entry.pageNumber) || (entry.pageNumber as number) < 1 || (entry.pageNumber as number) > pageCounts.get(entry.documentId)! ||
       !Number.isFinite(entry.horizontalPosition) || (entry.horizontalPosition as number) < 0 || (entry.horizontalPosition as number) > 1 ||
       !Number.isFinite(entry.verticalPosition) || (entry.verticalPosition as number) < 0 || (entry.verticalPosition as number) > 1 ||
+      (entry.rotation !== undefined && ![0, 90, 180, 270].includes(entry.rotation as number)) ||
       (entry.horizontalGuides !== undefined && !isGuideArray(entry.horizontalGuides)) ||
       (entry.verticalGuides !== undefined && !isGuideArray(entry.verticalGuides)) ||
       ((manifest.version as number) >= 5 && (manifest.version as number) <= 6 && !isLegacyRectangleArray(entry.rectangles)) ||

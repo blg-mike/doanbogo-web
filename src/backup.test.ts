@@ -1,10 +1,10 @@
 import 'fake-indexeddb/auto'
 import { describe, expect, it } from 'vitest'
-import { strToU8, zipSync } from 'fflate'
+import { strFromU8, strToU8, unzipSync, zipSync } from 'fflate'
 import { createWorkspaceBackup, readWorkspaceBackup } from './backup'
 import { addDocument, deleteChart, deleteDocument, duplicateDocument, getChart, getKnittingReport, getPageWork, getPages, getViewer, importWorkspaceData, listCharts, listDocuments, saveChart, saveKnittingReport, savePageWork, savePreference, saveViewer, setPageFlag } from './storage'
 import { createKnittingChart, makeRasterPdf } from './charts'
-import type { DocumentRecord, KnittingReport } from './types'
+import type { DocumentRecord, KnittingReport, TechniqueCropSlot } from './types'
 
 describe('portable workspace backup', () => {
   it('adds page work storage when opening an existing v1 database', async () => {
@@ -35,6 +35,34 @@ describe('portable workspace backup', () => {
     await savePageWork({ ...work, horizontalPosition: 0.25 })
     expect(await getPageWork('migration-check', 1)).toMatchObject({ horizontalPosition: 0.25 })
     await deleteDocument('migration-check')
+  })
+
+  it('round-trips ten crop slots and still accepts five-slot viewer backups', async () => {
+    const id = crypto.randomUUID()
+    const pdf = new Blob(['%PDF-1.7 slot-test'], { type: 'application/pdf' })
+    await addDocument({
+      id, fileName: 'slots.pdf', size: pdf.size, pageCount: 1, createdAt: Date.now(),
+      lastOpenedAt: null, tags: [], pdf, cover: null,
+    })
+    const viewer = await getViewer(id, 1)
+    const slots = Array<TechniqueCropSlot | null>(10).fill(null)
+    slots[9] = { pageNumber: 1, x: 0.1, y: 0.2, width: 0.3, height: 0.4 }
+    await saveViewer({ ...viewer, techniqueSlots: slots })
+
+    const exported = await createWorkspaceBackup()
+    const restored = await readWorkspaceBackup(new File([exported], 'ten-slots.doanbogo'))
+    expect(restored.viewers.find((item) => item.techniqueSlots?.[9])?.techniqueSlots).toHaveLength(10)
+
+    const entries = unzipSync(new Uint8Array(await exported.arrayBuffer()))
+    const manifest = JSON.parse(strFromU8(entries['manifest.json'])) as { viewers: { techniqueSlots?: (TechniqueCropSlot | null)[] }[] }
+    const savedViewer = manifest.viewers.find((item) => item.techniqueSlots?.[9])
+    expect(savedViewer).toBeDefined()
+    savedViewer!.techniqueSlots = savedViewer!.techniqueSlots!.slice(0, 5)
+    const fiveSlotBackup = new File([zipSync({ ...entries, 'manifest.json': strToU8(JSON.stringify(manifest)) })], 'five-slots.doanbogo')
+    const legacy = await readWorkspaceBackup(fiveSlotBackup)
+    expect(legacy.viewers.some((item) => item.techniqueSlots?.length === 5)).toBe(true)
+
+    await deleteDocument(id)
   })
 
   it('restores an associated knitting report and its photos with a new document id', async () => {
@@ -87,7 +115,8 @@ describe('portable workspace backup', () => {
     const viewer = await getViewer(original.id, original.pageCount)
     await saveViewer({
       ...viewer,
-      primary: { ...viewer.primary, page: 4, zoom: 2, centerX: 0.37, centerY: 0.68 },
+      primary: { ...viewer.primary, page: 4, zoom: 2, centerX: 0.37, centerY: 0.68, rotations: { 4: 90 } },
+      secondary: { ...viewer.secondary, rotations: { 1: 270 } },
       progressSettings: {
         horizontal: { visible: true, color: '#edc21b', thickness: 5, opacity: 0.4 },
         vertical: { visible: false, color: '#2255ee', thickness: 2, opacity: 0.8 },
@@ -140,6 +169,8 @@ describe('portable workspace backup', () => {
     expect(new TextDecoder().decode(await restored.documents[0].pdf.arrayBuffer())).toBe('%PDF-1.7 sample')
     expect(restored.pages[0]).toMatchObject({ documentId: original.id, pageNumber: 3, bookmarked: true })
     expect(restored.viewers[0].primary).toMatchObject({ page: 4, zoom: 2, centerX: 0.37, centerY: 0.68 })
+    expect(restored.viewers[0].primary.rotations).toEqual({ 4: 90 })
+    expect(restored.viewers[0].secondary.rotations).toEqual({ 1: 270 })
     expect(restored.viewers[0].progressSettings?.horizontal).toMatchObject({ color: '#edc21b', thickness: 5, opacity: 0.4 })
     expect(restored.viewers[0].annotationSettings?.text).toMatchObject({ color: '#28384c', fontSize: 20 })
     expect(restored.viewers[0].techniqueSlots?.[0]).toEqual({ pageNumber: 4, x: 0.12, y: 0.23, width: 0.45, height: 0.38 })

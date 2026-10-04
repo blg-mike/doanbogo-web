@@ -53,6 +53,7 @@ export function normalizePageWork(work: PageWorkRecord): PageWorkRecord {
   delete normalized.rectangles
   return {
     ...normalized,
+    rotation: [0, 90, 180, 270].includes(work.rotation ?? 0) ? (work.rotation ?? 0) : 0,
     horizontalGuides: work.horizontalGuides ?? [{ id: 'legacy-horizontal', position: work.horizontalPosition ?? 0.5 } satisfies ProgressGuide],
     verticalGuides: work.verticalGuides ?? [{ id: 'legacy-vertical', position: work.verticalPosition ?? 0.5 } satisfies ProgressGuide],
   }
@@ -294,6 +295,27 @@ export async function updateTags(id: string, tags: string[]) {
   })
 }
 
+export async function renameDocument(id: string, name: string) {
+  const baseName = name.trim().replace(/\.pdf$/i, '').trim()
+  if (!baseName) throw new Error('PDF 이름을 입력하세요.')
+  const fileName = baseName + '.pdf'
+  return access(async (db) => {
+    const tx = db.transaction('documents', 'readwrite')
+    const item = await tx.store.get(id)
+    if (!item) throw new Error('PDF를 찾을 수 없습니다.')
+    const renamed = { ...item, fileName }
+    await tx.store.put(renamed)
+    await tx.done
+    return renamed
+  }, () => {
+    const item = temporary.documents.get(id)
+    if (!item) throw new Error('PDF를 찾을 수 없습니다.')
+    const renamed = { ...item, fileName }
+    temporary.documents.set(id, renamed)
+    return renamed
+  })
+}
+
 export async function duplicateDocument(id: string) {
   const original = await getDocument(id)
   if (!original) throw new Error('문서를 찾을 수 없습니다.')
@@ -401,12 +423,14 @@ export async function getViewer(id: string, pageCount: number): Promise<ViewerSn
   const saved = await access((db) => db.get('viewers', id), () => temporary.viewers.get(id))
   if (saved) return {
     ...saved,
+    splitInitialized: saved.splitInitialized ?? saved.split,
     primary: { ...saved.primary, page: Math.min(pageCount, Math.max(1, saved.primary.page)) },
     secondary: { ...saved.secondary, page: Math.min(pageCount, Math.max(1, saved.secondary.page)) },
   }
   return {
     documentId: id,
     split: false,
+    splitInitialized: false,
     activePane: 'primary',
     primary: { ...defaultPane },
     secondary: { ...defaultPane },

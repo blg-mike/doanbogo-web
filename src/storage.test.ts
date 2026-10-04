@@ -1,6 +1,6 @@
 import 'fake-indexeddb/auto'
 import { describe, expect, it } from 'vitest'
-import { addDocument, deleteDocument, duplicateDocument, getPageWork, getPages, getViewer, listDocuments, markOpened, savePageWork, saveViewer, setPageFlag, updateTags } from './storage'
+import { addDocument, deleteDocument, duplicateDocument, getPageWork, getPages, getViewer, listDocuments, markOpened, renameDocument, savePageWork, saveViewer, setPageFlag, updateTags } from './storage'
 import type { DocumentRecord } from './types'
 
 function makeDocument(id: string, fileName: string, createdAt: number, tags: string[] = []): DocumentRecord {
@@ -18,6 +18,19 @@ function makeDocument(id: string, fileName: string, createdAt: number, tags: str
 }
 
 describe('local document storage', () => {
+  it('renames a PDF while preserving its stored document data', async () => {
+    const document = makeDocument(crypto.randomUUID(), 'Original.pdf', Date.now(), ['winter'])
+    await addDocument(document)
+
+    const renamed = await renameDocument(document.id, '  New pattern.PDF  ')
+
+    expect(renamed.fileName).toBe('New pattern.pdf')
+    expect(await renamed.pdf.text()).toBe(await document.pdf.text())
+    expect(renamed.tags).toEqual(['winter'])
+    expect((await listDocuments()).find((item) => item.id === document.id)?.fileName).toBe('New pattern.pdf')
+    await deleteDocument(document.id)
+  })
+
   it('searches by filename and tag and keeps the selected ordering', async () => {
     const prefix = crypto.randomUUID()
     const first = makeDocument(prefix + '-a', 'Cardigan.pdf', 1)
@@ -58,17 +71,36 @@ describe('local document storage', () => {
     await addDocument(document)
     await setPageFlag(document.id, 3, 'hidden', true)
     await setPageFlag(document.id, 5, 'bookmarked', true)
-    await savePageWork({ documentId: document.id, pageNumber: 5, horizontalPosition: 0.3, verticalPosition: 0.8, annotations: [] })
+    await savePageWork({
+      documentId: document.id, pageNumber: 5, horizontalPosition: 0.3, verticalPosition: 0.8, rotation: 90,
+      horizontalGuides: [{ id: 'guide-h-1', position: 0.3 }, { id: 'guide-h-2', position: 0.65 }],
+      verticalGuides: [{ id: 'guide-v-1', position: 0.8 }], annotations: [],
+    })
     const viewer = await getViewer(document.id, document.pageCount)
-    await saveViewer({ ...viewer, primary: { ...viewer.primary, page: 6 }, split: true })
+    const splitViewer = {
+      ...viewer,
+      primary: { ...viewer.primary, page: 6, rotations: { 6: 90 as const } },
+      secondary: { ...viewer.secondary, page: 7, zoom: 2.5, centerX: 0.25, centerY: 0.75, rotations: { 7: 270 as const } },
+      split: true,
+      splitInitialized: true,
+    }
+    await saveViewer(splitViewer)
+    await saveViewer({ ...splitViewer, split: false })
 
     expect(await getPages(document.id)).toEqual([
       { documentId: document.id, pageNumber: 3, hidden: true, bookmarked: false },
       { documentId: document.id, pageNumber: 5, hidden: false, bookmarked: true },
     ])
     expect(await getPageWork(document.id, 5)).toMatchObject({
-      horizontalGuides: [{ id: 'legacy-horizontal', position: 0.3 }],
-      verticalGuides: [{ id: 'legacy-vertical', position: 0.8 }],
+      rotation: 90,
+      horizontalGuides: [{ id: 'guide-h-1', position: 0.3 }, { id: 'guide-h-2', position: 0.65 }],
+      verticalGuides: [{ id: 'guide-v-1', position: 0.8 }],
+    })
+    expect(await getViewer(document.id, document.pageCount)).toMatchObject({
+      split: false,
+      splitInitialized: true,
+      primary: { page: 6, rotations: { 6: 90 } },
+      secondary: { page: 7, zoom: 2.5, centerX: 0.25, centerY: 0.75 },
     })
     expect((await getViewer(document.id, 4)).primary.page).toBe(4)
 

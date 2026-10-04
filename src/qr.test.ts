@@ -1,6 +1,6 @@
 import jsQR, { type QRCode } from 'jsqr'
 import { describe, expect, it, vi } from 'vitest'
-import { safeQrHref } from './qr'
+import { extractPdfPageLinks, safeQrHref } from './qr'
 
 vi.mock('jsqr', () => ({ default: vi.fn() }))
 
@@ -48,5 +48,33 @@ describe('PDF QR link targets', () => {
       vi.unstubAllGlobals()
       decoder.mockReset()
     }
+  })
+
+  it('extracts PDF link annotations and URLs split across adjacent text runs', () => {
+    const links = extractPdfPageLinks(
+      [{ subtype: 'Link', url: 'https://pattern.example/page', rect: [150, 150, 190, 180] }],
+      [
+        { str: 'https://example.', transform: [1, 0, 0, 10, 10, 50], width: 80, height: 10 },
+        { str: 'com/pattern.', transform: [1, 0, 0, 10, 90, 50], width: 60, height: 10 },
+        { str: 'javascript:alert(1)', transform: [1, 0, 0, 10, 10, 20], width: 100, height: 10 },
+      ],
+      { width: 200, height: 200, transform: [1, 0, 0, 1, 0, 0] },
+    )
+
+    expect(links).toHaveLength(2)
+    expect(links[0]).toMatchObject({ href: 'https://pattern.example/page', x: 0.75, y: 0.75, width: 0.2, height: 0.15 })
+    expect(links[1].href).toBe('https://example.com/pattern')
+    expect(links[1].x).toBe(0.05)
+    expect(links[1].width).toBeCloseTo(0.675)
+  })
+
+  it('maps link annotation bounds through the PDF viewport transform', () => {
+    const [link] = extractPdfPageLinks(
+      [{ subtype: 'Link', url: 'https://pattern.example/page', rect: [10, 20, 30, 40] }],
+      [],
+      { width: 200, height: 200, transform: [1, 0, 0, -1, 0, 200] },
+    )
+
+    expect(link).toMatchObject({ x: 0.05, y: 0.8, width: 0.1, height: 0.1 })
   })
 })

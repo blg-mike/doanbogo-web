@@ -1,23 +1,29 @@
 import { useCallback, useEffect, useRef, useState, type FormEvent as ReactFormEvent, type PointerEvent as ReactPointerEvent } from 'react'
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import type { PDFDocumentProxy } from 'pdfjs-dist'
-import { ArrowLeft, Bookmark, Columns2, Eraser, Eye, EyeOff, Grid3X3, Highlighter, Minus, MousePointer2, Pencil, Plus, QrCode, Redo2, RotateCcw, SlidersHorizontal, Type, Undo2, X } from 'lucide-react'
+import { ArrowLeft, Bookmark, CaseSensitive, Check, Columns2, Eraser, Eye, EyeOff, Grid3X3, Hash, Highlighter, Minus, MousePointer2, Pencil, Plus, Redo2, SlidersHorizontal, Type, Undo2, X } from 'lucide-react'
 import yyLogo from './assets/yy-logo.png'
 import { PdfPage, PdfThumbnail } from './PdfPage'
-import { getDocument, getPageWork, getPages, getViewer, markOpened, savePageWork, saveViewer, setPageFlag, setPagesFlag } from './storage'
+import { getDocument, getPageWork, getPages, getViewer, markOpened, renameDocument, savePageWork, saveViewer, setPageFlag, setPagesFlag } from './storage'
 import { openPdf, pdfErrorMessage } from './pdf'
 import KnittingReport from './KnittingReport'
-import type { AnnotationSettings, AnnotationStyle, AnnotationTool, ColorworkCreateRequest, ColorworkSettings, PageRecord, PageWorkRecord, PaneId, PaneSnapshot, ProgressSettings, TechniqueCropSlot, ViewerSnapshot } from './types'
+import type { AnnotationSettings, AnnotationStyle, AnnotationTool, ColorworkCreateRequest, ColorworkSettings, PageRecord, PageRotation, PageWorkRecord, PaneId, PaneSnapshot, ProgressSettings, TechniqueCropSlot, ViewerSnapshot } from './types'
 import { defaultColorworkSettings, getColorworkDimensions, resizeColorworkGrid } from './colorwork'
+import { clampCounterValue, counterValueFromInput } from './counter'
 import { TechniqueDialog, TechniquePopover } from './Technique'
-import { detectPdfQrLinks, type PdfQrLink } from './qr'
+import { detectPdfQrLinks, extractPdfPageLinks, type PdfQrLink } from './qr'
 
 type Size = { width: number; height: number }
 type WorkAction = { before: PageWorkRecord; after: PageWorkRecord }
 type PageHistory = { actions: WorkAction[]; cursor: number }
+type CounterSessionState = { documentId: string; visible: boolean; values: number[]; editingIndex: number | null; draft: string }
+
+function createCounterSession(documentId: string): CounterSessionState {
+  return { documentId, visible: false, values: [0, 0, 0, 0, 0], editingIndex: null, draft: '' }
+}
 
 const defaultProgressSettings: ProgressSettings = {
-  horizontal: { visible: true, color: '#f1c40f', thickness: 4, opacity: 0.5 },
+  horizontal: { visible: true, color: '#f1c40f', thickness: 12, opacity: 0.5 },
   vertical: { visible: true, color: '#2673e8', thickness: 1, opacity: 1 },
 }
 
@@ -207,12 +213,22 @@ export default function Viewer() {
   const saveTimer = useRef<number | undefined>(undefined)
   const workTimers = useRef(new Map<number, number>())
   const workRef = useRef<Record<number, PageWorkRecord>>({})
+  const pageWorkLoadRef = useRef(new Map<number, Promise<PageWorkRecord>>())
+  const workDocumentIdRef = useRef(id)
   const historyRef = useRef(new Map<number, PageHistory>())
   const dragRef = useRef<{ pointerId: number; orientation: 'wide' | 'tall'; rect: DOMRect } | null>(null)
   const [documentName, setDocumentName] = useState('')
+  const [renameDialog, setRenameDialog] = useState(false)
+  const [renameDraft, setRenameDraft] = useState('')
+  const [renameError, setRenameError] = useState('')
   const [pdf, setPdf] = useState<PDFDocumentProxy | null>(null)
   const [snapshot, setSnapshot] = useState<ViewerSnapshot | null>(null)
   const [loadedId, setLoadedId] = useState('')
+  const [savedCounterSession, setSavedCounterSession] = useState(() => createCounterSession(id))
+  const counterSession = savedCounterSession.documentId === id ? savedCounterSession : createCounterSession(id)
+  const { visible: counterPanelVisible, values: counterValues, editingIndex: editingCounterIndex, draft: counterDraft } = counterSession
+  const counterInputRef = useRef<HTMLInputElement>(null)
+  const cancelCounterBlur = useRef(false)
   const [pages, setPages] = useState<PageRecord[]>([])
   const [pageWorks, setPageWorks] = useState<Record<number, PageWorkRecord>>({})
   const [histories, setHistories] = useState<Record<number, PageHistory>>({})
@@ -227,7 +243,9 @@ export default function Viewer() {
   const [progressDialog, setProgressDialog] = useState(false)
   const [techniqueDialog, setTechniqueDialog] = useState(false)
   const [techniquePopoverIndex, setTechniquePopoverIndex] = useState<number | null>(null)
-  const [qrEnabled, setQrEnabled] = useState(true)
+  const [pdfLinksByPage, setPdfLinksByPage] = useState<Record<number, PdfQrLink[]>>({})
+  const pdfLinkPagesRef = useRef(new Set<number>())
+  const pdfLinkPendingRef = useRef(new Set<string>())
   const [qrLinksByPage, setQrLinksByPage] = useState<Record<number, PdfQrLink[]>>({})
   const qrLinksRef = useRef(new Map<number, PdfQrLink[]>())
   const qrScanPendingRef = useRef(new Set<string>())
@@ -236,6 +254,12 @@ export default function Viewer() {
   const [loadError, setLoadError] = useState<{ id: string; message: string } | null>(null)
   const [splitPreview, setSplitPreview] = useState<number | null>(null)
   const [areaSize, setAreaSize] = useState<Size>({ width: 0, height: 0 })
+
+  useEffect(() => {
+    if (editingCounterIndex === null) return
+    counterInputRef.current?.focus()
+    counterInputRef.current?.select()
+  }, [editingCounterIndex])
 
   const pushSnapshot = useCallback((next: ViewerSnapshot, immediate = false) => {
     snapshotRef.current = next
@@ -262,39 +286,74 @@ export default function Viewer() {
   const onPageRendered = useCallback((pageNumber: number, source: HTMLCanvasElement) => {
     const generation = qrDocumentGenerationRef.current
     const scanKey = generation + ':' + pageNumber
-    if (!qrEnabled || qrLinksRef.current.has(pageNumber) || qrScanPendingRef.current.has(scanKey)) return
-    qrScanPendingRef.current.add(scanKey)
-    const scale = Math.min(1, 1400 / Math.max(source.width, source.height))
-    const canvas = document.createElement('canvas')
-    canvas.width = Math.max(1, Math.round(source.width * scale))
-    canvas.height = Math.max(1, Math.round(source.height * scale))
-    const context = canvas.getContext('2d', { alpha: false })
-    if (!context) {
-      qrScanPendingRef.current.delete(scanKey)
-      return
+    if (!pdf) return
+    const scanPdfLinks = !pdfLinkPagesRef.current.has(pageNumber) && !pdfLinkPendingRef.current.has(scanKey)
+    const scanQr = !qrLinksRef.current.has(pageNumber) && !qrScanPendingRef.current.has(scanKey)
+    if (!scanPdfLinks && !scanQr) return
+    if (scanPdfLinks) pdfLinkPendingRef.current.add(scanKey)
+    if (scanQr) qrScanPendingRef.current.add(scanKey)
+    let qrCanvas: HTMLCanvasElement | null = null
+    if (scanQr) {
+      const scale = Math.min(1, 1400 / Math.max(source.width, source.height))
+      qrCanvas = document.createElement('canvas')
+      qrCanvas.width = Math.max(1, Math.round(source.width * scale))
+      qrCanvas.height = Math.max(1, Math.round(source.height * scale))
+      const context = qrCanvas.getContext('2d', { alpha: false })
+      if (!context) {
+        qrScanPendingRef.current.delete(scanKey)
+        qrCanvas = null
+      } else {
+        context.drawImage(source, 0, 0, qrCanvas.width, qrCanvas.height)
+      }
     }
-    context.drawImage(source, 0, 0, canvas.width, canvas.height)
-    window.setTimeout(() => {
-      try {
-        const links = detectPdfQrLinks(canvas)
-        if (generation === qrDocumentGenerationRef.current) {
-          qrLinksRef.current.set(pageNumber, links)
-          setQrLinksByPage((current) => ({ ...current, [pageNumber]: links }))
+    window.setTimeout(() => void (async () => {
+      if (scanPdfLinks) {
+        try {
+          const pageProxy = await pdf.getPage(pageNumber)
+          const [annotations, content] = await Promise.all([
+            pageProxy.getAnnotations({ intent: 'display' }),
+            pageProxy.getTextContent(),
+          ])
+          const textRuns = content.items.flatMap((item) => 'str' in item ? [item] : [])
+          const links = extractPdfPageLinks(annotations, textRuns, pageProxy.getViewport({ scale: 1 }))
+          if (generation === qrDocumentGenerationRef.current) {
+            pdfLinkPagesRef.current.add(pageNumber)
+            setPdfLinksByPage((current) => ({ ...current, [pageNumber]: links }))
+          }
+        } catch {
+          if (generation === qrDocumentGenerationRef.current) {
+            pdfLinkPagesRef.current.add(pageNumber)
+            setPdfLinksByPage((current) => ({ ...current, [pageNumber]: [] }))
+          }
         }
-      } catch {
-        if (generation === qrDocumentGenerationRef.current) {
-          qrLinksRef.current.set(pageNumber, [])
-          setQrLinksByPage((current) => ({ ...current, [pageNumber]: [] }))
+      }
+      if (qrCanvas) {
+        try {
+          const links = detectPdfQrLinks(qrCanvas)
+          if (generation === qrDocumentGenerationRef.current) {
+            qrLinksRef.current.set(pageNumber, links)
+            setQrLinksByPage((current) => ({ ...current, [pageNumber]: links }))
+          }
+        } catch {
+          if (generation === qrDocumentGenerationRef.current) {
+            qrLinksRef.current.set(pageNumber, [])
+            setQrLinksByPage((current) => ({ ...current, [pageNumber]: [] }))
+          }
+        } finally {
+          qrCanvas.width = 0
+          qrCanvas.height = 0
         }
-      } finally {
-        canvas.width = 0
-        canvas.height = 0
+      }
+      if (scanPdfLinks) pdfLinkPendingRef.current.delete(scanKey)
+      if (scanQr) {
         qrScanPendingRef.current.delete(scanKey)
       }
-    }, 0)
-  }, [qrEnabled])
+    })(), 0)
+  }, [pdf])
 
   useEffect(() => {
+    workDocumentIdRef.current = id
+    pageWorkLoadRef.current.clear()
     let disposed = false
     let closePdf: (() => Promise<void>) | undefined
     void (async () => {
@@ -310,12 +369,16 @@ export default function Viewer() {
       }
       closePdf = opened.dispose
       qrDocumentGenerationRef.current++
+      pdfLinkPagesRef.current.clear()
+      pdfLinkPendingRef.current.clear()
       qrLinksRef.current.clear()
       qrScanPendingRef.current.clear()
+      setPdfLinksByPage({})
       setQrLinksByPage({})
       setTechniqueDialog(false)
       setTechniquePopoverIndex(null)
       workRef.current = {}
+      pageWorkLoadRef.current.clear()
       historyRef.current.clear()
       setPageWorks({})
       setHistories({})
@@ -370,38 +433,95 @@ export default function Viewer() {
   const activeAnnotationStyle = tool === 'pen' || tool === 'line' || tool === 'highlight' || tool === 'text' ? annotationSettings[tool] : null
   const activeHistory = histories[activePage] ?? { actions: [], cursor: 0 }
   const activeWork = pageWorks[activePage] ?? blankWork(id, activePage)
+  const techniqueSlots = Array.from({ length: 10 }, (_, index) => snapshot?.techniqueSlots?.[index] ?? null)
   const activeColorworkGrid = activeWork.colorworkGrid ?? null
   const canUndo = activeHistory.cursor > 0
   const canRedo = activeHistory.cursor < activeHistory.actions.length
   const primaryPage = snapshot?.primary.page
   const secondaryPage = snapshot?.secondary.page
   const isSplit = snapshot?.split
+  const ensurePageWork = useCallback(async (page: number) => {
+    const existing = workRef.current[page]
+    if (existing) return existing
+    const pending = pageWorkLoadRef.current.get(page)
+    if (pending) return pending
+    let loadingWork: Promise<PageWorkRecord>
+    loadingWork = getPageWork(id, page).then((loaded) => {
+      if (workDocumentIdRef.current !== id) return loaded
+      const current = workRef.current[page]
+      if (current) return current
+      workRef.current = { ...workRef.current, [page]: loaded }
+      setPageWorks(workRef.current)
+      return loaded
+    }).finally(() => {
+      if (pageWorkLoadRef.current.get(page) === loadingWork) pageWorkLoadRef.current.delete(page)
+    })
+    pageWorkLoadRef.current.set(page, loadingWork)
+    return loadingWork
+  }, [id])
 
   useEffect(() => {
-    if (primaryPage === undefined || !id) return
+    if (primaryPage === undefined || !id || loadedId !== id) return
     const needed = [...new Set(isSplit && secondaryPage !== undefined ? [primaryPage, secondaryPage] : [primaryPage])]
-    let cancelled = false
-    void Promise.all(needed.map((page) => getPageWork(id, page))).then((loaded) => {
-      if (cancelled) return
-      const next = { ...workRef.current }
-      loaded.forEach((work) => { if (!next[work.pageNumber]) next[work.pageNumber] = work })
-      workRef.current = next
-      setPageWorks(next)
-    })
-    return () => { cancelled = true }
-  }, [id, primaryPage, secondaryPage, isSplit])
+    void Promise.all(needed.map((page) => ensurePageWork(page)))
+  }, [id, loadedId, primaryPage, secondaryPage, isSplit, ensurePageWork])
 
   function mutateSnapshot(change: (current: ViewerSnapshot) => ViewerSnapshot, immediate = false) {
     const current = snapshotRef.current
     if (current) pushSnapshot(change(current), immediate)
   }
 
+  async function saveDocumentName(event: ReactFormEvent<HTMLFormElement>) {
+    event.preventDefault()
+    try {
+      const renamed = await renameDocument(id, renameDraft)
+      setDocumentName(renamed.fileName)
+      setRenameDialog(false)
+    } catch (error) {
+      setRenameError(error instanceof Error ? error.message : 'PDF 이름을 변경하지 못했습니다.')
+    }
+  }
+
   function changePane(paneId: PaneId, change: (pane: PaneSnapshot) => PaneSnapshot, immediate = false) {
     mutateSnapshot((current) => ({ ...current, [paneId]: change(current[paneId]) }), immediate)
   }
 
+  function updateCounterSession(change: (current: CounterSessionState) => CounterSessionState) {
+    setSavedCounterSession((current) => change(current.documentId === id ? current : createCounterSession(id)))
+  }
+
+  function adjustCounter(index: number, amount: number) {
+    updateCounterSession((current) => ({
+      ...current,
+      values: current.values.map((value, item) => item === index ? clampCounterValue(value + amount) : value),
+    }))
+  }
+
+  function commitCounterEdit(index: number, rawValue: string) {
+    updateCounterSession((current) => ({
+      ...current,
+      values: current.values.map((item, itemIndex) => itemIndex === index ? counterValueFromInput(rawValue, item) : item),
+      editingIndex: null,
+    }))
+  }
+
+  function rotatePage(paneId: PaneId, pageNumber: number) {
+    const legacyRotation = workRef.current[pageNumber]?.rotation ?? 0
+    changePane(paneId, (current) => {
+      const currentRotation = current.rotations?.[pageNumber] ?? legacyRotation
+      const rotation = ((currentRotation + 90) % 360) as PageRotation
+      return {
+        ...current,
+        rotations: { ...current.rotations, [pageNumber]: rotation },
+        centerX: 0.5,
+        centerY: 0.5,
+      }
+    }, true)
+  }
+
   function setPageWork(work: PageWorkRecord, immediate: boolean, recordHistory = false, historyBefore?: PageWorkRecord) {
-    const current = workRef.current[work.pageNumber] ?? blankWork(id, work.pageNumber)
+    const current = workRef.current[work.pageNumber]
+    if (!current) return
     if (recordHistory && JSON.stringify(historyBefore ?? current) !== JSON.stringify(work)) {
       const state = historyRef.current.get(work.pageNumber) ?? { actions: [], cursor: 0 }
       const actions = state.actions.slice(0, state.cursor)
@@ -432,15 +552,6 @@ export default function Viewer() {
     if (!action) return
     updateHistory(activePage, { ...state, cursor: nextCursor })
     setPageWork(direction === 'undo' ? action.before : action.after, true, false)
-  }
-
-  async function ensurePageWork(page: number) {
-    const existing = workRef.current[page]
-    if (existing) return existing
-    const loaded = await getPageWork(id, page)
-    workRef.current = { ...workRef.current, [page]: loaded }
-    setPageWorks(workRef.current)
-    return loaded
   }
 
   function stepPage(direction: -1 | 1) {
@@ -515,16 +626,10 @@ export default function Viewer() {
     mutateSnapshot((current) => ({
       ...current,
       split: !current.split,
+      splitInitialized: true,
       activePane: 'primary',
-      secondary: current.split ? current.secondary : { ...current.secondary, page: current.primary.page, zoom: current.primary.zoom, centerX: current.primary.centerX, centerY: current.primary.centerY },
+      secondary: current.split || current.splitInitialized ? current.secondary : { ...current.secondary, page: current.primary.page, zoom: current.primary.zoom, centerX: current.primary.centerX, centerY: current.primary.centerY, rotations: { ...current.primary.rotations } },
     }), true)
-  }
-
-  function setZoom(direction: -1 | 1) {
-    if (!snapshot) return
-    const pane = snapshot[snapshot.activePane]
-    const zoom = clamp(Math.round((pane.zoom + direction * 0.25) * 100) / 100, 1, 5)
-    changePane(snapshot.activePane, (current) => ({ ...current, zoom }), true)
   }
 
   function jumpToPage(value: string) {
@@ -579,7 +684,7 @@ export default function Viewer() {
   function updateTechniqueSlot(index: number, slot: TechniqueCropSlot | null) {
     const current = snapshotRef.current
     if (!current) return
-    const slots = [...(current.techniqueSlots ?? Array<TechniqueCropSlot | null>(5).fill(null))]
+    const slots = Array.from({ length: 10 }, (_, slotIndex) => current.techniqueSlots?.[slotIndex] ?? null)
     slots[index] = slot
     pushSnapshot({ ...current, techniqueSlots: slots }, true)
   }
@@ -588,7 +693,8 @@ export default function Viewer() {
     if (!snapshot || colorworkRequest) return false
     const paneId = snapshot.activePane
     const pageNumber = snapshot[paneId].page
-    const before = workRef.current[pageNumber] ?? pageWorks[pageNumber] ?? blankWork(id, pageNumber)
+    const before = workRef.current[pageNumber]
+    if (!before) return false
     if (before.colorworkGrid) {
       const resized = resizeColorworkGrid(before.colorworkGrid, settings)
       if (resized.droppedCells && !window.confirm('격자를 줄이면 색칠된 ' + resized.droppedCells + '칸이 사라집니다. 설정을 적용할까요?')) return false
@@ -612,6 +718,7 @@ export default function Viewer() {
 
   function renderPane(paneId: PaneId, pane: PaneSnapshot, active: boolean) {
     const work = pageWorks[pane.page] ?? blankWork(id, pane.page)
+    const rotation = pane.rotations?.[pane.page] ?? work.rotation ?? 0
     const style = tool === 'pen' || tool === 'line' || tool === 'highlight' || tool === 'text' ? annotationSettings[tool] : annotationSettings.pen
     return <PdfPage
       key={paneId + ':' + pane.page}
@@ -619,11 +726,13 @@ export default function Viewer() {
       page={pane.page}
       paneId={paneId}
       pane={pane}
+      rotation={rotation}
       active={active}
       tool={tool}
       lineSettings={progressSettings}
       annotationStyle={style}
       work={work}
+      workReady={Boolean(pageWorks[pane.page])}
       createColorworkRequest={colorworkRequest?.paneId === paneId && colorworkRequest.pageNumber === pane.page ? colorworkRequest : null}
       colorworkBrushColor={colorworkBrushColor}
       colorworkBrushOpacity={colorworkBrushOpacity}
@@ -632,9 +741,10 @@ export default function Viewer() {
       onWorkChange={setPageWork}
       onCenter={(x, y) => saveCenter(paneId, x, y)}
       onZoom={(zoom) => changePane(paneId, (current) => ({ ...current, zoom }), true)}
+      onRotate={() => rotatePage(paneId, pane.page)}
       onColorworkRequestHandled={finishColorworkRequest}
       onTextToolConsumed={() => setTool('pan')}
-      qrEnabled={qrEnabled}
+      pageLinks={pdfLinksByPage[pane.page]}
       qrLinks={qrLinksByPage[pane.page]}
       onPageRendered={onPageRendered}
     />
@@ -652,23 +762,70 @@ export default function Viewer() {
       <header className="viewer-header">
         <div className="viewer-brand"><img src={yyLogo} alt="도안보고 로고" /><small>YY공동제작</small></div>
         <button className="viewer-back" aria-label="도안 목록으로" onClick={() => navigate('/')}><ArrowLeft size={20} /><span>내 도안</span></button>
-        <div className="viewer-title"><strong title={documentName}>{documentName}</strong><span>{reportMode ? '뜨개보고서' : snapshot[snapshot.activePane].page + ' / ' + pdf.numPages + ' 페이지'}</span></div>
+        <div className="viewer-title"><div className="viewer-title-name"><strong title={documentName}>{documentName}</strong><button type="button" className="viewer-title-edit" aria-label="PDF 이름 변경" title="PDF 이름 변경" onClick={() => { setRenameDraft(documentName.replace(/\.pdf$/i, '')); setRenameError(''); setRenameDialog(true) }}><Pencil size={14} /></button></div><span>{reportMode ? '뜨개보고서' : snapshot[snapshot.activePane].page + ' / ' + pdf.numPages + ' 페이지'}</span></div>
         <div className="viewer-header-actions">
           {!reportMode && <>
-            <button className={'viewer-action ' + (snapshot.split ? 'selected' : '')} onClick={toggleSplit}><Columns2 size={18} /><span>{snapshot.split ? '구분 끄기' : '두 영역 보기'}</span></button>
-            <button className="viewer-action" onClick={() => setTechniqueDialog(true)}><Grid3X3 size={17} /><span>기법</span></button>
+            <button className={'viewer-action ' + (snapshot.split ? 'selected' : '')} onClick={toggleSplit}><Columns2 size={18} /><span>{snapshot.split ? '한 영역 보기' : '두 영역 보기'}</span></button>
+            <button className="viewer-action" onClick={() => setTechniqueDialog(true)}><CaseSensitive size={17} /><span>기법</span></button>
+            <button className={'viewer-action ' + (counterPanelVisible ? 'selected' : '')} type="button" aria-label="숫자 카운터" title="숫자 카운터" aria-pressed={counterPanelVisible} onClick={() => updateCounterSession((current) => ({ ...current, visible: !current.visible }))}><Hash size={17} /><span>카운터</span></button>
             <button className="viewer-action page-management-action" aria-label="페이지 관리" title="숨긴 페이지 복구" onClick={() => { setSelectedHiddenPages(new Set()); setPageDialog(true) }}><EyeOff size={17} /><span>페이지 관리</span><span className="hidden-count">{pages.filter((page) => page.hidden).length}</span></button>
           </>}
           {reportMode && <button className="viewer-action" onClick={() => setSearchParams({})}><ArrowLeft size={16} /><span>도안으로 돌아가기</span></button>}
         </div>
       </header>
-      <section className={'pdf-work-area ' + (reportMode ? 'report-work-area' : snapshot.split ? (orientation === 'wide' ? 'split-wide' : 'split-tall') : 'single-pane')} ref={areaRef}>
+      <section className={'pdf-work-area' + (reportMode ? ' report-work-area' : '')}>
+        <div className={'pdf-document-area ' + (reportMode ? '' : snapshot.split ? (orientation === 'wide' ? 'split-wide' : 'split-tall') : 'single-pane')} ref={areaRef}>
         {reportMode ? <KnittingReport documentId={id} fileName={documentName} /> : snapshot.split ? <>
           <div className="split-section" style={orientation === 'wide' ? { flex: '0 0 ' + splitBasis(displayedRatio) } : { width: '100%', flex: '0 0 ' + splitBasis(displayedRatio) }}>{renderPane('primary', snapshot.primary, snapshot.activePane === 'primary')}</div>
           <button className={'split-divider ' + orientation} aria-label="영역 크기 조정" onPointerDown={beginDivider} onPointerMove={moveDivider} onPointerUp={finishDivider} onPointerCancel={finishDivider} onLostPointerCapture={finishDivider}><span /></button>
           <div className="split-section split-section-secondary" style={orientation === 'wide' ? { flex: '0 0 ' + splitBasis(1 - displayedRatio) } : { width: '100%', flex: '0 0 ' + splitBasis(1 - displayedRatio) }}>{renderPane('secondary', snapshot.secondary, snapshot.activePane === 'secondary')}</div>
         </> : renderPane('primary', snapshot.primary, true)}
-        {!reportMode && techniquePopoverIndex !== null && snapshot.techniqueSlots?.[techniquePopoverIndex] && <TechniquePopover key={techniquePopoverIndex} pdf={pdf} slot={snapshot.techniqueSlots[techniquePopoverIndex]} onClose={() => setTechniquePopoverIndex(null)} />}
+        {!reportMode && techniquePopoverIndex !== null && techniqueSlots[techniquePopoverIndex] && <TechniquePopover pdf={pdf} slots={techniqueSlots} slotIndex={techniquePopoverIndex} onNavigate={setTechniquePopoverIndex} onClose={() => setTechniquePopoverIndex(null)} />}
+        </div>
+        {!reportMode && counterPanelVisible && <aside id="viewer-number-counters" className="number-counter-panel" aria-label="숫자 카운터" onPointerDown={(event) => event.stopPropagation()} onKeyDown={(event) => event.stopPropagation()}>
+          {counterValues.map((value, index) => <div className="number-counter-row" key={index}>
+            <button type="button" className="number-counter-step" aria-label={'카운터 ' + (index + 1) + ' 감소'} disabled={value <= 0} onClick={() => adjustCounter(index, -1)}>−</button>
+            {editingCounterIndex === index
+              ? <input
+                ref={counterInputRef}
+                className="number-counter-input"
+                aria-label={'카운터 ' + (index + 1) + ' 숫자 입력'}
+                type="number"
+                inputMode="numeric"
+                min="0"
+                max="99"
+                step="1"
+                value={counterDraft}
+                onChange={(event) => {
+                  const draft = event.currentTarget.value
+                  updateCounterSession((current) => ({ ...current, draft }))
+                }}
+                onBlur={(event) => {
+                  if (cancelCounterBlur.current) {
+                    cancelCounterBlur.current = false
+                    updateCounterSession((current) => ({ ...current, editingIndex: null }))
+                    return
+                  }
+                  commitCounterEdit(index, event.currentTarget.value)
+                }}
+                onKeyDown={(event) => {
+                  event.stopPropagation()
+                  if (event.key === 'Enter') {
+                    event.preventDefault()
+                    commitCounterEdit(index, event.currentTarget.value)
+                    event.currentTarget.blur()
+                  } else if (event.key === 'Escape') {
+                    event.preventDefault()
+                    cancelCounterBlur.current = true
+                    event.currentTarget.blur()
+                    updateCounterSession((current) => ({ ...current, editingIndex: null }))
+                  }
+                }}
+              />
+              : <button type="button" className="number-counter-value" aria-label={'카운터 ' + (index + 1) + ' 숫자 직접 입력'} onClick={() => updateCounterSession((current) => ({ ...current, draft: String(value), editingIndex: index }))}>{value}</button>}
+            <button type="button" className="number-counter-step" aria-label={'카운터 ' + (index + 1) + ' 증가'} disabled={value >= 99} onClick={() => adjustCounter(index, 1)}>+</button>
+          </div>)}
+        </aside>}
       </section>
       <section className="viewer-footer">
         <div className="page-thumbnail-strip" aria-label="모든 페이지 썸네일" ref={thumbnailRailRef}>
@@ -689,7 +846,6 @@ export default function Viewer() {
             <button className={'viewer-tool tool-toggle ' + (tool === 'highlight' ? 'active' : '')} aria-label="형광펜" title="형광펜" onClick={() => setTool('highlight')}><Highlighter size={17} /><span>형광펜</span></button>
             <button className={'viewer-tool tool-toggle ' + (tool === 'eraser' ? 'active' : '')} aria-label="지우개" title="지우개" onClick={() => setTool('eraser')}><Eraser size={17} /><span>지우개</span></button>
             <button className={'viewer-tool tool-toggle ' + (tool === 'text' ? 'active' : '')} aria-label="텍스트" title="텍스트" onClick={() => setTool('text')}><Type size={17} /><span>텍스트</span></button>
-            <button className={'viewer-tool tool-toggle ' + (qrEnabled ? 'active' : '')} aria-label={qrEnabled ? 'QR 링크 끄기' : 'QR 링크 켜기'} aria-pressed={qrEnabled} title={qrEnabled ? 'PDF QR 링크 켜짐' : 'PDF QR 링크 꺼짐'} onClick={() => setQrEnabled((enabled) => !enabled)}><QrCode size={17} /><span>QR 링크</span></button>
             <button className="viewer-tool chart-tool" aria-label="컬러워크 설정" title="차트 크기와 뜨개 게이지 설정" disabled={!pageWorks[activePage] || Boolean(colorworkRequest)} onClick={() => setColorworkDialog(true)}><Grid3X3 size={17} /><span>컬러워크</span>{activeColorworkGrid && <small>{activeColorworkGrid.columns}×{activeColorworkGrid.rows}</small>}</button>
             {activeColorworkGrid && <>
               <button className="viewer-tool compact-tool" aria-label={activeColorworkGrid.visible ? '컬러워크 숨기기' : '컬러워크 보이기'} title={activeColorworkGrid.visible ? '컬러워크 숨기기' : '컬러워크 보이기'} onClick={toggleColorworkVisibility}>{activeColorworkGrid.visible ? <Eye size={16} /> : <EyeOff size={16} />}</button>
@@ -708,7 +864,7 @@ export default function Viewer() {
             <span className="control-separator" />
             <button className="viewer-tool compact-tool" aria-label="실행 취소" title="실행 취소" disabled={!canUndo} onClick={() => undoRedo('undo')}><Undo2 size={17} /></button>
             <button className="viewer-tool compact-tool" aria-label="다시 실행" title="다시 실행" disabled={!canRedo} onClick={() => undoRedo('redo')}><Redo2 size={17} /></button>
-            <button className="viewer-tool" aria-label="진행선 설정" title="가로·세로 진행선 설정" onClick={() => setProgressDialog(true)}><SlidersHorizontal size={17} /><span>진행선</span></button>
+            <button className="viewer-tool" aria-label="진행선 설정" title="가로·세로 진행선 설정" disabled={!pageWorks[activePage]} onClick={() => setProgressDialog(true)}><SlidersHorizontal size={17} /><span>진행선</span></button>
           </div>
           <div className="viewer-navigation">
             <button className="text-control" disabled={activePage <= 1} onClick={() => stepPage(-1)}>이전</button>
@@ -718,13 +874,10 @@ export default function Viewer() {
             <button className={'viewer-tool ' + (isBookmarked ? 'active' : '')} aria-label={isBookmarked ? '북마크 해제' : '북마크'} onClick={() => void toggleBookmark()}><Bookmark size={17} fill={isBookmarked ? 'currentColor' : 'none'} /><span>북마크</span></button>
             <button className="viewer-tool" aria-label="페이지 숨김" disabled={visibleCount <= 1} onClick={() => void hideCurrentPage()}><EyeOff size={17} /><span>숨김</span></button>
             <span className="control-separator" />
-            <button className="zoom-button" aria-label="축소" disabled={snapshot[snapshot.activePane].zoom <= 1} onClick={() => setZoom(-1)}><Minus size={17} /></button>
-            <span className="zoom-value">{Math.round(snapshot[snapshot.activePane].zoom * 100)}%</span>
-            <button className="zoom-button" aria-label="확대" disabled={snapshot[snapshot.activePane].zoom >= 5} onClick={() => setZoom(1)}><Plus size={17} /></button>
-            <button className="zoom-reset" onClick={() => changePane(snapshot.activePane, (pane) => ({ ...pane, zoom: 1, centerX: 0.5, centerY: 0.5 }), true)}><RotateCcw size={15} /><span>맞춤</span></button>
           </div>
         </section>}
       </section>
+      {renameDialog && <div className="modal-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) setRenameDialog(false) }}><section className="modal-card" role="dialog" aria-modal="true" aria-label="PDF 이름 변경"><div className="modal-heading"><h2>PDF 이름 변경</h2><button className="icon-button" aria-label="닫기" onClick={() => setRenameDialog(false)}><X size={20} /></button></div><form className="modal-form" onSubmit={(event) => void saveDocumentName(event)}><label htmlFor="viewer-pdf-name">PDF 이름</label><input id="viewer-pdf-name" autoFocus required maxLength={120} value={renameDraft} onChange={(event) => setRenameDraft(event.currentTarget.value)} /><p className="modal-copy">.pdf 확장자는 저장할 때 자동으로 붙습니다.</p>{renameError && <p className="rename-error" role="alert">{renameError}</p>}<div className="modal-actions"><button type="button" className="secondary-button" onClick={() => setRenameDialog(false)}>취소</button><button className="primary-button" type="submit"><Check size={17} />저장</button></div></form></section></div>}
       {pageDialog && <HiddenPagesDialog
         pdf={pdf}
         pages={pages.filter((page) => page.hidden).sort((a, b) => a.pageNumber - b.pageNumber)}
@@ -750,7 +903,7 @@ export default function Viewer() {
       {techniqueDialog && <TechniqueDialog
         pdf={pdf}
         pages={pages}
-        slots={snapshot.techniqueSlots ?? Array<TechniqueCropSlot | null>(5).fill(null)}
+        slots={techniqueSlots}
         initialPage={activePage}
         onClose={() => setTechniqueDialog(false)}
         onSave={updateTechniqueSlot}

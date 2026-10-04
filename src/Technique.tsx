@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react'
 import type { PDFDocumentProxy } from 'pdfjs-dist'
-import { X } from 'lucide-react'
+import { ChevronLeft, ChevronRight, X } from 'lucide-react'
 import { PdfThumbnail } from './PdfPage'
 import type { PageRecord, TechniqueCropSlot } from './types'
 
@@ -214,7 +214,7 @@ export function TechniqueDialog({ pdf, pages, slots, initialPage, onClose, onSav
       </header>
       {editingIndex === null
         ? <div className="technique-slot-grid">
-          {Array.from({ length: 5 }, (_, index) => {
+          {Array.from({ length: 10 }, (_, index) => {
             const slot = slots[index] ?? null
             return <article className="technique-slot-card" key={index}>
               <button type="button" className="technique-slot-main" aria-label={slot ? '슬롯 ' + (index + 1) + ', ' + slot.pageNumber + '페이지 CROP 열기' : '슬롯 ' + (index + 1) + ' CROP 지정'} onClick={() => slot ? onOpen(index) : editSlot(index)}>
@@ -260,12 +260,20 @@ export function TechniqueDialog({ pdf, pages, slots, initialPage, onClose, onSav
   </div>
 }
 
-export function TechniquePopover({ pdf, slot, onClose }: { pdf: PDFDocumentProxy; slot: TechniqueCropSlot; onClose: () => void }) {
+export function TechniquePopover({ pdf, slots, slotIndex, onNavigate, onClose }: {
+  pdf: PDFDocumentProxy
+  slots: (TechniqueCropSlot | null)[]
+  slotIndex: number
+  onNavigate: (index: number) => void
+  onClose: () => void
+}) {
   const areaRef = useRef<HTMLDivElement>(null)
   const frameRef = useRef<Frame>(initialFrame)
   const dragRef = useRef<{ pointerId: number; mode: 'move' | 'resize'; x: number; y: number; before: Frame } | null>(null)
   const [frame, setFrame] = useState(initialFrame)
   const [zoom, setZoom] = useState(100)
+  const slot = slots[slotIndex]!
+  const savedSlotIndexes = slots.flatMap((item, index) => item ? [index] : [])
 
   useEffect(() => {
     function closeOnEscape(event: KeyboardEvent) {
@@ -317,10 +325,25 @@ export function TechniquePopover({ pdf, slot, onClose }: { pdf: PDFDocumentProxy
     if (dragRef.current?.pointerId === event.pointerId) dragRef.current = null
   }
 
+  function navigate(direction: -1 | 1) {
+    for (let offset = 1; offset <= slots.length; offset++) {
+      const index = (slotIndex + direction * offset + slots.length) % slots.length
+      if (slots[index]) {
+        onNavigate(index)
+        setZoom(100)
+        return
+      }
+    }
+  }
+
   return <div className="technique-popover-layer" ref={areaRef} onPointerDown={(event) => event.stopPropagation()}>
     <section className="technique-popover" aria-label={'기법 슬롯, PDF ' + slot.pageNumber + '페이지 CROP'} style={{ left: frame.x, top: frame.y, width: frame.width, height: frame.height }}>
       <header className="technique-popover-header" onPointerDown={(event) => beginDrag(event, 'move')} onPointerMove={moveDrag} onPointerUp={finishDrag} onPointerCancel={finishDrag}>
-        <strong>기법 · {slot.pageNumber}페이지</strong>
+        <strong>기법 {slotIndex + 1}/{slots.length} · {slot.pageNumber}페이지</strong>
+        {savedSlotIndexes.length > 1 && <div className="technique-popover-navigation" onPointerDown={(event) => event.stopPropagation()}>
+          <button type="button" aria-label="이전 기법" title="이전 기법" onClick={() => navigate(-1)}><ChevronLeft size={16} /></button>
+          <button type="button" aria-label="다음 기법" title="다음 기법" onClick={() => navigate(1)}><ChevronRight size={16} /></button>
+        </div>}
         <button type="button" aria-label="기법 이미지 닫기" onPointerDown={(event) => event.stopPropagation()} onClick={onClose}><X size={17} /></button>
       </header>
       <div className="technique-popover-image">

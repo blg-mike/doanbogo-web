@@ -77,6 +77,7 @@ export interface AnnotationRecord {
 export interface PageWorkRecord {
   documentId: string
   pageNumber: number
+  rotation?: PageRotation
   horizontalPosition: number
   verticalPosition: number
   horizontalGuides?: ProgressGuide[]
@@ -84,6 +85,8 @@ export interface PageWorkRecord {
   annotations: AnnotationRecord[]
   colorworkGrid?: ColorworkGrid
 }
+
+export type PageRotation = 0 | 90 | 180 | 270
 
 export interface DocumentRecord {
   id: string
@@ -109,6 +112,7 @@ export interface PaneSnapshot {
   zoom: number
   centerX: number
   centerY: number
+  rotations?: Record<number, PageRotation>
 }
 
 export interface TechniqueCropSlot {
@@ -122,6 +126,7 @@ export interface TechniqueCropSlot {
 export interface ViewerSnapshot {
   documentId: string
   split: boolean
+  splitInitialized?: boolean
   activePane: PaneId
   primary: PaneSnapshot
   secondary: PaneSnapshot
