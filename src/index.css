@@ -1,0 +1,26 @@
+:root {
+  font-family: "Noto Sans KR", "Segoe UI", system-ui, sans-serif;
+  color: #182238;
+  background: #f8fafd;
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  font-optical-sizing: auto;
+  font-weight: 400;
+  --ink: #182238;
+  --muted: #7a8499;
+  --faint: #e8ecf2;
+  --blue: #2673e8;
+  --blue-pale: #eaf2ff;
+  --surface: #fff;
+  --page: #f8fafd;
+}
+* { box-sizing: border-box; }
+html, body, #root { width: 100%; min-width: 320px; min-height: 100%; margin: 0; }
+body { min-height: 100vh; }
+button, input, select { font: inherit; }
+button { color: inherit; }
+button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible { outline: 3px solid rgba(38, 115, 232, .3); outline-offset: 2px; }
+button:disabled { cursor: not-allowed !important; opacity: .42; }
+::selection { background: #d9e8ff; }
