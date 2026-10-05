@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, type MouseEvent as ReactMouseEvent, type PointerEvent as ReactPointerEvent, type RefObject } from 'react'
 import type { PDFDocumentProxy, PDFPageProxy, RenderTask } from 'pdfjs-dist'
-import { EyeOff, Minus, Plus, RotateCw, Trash2 } from 'lucide-react'
+import { Minus, Plus, Trash2 } from 'lucide-react'
 import type { AnnotationRecord, AnnotationStyle, AnnotationTool, ColorworkCell, ColorworkCreateRequest, ColorworkGrid, PageRotation, PageWorkRecord, PaneId, PaneSnapshot, ProgressGuide, ProgressSettings } from './types'
 import { createColorworkGrid, resizeColorworkGridDisplay } from './colorwork'
 import { textNoteBoxAt } from './textNote'
@@ -365,7 +365,7 @@ function withTextBox(annotation: AnnotationRecord, pageHeight: number): Annotati
   return { ...annotation, points: [{ x: box.x, y: box.y }], boxWidth: box.width, boxHeight: box.height }
 }
 
-export function PdfPage({ pdf, page, paneId, pane, splitView, rotation, active, tool, lineSettings, annotationStyle, work, workReady, colorworkBrushColor, colorworkBrushOpacity, colorworkEraser, createColorworkRequest, pageLinks, qrLinks, onPageRendered, onActivate, onWorkChange, onZoom, onRotate, onHidePage, canHidePage, onCenter, onColorworkRequestHandled, onTextToolConsumed }: {
+export function PdfPage({ pdf, page, paneId, pane, splitView, rotation, active, tool, lineSettings, annotationStyle, work, workReady, colorworkBrushColor, colorworkBrushOpacity, colorworkEraser, createColorworkRequest, pageLinks, qrLinks, onPageRendered, onActivate, onWorkChange, onZoom, onCenter, onColorworkRequestHandled, onTextToolConsumed }: {
   pdf: PDFDocumentProxy
   page: number
   paneId: PaneId
@@ -388,9 +388,6 @@ export function PdfPage({ pdf, page, paneId, pane, splitView, rotation, active, 
   onActivate: () => void
   onWorkChange: (work: PageWorkRecord, immediate: boolean, recordHistory?: boolean, historyBefore?: PageWorkRecord) => void
   onZoom: (zoom: number) => void
-  onRotate: () => void
-  onHidePage: () => void
-  canHidePage: boolean
   onCenter: (x: number, y: number) => void
   onColorworkRequestHandled: (id: string) => void
   onTextToolConsumed: () => void
@@ -1596,17 +1593,6 @@ export function PdfPage({ pdf, page, paneId, pane, splitView, rotation, active, 
         {readyKey !== renderKey && renderError?.key !== renderKey && <div className={'pane-loading' + (displayedRaster?.pdf === pdf && displayedRaster.page === page ? ' pane-loading-refresh' : '')}><span>PDF 페이지를 준비하고 있어요…</span></div>}
         {renderError?.key === renderKey && <div className="pane-error">{renderError.message}<button onClick={() => { setRenderError(null); setRetry((current) => current + 1) }}>다시 시도</button></div>}
         {!workReady && <div className="page-work-loading">페이지 작업을 불러오는 중…</div>}
-      </div>
-      <div className="pdf-view-controls" role="group" aria-label="PDF 확대 및 회전" onPointerDown={(event) => event.stopPropagation()}>
-        <div className="pdf-rotate-row">
-          <button type="button" className="pdf-hide-page-button" aria-label={page + '페이지 숨기기'} title={canHidePage ? page + '페이지 숨기기' : '최소 한 페이지는 표시 상태로 남아야 합니다.'} disabled={!workReady || !canHidePage} onClick={onHidePage}><EyeOff size={16} /></button>
-          <button type="button" className="pdf-rotate-button" aria-label="페이지 시계방향 90도 회전" title={'90도 회전 · 현재 ' + rotation + '도'} disabled={!workReady} onClick={onRotate}><RotateCw size={17} /></button>
-        </div>
-        <div className="pdf-zoom-row">
-          <button type="button" className="zoom-button" aria-label="축소" disabled={pane.zoom <= 1} onClick={() => onZoom(Math.max(1, Math.round((pane.zoom - 0.25) * 100) / 100))}><Minus size={16} /></button>
-          <span className="zoom-value">{Math.round(pane.zoom * 100)}%</span>
-          <button type="button" className="zoom-button" aria-label="확대" disabled={pane.zoom >= 5} onClick={() => onZoom(Math.min(5, Math.round((pane.zoom + 0.25) * 100) / 100))}><Plus size={16} /></button>
-        </div>
       </div>
     </div>
   )

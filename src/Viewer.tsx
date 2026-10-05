@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState, type FormEvent as ReactFormEv
 import type { PDFDocumentProxy } from 'pdfjs-dist'
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import QrWorker from './qrDecode.worker?worker&inline'
-import { ArrowLeft, Bookmark, Check, ChevronDown, ChevronUp, Columns2, Eraser, Eye, EyeOff, Grid3X3, Hash, Highlighter, Minus, MousePointer2, Pencil, Plus, Redo2, SlidersHorizontal, Type, Undo2, X } from 'lucide-react'
+import { ArrowLeft, Bookmark, Check, ChevronDown, ChevronUp, Columns2, Eraser, Eye, EyeOff, Grid3X3, Hash, Highlighter, Minus, MousePointer2, Pencil, Plus, Redo2, RotateCw, SlidersHorizontal, Type, Undo2, X } from 'lucide-react'
 import yyLogo from './assets/yy-logo.png'
 import { cancelThumbnailRenders, PdfPage, PdfThumbnail, setThumbnailRenderingPaused, waitForThumbnailQueueIdle } from './PdfPage'
 import { getDocument, getPageRecognition, getPageWork, getPages, getViewer, markOpened, renameDocument, savePageRecognition, savePageWork, saveViewer, setPageFlag, setPagesFlag } from './storage'
@@ -711,6 +711,8 @@ export default function Viewer() {
   const activeAnnotationStyle = tool === 'pen' || tool === 'line' || tool === 'highlight' || tool === 'text' ? annotationSettings[tool] : null
   const activeHistory = histories[activePage] ?? { actions: [], cursor: 0 }
   const activeWork = pageWorks[activePage] ?? blankWork(id, activePage)
+  const activeZoom = snapshot ? snapshot[snapshot.activePane].zoom : 1
+  const activeRotation = snapshot ? snapshot[snapshot.activePane].rotations?.[activePage] ?? activeWork.rotation ?? 0 : 0
   const activeColorworkGrid = activeWork.colorworkGrid ?? null
   const canUndo = activeHistory.cursor > 0
   const canRedo = activeHistory.cursor < activeHistory.actions.length
@@ -1323,9 +1325,6 @@ export default function Viewer() {
       onWorkChange={setPageWork}
       onCenter={(x, y) => saveCenter(paneId, x, y)}
       onZoom={(zoom) => changePane(paneId, (current) => ({ ...current, zoom }), true)}
-      onRotate={() => rotatePage(paneId, pane.page)}
-      onHidePage={() => { void hidePage(pane.page) }}
-      canHidePage={pdf!.numPages - hiddenNumbers.size > 1}
       onColorworkRequestHandled={finishColorworkRequest}
       onTextToolConsumed={() => setTool('pan')}
       pageLinks={pdfLinksByPage[pane.page]}
@@ -1517,6 +1516,14 @@ export default function Viewer() {
             <span className="control-separator" />
             <button className="viewer-tool compact-tool" aria-label="실행 취소" title="실행 취소" disabled={!canUndo} onClick={() => undoRedo('undo')}><Undo2 size={17} /></button>
             <button className="viewer-tool compact-tool" aria-label="다시 실행" title="다시 실행" disabled={!canRedo} onClick={() => undoRedo('redo')}><Redo2 size={17} /></button>
+          </div>
+          <div className="viewer-page-controls" role="group" aria-label="PDF 페이지 조작">
+            <span className="viewer-page-target">{snapshot.split ? (orientation === 'wide' ? (snapshot.activePane === 'primary' ? '왼쪽' : '오른쪽') : (snapshot.activePane === 'primary' ? '위쪽' : '아래쪽')) + ' · ' : ''}{activePage}페이지</span>
+            <button type="button" className="viewer-page-control-button" aria-label={activePage + '페이지 숨기기'} title={pdf.numPages - hiddenNumbers.size > 1 ? activePage + '페이지 숨기기' : '최소 한 페이지는 표시 상태로 남아야 합니다.'} disabled={!pageWorks[activePage] || pageVisibilitySaving || pdf.numPages - hiddenNumbers.size <= 1} onClick={() => { void hidePage(activePage) }}><EyeOff size={17} /></button>
+            <button type="button" className="viewer-page-control-button" aria-label="시계 방향 90도 회전" title={'90도 회전 · 현재 ' + activeRotation + '도'} disabled={!pageWorks[activePage]} onClick={() => rotatePage(snapshot.activePane, activePage)}><RotateCw size={17} /></button>
+            <button type="button" className="viewer-page-control-button" aria-label="축소" title="25% 축소" disabled={activeZoom <= 1} onClick={() => changePane(snapshot.activePane, (pane) => ({ ...pane, zoom: Math.max(1, Math.round((pane.zoom - 0.25) * 100) / 100) }), true)}><Minus size={17} /></button>
+            <span className="viewer-page-zoom" aria-label={'확대 배율 ' + Math.round(activeZoom * 100) + '%'}>{Math.round(activeZoom * 100)}%</span>
+            <button type="button" className="viewer-page-control-button" aria-label="확대" title="25% 확대" disabled={activeZoom >= 5} onClick={() => changePane(snapshot.activePane, (pane) => ({ ...pane, zoom: Math.min(5, Math.round((pane.zoom + 0.25) * 100) / 100) }), true)}><Plus size={17} /></button>
           </div>
           <div className="viewer-navigation">
             <button className={'viewer-tool ' + (counterPanelVisible ? 'active' : '')} type="button" aria-label="숫자 카운터" title="숫자 카운터" aria-pressed={counterPanelVisible} onClick={() => updateCounterSession((current) => ({ ...current, visible: !current.visible }))}><Hash size={17} /><span>카운터</span></button>
