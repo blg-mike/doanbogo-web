@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState, type PointerEvent, type ReactNode } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
+import BrandLoading from './BrandLoading'
 import { ArrowLeft, Check, ChevronDown, Copy, Download, Eraser, FlipHorizontal2, FlipVertical2, Hand, Layers, Minus, MousePointer2, PaintBucket, Paintbrush, Plus, Redo2, RotateCcw, RotateCw, Save, Trash2, Undo2 } from 'lucide-react'
 import { crochetSymbols, exportChart } from './charts'
 import { getChart, saveChart } from './storage'
@@ -526,7 +527,7 @@ export default function ChartEditor() {
 
   if (!chart || chart.id !== id) return missing
     ? <main className="chart-not-found"><h1>차트를 찾을 수 없습니다</h1><button className="secondary-button" onClick={() => navigate('/')}>워크스페이스로</button></main>
-    : <main className="chart-loading"><span className="loading-orb" /><p>차트를 여는 중이에요…</p></main>
+    : <BrandLoading kind="chart" requestId={'chart-data:' + id} layout="screen" />
 
   return (
     <main className="chart-editor-shell">

@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, type MouseEvent as ReactMouseEvent, type PointerEvent as ReactPointerEvent, type RefObject } from 'react'
 import type { PDFDocumentProxy, PDFPageProxy, RenderTask } from 'pdfjs-dist'
 import { Minus, Plus, Trash2 } from 'lucide-react'
+import BrandLoading from './BrandLoading'
 import type { AnnotationRecord, AnnotationStyle, AnnotationTool, ColorworkCell, ColorworkCreateRequest, ColorworkGrid, PageRotation, PageWorkRecord, PaneId, PaneSnapshot, ProgressGuide, ProgressSettings } from './types'
 import { createColorworkGrid, resizeColorworkGridDisplay } from './colorwork'
 import { textNoteBoxAt } from './textNote'
@@ -1590,9 +1591,8 @@ export function PdfPage({ pdf, page, paneId, pane, splitView, rotation, active, 
           </div>
           </div>
         </div>
-        {readyKey !== renderKey && renderError?.key !== renderKey && <div className={'pane-loading' + (displayedRaster?.pdf === pdf && displayedRaster.page === page ? ' pane-loading-refresh' : '')}><span>PDF 페이지를 준비하고 있어요…</span></div>}
+        {renderError?.key !== renderKey && (!workReady || readyKey !== renderKey) && <div className={'pane-loading' + (workReady && displayedRaster?.pdf === pdf && displayedRaster.page === page ? ' pane-loading-refresh' : '')}><BrandLoading kind={workReady ? 'pdf' : 'page-work'} requestId={paneId + ':' + page + ':' + renderKey + ':' + workReady} layout={workReady && displayedRaster?.pdf === pdf && displayedRaster.page === page ? 'overlay' : 'pane'} /></div>}
         {renderError?.key === renderKey && <div className="pane-error">{renderError.message}<button onClick={() => { setRenderError(null); setRetry((current) => current + 1) }}>다시 시도</button></div>}
-        {!workReady && <div className="page-work-loading">페이지 작업을 불러오는 중…</div>}
       </div>
     </div>
   )

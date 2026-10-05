@@ -3,6 +3,7 @@ import type { PDFDocumentProxy } from 'pdfjs-dist'
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import QrWorker from './qrDecode.worker?worker&inline'
 import { ArrowLeft, Bookmark, Check, ChevronDown, ChevronUp, Columns2, Eraser, Eye, EyeOff, Grid3X3, Hash, Highlighter, Minus, MousePointer2, Pencil, Plus, Redo2, RotateCw, SlidersHorizontal, Type, Undo2, X } from 'lucide-react'
+import BrandLoading from './BrandLoading'
 import yyLogo from './assets/yy-logo.png'
 import { cancelThumbnailRenders, PdfPage, PdfThumbnail, setThumbnailRenderingPaused, waitForThumbnailQueueIdle } from './PdfPage'
 import { getDocument, getPageRecognition, getPageWork, getPages, getViewer, markOpened, renameDocument, savePageRecognition, savePageWork, saveViewer, setPageFlag, setPagesFlag } from './storage'
@@ -1337,7 +1338,7 @@ export default function Viewer() {
   const pageRecords = pages.reduce((map, page) => map.set(page.pageNumber, page), new Map<number, PageRecord>())
 
   if (loadError?.id === id) return <main className="viewer-state"><div className="viewer-error-icon"><X size={22} /></div><h1>PDF를 열지 못했습니다</h1><p>{loadError.message}</p><button className="primary-button" onClick={requestPdfResume}>다시 시도</button><button className="secondary-button" onClick={() => navigate('/')}>도안 목록으로</button></main>
-  if (suspended || loading || loadedId !== id) return <main className="viewer-state"><div className="loading-orb" /><p>{suspendError || 'PDF와 작업 위치를 불러오고 있어요…'}</p></main>
+  if (suspended || loading || loadedId !== id) return <BrandLoading kind="pdf" requestId={'pdf:' + id + ':' + pdfOpenCycle} layout="screen" messageOverride={suspendError || undefined} />
   if (!pdf || !snapshot) return null
 
   return (

@@ -1,5 +1,6 @@
 import { Suspense, lazy } from 'react'
 import { HashRouter, Navigate, Route, Routes, useParams } from 'react-router-dom'
+import BrandLoading from './BrandLoading'
 import PwaUpdatePrompt from './PwaUpdatePrompt'
 import './App.css'
 
@@ -10,7 +11,7 @@ const ChartEditor = lazy(() => import('./ChartEditor'))
 
 function ViewerRoute() {
   const { id } = useParams()
-  return <Viewer key={id} />
+  return <Suspense fallback={<BrandLoading kind="pdf" requestId={'viewer-module:' + id} layout="screen" />}><Viewer key={id} /></Suspense>
 }
 
 export default function App() {
@@ -18,15 +19,13 @@ export default function App() {
 
   return (
     <HashRouter>
-      <Suspense fallback={<main className="viewer-state"><div className="loading-orb" /><p>도안보고를 여는 중이에요…</p></main>}>
-        <Routes>
-          <Route path="/" element={<Workspace />} />
-          <Route path="/viewer/:id" element={<ViewerRoute />} />
-          <Route path="/charts/new" element={<ChartCreate />} />
-          <Route path="/chart/:id" element={<ChartEditor />} />
-          <Route path="*" element={<Navigate to="/" replace />} />
-        </Routes>
-      </Suspense>
+      <Routes>
+        <Route path="/" element={<Suspense fallback={<BrandLoading kind="app" requestId="workspace-module" layout="screen" />}><Workspace /></Suspense>} />
+        <Route path="/viewer/:id" element={<ViewerRoute />} />
+        <Route path="/charts/new" element={<Suspense fallback={<BrandLoading kind="chart" requestId="chart-create-module" layout="screen" />}><ChartCreate /></Suspense>} />
+        <Route path="/chart/:id" element={<Suspense fallback={<BrandLoading kind="chart" requestId="chart-editor-module" layout="screen" />}><ChartEditor /></Suspense>} />
+        <Route path="*" element={<Navigate to="/" replace />} />
+      </Routes>
       {pwaEnabled && <PwaUpdatePrompt />}
     </HashRouter>
   )

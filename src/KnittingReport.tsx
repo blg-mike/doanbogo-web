@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { Check, Clipboard, Download, ImagePlus, Pencil, Plus, Trash2, X } from 'lucide-react'
+import BrandLoading from './BrandLoading'
 import { getKnittingReportById, getKnittingReports, saveKnittingReport, type KnittingReportSummary } from './storage'
 import type { KnittingReport, ReportAccessory, ReportMeasurement, ReportModification, ReportNeedle, ReportTimelinePhoto, ReportYarn } from './types'
 import { exportKnittingReportPdf } from './knittingReportPdf'
@@ -386,7 +387,9 @@ export default function KnittingReport({ documentId, fileName }: Props) {
     }
   }
 
-  if (!report) return <div className="knitting-report-loading"><span className="loading-orb" /><p>{saveState}</p></div>
+  if (!report) return saveState === '불러오는 중'
+    ? <BrandLoading kind="report" requestId={'report:' + documentId} layout="report" />
+    : <div className="knitting-report-error" role="alert">{saveState}</div>
   const values = report.fields
 
   return <div className="knitting-report-editor">

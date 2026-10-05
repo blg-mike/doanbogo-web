@@ -87,8 +87,6 @@
 .chart-zoom-controls button { width: 29px; height: 28px; display: grid; place-items: center; border: 0; border-radius: 7px; color: #66738a; background: transparent; cursor: pointer; }
 .chart-zoom-controls button:hover { color: var(--blue); background: #eef5ff; }
 .chart-zoom-controls span { min-width: 42px; color: #69768b; text-align: center; font-size: 10px; }
-.chart-loading { min-height: 100vh; display: grid; place-content: center; justify-items: center; gap: 12px; color: #77849a; font-size: 12px; }
-.chart-loading .loading-orb { width: 28px; height: 28px; }
 .chart-not-found { min-height: 100vh; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 16px; background: #f8fafd; }
 .chart-not-found h1 { margin: 0; font-size: 19px; }
 .chart-create-button { min-height: 42px; display: inline-flex; align-items: center; justify-content: center; gap: 8px; padding: 0 15px; border: 1px solid #d7e5f7; border-radius: 11px; color: #2869bd; background: #f0f6ff; font-size: 13px; font-weight: 650; cursor: pointer; }
