@@ -1,10 +1,10 @@
-import { useCallback, useEffect, useRef, useState, type FormEvent as ReactFormEvent, type MouseEvent as ReactMouseEvent, type PointerEvent as ReactPointerEvent } from 'react'
+import { useCallback, useEffect, useRef, useState, type FormEvent as ReactFormEvent, type MouseEvent as ReactMouseEvent, type PointerEvent as ReactPointerEvent, type UIEvent as ReactUIEvent } from 'react'
 import type { PDFDocumentProxy } from 'pdfjs-dist'
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import QrWorker from './qrDecode.worker?worker&inline'
 import { ArrowLeft, Bookmark, Check, ChevronDown, ChevronUp, Columns2, Eraser, Eye, EyeOff, Grid3X3, Hash, Highlighter, Minus, MousePointer2, Pencil, Plus, Redo2, SlidersHorizontal, Type, Undo2, X } from 'lucide-react'
 import yyLogo from './assets/yy-logo.png'
-import { PdfPage, PdfThumbnail, waitForThumbnailQueueIdle } from './PdfPage'
+import { cancelThumbnailRenders, PdfPage, PdfThumbnail, setThumbnailRenderingPaused, waitForThumbnailQueueIdle } from './PdfPage'
 import { getDocument, getPageRecognition, getPageWork, getPages, getViewer, markOpened, renameDocument, savePageRecognition, savePageWork, saveViewer, setPageFlag, setPagesFlag } from './storage'
 import { pdfPageRenderQueue } from './pdfPageRenderQueue'
 import { openPdf, pdfErrorMessage } from './pdf'
@@ -257,6 +257,7 @@ export default function Viewer() {
   const pdfCleanupTasksRef = useRef(new Set<Promise<void>>())
   const recognitionResolutionRef = useRef(new Map<number, number>())
   const thumbnailScrollRef = useRef(0)
+  const thumbnailScrollTimerRef = useRef<number | undefined>(undefined)
   const [pdfOpenCycle, setPdfOpenCycle] = useState(0)
   const [suspended, setSuspended] = useState(false)
   const [suspendError, setSuspendError] = useState('')
@@ -292,7 +293,7 @@ export default function Viewer() {
   const thumbnailSelection = thumbnailUi.documentId === id ? thumbnailUi.selection : null
   const thumbnailTouchGestureRef = useRef<ThumbnailTouchGesture | null>(null)
   const suppressThumbnailClickRef = useRef(false)
-  const [thumbnailCollapsed, setThumbnailCollapsed] = useState(false)
+  const [thumbnailCollapsed, setThumbnailCollapsed] = useState(() => tabletResourcePolicy)
   const thumbnailContentId = 'viewer-thumbnails-' + id.replace(/[^a-zA-Z0-9_-]/g, '-')
   const [pageWorks, setPageWorks] = useState<Record<number, PageWorkRecord>>({})
   const [histories, setHistories] = useState<Record<number, PageHistory>>({})
@@ -339,6 +340,9 @@ export default function Viewer() {
     suspendAfterOpenRef.current = false
     viewerLifecycleRef.current = 'suspending'
     thumbnailScrollRef.current = thumbnailRailRef.current?.scrollLeft ?? thumbnailScrollRef.current
+    window.clearTimeout(thumbnailScrollTimerRef.current)
+    thumbnailScrollTimerRef.current = undefined
+    cancelThumbnailRenders()
     setLoading(true)
     setSuspended(true)
   }, [])
@@ -667,12 +671,17 @@ export default function Viewer() {
   }, [pageWorkPersistence, tabletResourcePolicy, requestPdfResume, requestPdfSuspend, saveViewerWithNotice])
 
   useEffect(() => {
-    if (!pdf || suspended) return
+    if (!pdf || suspended || thumbnailCollapsed) return
     const frame = requestAnimationFrame(() => {
       if (thumbnailRailRef.current) thumbnailRailRef.current.scrollLeft = thumbnailScrollRef.current
     })
     return () => cancelAnimationFrame(frame)
-  }, [pdf, suspended])
+  }, [pdf, suspended, thumbnailCollapsed])
+
+  useEffect(() => () => {
+    window.clearTimeout(thumbnailScrollTimerRef.current)
+    setThumbnailRenderingPaused(false)
+  }, [])
 
   useEffect(() => {
     const element = areaRef.current
@@ -722,12 +731,12 @@ export default function Viewer() {
       } finally {
         pdfCleanupTasksRef.current.delete(cleanup)
       }
-    })(), 1200)
+    })(), tabletResourcePolicy && thumbnailCollapsed ? 200 : 1200)
     return () => {
       cancelled = true
       window.clearTimeout(timer)
     }
-  }, [pdf, suspended, primaryPage, secondaryPage, isSplit])
+  }, [pdf, suspended, primaryPage, secondaryPage, isSplit, tabletResourcePolicy, thumbnailCollapsed])
 
   useEffect(() => {
     qrSchedulerRef.current?.setActivePage(activePage)
@@ -1065,6 +1074,10 @@ export default function Viewer() {
 
   function toggleThumbnailAccordion() {
     if (!thumbnailCollapsed) {
+      thumbnailScrollRef.current = thumbnailRailRef.current?.scrollLeft ?? thumbnailScrollRef.current
+      window.clearTimeout(thumbnailScrollTimerRef.current)
+      thumbnailScrollTimerRef.current = undefined
+      setThumbnailRenderingPaused(false)
       const gesture = thumbnailTouchGestureRef.current
       if (gesture) {
         window.clearTimeout(gesture.timer)
@@ -1074,6 +1087,17 @@ export default function Viewer() {
       }
     }
     setThumbnailCollapsed((current) => !current)
+  }
+
+  function handleThumbnailScroll(event: ReactUIEvent<HTMLDivElement>) {
+    thumbnailScrollRef.current = event.currentTarget.scrollLeft
+    if (!tabletResourcePolicy) return
+    setThumbnailRenderingPaused(true)
+    window.clearTimeout(thumbnailScrollTimerRef.current)
+    thumbnailScrollTimerRef.current = window.setTimeout(() => {
+      thumbnailScrollTimerRef.current = undefined
+      setThumbnailRenderingPaused(false)
+    }, 200)
   }
 
   function handleThumbnailSelect(pageNumber: number, event: ReactMouseEvent<HTMLButtonElement>) {
@@ -1409,7 +1433,8 @@ export default function Viewer() {
           {thumbnailCollapsed ? <ChevronDown size={14} /> : <ChevronUp size={14} />}
         </button>
         <div id={thumbnailContentId} className="thumbnail-content" hidden={thumbnailCollapsed}>
-        <div className="page-thumbnail-strip" aria-label="모든 페이지 썸네일" ref={thumbnailRailRef}>
+        {!thumbnailCollapsed && <>
+        <div className="page-thumbnail-strip" aria-label="모든 페이지 썸네일" ref={thumbnailRailRef} onScroll={handleThumbnailScroll}>
           {compactPageThumbnails(pdf.numPages, hiddenNumbers).map((item) => {
             if (item.type === 'hidden-run') {
               const pageNumbers = Array.from({ length: item.lastPage - item.firstPage + 1 }, (_, index) => item.firstPage + index)
@@ -1433,7 +1458,7 @@ export default function Viewer() {
             return <div className="page-thumbnail-entry" key={page}>
               <PdfThumbnail
                 pdf={pdf} pageNumber={page} active={active} hidden={false} bookmarked={Boolean(state?.bookmarked)} selected={selected}
-                disabled={pageVisibilitySaving} renderEnabled={!thumbnailCollapsed} root={thumbnailRailRef}
+                disabled={pageVisibilitySaving} root={thumbnailRailRef}
                 onSelect={(event) => handleThumbnailSelect(page, event)}
                 onPointerDown={(event) => beginThumbnailTouch(page, event)}
                 onPointerMove={moveThumbnailTouch}
@@ -1460,6 +1485,7 @@ export default function Viewer() {
           {hideSelectionWouldRemoveLastPage && <span role="status">최소 한 페이지는 표시 상태로 남아야 합니다.</span>}
           {pageVisibilityError && <span role="alert">{pageVisibilityError}</span>}
         </div>}
+        </>}
         </div>
         {reportMode ? <div className="viewer-controlbar report-controlbar"><span>PDF 페이지와 작업 내용은 그대로 저장되어 있습니다.</span><button className="secondary-button" onClick={() => setSearchParams({})}><ArrowLeft size={16} />도안 보기</button></div> : <section className="viewer-controlbar">
           <div className="viewer-tools" aria-label="필기 도구">

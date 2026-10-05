@@ -6,7 +6,7 @@ import { createColorworkGrid, resizeColorworkGridDisplay } from './colorwork'
 import { textNoteBoxAt } from './textNote'
 import type { PdfQrLink } from './qr'
 import { inverseRotatePoint, rotatedPageSize } from './pageGeometry'
-import { acquireThumbnailCache, getViewerResourcePolicy, pdfRasterScale, viewerCanvasMemory } from './pdfRenderResources'
+import { acquireThumbnailCache, getViewerResourcePolicy, pdfRasterScale, releaseCanvasWhenSettled, viewerCanvasMemory } from './pdfRenderResources'
 import { pdfPageRenderQueue } from './pdfPageRenderQueue'
 
 type Point = { x: number; y: number }
@@ -32,6 +32,8 @@ interface ThumbnailJob {
   cancelled: boolean
   queued: boolean
   preempted: boolean
+  settled: Promise<void>
+  onSettled?: () => void
   run: () => Promise<void>
   cancel: () => void
   preempt: () => void
@@ -43,6 +45,7 @@ let activePageRenders = 0
 let runningThumbnail: ThumbnailJob | null = null
 const failedImageCounts = new WeakMap<PDFPageProxy, number>()
 const thumbnailIdleWaiters = new Set<() => void>()
+let thumbnailRenderingPaused = false
 
 // oxlint-disable-next-line react/only-export-components -- shared with Viewer suspension before PDF disposal.
 export function waitForThumbnailQueueIdle() {
@@ -54,6 +57,25 @@ function resolveThumbnailIdle() {
   if (activeThumbnails || thumbnailQueue.length) return
   thumbnailIdleWaiters.forEach((resolve) => resolve())
   thumbnailIdleWaiters.clear()
+}
+
+// oxlint-disable-next-line react/only-export-components -- shared with Viewer scroll pacing.
+export function setThumbnailRenderingPaused(paused: boolean) {
+  thumbnailRenderingPaused = paused
+  if (paused) runningThumbnail?.preempt()
+  else pumpThumbnails()
+}
+
+// oxlint-disable-next-line react/only-export-components -- shared with Viewer lifecycle cleanup.
+export function cancelThumbnailRenders() {
+  thumbnailRenderingPaused = false
+  for (const job of thumbnailQueue.splice(0)) {
+    job.queued = false
+    job.cancel()
+    job.onSettled?.()
+  }
+  runningThumbnail?.cancel()
+  resolveThumbnailIdle()
 }
 
 function enqueueThumbnail(job: ThumbnailJob) {
@@ -71,19 +93,20 @@ function removeQueuedThumbnail(job: ThumbnailJob) {
 }
 
 function pumpThumbnails() {
-  while (activePageRenders === 0 && activeThumbnails < 1 && thumbnailQueue.length) {
+  while (!thumbnailRenderingPaused && activePageRenders === 0 && activeThumbnails < 1 && thumbnailQueue.length) {
     const job = thumbnailQueue.shift()!
     job.queued = false
     if (job.cancelled) continue
     activeThumbnails++
     runningThumbnail = job
-    void job.run().finally(() => {
+    job.settled = job.run()
+    void job.settled.finally(() => {
       activeThumbnails--
       if (runningThumbnail === job) runningThumbnail = null
       if (job.preempted && !job.cancelled) {
         job.preempted = false
         enqueueThumbnail(job)
-      }
+      } else job.onSettled?.()
       pumpThumbnails()
       resolveThumbnailIdle()
     })
@@ -107,13 +130,21 @@ function clearCanvas(canvas: HTMLCanvasElement) {
   canvas.height = 0
 }
 
+function clearThumbnailCanvas(canvas: HTMLCanvasElement, job: ThumbnailJob | null) {
+  if (job && runningThumbnail === job) {
+    void releaseCanvasWhenSettled(canvas, job.settled)
+    return
+  }
+  clearCanvas(canvas)
+}
+
 function copyCanvas(target: HTMLCanvasElement, source: HTMLCanvasElement) {
   target.width = source.width
   target.height = source.height
   target.getContext('2d', { alpha: false })?.drawImage(source, 0, 0)
 }
 
-export function PdfThumbnail({ pdf, pageNumber, active, hidden, bookmarked, selected, disabled, renderEnabled = true, root, onSelect, onPointerDown, onPointerMove, onPointerUp, onPointerCancel, onLostPointerCapture }: {
+export function PdfThumbnail({ pdf, pageNumber, active, hidden, bookmarked, selected, disabled, root, onSelect, onPointerDown, onPointerMove, onPointerUp, onPointerCancel, onLostPointerCapture }: {
   pdf: PDFDocumentProxy
   pageNumber: number
   active: boolean
@@ -121,7 +152,6 @@ export function PdfThumbnail({ pdf, pageNumber, active, hidden, bookmarked, sele
   bookmarked: boolean
   selected?: boolean
   disabled?: boolean
-  renderEnabled?: boolean
   root: RefObject<HTMLDivElement | null>
   onSelect: (event: ReactMouseEvent<HTMLButtonElement>) => void
   onPointerDown?: (event: ReactPointerEvent<HTMLButtonElement>) => void
@@ -135,11 +165,15 @@ export function PdfThumbnail({ pdf, pageNumber, active, hidden, bookmarked, sele
   const [ready, setReady] = useState(false)
   const observerTargetRef = useRef<HTMLSpanElement>(null)
   const cacheSessionRef = useRef<ReturnType<typeof acquireThumbnailCache> | null>(null)
+  const thumbnailJobRef = useRef<ThumbnailJob | null>(null)
 
   useEffect(() => {
     const target = observerTargetRef.current
     if (!target) return
-    const observer = new IntersectionObserver(([entry]) => setVisible(entry.isIntersecting), { root: root.current, rootMargin: '80px 160px' })
+    const observer = new IntersectionObserver(([entry]) => {
+      if (!entry.isIntersecting) setReady(false)
+      setVisible(entry.isIntersecting)
+    }, { root: root.current, rootMargin: '0px' })
     observer.observe(target)
     return () => observer.disconnect()
   }, [root])
@@ -157,8 +191,8 @@ export function PdfThumbnail({ pdf, pageNumber, active, hidden, bookmarked, sele
     if (!canvas) return
     const cache = cacheSessionRef.current?.cache
     cache?.excludePage(pageNumber, hidden)
-    if (!visible || !renderEnabled) {
-      clearCanvas(canvas)
+    if (!visible) {
+      clearThumbnailCanvas(canvas, thumbnailJobRef.current)
       return
     }
     const cached = cache?.get(pageNumber)
@@ -167,12 +201,16 @@ export function PdfThumbnail({ pdf, pageNumber, active, hidden, bookmarked, sele
       setReady(true)
       return () => clearCanvas(canvas)
     }
-    setReady(false)
     let renderTask: RenderTask | undefined
     const job: ThumbnailJob = {
       cancelled: false,
       queued: false,
       preempted: false,
+      settled: Promise.resolve(),
+      onSettled: () => {
+        if (thumbnailJobRef.current === job) thumbnailJobRef.current = null
+        if (job.cancelled) clearCanvas(canvas)
+      },
       run: async () => {
         renderTask = undefined
         try {
@@ -195,11 +233,14 @@ export function PdfThumbnail({ pdf, pageNumber, active, hidden, bookmarked, sele
             setReady(false)
             return
           }
-          const cachedCanvas = document.createElement('canvas')
-          cachedCanvas.width = canvas.width
-          cachedCanvas.height = canvas.height
-          cachedCanvas.getContext('2d', { alpha: false })?.drawImage(canvas, 0, 0)
-          cacheSessionRef.current?.cache.set(pageNumber, cachedCanvas)
+          const activeCache = cacheSessionRef.current?.cache
+          if (activeCache) {
+            const cachedCanvas = document.createElement('canvas')
+            cachedCanvas.width = canvas.width
+            cachedCanvas.height = canvas.height
+            cachedCanvas.getContext('2d', { alpha: false })?.drawImage(canvas, 0, 0)
+            activeCache.set(pageNumber, cachedCanvas)
+          }
           setReady(true)
         } catch {
           // The page number stays selectable when a thumbnail cannot be rendered.
@@ -219,13 +260,15 @@ export function PdfThumbnail({ pdf, pageNumber, active, hidden, bookmarked, sele
         renderTask?.cancel?.()
       },
     }
+    thumbnailJobRef.current = job
     enqueueThumbnail(job)
     return () => {
       job.cancel()
       removeQueuedThumbnail(job)
-      clearCanvas(canvas)
+      clearThumbnailCanvas(canvas, job)
+      if (runningThumbnail !== job && thumbnailJobRef.current === job) thumbnailJobRef.current = null
     }
-  }, [canvas, hidden, pageNumber, pdf, renderEnabled, visible])
+  }, [canvas, hidden, pageNumber, pdf, visible])
 
   return (
     <button
@@ -248,7 +291,7 @@ export function PdfThumbnail({ pdf, pageNumber, active, hidden, bookmarked, sele
           ? <span className="thumbnail-hidden-ellipsis" aria-hidden="true">…</span>
           : <>
             <canvas ref={setCanvas} width={0} height={0} aria-hidden="true" />
-            {(!ready || !visible || !renderEnabled) && <span className="thumbnail-placeholder">{pageNumber}</span>}
+            {(!ready || !visible) && <span className="thumbnail-placeholder">{pageNumber}</span>}
             {selected && <span className="thumbnail-selection-mark">✓</span>}
             {bookmarked && <span className="thumbnail-bookmark">★</span>}
           </>}

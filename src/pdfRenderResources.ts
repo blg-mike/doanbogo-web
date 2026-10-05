@@ -3,6 +3,8 @@ import type { PDFDocumentProxy } from 'pdfjs-dist'
 export const MAX_PDF_CANVAS_PIXELS = 16_000_000
 export const MAX_THUMBNAIL_CACHE_ENTRIES = 128
 export const MAX_THUMBNAIL_CACHE_BYTES = 8 * 1024 * 1024
+export const MAX_TOUCH_THUMBNAIL_CACHE_ENTRIES = 8
+export const MAX_TOUCH_THUMBNAIL_CACHE_BYTES = 512 * 1024
 export const MAX_VIEWER_CANVAS_BYTES = 44 * 1024 * 1024
 export const MAX_SINGLE_VIEW_PDF_PIXELS = 5_000_000
 export const MAX_SPLIT_VIEW_PDF_PIXELS = 3_000_000
@@ -36,13 +38,13 @@ const tabletPolicy: ViewerResourcePolicy = {
   singleViewPixels: 2_500_000,
   splitViewPixels: 1_500_000,
   colorworkPixels: 500_000,
-  thumbnailCacheEntries: 32,
-  thumbnailCacheBytes: 2 * 1024 * 1024,
+  thumbnailCacheEntries: MAX_TOUCH_THUMBNAIL_CACHE_ENTRIES,
+  thumbnailCacheBytes: MAX_TOUCH_THUMBNAIL_CACHE_BYTES,
   cachedPageWorks: 4,
 }
 
-export function getViewerResourcePolicy(userAgent = typeof navigator === 'undefined' ? '' : navigator.userAgent, hasCoarsePointer = typeof matchMedia !== 'undefined' && matchMedia('(any-pointer: coarse)').matches): ViewerResourcePolicy {
-  return /Android/i.test(userAgent) && hasCoarsePointer ? tabletPolicy : desktopPolicy
+export function getViewerResourcePolicy(hasCoarsePointer = typeof matchMedia !== 'undefined' && matchMedia('(any-pointer: coarse)').matches, maxTouchPoints = typeof navigator === 'undefined' ? 0 : navigator.maxTouchPoints): ViewerResourcePolicy {
+  return hasCoarsePointer && maxTouchPoints >= 2 ? tabletPolicy : desktopPolicy
 }
 
 export function pdfRasterScale(width: number, height: number, cssScale: number, devicePixelRatio: number, maxPixels = MAX_PDF_CANVAS_PIXELS) {
@@ -95,6 +97,10 @@ type CanvasResource = { width: number; height: number }
 function releaseCanvas(canvas: CanvasResource) {
   canvas.width = 0
   canvas.height = 0
+}
+
+export function releaseCanvasWhenSettled(canvas: CanvasResource, renderPromise: Promise<unknown>) {
+  return renderPromise.then(() => releaseCanvas(canvas), () => releaseCanvas(canvas))
 }
 
 export class ThumbnailCanvasCache<TCanvas extends CanvasResource = HTMLCanvasElement> {
