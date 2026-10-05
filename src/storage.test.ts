@@ -1,6 +1,6 @@
 import 'fake-indexeddb/auto'
 import { describe, expect, it } from 'vitest'
-import { addDocument, deleteDocument, duplicateDocument, getPageWork, getPages, getViewer, listDocuments, markOpened, renameDocument, savePageWork, saveViewer, setPageFlag, updateTags } from './storage'
+import { addDocument, deleteDocument, duplicateDocument, getPageRecognition, getPageWork, getPages, getViewer, listDocuments, markOpened, renameDocument, savePageRecognition, savePageWork, saveViewer, setPageFlag, updateTags } from './storage'
 import type { DocumentRecord } from './types'
 
 function makeDocument(id: string, fileName: string, createdAt: number, tags: string[] = []): DocumentRecord {
@@ -71,6 +71,9 @@ describe('local document storage', () => {
     await addDocument(document)
     await setPageFlag(document.id, 3, 'hidden', true)
     await setPageFlag(document.id, 5, 'bookmarked', true)
+    await savePageRecognition(document.id, 5, { pdfLinksDone: true, pdfLinks: [], qrLinksDone: true, qrLinks: [], qrInputMaxDimension: 1400 })
+    const pdfLink = { x: 0.1, y: 0.2, width: 0.3, height: 0.1, href: 'https://example.com' }
+    await savePageRecognition(document.id, 5, { pdfLinks: [pdfLink] })
     await savePageWork({
       documentId: document.id, pageNumber: 5, horizontalPosition: 0.3, verticalPosition: 0.8, rotation: 90,
       horizontalGuides: [{ id: 'guide-h-1', position: 0.3 }, { id: 'guide-h-2', position: 0.65 }],
@@ -91,6 +94,13 @@ describe('local document storage', () => {
       { documentId: document.id, pageNumber: 3, hidden: true, bookmarked: false },
       { documentId: document.id, pageNumber: 5, hidden: false, bookmarked: true },
     ])
+    expect(await getPageRecognition(document.id, 5)).toMatchObject({
+      version: 1,
+      pdfLinksDone: true,
+      pdfLinks: [pdfLink],
+      qrLinksDone: true,
+      qrInputMaxDimension: 1400,
+    })
     expect(await getPageWork(document.id, 5)).toMatchObject({
       rotation: 90,
       horizontalGuides: [{ id: 'guide-h-1', position: 0.3 }, { id: 'guide-h-2', position: 0.65 }],
@@ -106,6 +116,7 @@ describe('local document storage', () => {
 
     await deleteDocument(document.id)
     expect(await getPages(document.id)).toEqual([])
+    expect(await getPageRecognition(document.id, 5)).toBeUndefined()
     expect(await getPageWork(document.id, 5)).toMatchObject({ horizontalPosition: 0.5, verticalPosition: 0.5, annotations: [] })
     expect((await listDocuments('name')).some((item) => item.id === document.id)).toBe(false)
   })

@@ -15,10 +15,11 @@ async function loadPortableFallback(data: Uint8Array, reason: unknown) {
 
   const workerModule = await import('pdfjs-dist/build/pdf.worker.min.mjs')
   ;(globalThis as typeof globalThis & { pdfjsWorker?: typeof workerModule }).pdfjsWorker = workerModule
-  return pdfjs.getDocument({ data: data.slice(), ...pdfBinaryResourceOptions() })
+  return pdfjs.getDocument({ data, ...pdfBinaryResourceOptions() })
 }
 
-async function loadPortableDocument(data: Uint8Array) {
+async function loadPortableDocument(blob: Blob) {
+  let data = new Uint8Array(await blob.arrayBuffer())
   let worker: Worker
   try {
     worker = new PdfWorker()
@@ -55,11 +56,22 @@ async function loadPortableDocument(data: Uint8Array) {
   const previousWorkerPort = pdfjs.GlobalWorkerOptions.workerPort
   try {
     pdfjs.GlobalWorkerOptions.workerPort = worker
-    task = pdfjs.getDocument({ data: data.slice(), ...pdfBinaryResourceOptions() })
+    task = pdfjs.getDocument({ data, ...pdfBinaryResourceOptions() })
   } catch (error) {
     removeWorkerListeners()
     worker.terminate()
-    throw error
+    data = new Uint8Array(await blob.arrayBuffer())
+    fallbackTask = await loadPortableFallback(data, error)
+    return {
+      promise: fallbackTask.promise,
+      dispose: async () => {
+        try {
+          await fallbackTask?.destroy()
+        } finally {
+          data = new Uint8Array()
+        }
+      },
+    }
   } finally {
     pdfjs.GlobalWorkerOptions.workerPort = previousWorkerPort
   }
@@ -69,8 +81,9 @@ async function loadPortableDocument(data: Uint8Array) {
     removeWorkerListeners()
     if (!workerFailed) throw error
     worker.terminate()
-    if (task) void task.destroy().catch(() => {})
+    if (task) await task.destroy().catch(() => {})
     task = undefined
+    data = new Uint8Array(await blob.arrayBuffer())
     fallbackTask = await loadPortableFallback(data, workerError ?? error)
     return fallbackTask.promise
   }).then((document) => {
@@ -86,6 +99,7 @@ async function loadPortableDocument(data: Uint8Array) {
         else if (task) await task.destroy()
       } finally {
         worker.terminate()
+        data = new Uint8Array()
       }
     },
   }
@@ -93,8 +107,7 @@ async function loadPortableDocument(data: Uint8Array) {
 
 async function loadDocument(blob: Blob) {
   if (import.meta.env.VITE_PORTABLE) {
-    const data = new Uint8Array(await blob.arrayBuffer())
-    return loadPortableDocument(data)
+    return loadPortableDocument(blob)
   }
 
   const url = URL.createObjectURL(blob)

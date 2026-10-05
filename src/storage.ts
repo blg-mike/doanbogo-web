@@ -1,5 +1,5 @@
 import { openDB, type DBSchema, type IDBPDatabase } from 'idb'
-import type { ChartDocument, DocumentRecord, KnittingReport, PageRecord, PageWorkRecord, PaneSnapshot, PreferenceRecord, ProgressGuide, SortMode, ViewerSnapshot } from './types'
+import type { ChartDocument, DocumentRecord, KnittingReport, PageRecognitionRecord, PageRecord, PageWorkRecord, PaneSnapshot, PreferenceRecord, ProgressGuide, SortMode, ViewerSnapshot } from './types'
 
 interface DoanBogoDB extends DBSchema {
   documents: {
@@ -17,6 +17,8 @@ interface DoanBogoDB extends DBSchema {
   pageWork: { key: [string, number]; value: PageWorkRecord; indexes: { 'by-document': string } }
   charts: { key: string; value: ChartDocument; indexes: { 'by-updated': number } }
   knittingReports: { key: string; value: KnittingReport }
+  knittingReportEntries: { key: string; value: KnittingReport; indexes: { 'by-document': string } }
+  pageRecognition: { key: [string, number]; value: PageRecognitionRecord; indexes: { 'by-document': string } }
 }
 
 export type StorageMode = 'checking' | 'persistent' | 'temporary'
@@ -44,6 +46,7 @@ const temporary = {
   pageWork: new Map<string, PageWorkRecord>(),
   charts: new Map<string, ChartDocument>(),
   knittingReports: new Map<string, KnittingReport>(),
+  pageRecognition: new Map<string, PageRecognitionRecord>(),
 }
 
 const pageKey = (id: string, page: number) => id + '\u0000' + page
@@ -86,7 +89,7 @@ async function database(): Promise<Database | null> {
     try {
       let abandoned = false
       let timeoutId = 0
-      const opening = openDB<DoanBogoDB>('doanbogo-web', 5, {
+      const opening = openDB<DoanBogoDB>('doanbogo-web', 7, {
         async upgrade(db, oldVersion, _newVersion, transaction) {
           if (oldVersion < 1) {
             const documents = db.createObjectStore('documents', { keyPath: 'id' })
@@ -114,6 +117,22 @@ async function database(): Promise<Database | null> {
               }
               cursor = await cursor.continue()
             }
+          }
+          if (oldVersion < 6) {
+            const reports = db.createObjectStore('knittingReportEntries', { keyPath: 'id' })
+            reports.createIndex('by-document', 'documentId')
+            if (oldVersion >= 4) {
+              let cursor = await transaction.objectStore('knittingReports').openCursor()
+              while (cursor) {
+                const legacy = cursor.value as unknown as KnittingReport
+                await reports.put({ ...legacy, id: legacy.documentId, workPhotos: [] })
+                cursor = await cursor.continue()
+              }
+            }
+          }
+          if (oldVersion < 7) {
+            const recognition = db.createObjectStore('pageRecognition', { keyPath: ['documentId', 'pageNumber'] })
+            recognition.createIndex('by-document', 'documentId')
           }
         },
       }).then((db) => {
@@ -162,7 +181,7 @@ async function database(): Promise<Database | null> {
 async function loadIntoTemporary(db: Database) {
   try {
     const [documents, pages, viewers, preferences, pageWork, charts, knittingReports] = await Promise.all([
-      db.getAll('documents'), db.getAll('pages'), db.getAll('viewers'), db.getAll('preferences'), db.getAll('pageWork'), db.getAll('charts'), db.getAll('knittingReports'),
+      db.getAll('documents'), db.getAll('pages'), db.getAll('viewers'), db.getAll('preferences'), db.getAll('pageWork'), db.getAll('charts'), db.getAll('knittingReportEntries'),
     ])
     documents.forEach((item) => temporary.documents.set(item.id, item))
     pages.forEach((item) => temporary.pages.set(pageKey(item.documentId, item.pageNumber), item))
@@ -170,7 +189,7 @@ async function loadIntoTemporary(db: Database) {
     preferences.forEach((item) => temporary.preferences.set(item.key, item))
     pageWork.forEach((item) => temporary.pageWork.set(pageKey(item.documentId, item.pageNumber), item))
     charts.forEach((item) => temporary.charts.set(item.id, item))
-    knittingReports.forEach((item) => temporary.knittingReports.set(item.documentId, item))
+    knittingReports.forEach((item) => temporary.knittingReports.set(item.id, item))
   } catch {
     // Keep the app usable in memory even when the browser refuses further reads.
   }
@@ -269,13 +288,25 @@ export async function deleteChart(id: string) {
   await access(async (db) => { await db.delete('charts', id) }, () => { temporary.charts.delete(id) })
 }
 
+export type KnittingReportSummary = Pick<KnittingReport, 'id' | 'title' | 'createdAt' | 'updatedAt'>
+
+export async function getKnittingReports(documentId: string) {
+  const reports = await access((db) => db.getAllFromIndex('knittingReportEntries', 'by-document', documentId), () => [...temporary.knittingReports.values()].filter((report) => report.documentId === documentId))
+  return reports.sort((left, right) => left.createdAt - right.createdAt)
+}
+
 export async function getKnittingReport(documentId: string) {
-  return access((db) => db.get('knittingReports', documentId), () => temporary.knittingReports.get(documentId))
+  const reports = await getKnittingReports(documentId)
+  return reports.sort((left, right) => right.updatedAt - left.updatedAt)[0]
+}
+
+export async function getKnittingReportById(id: string) {
+  return access((db) => db.get('knittingReportEntries', id), () => temporary.knittingReports.get(id))
 }
 
 export async function saveKnittingReport(report: KnittingReport) {
-  const saved = { ...report, updatedAt: Date.now() }
-  await access(async (db) => { await db.put('knittingReports', saved) }, () => { temporary.knittingReports.set(saved.documentId, saved) })
+  const saved = { ...report, updatedAt: Math.max(Date.now(), report.updatedAt + 1) }
+  await access(async (db) => { await db.put('knittingReportEntries', saved) }, () => { temporary.knittingReports.set(saved.id, saved) })
   return saved
 }
 
@@ -343,20 +374,30 @@ export async function duplicateDocument(id: string) {
     tags: [],
   }
   await addDocument(copy)
-  const report = await getKnittingReport(id)
-  if (report) {
+  const reports = await getKnittingReports(id)
+  for (const report of reports) {
     const title = '복사본 - ' + report.title
-    await saveKnittingReport({ ...report, documentId: copy.id, title, fields: { ...report.fields, 'project.name': title } })
+    await saveKnittingReport({ ...report, id: crypto.randomUUID(), documentId: copy.id, title, fields: { ...report.fields, 'project.name': title } })
   }
   return copy
 }
 
 export async function deleteDocument(id: string) {
   await access(async (db) => {
-    const tx = db.transaction(['documents', 'pages', 'viewers', 'pageWork', 'knittingReports'], 'readwrite')
+    const tx = db.transaction(['documents', 'pages', 'viewers', 'pageWork', 'knittingReports', 'knittingReportEntries', 'pageRecognition'], 'readwrite')
     await tx.objectStore('documents').delete(id)
     await tx.objectStore('viewers').delete(id)
     await tx.objectStore('knittingReports').delete(id)
+    let recognitionCursor = await tx.objectStore('pageRecognition').index('by-document').openCursor(IDBKeyRange.only(id))
+    while (recognitionCursor) {
+      await recognitionCursor.delete()
+      recognitionCursor = await recognitionCursor.continue()
+    }
+    let reportCursor = await tx.objectStore('knittingReportEntries').index('by-document').openCursor(IDBKeyRange.only(id))
+    while (reportCursor) {
+      await reportCursor.delete()
+      reportCursor = await reportCursor.continue()
+    }
     let cursor = await tx.objectStore('pages').index('by-document').openCursor(IDBKeyRange.only(id))
     while (cursor) {
       await cursor.delete()
@@ -371,9 +412,49 @@ export async function deleteDocument(id: string) {
   }, () => {
     temporary.documents.delete(id)
     temporary.viewers.delete(id)
-    temporary.knittingReports.delete(id)
+    for (const [key, report] of temporary.knittingReports) if (report.documentId === id) temporary.knittingReports.delete(key)
     for (const [key, page] of temporary.pages) if (page.documentId === id) temporary.pages.delete(key)
     for (const [key, work] of temporary.pageWork) if (work.documentId === id) temporary.pageWork.delete(key)
+    for (const [key, recognition] of temporary.pageRecognition) if (recognition.documentId === id) temporary.pageRecognition.delete(key)
+  })
+}
+
+export async function getPageRecognition(id: string, pageNumber: number) {
+  return access((db) => db.get('pageRecognition', [id, pageNumber]), () => temporary.pageRecognition.get(pageKey(id, pageNumber)))
+}
+
+export async function savePageRecognition(id: string, pageNumber: number, change: Partial<Omit<PageRecognitionRecord, 'documentId' | 'pageNumber' | 'version'>>) {
+  const key = pageKey(id, pageNumber)
+  await access(async (db) => {
+    const tx = db.transaction('pageRecognition', 'readwrite')
+    const current = await tx.store.get([id, pageNumber])
+    await tx.store.put({
+      documentId: id,
+      pageNumber,
+      version: 1,
+      pdfLinksDone: false,
+      pdfLinks: [],
+      qrLinksDone: false,
+      qrLinks: [],
+      qrInputMaxDimension: 0,
+      ...current,
+      ...change,
+    })
+    await tx.done
+  }, () => {
+    const current = temporary.pageRecognition.get(key)
+    temporary.pageRecognition.set(key, {
+      documentId: id,
+      pageNumber,
+      version: 1,
+      pdfLinksDone: false,
+      pdfLinks: [],
+      qrLinksDone: false,
+      qrLinks: [],
+      qrInputMaxDimension: 0,
+      ...current,
+      ...change,
+    })
   })
 }
 
@@ -488,7 +569,7 @@ export async function readWorkspaceData(): Promise<WorkspaceData> {
     knittingReports: [...temporary.knittingReports.values()],
   }
   return access((activeDb) => Promise.all([
-    activeDb.getAll('documents'), activeDb.getAll('pages'), activeDb.getAll('viewers'), activeDb.getAll('preferences'), activeDb.getAll('pageWork'), activeDb.getAll('charts'), activeDb.getAll('knittingReports'),
+    activeDb.getAll('documents'), activeDb.getAll('pages'), activeDb.getAll('viewers'), activeDb.getAll('preferences'), activeDb.getAll('pageWork'), activeDb.getAll('charts'), activeDb.getAll('knittingReportEntries'),
   ]).then(([documents, pages, viewers, preferences, pageWork, charts, knittingReports]) => ({ documents, pages, viewers: viewers.map(stripLegacyTechniqueSlots), preferences, pageWork: pageWork.map(normalizePageWork), charts, knittingReports })), () => ({
     documents: [...temporary.documents.values()],
     pages: [...temporary.pages.values()],
@@ -521,7 +602,13 @@ export async function importWorkspaceData(incoming: WorkspaceData) {
     usedChartIds.add(id)
     return { ...item, id }
   })
-  const knittingReports = (incoming.knittingReports ?? []).map((item) => ({ ...item, documentId: idMap.get(item.documentId)! }))
+  const usedReportIds = new Set(current.knittingReports.map((report) => report.id))
+  const knittingReports = (incoming.knittingReports ?? []).map((item) => {
+    let id = item.id
+    if (usedReportIds.has(id)) id = crypto.randomUUID()
+    usedReportIds.add(id)
+    return { ...item, id, documentId: idMap.get(item.documentId)! }
+  })
   const db = await database()
   if (!db) {
     documents.forEach((item) => temporary.documents.set(item.id, item))
@@ -529,18 +616,18 @@ export async function importWorkspaceData(incoming: WorkspaceData) {
     viewers.forEach((item) => temporary.viewers.set(item.documentId, item))
     pageWork.forEach((item) => temporary.pageWork.set(pageKey(item.documentId, item.pageNumber), item))
     charts.forEach((item) => temporary.charts.set(item.id, item))
-    knittingReports.forEach((item) => temporary.knittingReports.set(item.documentId, item))
+    knittingReports.forEach((item) => temporary.knittingReports.set(item.id, item))
     incoming.preferences.forEach((item) => temporary.preferences.set(item.key, item))
     return documents.length + charts.length
   }
   return access(async (activeDb) => {
-    const tx = activeDb.transaction(['documents', 'pages', 'viewers', 'preferences', 'pageWork', 'charts', 'knittingReports'], 'readwrite')
+    const tx = activeDb.transaction(['documents', 'pages', 'viewers', 'preferences', 'pageWork', 'charts', 'knittingReportEntries'], 'readwrite')
     for (const item of documents) await tx.objectStore('documents').put(item)
     for (const item of pages) await tx.objectStore('pages').put(item)
     for (const item of viewers) await tx.objectStore('viewers').put(item)
     for (const item of pageWork) await tx.objectStore('pageWork').put(item)
     for (const item of charts) await tx.objectStore('charts').put(item)
-    for (const item of knittingReports) await tx.objectStore('knittingReports').put(item)
+    for (const item of knittingReports) await tx.objectStore('knittingReportEntries').put(item)
     for (const item of incoming.preferences) await tx.objectStore('preferences').put(item)
     await tx.done
     return documents.length + charts.length
@@ -550,7 +637,7 @@ export async function importWorkspaceData(incoming: WorkspaceData) {
     viewers.forEach((item) => temporary.viewers.set(item.documentId, item))
     pageWork.forEach((item) => temporary.pageWork.set(pageKey(item.documentId, item.pageNumber), item))
     charts.forEach((item) => temporary.charts.set(item.id, item))
-    knittingReports.forEach((item) => temporary.knittingReports.set(item.documentId, item))
+    knittingReports.forEach((item) => temporary.knittingReports.set(item.id, item))
     incoming.preferences.forEach((item) => temporary.preferences.set(item.key, item))
     return documents.length + charts.length
   })

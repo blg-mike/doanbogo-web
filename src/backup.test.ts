@@ -2,13 +2,13 @@ import 'fake-indexeddb/auto'
 import { describe, expect, it } from 'vitest'
 import { strFromU8, strToU8, unzipSync, zipSync } from 'fflate'
 import { createWorkspaceBackup, readWorkspaceBackup } from './backup'
-import { addDocument, deleteChart, deleteDocument, duplicateDocument, getChart, getKnittingReport, getPageWork, getPages, getViewer, importWorkspaceData, listCharts, listDocuments, saveChart, saveKnittingReport, savePageWork, savePreference, saveViewer, setPageFlag } from './storage'
+import { addDocument, deleteChart, deleteDocument, duplicateDocument, getChart, getKnittingReport, getKnittingReports, getPageWork, getPages, getViewer, importWorkspaceData, listCharts, listDocuments, saveChart, saveKnittingReport, savePageWork, savePreference, saveViewer, setPageFlag } from './storage'
 import { createKnittingChart, makeRasterPdf } from './charts'
 import type { DocumentRecord, KnittingReport } from './types'
 
 describe('portable workspace backup', () => {
-  it('adds page work storage when opening an existing v1 database', async () => {
-    const request = indexedDB.open('doanbogo-web', 1)
+  it('migrates a legacy one-report-per-document database to report ids', async () => {
+    const request = indexedDB.open('doanbogo-web', 5)
     request.onupgradeneeded = () => {
       const db = request.result
       const documents = db.createObjectStore('documents', { keyPath: 'id' })
@@ -24,6 +24,15 @@ describe('portable workspace backup', () => {
         wideRatio: 0.5, tallRatio: 0.5, techniqueSlots: [null, null, null, null, null], updatedAt: Date.now(),
       })
       db.createObjectStore('preferences', { keyPath: 'key' })
+      const pageWork = db.createObjectStore('pageWork', { keyPath: ['documentId', 'pageNumber'] })
+      pageWork.createIndex('by-document', 'documentId')
+      const charts = db.createObjectStore('charts', { keyPath: 'id' })
+      charts.createIndex('by-updated', 'updatedAt')
+      const reports = db.createObjectStore('knittingReports', { keyPath: 'documentId' })
+      reports.put({
+        documentId: 'migration-check', title: '기존 보고서', createdAt: 1, updatedAt: 1, fields: { 'project.name': '기존 보고서' },
+        representativePhoto: '', yarns: [], needles: [], accessories: [], measurements: [], modifications: [], finishedPhotos: [],
+      })
     }
     const oldDatabase = await new Promise<IDBDatabase>((resolve, reject) => {
       request.onsuccess = () => resolve(request.result)
@@ -37,6 +46,7 @@ describe('portable workspace backup', () => {
       createdAt: Date.now(), lastOpenedAt: null, tags: [], pdf, cover: null,
     })
     expect(await getViewer('migration-check', 1)).not.toHaveProperty('techniqueSlots')
+    expect(await getKnittingReports('migration-check')).toMatchObject([{ id: 'migration-check', workPhotos: [], title: '기존 보고서' }])
     const work = await getPageWork('migration-check', 1)
     expect(work).toMatchObject({ horizontalPosition: 0.5, verticalPosition: 0.5, annotations: [] })
     await savePageWork({ ...work, horizontalPosition: 0.25 })
@@ -92,25 +102,44 @@ describe('portable workspace backup', () => {
       createdAt: Date.now(), lastOpenedAt: null, tags: [], pdf, cover: null,
     })
     const report: KnittingReport = {
-      documentId, title: '가디건 프로젝트', createdAt: Date.now(), updatedAt: Date.now(),
+      id: crypto.randomUUID(), documentId, title: '가디건 프로젝트', createdAt: Date.now(), updatedAt: Date.now(),
       fields: { 'project.name': '가디건 프로젝트', 'project.status': '완성' },
       representativePhoto: 'data:image/jpeg;base64,/9j/4AAQ',
       yarns: [], needles: [], accessories: [],
       measurements: [{ id: 'size-1', label: '기장', pattern: '54cm', finished: '57cm' }],
       modifications: [], finishedPhotos: [{ id: 'photo-1', label: '정면', dataUrl: 'data:image/jpeg;base64,/9j/4AAQ' }],
+      workPhotos: [{ id: 'work-1', label: '소매 진행', dataUrl: 'data:image/jpeg;base64,/9j/4AAQ', uploadedAt: Date.now(), activityDate: '2026-10-01' }],
     }
     await saveKnittingReport(report)
+    const secondReport = await saveKnittingReport({
+      ...report,
+      id: crypto.randomUUID(),
+      title: '두 번째 프로젝트',
+      fields: { 'project.name': '두 번째 프로젝트' },
+    })
+    expect(await getKnittingReports(documentId)).toHaveLength(2)
     const copy = await duplicateDocument(documentId)
-    expect(await getKnittingReport(copy.id)).toMatchObject({ title: '복사본 - 가디건 프로젝트', fields: { 'project.name': '복사본 - 가디건 프로젝트' } })
+    expect((await getKnittingReports(copy.id)).map((item) => item.title)).toContain('복사본 - 가디건 프로젝트')
+    expect(await getKnittingReports(copy.id)).toHaveLength(2)
+    expect((await getKnittingReports(copy.id)).map((item) => item.id)).not.toContain(secondReport.id)
     await deleteDocument(copy.id)
     const backup = await createWorkspaceBackup()
     const restored = await readWorkspaceBackup(new File([backup], 'report.doanbogo'))
-    expect(restored.knittingReports).toEqual([expect.objectContaining({ title: report.title, representativePhoto: report.representativePhoto })])
+    expect(restored.knittingReports.filter((item) => item.documentId === documentId)).toHaveLength(2)
+    expect(restored.knittingReports).toContainEqual(expect.objectContaining({ title: report.title, representativePhoto: report.representativePhoto }))
+
+    const archiveEntries = unzipSync(new Uint8Array(await backup.arrayBuffer()))
+    const legacyManifest = JSON.parse(strFromU8(archiveEntries['manifest.json'])) as { version: number; knittingReports: Record<string, unknown>[] }
+    legacyManifest.version = 7
+    legacyManifest.knittingReports = legacyManifest.knittingReports.filter((item) => item.documentId === documentId).slice(0, 1).map(({ id: _id, workPhotos: _workPhotos, ...item }) => item)
+    const legacyBackup = new File([zipSync({ ...archiveEntries, 'manifest.json': strToU8(JSON.stringify(legacyManifest)) })], 'legacy-report.doanbogo')
+    const legacyRestored = await readWorkspaceBackup(legacyBackup)
+    expect(legacyRestored.knittingReports[0]).toMatchObject({ id: documentId, documentId, workPhotos: [] })
 
     await importWorkspaceData(restored)
     const imported = (await listDocuments('name')).find((item) => item.id !== documentId)
     expect(imported).toBeTruthy()
-    expect(await getKnittingReport(imported!.id)).toMatchObject({ documentId: imported!.id, fields: report.fields, finishedPhotos: report.finishedPhotos })
+    expect(await getKnittingReports(imported!.id)).toContainEqual(expect.objectContaining({ documentId: imported!.id, fields: report.fields, finishedPhotos: report.finishedPhotos, workPhotos: report.workPhotos }))
     await deleteDocument(documentId)
     await deleteDocument(imported!.id)
     expect(await getKnittingReport(documentId)).toBeUndefined()
@@ -170,12 +199,12 @@ describe('portable workspace backup', () => {
     chart.cells[0] = '#e34b4b'
     await saveChart(chart)
     const report: KnittingReport = {
-      documentId: original.id, title: '겨울 스웨터', createdAt: Date.now(), updatedAt: Date.now(),
+      id: crypto.randomUUID(), documentId: original.id, title: '겨울 스웨터', createdAt: Date.now(), updatedAt: Date.now(),
       fields: { 'project.name': '겨울 스웨터', 'project.status': '완성' },
       representativePhoto: 'data:image/jpeg;base64,/9j/4AAQ',
       yarns: [], needles: [], accessories: [],
       measurements: [{ id: 'measure-1', label: '기장', pattern: '54cm', finished: '57cm' }],
-      modifications: [], finishedPhotos: [{ id: 'photo-1', label: '정면', dataUrl: 'data:image/jpeg;base64,/9j/4AAQ' }],
+      modifications: [], finishedPhotos: [{ id: 'photo-1', label: '정면', dataUrl: 'data:image/jpeg;base64,/9j/4AAQ' }], workPhotos: [],
     }
     const savedReport = await saveKnittingReport(report)
 
@@ -200,7 +229,7 @@ describe('portable workspace backup', () => {
     expect(restored.pageWork[0].colorworkGrid?.cells[0]).toEqual({ color: '#f1c40f', opacity: 0.25 })
     expect(restored.preferences).toContainEqual({ key: 'view', value: 'list' })
     expect(restored.charts).toEqual([expect.objectContaining({ id: chart.id, title: chart.title, cells: ['#e34b4b', null, null, null, null, null] })])
-    expect(restored.knittingReports).toEqual([savedReport])
+    expect(restored.knittingReports.filter((item) => item.documentId === original.id)).toEqual([savedReport])
 
     expect(await importWorkspaceData(restored)).toBe(2)
     const imported = (await listDocuments('name')).find((item) => item.id !== original.id)

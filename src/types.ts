@@ -100,6 +100,17 @@ export interface DocumentRecord {
   cover: Blob | null
 }
 
+export interface PageRecognitionRecord {
+  documentId: string
+  pageNumber: number
+  version: 1
+  pdfLinksDone: boolean
+  pdfLinks: { x: number; y: number; width: number; height: number; href: string }[]
+  qrLinksDone: boolean
+  qrLinks: { x: number; y: number; width: number; height: number; href: string }[]
+  qrInputMaxDimension: number
+}
+
 export interface PageRecord {
   documentId: string
   pageNumber: number
@@ -180,6 +191,11 @@ export interface ReportPhoto {
   dataUrl: string
 }
 
+export interface ReportTimelinePhoto extends ReportPhoto {
+  uploadedAt: number
+  activityDate: string
+}
+
 export interface ReportYarn {
   id: string
   photo: string
@@ -237,6 +253,7 @@ export interface ReportModification {
 }
 
 export interface KnittingReport {
+  id: string
   documentId: string
   title: string
   createdAt: number
@@ -249,4 +266,5 @@ export interface KnittingReport {
   measurements: ReportMeasurement[]
   modifications: ReportModification[]
   finishedPhotos: ReportPhoto[]
+  workPhotos: ReportTimelinePhoto[]
 }

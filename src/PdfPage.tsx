@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useLayoutEffect, useRef, useState, type PointerEvent as ReactPointerEvent, type RefObject } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useRef, useState, type MouseEvent as ReactMouseEvent, type PointerEvent as ReactPointerEvent, type RefObject } from 'react'
 import type { PDFDocumentProxy, PDFPageProxy, RenderTask } from 'pdfjs-dist'
 import { EyeOff, Minus, Plus, RotateCw, Trash2 } from 'lucide-react'
 import type { AnnotationRecord, AnnotationStyle, AnnotationTool, ColorworkCell, ColorworkCreateRequest, ColorworkGrid, PageRotation, PageWorkRecord, PaneId, PaneSnapshot, ProgressGuide, ProgressSettings } from './types'
@@ -6,7 +6,8 @@ import { createColorworkGrid, resizeColorworkGridDisplay } from './colorwork'
 import { textNoteBoxAt } from './textNote'
 import type { PdfQrLink } from './qr'
 import { inverseRotatePoint, rotatedPageSize } from './pageGeometry'
-import { acquireThumbnailCache, pdfRasterScale } from './pdfRenderResources'
+import { acquireThumbnailCache, getViewerResourcePolicy, pdfRasterScale, viewerCanvasMemory } from './pdfRenderResources'
+import { pdfPageRenderQueue } from './pdfPageRenderQueue'
 
 type Point = { x: number; y: number }
 type Size = { width: number; height: number }
@@ -41,6 +42,19 @@ let activeThumbnails = 0
 let activePageRenders = 0
 let runningThumbnail: ThumbnailJob | null = null
 const failedImageCounts = new WeakMap<PDFPageProxy, number>()
+const thumbnailIdleWaiters = new Set<() => void>()
+
+// oxlint-disable-next-line react/only-export-components -- shared with Viewer suspension before PDF disposal.
+export function waitForThumbnailQueueIdle() {
+  if (!activeThumbnails && !thumbnailQueue.length) return Promise.resolve()
+  return new Promise<void>((resolve) => thumbnailIdleWaiters.add(resolve))
+}
+
+function resolveThumbnailIdle() {
+  if (activeThumbnails || thumbnailQueue.length) return
+  thumbnailIdleWaiters.forEach((resolve) => resolve())
+  thumbnailIdleWaiters.clear()
+}
 
 function enqueueThumbnail(job: ThumbnailJob) {
   if (job.cancelled || job.queued) return
@@ -71,6 +85,7 @@ function pumpThumbnails() {
         enqueueThumbnail(job)
       }
       pumpThumbnails()
+      resolveThumbnailIdle()
     })
   }
 }
@@ -98,7 +113,7 @@ function copyCanvas(target: HTMLCanvasElement, source: HTMLCanvasElement) {
   target.getContext('2d', { alpha: false })?.drawImage(source, 0, 0)
 }
 
-export function PdfThumbnail({ pdf, pageNumber, active, hidden, bookmarked, selected, disabled, renderEnabled = true, root, onSelect }: {
+export function PdfThumbnail({ pdf, pageNumber, active, hidden, bookmarked, selected, disabled, renderEnabled = true, root, onSelect, onPointerDown, onPointerMove, onPointerUp, onPointerCancel, onLostPointerCapture }: {
   pdf: PDFDocumentProxy
   pageNumber: number
   active: boolean
@@ -108,7 +123,12 @@ export function PdfThumbnail({ pdf, pageNumber, active, hidden, bookmarked, sele
   disabled?: boolean
   renderEnabled?: boolean
   root: RefObject<HTMLDivElement | null>
-  onSelect: () => void
+  onSelect: (event: ReactMouseEvent<HTMLButtonElement>) => void
+  onPointerDown?: (event: ReactPointerEvent<HTMLButtonElement>) => void
+  onPointerMove?: (event: ReactPointerEvent<HTMLButtonElement>) => void
+  onPointerUp?: (event: ReactPointerEvent<HTMLButtonElement>) => void
+  onPointerCancel?: (event: ReactPointerEvent<HTMLButtonElement>) => void
+  onLostPointerCapture?: (event: ReactPointerEvent<HTMLButtonElement>) => void
 }) {
   const [canvas, setCanvas] = useState<HTMLCanvasElement | null>(null)
   const [visible, setVisible] = useState(false)
@@ -125,7 +145,7 @@ export function PdfThumbnail({ pdf, pageNumber, active, hidden, bookmarked, sele
   }, [root])
 
   useEffect(() => {
-    const session = acquireThumbnailCache(pdf)
+    const session = acquireThumbnailCache(pdf, getViewerResourcePolicy())
     cacheSessionRef.current = session
     return () => {
       session.release()
@@ -210,18 +230,28 @@ export function PdfThumbnail({ pdf, pageNumber, active, hidden, bookmarked, sele
   return (
     <button
       className={'page-thumbnail ' + (active ? 'active' : '') + (hidden ? ' hidden' : '') + (selected ? ' selected' : '')}
-      aria-label={pageNumber + '페이지 썸네일' + (hidden ? ', 숨김' : '') + (bookmarked ? ', 북마크' : '') + (selected ? ', 선택됨' : '')}
+      data-page-number={pageNumber}
+      aria-label={hidden ? pageNumber + '페이지 숨김, 클릭하여 숨김 해제' : pageNumber + '페이지 썸네일' + (bookmarked ? ', 북마크' : '') + (selected ? ', 선택됨' : '')}
       aria-current={active ? 'page' : undefined}
       aria-pressed={selected}
       disabled={disabled}
       onClick={onSelect}
+      onPointerDown={onPointerDown}
+      onPointerMove={onPointerMove}
+      onPointerUp={onPointerUp}
+      onPointerCancel={onPointerCancel}
+      onLostPointerCapture={onLostPointerCapture}
+      onContextMenu={(event) => event.preventDefault()}
     >
       <span className="page-thumbnail-image">
-        <canvas ref={setCanvas} width={0} height={0} aria-hidden="true" />
-        {(!ready || !visible || !renderEnabled) && <span className="thumbnail-placeholder">{pageNumber}</span>}
-        {hidden && <span className="thumbnail-badge">숨김</span>}
-        {selected && <span className="thumbnail-selection-mark">✓</span>}
-        {bookmarked && <span className="thumbnail-bookmark">★</span>}
+        {hidden
+          ? <span className="thumbnail-hidden-ellipsis" aria-hidden="true">…</span>
+          : <>
+            <canvas ref={setCanvas} width={0} height={0} aria-hidden="true" />
+            {(!ready || !visible || !renderEnabled) && <span className="thumbnail-placeholder">{pageNumber}</span>}
+            {selected && <span className="thumbnail-selection-mark">✓</span>}
+            {bookmarked && <span className="thumbnail-bookmark">★</span>}
+          </>}
       </span>
       <span className="page-thumbnail-number">{pageNumber}</span>
       <span ref={observerTargetRef} className="thumbnail-observer" aria-hidden="true" />
@@ -292,11 +322,12 @@ function withTextBox(annotation: AnnotationRecord, pageHeight: number): Annotati
   return { ...annotation, points: [{ x: box.x, y: box.y }], boxWidth: box.width, boxHeight: box.height }
 }
 
-export function PdfPage({ pdf, page, paneId, pane, rotation, active, tool, lineSettings, annotationStyle, work, workReady, colorworkBrushColor, colorworkBrushOpacity, colorworkEraser, createColorworkRequest, pageLinks, qrLinks, onPageRendered, onActivate, onWorkChange, onZoom, onRotate, onHidePage, canHidePage, onCenter, onColorworkRequestHandled, onTextToolConsumed }: {
+export function PdfPage({ pdf, page, paneId, pane, splitView, rotation, active, tool, lineSettings, annotationStyle, work, workReady, colorworkBrushColor, colorworkBrushOpacity, colorworkEraser, createColorworkRequest, pageLinks, qrLinks, onPageRendered, onActivate, onWorkChange, onZoom, onRotate, onHidePage, canHidePage, onCenter, onColorworkRequestHandled, onTextToolConsumed }: {
   pdf: PDFDocumentProxy
   page: number
   paneId: PaneId
   pane: PaneSnapshot
+  splitView: boolean
   rotation: PageRotation
   active: boolean
   tool: AnnotationTool
@@ -321,6 +352,7 @@ export function PdfPage({ pdf, page, paneId, pane, rotation, active, tool, lineS
   onColorworkRequestHandled: (id: string) => void
   onTextToolConsumed: () => void
 }) {
+  const resourcePolicy = getViewerResourcePolicy()
   const scrollRef = useRef<HTMLDivElement>(null)
   const rotationLayerRef = useRef<HTMLDivElement>(null)
   const canvasRef = useRef<HTMLCanvasElement>(null)
@@ -329,6 +361,9 @@ export function PdfPage({ pdf, page, paneId, pane, rotation, active, tool, lineS
   const textStyleToolbarRef = useRef<HTMLDivElement>(null)
   const colorworkPanelRef = useRef<HTMLDivElement>(null)
   const colorworkCanvasRef = useRef<HTMLCanvasElement>(null)
+  const renderQueueKey = useRef<object>({})
+  const displayCanvasKey = useRef<object>({})
+  const stagingCanvasKey = useRef<object>({})
   const handledColorworkRequest = useRef<string | null>(null)
   const colorworkTransform = useRef<ColorworkTransform | null>(null)
   const colorworkStroke = useRef<ColorworkStroke | null>(null)
@@ -337,11 +372,11 @@ export function PdfPage({ pdf, page, paneId, pane, rotation, active, tool, lineS
   const lastRenderPage = useRef<{ page: number; rotation: PageRotation } | null>(null)
   const [size, setSize] = useState<Size>({ width: 0, height: 0 })
   const [displayedSize, setDisplayedSize] = useState<{ page: Size; css: Size } | null>(null)
-  const [displayedRaster, setDisplayedRaster] = useState<{ pdf: PDFDocumentProxy; page: number } | null>(null)
+  const [displayedRaster, setDisplayedRaster] = useState<{ pdf: PDFDocumentProxy; page: number; zoom: number; rotation: PageRotation } | null>(null)
   const [readyKey, setReadyKey] = useState('')
   const [renderError, setRenderError] = useState<{ key: string; message: string } | null>(null)
   const [retry, setRetry] = useState(0)
-  const [pinchZoom, setPinchZoom] = useState<number | null>(null)
+  const pinchZoom = useRef<number | null>(null)
   const [draft, setDraft] = useState<Point[]>([])
   const pointers = useRef(new Map<number, { x: number; y: number }>())
   const gesture = useRef<
@@ -365,6 +400,8 @@ export function PdfPage({ pdf, page, paneId, pane, rotation, active, tool, lineS
   const [fontSizeDraft, setFontSizeDraft] = useState<{ id: string; value: string } | null>(null)
   const renderKey = [page, pane.zoom, rotation, size.width, size.height].join(':')
   const colorworkGrid = work.colorworkGrid?.visible ? work.colorworkGrid : null
+  const canPreviewZoom = displayedRaster?.pdf === pdf && displayedRaster.page === page && displayedRaster.rotation === rotation
+  const zoomPreviewScale = canPreviewZoom ? pane.zoom / displayedRaster.zoom : 1
 
   useEffect(() => {
     const element = scrollRef.current
@@ -381,58 +418,115 @@ export function PdfPage({ pdf, page, paneId, pane, rotation, active, tool, lineS
     }
   }, [])
 
+  useEffect(() => () => {
+    if (canvasRef.current) clearCanvas(canvasRef.current)
+    if (colorworkCanvasRef.current) clearCanvas(colorworkCanvasRef.current)
+    viewerCanvasMemory.release(displayCanvasKey.current)
+    viewerCanvasMemory.release(stagingCanvasKey.current)
+  }, [])
+
   useEffect(() => {
     if (!size.width || !size.height) return
     const sequence = ++renderSequence.current
     let cancelled = false
     let timedOut = false
-    let renderTask: ReturnType<PDFDocumentProxy['getPage']> extends Promise<infer P> ? P extends { render: (...args: never[]) => infer R } ? R : never : never
+    let renderTask: RenderTask | undefined
+    let pendingPageRequest: Promise<PDFPageProxy> | null = null
+    let renderSettled = false
     let timeoutId = 0
     let debounceId = 0
     let finishDebounce: (() => void) | undefined
     let cancelPending: (() => void) | undefined
     let staging: HTMLCanvasElement | null = null
     let releasePriority: (() => void) | undefined
+    let cancelQueuedRender: (() => void) | undefined
     const previousRenderPage = lastRenderPage.current
     const renderImmediately = !previousRenderPage || previousRenderPage.page !== page || previousRenderPage.rotation !== rotation
     lastRenderPage.current = { page, rotation }
-    void (async () => {
+    const cancelRender = () => {
+      if (cancelled) return
+      cancelled = true
+      window.clearTimeout(debounceId)
+      finishDebounce?.()
+      window.clearTimeout(timeoutId)
+      cancelPending?.()
+      if (!renderSettled) renderTask?.cancel?.()
+    }
+    const runRender = async () => {
+      if (cancelled || sequence !== renderSequence.current) return
+      releasePriority = prioritizePdfPageRender()
+      const cancelledRender = Symbol('cancelled')
+      const cancellationPromise = new Promise<typeof cancelledRender>((resolve) => {
+        cancelPending = () => resolve(cancelledRender)
+      })
+      let rejectTimeout!: (reason: Error) => void
+      const timeoutPromise = new Promise<never>((_, reject) => { rejectTimeout = reject })
+      timeoutId = window.setTimeout(() => {
+        timedOut = true
+        const timeoutError = new Error('PDF 페이지 표시가 20초 안에 끝나지 않았습니다. 다시 시도해 주세요.')
+        if (renderTask) {
+          renderTask.cancel()
+          void renderTask.promise.catch(() => {}).then(() => rejectTimeout(timeoutError))
+        } else rejectTimeout(timeoutError)
+      }, 20000)
       try {
-        if (!renderImmediately) {
-          await new Promise<void>((resolve) => {
-            finishDebounce = resolve
-            debounceId = window.setTimeout(resolve, 150)
-          })
+        pendingPageRequest = pdf.getPage(page)
+        const pageResult = await Promise.race([pendingPageRequest, timeoutPromise, cancellationPromise])
+        if (pageResult === cancelledRender || cancelled) {
+          await pendingPageRequest.catch(() => {})
+          return
         }
-        if (cancelled || sequence !== renderSequence.current) return
-        releasePriority = prioritizePdfPageRender()
-        const cancelledRender = Symbol('cancelled')
-        const cancellationPromise = new Promise<typeof cancelledRender>((resolve) => {
-          cancelPending = () => resolve(cancelledRender)
-        })
-        const timeoutPromise = new Promise<never>((_, reject) => {
-          timeoutId = window.setTimeout(() => {
-            timedOut = true
-            reject(new Error('PDF 페이지 표시가 20초 안에 끝나지 않았습니다. 다시 시도해 주세요.'))
-            renderTask?.cancel?.()
-          }, 20000)
-        })
-        const pageResult = await Promise.race([pdf.getPage(page), timeoutPromise, cancellationPromise])
-        if (pageResult === cancelledRender || cancelled) return
         const pdfPage = pageResult
         const base = pdfPage.getViewport({ scale: 1 })
         const fitSize = rotatedPageSize(base, rotation)
         const fit = Math.min(Math.max(1, size.width - 24) / fitSize.width, Math.max(1, size.height - 24) / fitSize.height)
         const cssScale = Math.max(0.1, fit * pane.zoom)
-        const rasterScale = pdfRasterScale(base.width, base.height, cssScale, window.devicePixelRatio || 1)
-        const viewport = pdfPage.getViewport({ scale: rasterScale })
-        staging = document.createElement('canvas')
-        staging.width = Math.ceil(viewport.width)
-        staging.height = Math.ceil(viewport.height)
-        const context = staging.getContext('2d', { alpha: false })
-        if (!context) throw new Error('이 브라우저에서 PDF 화면을 만들 수 없습니다.')
-        renderTask = pdfPage.render({ canvas: staging, canvasContext: context, viewport }) as typeof renderTask
-        await Promise.race([renderTask.promise, timeoutPromise, cancellationPromise])
+        const panePixelLimit = splitView ? resourcePolicy.splitViewPixels : resourcePolicy.singleViewPixels
+        const maxPixels = Math.min(panePixelLimit, Math.floor(viewerCanvasMemory.availableBytes(stagingCanvasKey.current) / 4))
+        if (!maxPixels) throw new Error('PDF 렌더 메모리를 확보하지 못했습니다. 다른 탭을 닫고 다시 시도해 주세요.')
+        let rasterScale = 0
+        let rendered = false
+        for (let attempt = 0; attempt < 2 && !rendered; attempt++) {
+          rasterScale = pdfRasterScale(base.width, base.height, cssScale, window.devicePixelRatio || 1, attempt ? Math.max(1, Math.floor(maxPixels / 4)) : maxPixels)
+          const viewport = pdfPage.getViewport({ scale: rasterScale })
+          staging = document.createElement('canvas')
+          staging.width = Math.ceil(viewport.width)
+          staging.height = Math.ceil(viewport.height)
+          if (!viewerCanvasMemory.reserve(stagingCanvasKey.current, staging.width * staging.height * 4)) {
+            clearCanvas(staging)
+            viewerCanvasMemory.release(stagingCanvasKey.current)
+            staging = null
+            if (!attempt) continue
+            throw new Error('PDF 렌더 메모리를 확보하지 못했습니다. 다른 탭을 닫고 다시 시도해 주세요.')
+          }
+          const context = staging.getContext('2d', { alpha: false })
+          if (!context) {
+            clearCanvas(staging)
+            staging = null
+            viewerCanvasMemory.release(stagingCanvasKey.current)
+            if (!attempt) continue
+            throw new Error('이 브라우저에서 PDF 화면을 만들 수 없습니다.')
+          }
+          try {
+            const task = pdfPage.render({ canvas: staging, canvasContext: context, viewport })
+            renderTask = task
+            await Promise.race([task.promise, timeoutPromise])
+            renderSettled = true
+            rendered = true
+          } catch (cause) {
+            if (timedOut) {
+              await renderTask?.promise.catch(() => {})
+              throw new Error('PDF 페이지 표시가 20초 안에 끝나지 않았습니다. 다시 시도해 주세요.')
+            }
+            if (attempt || cancelled || (cause instanceof Error && cause.name === 'RenderingCancelledException')) throw cause
+            clearCanvas(staging)
+            staging = null
+            viewerCanvasMemory.release(stagingCanvasKey.current)
+            renderTask = undefined
+          }
+        }
+        if (!rendered || !staging) throw new Error('PDF 페이지를 표시하지 못했습니다.')
+        renderSettled = true
         if (cancelled || sequence !== renderSequence.current) return
         let failedImageCount = failedImageCounts.get(pdfPage)
         if (failedImageCount === undefined) {
@@ -443,36 +537,54 @@ export function PdfPage({ pdf, page, paneId, pane, rotation, active, tool, lineS
           throw new Error(`${page}페이지의 이미지 ${failedImageCount}개를 해독하지 못했습니다. PDF.js 이미지 자산을 확인하고 PDF를 다시 열어 주세요.`)
         }
         const target = canvasRef.current
-        const targetContext = target?.getContext('2d', { alpha: false })
-        if (!target || !targetContext) throw new Error('PDF 화면을 표시할 수 없습니다.')
+        if (!target) throw new Error('PDF 화면을 표시할 수 없습니다.')
+        target.width = 0
+        target.height = 0
+        viewerCanvasMemory.release(displayCanvasKey.current)
         target.width = staging.width
         target.height = staging.height
+        const targetContext = target.getContext('2d', { alpha: false })
+        if (!targetContext) throw new Error('PDF 화면을 표시할 수 없습니다.')
+        const displayBytes = target.width * target.height * 4
+        if (!viewerCanvasMemory.reserve(displayCanvasKey.current, displayBytes)) {
+          clearCanvas(target)
+          throw new Error('PDF 화면을 표시할 메모리를 확보하지 못했습니다.')
+        }
         target.style.width = base.width * cssScale + 'px'
         target.style.height = base.height * cssScale + 'px'
         targetContext.drawImage(staging, 0, 0)
         const css = { width: base.width * cssScale, height: base.height * cssScale }
         setDisplayedSize({ page: { width: base.width, height: base.height }, css })
-        setDisplayedRaster({ pdf, page })
+        setDisplayedRaster({ pdf, page, zoom: pane.zoom, rotation })
         setReadyKey(renderKey)
       } catch (cause) {
         if (!cancelled && sequence === renderSequence.current && (timedOut || !(cause instanceof Error && cause.name === 'RenderingCancelledException'))) {
           setRenderError({ key: renderKey, message: timedOut ? 'PDF 페이지 표시가 20초 안에 끝나지 않았습니다. 다시 시도해 주세요.' : cause instanceof Error ? cause.message : 'PDF 페이지를 표시하지 못했습니다.' })
         }
       } finally {
+        renderSettled = true
+        if (cancelled && pendingPageRequest) await pendingPageRequest.catch(() => {})
         window.clearTimeout(timeoutId)
         if (staging) clearCanvas(staging)
+        viewerCanvasMemory.release(stagingCanvasKey.current)
         releasePriority?.()
       }
+    }
+    void (async () => {
+      if (!renderImmediately) {
+        await new Promise<void>((resolve) => {
+          finishDebounce = resolve
+          debounceId = window.setTimeout(resolve, 200)
+        })
+      }
+      if (cancelled || sequence !== renderSequence.current) return
+      cancelQueuedRender = pdfPageRenderQueue.enqueue(renderQueueKey.current, runRender, cancelRender, active ? 1 : 0)
     })()
     return () => {
-      cancelled = true
-      window.clearTimeout(debounceId)
-      finishDebounce?.()
-      window.clearTimeout(timeoutId)
-      cancelPending?.()
-      renderTask?.cancel?.()
+      cancelRender()
+      cancelQueuedRender?.()
     }
-  }, [pdf, page, pane.zoom, rotation, size.width, size.height, retry, renderKey])
+  }, [pdf, page, pane.zoom, rotation, size.width, size.height, retry, renderKey, splitView, active, resourcePolicy])
 
   useEffect(() => {
     if (readyKey !== renderKey) return
@@ -493,6 +605,17 @@ export function PdfPage({ pdf, page, paneId, pane, rotation, active, tool, lineS
   useEffect(() => {
     centerRef.current = { x: pane.centerX, y: pane.centerY }
   }, [page, pane.zoom, pane.centerX, pane.centerY])
+
+  useEffect(() => {
+    if (!canPreviewZoom) return
+    const element = scrollRef.current
+    if (!element) return
+    const frame = requestAnimationFrame(() => {
+      element.scrollLeft = Math.max(0, centerRef.current.x * element.scrollWidth - element.clientWidth / 2)
+      element.scrollTop = Math.max(0, centerRef.current.y * element.scrollHeight - element.clientHeight / 2)
+    })
+    return () => cancelAnimationFrame(frame)
+  }, [zoomPreviewScale, canPreviewZoom])
 
   useEffect(() => {
     if (editingNoteId !== null) textInputRef.current?.focus()
@@ -552,7 +675,7 @@ export function PdfPage({ pdf, page, paneId, pane, rotation, active, tool, lineS
       gesture.current = {
         kind: 'pinch', firstId: current.pointerId, secondId: event.pointerId,
         distance: Math.max(1, Math.hypot(event.clientX - first.x, event.clientY - first.y)),
-        zoom: pinchZoom ?? pane.zoom,
+        zoom: pinchZoom.current ?? pane.zoom,
         centerX: Math.min(1, Math.max(0, (area.scrollLeft + midpointX - rect.left) / Math.max(area.scrollWidth, 1))),
         centerY: Math.min(1, Math.max(0, (area.scrollTop + midpointY - rect.top) / Math.max(area.scrollHeight, 1))),
       }
@@ -573,7 +696,12 @@ export function PdfPage({ pdf, page, paneId, pane, rotation, active, tool, lineS
       const first = pointers.current.get(current.firstId)
       const second = pointers.current.get(current.secondId)
       if (!first || !second) return
-      setPinchZoom(Math.min(5, Math.max(1, current.zoom * Math.hypot(second.x - first.x, second.y - first.y) / current.distance)))
+      const zoom = Math.min(5, Math.max(1, current.zoom * Math.hypot(second.x - first.x, second.y - first.y) / current.distance))
+      pinchZoom.current = zoom
+      if (rotationLayerRef.current) {
+        const scale = canPreviewZoom && displayedRaster ? zoom / displayedRaster.zoom : 1
+        rotationLayerRef.current.style.transform = 'rotate(' + rotation + 'deg) scale(' + scale + ')'
+      }
     }
   }
 
@@ -581,13 +709,13 @@ export function PdfPage({ pdf, page, paneId, pane, rotation, active, tool, lineS
     const current = gesture.current
     const area = scrollRef.current
     if (!pointers.current.has(event.pointerId)) return
-    if (tool === 'pan' && current?.kind === 'pinch' && area && pinchZoom !== null) {
+    if (tool === 'pan' && current?.kind === 'pinch' && area && pinchZoom.current !== null) {
       centerRef.current = { x: current.centerX, y: current.centerY }
       onCenter(current.centerX, current.centerY)
-      onZoom(pinchZoom)
+      onZoom(pinchZoom.current)
     }
     pointers.current.delete(event.pointerId)
-    setPinchZoom(null)
+    pinchZoom.current = null
     const remaining = [...pointers.current.entries()][0]
     if (area && remaining) {
       gesture.current = { kind: 'pan', pointerId: remaining[0], x: remaining[1].x, y: remaining[1].y, scrollLeft: area.scrollLeft, scrollTop: area.scrollTop }
@@ -805,10 +933,14 @@ export function PdfPage({ pdf, page, paneId, pane, rotation, active, tool, lineS
   useEffect(() => {
     const grid = work.colorworkGrid
     const canvas = colorworkCanvasRef.current
-    if (!grid?.visible || !canvas || !displayedSize) return
+    if (!canvas) return
+    if (!grid?.visible || !displayedSize) {
+      clearCanvas(canvas)
+      return
+    }
     const canvasSize = displayedSize.css
     if (!canvasSize.width || !canvasSize.height) return
-    const ratio = pdfRasterScale(canvasSize.width, canvasSize.height, 1, window.devicePixelRatio || 1)
+    const ratio = pdfRasterScale(canvasSize.width, canvasSize.height, 1, window.devicePixelRatio || 1, resourcePolicy.colorworkPixels)
     canvas.width = Math.max(1, Math.ceil(canvasSize.width * ratio))
     canvas.height = Math.max(1, Math.ceil(canvasSize.height * ratio))
     const context = canvas.getContext('2d')
@@ -839,7 +971,7 @@ export function PdfPage({ pdf, page, paneId, pane, rotation, active, tool, lineS
       context.lineTo(canvas.width, y)
     }
     context.stroke()
-  }, [work.colorworkGrid, displayedSize, rotation])
+  }, [work.colorworkGrid, displayedSize, rotation, resourcePolicy])
 
   useEffect(() => {
     if (!createColorworkRequest || createColorworkRequest.paneId !== paneId || createColorworkRequest.pageNumber !== page) return
@@ -1141,8 +1273,8 @@ export function PdfPage({ pdf, page, paneId, pane, rotation, active, tool, lineS
     transform: 'rotate(' + -rotation + 'deg)',
   } : undefined
   const pageWrapStyle = rotatedCssSize ? {
-    width: Math.max(size.width - 24, rotatedCssSize.width) + 24,
-    height: Math.max(size.height - 24, rotatedCssSize.height) + 24,
+    width: Math.max(size.width - 24, rotatedCssSize.width * zoomPreviewScale) + 24,
+    height: Math.max(size.height - 24, rotatedCssSize.height * zoomPreviewScale) + 24,
   } : undefined
   const colorworkColumnCellWidth = colorworkGrid && cssSize ? colorworkGrid.displayWidth * cssSize.width / colorworkGrid.columns : 0
   const colorworkRowCellHeight = colorworkGrid && cssSize ? Math.max(1, (colorworkGrid.displayHeight * cssSize.height - 26) / colorworkGrid.rows) : 0
@@ -1159,7 +1291,7 @@ export function PdfPage({ pdf, page, paneId, pane, rotation, active, tool, lineS
       <div className="pane-label">{active ? '현재 작업 영역' : '보조 영역'}</div>
       <div className="pdf-scroll-area" ref={scrollRef} onScroll={recordCenter} onPointerDown={pointerDown} onPointerMove={pointerMove} onPointerUp={pointerEnd} onPointerCancel={pointerEnd} onDoubleClick={doubleTap}>
         <div className="pdf-page-wrap" style={pageWrapStyle}>
-          <div ref={rotationLayerRef} className="pdf-rotation-content" style={cssSize ? { width: cssSize.width, height: cssSize.height, transform: 'rotate(' + rotation + 'deg)' } : undefined}>
+          <div ref={rotationLayerRef} className="pdf-rotation-content" style={cssSize ? { width: cssSize.width, height: cssSize.height, transform: 'rotate(' + rotation + 'deg) scale(' + zoomPreviewScale + ')' } : undefined}>
           <div className="pdf-image-layer" style={cssSize ? { width: cssSize.width, height: cssSize.height } : undefined}>
             <canvas ref={canvasRef} aria-label={'PDF ' + page + '페이지'} />
             {pageSize && cssSize && <>

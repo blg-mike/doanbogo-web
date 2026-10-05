@@ -254,6 +254,26 @@ export async function exportKnittingReportPdf(report: KnittingReport) {
     for (const [index, row] of printableMods.entries()) await drawCard(row.section || '변형 ' + (index + 1), '', modificationFields.map(([key, label]) => [label, row[key]]))
   }
 
+  const processPhotos = report.workPhotos.slice().sort((left, right) => left.activityDate.localeCompare(right.activityDate) || left.uploadedAt - right.uploadedAt)
+  if (processPhotos.length) {
+    drawSection('07', '작업 과정 기록')
+    for (let index = 0; index < processPhotos.length; index += 2) {
+      ensure(350)
+      const row = processPhotos.slice(index, index + 2)
+      for (const [column, photo] of row.entries()) {
+        const image = await loadPhoto(photo.dataUrl)
+        const x = LEFT + column * 540
+        page.context.fillStyle = '#fff'
+        page.context.beginPath(); page.context.roundRect(x, page.y, 520, 310, 12); page.context.fill()
+        page.context.strokeStyle = '#e8e2e6'; page.context.stroke()
+        if (image) drawImageContain(page.context, image, x + 12, page.y + 12, 496, 254)
+        page.context.fillStyle = '#554a58'; page.context.font = '18px "Noto Sans KR", sans-serif'
+        page.context.fillText(`${photo.activityDate} · ${photo.label || '작업 기록'}`, x + 15, page.y + 292, 490)
+      }
+      page.y += 330
+    }
+  }
+
   const washPairs: [string, string][] = [
     ['세탁 여부', values['finished.washed']], ['세탁 방법', values['finished.washingMethod']], ['블로킹 방법', values['finished.blockingMethod']],
     ['세탁 전 크기', values['finished.beforeSize']], ['세탁 후 크기', values['finished.afterSize']], ['세탁·블로킹 변화', values['finished.washMemo']],
@@ -263,7 +283,7 @@ export async function exportKnittingReportPdf(report: KnittingReport) {
   ]
   const printablePhotos = report.finishedPhotos.filter((photo) => photo.dataUrl)
   if (printablePhotos.length || nonEmpty(washPairs)) {
-    drawSection('07', '완성 기록')
+    drawSection('08', '완성 기록')
     if (printablePhotos.length) {
       for (let index = 0; index < printablePhotos.length; index += 2) {
         ensure(350)

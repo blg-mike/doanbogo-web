@@ -1,16 +1,25 @@
 import type { PdfQrLink } from './qr'
 
-export const MAX_QUEUED_QR_SCANS = 2
+export const MAX_QUEUED_QR_SCANS = 1
 
 export interface QrScanRequest {
   generation: number
   pageNumber: number
+  inputMaxDimension?: number
+}
+
+export interface QrPixelCapture {
   width: number
   height: number
   pixels: ArrayBuffer
+  inputMaxDimension: number
 }
 
-interface QueuedScan extends QrScanRequest {
+export interface QrScanSubmission extends QrScanRequest {
+  capturePixels: () => QrPixelCapture | null
+}
+
+interface QueuedScan extends QrScanSubmission {
   id: number
   order: number
 }
@@ -61,13 +70,13 @@ export class QrScanScheduler {
     this.pump()
   }
 
-  enqueue(request: QrScanRequest) {
+  enqueue(request: QrScanSubmission) {
     if (this.disposed) {
       this.onDrop(request)
       return false
     }
     if (this.failed) {
-      this.onResult(request, [])
+      this.onDrop(request)
       return false
     }
     if (this.contains(request.generation, request.pageNumber)) return false
@@ -98,7 +107,7 @@ export class QrScanScheduler {
   dispose() {
     if (this.disposed) return
     this.disposed = true
-    const pending = [...this.queue, ...(this.active ? [this.active] : [])]
+    const pending = [...(this.active ? [this.active] : []), ...this.queue]
     this.queue.length = 0
     this.active = null
     this.worker?.terminate()
@@ -130,7 +139,8 @@ export class QrScanScheduler {
       const completed = this.active
       if (!completed || data.id !== completed.id) return
       this.active = null
-      this.onResult(completed, data.error ? [] : data.links)
+      if (data.error) this.onDrop(completed)
+      else this.onResult(completed, data.links)
       this.pump()
     }
     worker.onerror = (event) => {
@@ -147,12 +157,20 @@ export class QrScanScheduler {
     const request = this.queue.shift()!
     this.active = request
     try {
+      const capture = request.capturePixels()
+      if (!capture) {
+        this.active = null
+        this.onDrop(request)
+        this.pump()
+        return
+      }
+      request.inputMaxDimension = capture.inputMaxDimension
       this.ensureWorker().postMessage({
         id: request.id,
-        width: request.width,
-        height: request.height,
-        pixels: request.pixels,
-      }, [request.pixels])
+        width: capture.width,
+        height: capture.height,
+        pixels: capture.pixels,
+      }, [capture.pixels])
     } catch (error) {
       this.fail(error instanceof Error ? error : new Error(String(error)))
     }
@@ -162,11 +180,11 @@ export class QrScanScheduler {
     if (this.failed || this.disposed) return
     this.failed = true
     console.warn('[QR] Background scanning stopped; PDF text links remain available.', error)
-    const pending = [...this.queue, ...(this.active ? [this.active] : [])]
+    const pending = [...(this.active ? [this.active] : []), ...this.queue]
     this.queue.length = 0
     this.active = null
     this.worker?.terminate()
     this.worker = null
-    pending.forEach((request) => this.onResult(request, []))
+    pending.forEach((request) => this.onDrop(request))
   }
 }

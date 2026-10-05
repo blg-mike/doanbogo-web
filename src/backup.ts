@@ -1,5 +1,5 @@
 import { strFromU8, strToU8, unzipSync, zipSync } from 'fflate'
-import type { AnnotationRecord, ChartDocument, ColorworkGrid, DocumentRecord, KnittingReport, PageRecord, PageWorkRecord, PreferenceRecord, ViewerSnapshot } from './types'
+import type { AnnotationRecord, ChartDocument, ColorworkGrid, DocumentRecord, KnittingReport, PageRecord, PageWorkRecord, PreferenceRecord, ReportTimelinePhoto, ViewerSnapshot } from './types'
 import { normalizePageWork, readWorkspaceData, type WorkspaceData } from './storage'
 
 interface BackupDocument extends Omit<DocumentRecord, 'pdf' | 'cover'> {
@@ -9,7 +9,7 @@ interface BackupDocument extends Omit<DocumentRecord, 'pdf' | 'cover'> {
 
 interface BackupManifest {
   format: 'doanbogo'
-  version: 7
+  version: 8
   exportedAt: number
   documents: BackupDocument[]
   pages: PageRecord[]
@@ -110,6 +110,7 @@ function isReportRows(value: unknown, fields: string[]) {
 
 function isKnittingReport(value: unknown, documentIds: Set<string>): value is KnittingReport {
   if (!isObject(value) || typeof value.documentId !== 'string' || !documentIds.has(value.documentId) ||
+    (value.id !== undefined && (typeof value.id !== 'string' || !value.id || value.id.length > 500)) ||
     typeof value.title !== 'string' || value.title.length > 500 || !Number.isFinite(value.createdAt) || !Number.isFinite(value.updatedAt) ||
     !isObject(value.fields) || Object.keys(value.fields).length > 500 || Object.values(value.fields).some((field) => typeof field !== 'string' || field.length > 20_000) ||
     !isReportPhoto(value.representativePhoto) ||
@@ -119,10 +120,18 @@ function isKnittingReport(value: unknown, documentIds: Set<string>): value is Kn
     !isReportRows(value.measurements, ['label', 'pattern', 'finished']) ||
     !isReportRows(value.modifications, ['section', 'original', 'changed', 'memo']) ||
     !Array.isArray(value.finishedPhotos) || value.finishedPhotos.length > 500 ||
-    !value.finishedPhotos.every((photo) => isObject(photo) && typeof photo.id === 'string' && typeof photo.label === 'string' && photo.label.length <= 500 && isReportPhoto(photo.dataUrl))) return false
+    !value.finishedPhotos.every((photo) => isObject(photo) && typeof photo.id === 'string' && typeof photo.label === 'string' && photo.label.length <= 500 && isReportPhoto(photo.dataUrl)) ||
+    (value.workPhotos !== undefined && (!Array.isArray(value.workPhotos) || value.workPhotos.length > 500 ||
+      !value.workPhotos.every((photo) => isObject(photo) && typeof photo.id === 'string' && typeof photo.label === 'string' && photo.label.length <= 500 &&
+        isReportPhoto(photo.dataUrl) && Number.isFinite(photo.uploadedAt) && typeof photo.activityDate === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(photo.activityDate))))) return false
   const yarns = value.yarns as unknown[]
   const accessories = value.accessories as unknown[]
   return yarns.every((row) => isObject(row) && isReportPhoto(row.photo)) && accessories.every((row) => isObject(row) && isReportPhoto(row.photo))
+}
+
+function normalizeKnittingReport(value: KnittingReport): KnittingReport {
+  const legacy = value as KnittingReport & { id?: string; workPhotos?: ReportTimelinePhoto[] }
+  return { ...legacy, id: legacy.id || legacy.documentId, workPhotos: legacy.workPhotos ?? [] }
 }
 
 function isChart(entry: unknown): entry is ChartDocument {
@@ -165,7 +174,7 @@ export async function createWorkspaceBackup() {
 
   const manifest: BackupManifest = {
     format: 'doanbogo',
-    version: 7,
+    version: 8,
     exportedAt: Date.now(),
     documents,
     pages: data.pages,
@@ -196,7 +205,7 @@ export async function readWorkspaceBackup(file: File): Promise<WorkspaceData> {
   } catch {
     throw new Error('작업 파일의 안내 정보가 손상됐습니다.')
   }
-  if (!isObject(manifest) || manifest.format !== 'doanbogo' || ![1, 2, 3, 4, 5, 6, 7].includes(manifest.version as number) ||
+  if (!isObject(manifest) || manifest.format !== 'doanbogo' || ![1, 2, 3, 4, 5, 6, 7, 8].includes(manifest.version as number) ||
     !Array.isArray(manifest.documents) || !Array.isArray(manifest.pages) ||
     !Array.isArray(manifest.viewers) || !Array.isArray(manifest.preferences) ||
     ((manifest.version as number) >= 2 && !Array.isArray(manifest.pageWork)) ||
@@ -332,12 +341,12 @@ export async function readWorkspaceBackup(file: File): Promise<WorkspaceData> {
 
   const knittingReports: KnittingReport[] = (Array.isArray(manifest.knittingReports) ? manifest.knittingReports : []).map((entry) => {
     if (!isKnittingReport(entry, ids)) throw new Error('작업 파일에 올바르지 않은 뜨개보고서 정보가 있습니다.')
-    return entry
+    return normalizeKnittingReport(entry)
   })
-  const reportDocumentIds = new Set<string>()
+  const reportIds = new Set<string>()
   for (const report of knittingReports) {
-    if (reportDocumentIds.has(report.documentId)) throw new Error('작업 파일에 중복된 뜨개보고서가 있습니다.')
-    reportDocumentIds.add(report.documentId)
+    if (reportIds.has(report.id)) throw new Error('작업 파일에 중복된 뜨개보고서가 있습니다.')
+    reportIds.add(report.id)
   }
 
   return { documents, pages, viewers, preferences, pageWork, charts, knittingReports }
