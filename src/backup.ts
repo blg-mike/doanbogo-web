@@ -1,6 +1,7 @@
 import { strFromU8, strToU8, unzipSync, zipSync } from 'fflate'
 import type { AnnotationRecord, ChartDocument, ColorworkGrid, DocumentRecord, KnittingReport, PageRecord, PageWorkRecord, PreferenceRecord, ReportTimelinePhoto, ViewerSnapshot } from './types'
 import { normalizePageWork, readWorkspaceData, type WorkspaceData } from './storage'
+import { createDefaultCounters, isCounterSnapshots } from './smartCounter'
 
 interface BackupDocument extends Omit<DocumentRecord, 'pdf' | 'cover'> {
   pdfPath: string
@@ -9,7 +10,7 @@ interface BackupDocument extends Omit<DocumentRecord, 'pdf' | 'cover'> {
 
 interface BackupManifest {
   format: 'doanbogo'
-  version: 8
+  version: 9
   exportedAt: number
   documents: BackupDocument[]
   pages: PageRecord[]
@@ -174,7 +175,7 @@ export async function createWorkspaceBackup() {
 
   const manifest: BackupManifest = {
     format: 'doanbogo',
-    version: 8,
+    version: 9,
     exportedAt: Date.now(),
     documents,
     pages: data.pages,
@@ -205,7 +206,7 @@ export async function readWorkspaceBackup(file: File): Promise<WorkspaceData> {
   } catch {
     throw new Error('작업 파일의 안내 정보가 손상됐습니다.')
   }
-  if (!isObject(manifest) || manifest.format !== 'doanbogo' || ![1, 2, 3, 4, 5, 6, 7, 8].includes(manifest.version as number) ||
+  if (!isObject(manifest) || manifest.format !== 'doanbogo' || ![1, 2, 3, 4, 5, 6, 7, 8, 9].includes(manifest.version as number) ||
     !Array.isArray(manifest.documents) || !Array.isArray(manifest.pages) ||
     !Array.isArray(manifest.viewers) || !Array.isArray(manifest.preferences) ||
     ((manifest.version as number) >= 2 && !Array.isArray(manifest.pageWork)) ||
@@ -274,6 +275,7 @@ export async function readWorkspaceBackup(file: File): Promise<WorkspaceData> {
       !Number.isFinite(entry.secondary.centerX) || !Number.isFinite(entry.secondary.centerY) ||
       !isPaneRotations(entry.primary.rotations, pageCounts.get(entry.documentId)!) ||
       !isPaneRotations(entry.secondary.rotations, pageCounts.get(entry.documentId)!) ||
+      ((manifest.version as number) >= 9 && !isCounterSnapshots(entry.counters)) ||
       !Number.isFinite(entry.wideRatio) || !Number.isFinite(entry.tallRatio) || !Number.isFinite(entry.updatedAt) ||
       (entry.progressSettings !== undefined && !isProgressSettings(entry.progressSettings)) ||
       (entry.annotationSettings !== undefined && !isAnnotationSettings(entry.annotationSettings))) {
@@ -281,6 +283,7 @@ export async function readWorkspaceBackup(file: File): Promise<WorkspaceData> {
     }
     const viewer = { ...entry }
     delete viewer.techniqueSlots
+    if ((manifest.version as number) < 9) viewer.counters = createDefaultCounters()
     return viewer as unknown as ViewerSnapshot
   })
 

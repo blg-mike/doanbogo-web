@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState, type FormEvent as ReactFormEv
 import type { PDFDocumentProxy } from 'pdfjs-dist'
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import QrWorker from './qrDecode.worker?worker&inline'
-import { ArrowLeft, Bookmark, Check, ChevronDown, ChevronUp, Columns2, Eraser, Eye, EyeOff, Grid3X3, Hash, Highlighter, Minus, MousePointer2, Pencil, Plus, Redo2, RotateCw, SlidersHorizontal, Type, Undo2, X } from 'lucide-react'
+import { ArrowLeft, Bookmark, Check, ChevronDown, ChevronUp, Columns2, Eraser, Eye, EyeOff, Grid3X3, Hash, Highlighter, Minus, MousePointer2, Pencil, Plus, Redo2, RotateCw, Settings2, SlidersHorizontal, Type, Undo2, X } from 'lucide-react'
 import BrandLoading from './BrandLoading'
 import yyLogo from './assets/yy-logo.png'
 import { cancelThumbnailRenders, PdfPage, PdfThumbnail, setThumbnailRenderingPaused, waitForThumbnailQueueIdle } from './PdfPage'
@@ -10,9 +10,10 @@ import { getDocument, getPageRecognition, getPageWork, getPages, getViewer, mark
 import { pdfPageRenderQueue } from './pdfPageRenderQueue'
 import { openPdf, pdfErrorMessage } from './pdf'
 import KnittingReport from './KnittingReport'
-import type { AnnotationSettings, AnnotationStyle, AnnotationTool, ColorworkCreateRequest, ColorworkSettings, PageRecord, PageRotation, PageWorkRecord, PaneId, PaneSnapshot, ProgressSettings, ViewerSnapshot } from './types'
+import type { AnnotationSettings, AnnotationStyle, AnnotationTool, ColorworkCreateRequest, ColorworkSettings, CounterSnapshot, CounterTaskRule, PageRecord, PageRotation, PageWorkRecord, PaneId, PaneSnapshot, ProgressSettings, ViewerSnapshot } from './types'
 import { defaultColorworkSettings, getColorworkDimensions, resizeColorworkGrid } from './colorwork'
 import { clampCounterValue, counterValueFromInput } from './counter'
+import { MAX_COUNTER_ROW, MAX_COUNTER_TASK_RULES, counterPatternState, counterTaskProgress, counterTaskKey, createCounterTaskRule, dueCounterTasks, normalizeCounterSnapshots, setCounterTaskOccurrences } from './smartCounter'
 import { extractPdfPageLinks, type PdfQrLink } from './qr'
 import { captureAndEnqueueQrPixels } from './qrCapture'
 import { PageWorkPersistence } from './pageWorkPersistence'
@@ -23,7 +24,7 @@ import { canHidePageSelection, compactPageThumbnails, completePageList, nextVisi
 type Size = { width: number; height: number }
 type WorkAction = { before: PageWorkRecord; after: PageWorkRecord }
 type PageHistory = { actions: WorkAction[]; cursor: number }
-type CounterSessionState = { documentId: string; visible: boolean; values: number[]; editingIndex: number | null; draft: string; popoverPosition: CounterPopoverPosition | null }
+type CounterSessionState = { documentId: string; visible: boolean; activeIndex: number; expanded: boolean; editingIndex: number | null; draft: string; popoverPosition: CounterPopoverPosition | null; dismissedAlertKey: string | null; advanceConfirmation: boolean; historyExpanded: boolean }
 type CounterPopoverPosition = { x: number; y: number }
 type CounterPopoverDrag = { pointerId: number; offsetX: number; offsetY: number; width: number; height: number }
 const MAX_CACHED_PAGE_WORKS = getViewerResourcePolicy().cachedPageWorks
@@ -43,7 +44,7 @@ type ThumbnailTouchGesture = {
 }
 
 function createCounterSession(documentId: string): CounterSessionState {
-  return { documentId, visible: false, values: [0, 0, 0, 0, 0], editingIndex: null, draft: '', popoverPosition: null }
+  return { documentId, visible: false, activeIndex: 0, expanded: false, editingIndex: null, draft: '', popoverPosition: null, dismissedAlertKey: null, advanceConfirmation: false, historyExpanded: false }
 }
 
 const defaultProgressSettings: ProgressSettings = {
@@ -236,6 +237,101 @@ function ColorworkSettingsDialog({ initial, onClose, onApply }: {
   )
 }
 
+function CounterSettingsDialog({ initial, index, onClose, onSave }: {
+  initial: CounterSnapshot
+  index: number
+  onClose: () => void
+  onSave: (counter: CounterSnapshot) => void
+}) {
+  const [draft, setDraft] = useState<CounterSnapshot>({ ...initial, taskRules: initial.taskRules.map((rule) => ({ ...rule })), taskOccurrences: initial.taskOccurrences.map((item) => ({ ...item })) })
+  const patternState = counterPatternState(draft)
+
+  function update(change: Partial<CounterSnapshot>) {
+    setDraft((current) => ({ ...current, ...change }))
+  }
+
+  function changeMode(mode: CounterSnapshot['mode']) {
+    setDraft((current) => ({
+      ...current,
+      mode,
+      value: mode === 'repeat' ? Math.max(1, current.value) : Math.min(99, current.value),
+    }))
+  }
+
+  function updateRule(ruleId: string, change: Partial<CounterTaskRule>) {
+    setDraft((current) => ({ ...current, taskRules: current.taskRules.map((rule) => rule.id === ruleId ? { ...rule, ...change } : rule) }))
+  }
+
+  function removeRule(ruleId: string) {
+    setDraft((current) => ({
+      ...current,
+      taskRules: current.taskRules.filter((rule) => rule.id !== ruleId),
+      taskOccurrences: current.taskOccurrences.filter((item) => item.ruleId !== ruleId),
+    }))
+  }
+
+  function save(event: ReactFormEvent<HTMLFormElement>) {
+    event.preventDefault()
+    const unchangedRuleIds = new Set(draft.taskRules.filter((rule) => {
+      const previous = initial.taskRules.find((item) => item.id === rule.id)
+      return previous && previous.kind === rule.kind && previous.interval === rule.interval && previous.total === rule.total
+    }).map((rule) => rule.id))
+    onSave({
+      ...draft,
+      repeatName: draft.repeatName.trim() || '무늬',
+      taskOccurrences: draft.taskOccurrences.filter((item) => unchangedRuleIds.has(item.ruleId)),
+    })
+  }
+
+  const preview = patternState.kind === 'before'
+    ? '전체 ' + draft.value + '단 · ' + draft.startRow + '단부터 시작'
+    : patternState.kind === 'complete'
+      ? '전체 ' + draft.value + '단 · 반복 완료'
+      : '전체 ' + draft.value + '단 → ' + draft.repeatName + ' ' + patternState.patternRow + '단 · ' + patternState.repeatNumber + '회차'
+
+  return (
+    <div className="modal-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) onClose() }}>
+      <form className="modal-card counter-settings-modal" role="dialog" aria-modal="true" aria-label={'카운터 ' + (index + 1) + ' 설정'} onSubmit={save}>
+        <div className="modal-heading"><div><p className="eyebrow">SMART COUNTER</p><h2>카운터 {index + 1} 설정</h2></div><button type="button" className="icon-button" aria-label="닫기" onClick={onClose}><X size={20} /></button></div>
+        <div className="counter-settings-body">
+          <div className="counter-mode-switch" aria-label="카운터 유형">
+            <button type="button" className={draft.mode === 'simple' ? 'selected' : ''} aria-pressed={draft.mode === 'simple'} onClick={() => changeMode('simple')}>단순 카운터</button>
+            <button type="button" className={draft.mode === 'repeat' ? 'selected' : ''} aria-pressed={draft.mode === 'repeat'} onClick={() => changeMode('repeat')}>반복 카운터</button>
+          </div>
+          {draft.mode === 'repeat' && <>
+            <label className="counter-settings-field">반복 이름<input required maxLength={100} value={draft.repeatName} onChange={(event) => update({ repeatName: event.currentTarget.value })} /></label>
+            <div className="counter-settings-grid">
+              <label className="counter-settings-field">시작 단<input required type="number" min="1" max={MAX_COUNTER_ROW} value={draft.startRow} onChange={(event) => update({ startRow: Number(event.currentTarget.value) })} /></label>
+              <label className="counter-settings-field">반복 길이<input required type="number" min="1" max={MAX_COUNTER_ROW} value={draft.repeatLength} onChange={(event) => update({ repeatLength: Number(event.currentTarget.value) })} /></label>
+            </div>
+            <div className="counter-repeat-limit">
+              <strong>반복 횟수</strong>
+              <label><input type="radio" name="counter-repeat-limit" checked={draft.repeatCount === null} onChange={() => update({ repeatCount: null })} />계속 반복</label>
+              <label><input type="radio" name="counter-repeat-limit" checked={draft.repeatCount !== null} onChange={() => update({ repeatCount: draft.repeatCount ?? 1 })} />횟수 지정</label>
+              <input aria-label="반복 횟수 지정" required type="number" min="1" max={MAX_COUNTER_ROW} disabled={draft.repeatCount === null} value={draft.repeatCount ?? 1} onChange={(event) => update({ repeatCount: Number(event.currentTarget.value) })} />
+            </div>
+            <div className="counter-settings-preview"><strong>미리보기</strong><span>{preview}</span></div>
+            <section className="counter-task-settings" aria-label="줄임 늘림 알림 설정">
+              <div className="counter-task-settings-heading"><strong>줄임·늘림 알림</strong><span>{draft.taskRules.length}/{MAX_COUNTER_TASK_RULES}</span></div>
+              {draft.taskRules.map((rule, ruleIndex) => <div className="counter-task-setting" key={rule.id}>
+                <label>작업<select aria-label={'알림 ' + (ruleIndex + 1) + ' 작업'} value={rule.kind} onChange={(event) => updateRule(rule.id, { kind: event.currentTarget.value as CounterTaskRule['kind'] })}>
+                  <option value="decrease">줄임</option><option value="increase">늘림</option>
+                </select></label>
+                <label>간격<input aria-label={'알림 ' + (ruleIndex + 1) + ' 간격'} required type="number" min="1" max={MAX_COUNTER_ROW} value={rule.interval} onChange={(event) => updateRule(rule.id, { interval: Number(event.currentTarget.value) })} /><span>단마다</span></label>
+                <label>횟수<input aria-label={'알림 ' + (ruleIndex + 1) + ' 횟수'} required type="number" min="1" max={MAX_COUNTER_ROW} value={rule.total} onChange={(event) => updateRule(rule.id, { total: Number(event.currentTarget.value) })} /></label>
+                <button type="button" className="icon-button" aria-label={'알림 ' + (ruleIndex + 1) + ' 삭제'} onClick={() => removeRule(rule.id)}><X size={16} /></button>
+              </div>)}
+              <button type="button" className="secondary-button counter-task-add" disabled={draft.taskRules.length >= MAX_COUNTER_TASK_RULES} onClick={() => update({ taskRules: [...draft.taskRules, createCounterTaskRule()] })}><Plus size={15} />줄임·늘림 알림 추가</button>
+              <p>간격은 전체 단수 기준입니다. 예: 6단마다 8회면 6·12·18단에 알림이 표시됩니다.</p>
+            </section>
+          </>}
+          <div className="modal-actions"><button type="button" className="secondary-button" onClick={onClose}>취소</button><button type="submit" className="primary-button"><Check size={17} />설정 저장</button></div>
+        </div>
+      </form>
+    </div>
+  )
+}
+
 export default function Viewer() {
   const { id = '' } = useParams()
   const navigate = useNavigate()
@@ -283,9 +379,19 @@ export default function Viewer() {
   const [loadedId, setLoadedId] = useState('')
   const [savedCounterSession, setSavedCounterSession] = useState(() => createCounterSession(id))
   const counterSession = savedCounterSession.documentId === id ? savedCounterSession : createCounterSession(id)
-  const { visible: counterPanelVisible, values: counterValues, editingIndex: editingCounterIndex, draft: counterDraft, popoverPosition: counterPopoverPosition } = counterSession
+  const { visible: counterPanelVisible, activeIndex: activeCounterIndex, expanded: countersExpanded, editingIndex: editingCounterIndex, draft: counterDraft, popoverPosition: counterPopoverPosition } = counterSession
+  const counters = normalizeCounterSnapshots(snapshot?.counters)
+  const activeCounter = counters[activeCounterIndex]
+  const currentDueTasks = dueCounterTasks(activeCounter)
+  const pendingDueTasks = currentDueTasks.filter((task) => task.status === undefined)
+  const currentDueKey = activeCounterIndex + ':' + currentDueTasks.map((task) => counterTaskKey(task.rule.id, task.occurrence)).join('|')
+  const missedCounterTasks = activeCounter.taskOccurrences.filter((item) => item.status === 'missed').flatMap((item) => {
+    const rule = activeCounter.taskRules.find((candidate) => candidate.id === item.ruleId)
+    return rule ? [{ rule, occurrence: item.occurrence }] : []
+  })
   const counterInputRef = useRef<HTMLInputElement>(null)
   const cancelCounterBlur = useRef(false)
+  const [counterSettingsOpen, setCounterSettingsOpen] = useState(false)
   const [pages, setPages] = useState<PageRecord[]>([])
   const pageVisibilityActionRef = useRef(false)
   const [pageVisibilitySaving, setPageVisibilitySaving] = useState(false)
@@ -857,19 +963,68 @@ export default function Viewer() {
     setSavedCounterSession((current) => change(current.documentId === id ? current : createCounterSession(id)))
   }
 
+  function updateCounter(index: number, change: (current: CounterSnapshot) => CounterSnapshot) {
+    const current = snapshotRef.current
+    if (!current) return
+    const nextCounters = normalizeCounterSnapshots(current.counters)
+    nextCounters[index] = change(nextCounters[index])
+    pushSnapshot({ ...current, counters: nextCounters }, true)
+  }
+
   function adjustCounter(index: number, amount: number) {
-    updateCounterSession((current) => ({
-      ...current,
-      values: current.values.map((value, item) => item === index ? clampCounterValue(value + amount) : value),
+    updateCounter(index, (counter) => ({
+      ...counter,
+      value: counter.mode === 'repeat'
+        ? clampCounterValue(counter.value + amount, 1, MAX_COUNTER_ROW)
+        : clampCounterValue(counter.value + amount),
     }))
+    updateCounterSession((current) => ({ ...current, advanceConfirmation: false, dismissedAlertKey: null }))
   }
 
   function commitCounterEdit(index: number, rawValue: string) {
-    updateCounterSession((current) => ({
-      ...current,
-      values: current.values.map((item, itemIndex) => itemIndex === index ? counterValueFromInput(rawValue, item) : item),
-      editingIndex: null,
+    updateCounter(index, (counter) => ({
+      ...counter,
+      value: counterValueFromInput(rawValue, counter.value, counter.mode === 'repeat' ? 1 : 0, counter.mode === 'repeat' ? MAX_COUNTER_ROW : 99),
     }))
+    updateCounterSession((current) => ({ ...current, editingIndex: null, advanceConfirmation: false, dismissedAlertKey: null }))
+  }
+
+  function advanceCounter(index: number, status?: 'done' | 'missed') {
+    const currentCounter = normalizeCounterSnapshots(snapshotRef.current?.counters)[index]
+    const dueTasks = dueCounterTasks(currentCounter)
+    updateCounter(index, (counter) => {
+      const tasksToMark = status === 'missed' ? dueTasks.filter((task) => task.status === undefined) : dueTasks
+      const withTasks = status ? setCounterTaskOccurrences(counter, tasksToMark, status) : counter
+      const maximum = counter.mode === 'repeat' ? MAX_COUNTER_ROW : 99
+      return { ...withTasks, value: Math.min(maximum, counter.value + 1) }
+    })
+    updateCounterSession((current) => ({ ...current, advanceConfirmation: false, dismissedAlertKey: null }))
+  }
+
+  function requestCounterAdvance(index: number) {
+    const counter = normalizeCounterSnapshots(snapshotRef.current?.counters)[index]
+    if (counter.value >= (counter.mode === 'repeat' ? MAX_COUNTER_ROW : 99)) return
+    if (dueCounterTasks(counter).some((task) => task.status === undefined)) {
+      updateCounterSession((current) => ({ ...current, advanceConfirmation: true }))
+      return
+    }
+    advanceCounter(index)
+  }
+
+  function markCurrentCounterTasksDone(index: number) {
+    const counter = normalizeCounterSnapshots(snapshotRef.current?.counters)[index]
+    const tasks = dueCounterTasks(counter).filter((task) => task.status !== 'done')
+    if (tasks.length) updateCounter(index, (current) => setCounterTaskOccurrences(current, tasks, 'done'))
+  }
+
+  function clearCurrentCounterTaskCompletion(index: number) {
+    const counter = normalizeCounterSnapshots(snapshotRef.current?.counters)[index]
+    const tasks = dueCounterTasks(counter).filter((task) => task.status === 'done')
+    if (tasks.length) updateCounter(index, (current) => setCounterTaskOccurrences(current, tasks))
+  }
+
+  function markMissedCounterTaskDone(index: number, rule: CounterTaskRule, occurrence: number) {
+    updateCounter(index, (counter) => setCounterTaskOccurrences(counter, [{ rule, occurrence }], 'done'))
   }
 
   function beginCounterPopoverDrag(event: ReactPointerEvent<HTMLElement>) {
@@ -1374,38 +1529,65 @@ export default function Viewer() {
           onKeyDown={(event) => event.stopPropagation()}
         >
           <header className="number-counter-header" title="드래그해 위치 이동" onPointerDown={beginCounterPopoverDrag} onPointerMove={moveCounterPopover} onPointerUp={finishCounterPopoverDrag} onPointerCancel={finishCounterPopoverDrag} onLostPointerCapture={finishCounterPopoverDrag}>
-            <strong>숫자 카운터</strong><span>드래그해 이동</span>
+            <strong>{activeCounter.mode === 'repeat' ? activeCounter.repeatName : '카운터 ' + (activeCounterIndex + 1)}</strong>
+            <span>{activeCounter.mode === 'repeat' ? '반복 카운터' : '단순 카운터'}</span>
+            <button type="button" className="number-counter-settings-button" aria-label={'카운터 ' + (activeCounterIndex + 1) + ' 설정'} title="카운터 설정" onPointerDown={(event) => event.stopPropagation()} onClick={() => setCounterSettingsOpen(true)}><Settings2 size={16} /></button>
           </header>
-          {counterValues.map((value, index) => <div className="number-counter-row" key={index}>
-            <button type="button" className="number-counter-step" aria-label={'카운터 ' + (index + 1) + ' 감소'} disabled={value <= 0} onClick={() => adjustCounter(index, -1)}>−</button>
-            {editingCounterIndex === index
+          <button type="button" className="number-counter-list-toggle" aria-expanded={countersExpanded} onClick={() => updateCounterSession((current) => ({ ...current, expanded: !current.expanded }))}>
+            <span>카운터 목록</span>{countersExpanded ? <ChevronUp size={15} /> : <ChevronDown size={15} />}
+          </button>
+          {countersExpanded && <div className="number-counter-list" aria-label="카운터 5개">
+            {counters.map((counter, index) => {
+              const state = counter.mode === 'repeat' ? counterPatternState(counter) : null
+              const detail = counter.mode === 'simple' ? '단순 · ' + counter.value : state?.kind === 'active' ? counter.repeatName + ' ' + state.patternRow + ' / ' + counter.repeatLength + '단 · ' + state.repeatNumber + '회차' : state?.kind === 'complete' ? '반복 완료' : counter.repeatName + ' · 시작 전'
+              return <button type="button" key={index} className={'number-counter-list-item' + (index === activeCounterIndex ? ' active' : '')} aria-pressed={index === activeCounterIndex} onClick={() => updateCounterSession((current) => ({ ...current, activeIndex: index, expanded: false, editingIndex: null, advanceConfirmation: false, dismissedAlertKey: null, historyExpanded: false }))}>
+                <strong>{counter.mode === 'repeat' ? counter.repeatName : '카운터 ' + (index + 1)}</strong><span>{counter.mode === 'repeat' ? '전체 ' + counter.value + '단 · ' + detail : detail}</span>
+              </button>
+            })}
+          </div>}
+          <div className="number-counter-summary">
+            {activeCounter.mode === 'repeat' ? <>
+              <strong className="number-counter-total">전체 {activeCounter.value}단</strong>
+              {(() => {
+                const state = counterPatternState(activeCounter)
+                if (state.kind === 'before') return <p>{activeCounter.repeatName} · {activeCounter.startRow}단부터 시작</p>
+                if (state.kind === 'complete') return <p>{activeCounter.repeatName} · 반복 완료</p>
+                return <p>{activeCounter.repeatName} {state.patternRow} / {activeCounter.repeatLength}단 · {state.repeatNumber}회차{activeCounter.repeatCount === null ? '' : ' / ' + activeCounter.repeatCount + '회'}</p>
+              })()}
+              {activeCounter.taskRules.map((rule) => {
+                const progress = counterTaskProgress(activeCounter, rule)
+                const label = rule.kind === 'decrease' ? '줄임' : '늘림'
+                return <p className="number-counter-task-progress" key={rule.id}>{label} {progress.completed}회 완료 / {rule.total}회 · {progress.remaining}회 남음{progress.missed > 0 ? ' · 미완료 ' + progress.missed + '회' : ''}</p>
+              })}
+            </> : <strong className="number-counter-total">카운터 {activeCounter.value}</strong>}
+          </div>
+          <div className="number-counter-row">
+            <button type="button" className="number-counter-step" aria-label={'카운터 ' + (activeCounterIndex + 1) + ' 감소'} disabled={activeCounter.value <= (activeCounter.mode === 'repeat' ? 1 : 0)} onClick={() => adjustCounter(activeCounterIndex, -1)}>−</button>
+            {editingCounterIndex === activeCounterIndex
               ? <input
                 ref={counterInputRef}
                 className="number-counter-input"
-                aria-label={'카운터 ' + (index + 1) + ' 숫자 입력'}
+                aria-label={'카운터 ' + (activeCounterIndex + 1) + ' 숫자 입력'}
                 type="number"
                 inputMode="numeric"
-                min="0"
-                max="99"
+                min={activeCounter.mode === 'repeat' ? 1 : 0}
+                max={activeCounter.mode === 'repeat' ? MAX_COUNTER_ROW : 99}
                 step="1"
                 value={counterDraft}
-                onChange={(event) => {
-                  const draft = event.currentTarget.value
-                  updateCounterSession((current) => ({ ...current, draft }))
-                }}
+                onChange={(event) => updateCounterSession((current) => ({ ...current, draft: event.currentTarget.value }))}
                 onBlur={(event) => {
                   if (cancelCounterBlur.current) {
                     cancelCounterBlur.current = false
                     updateCounterSession((current) => ({ ...current, editingIndex: null }))
                     return
                   }
-                  commitCounterEdit(index, event.currentTarget.value)
+                  commitCounterEdit(activeCounterIndex, event.currentTarget.value)
                 }}
                 onKeyDown={(event) => {
                   event.stopPropagation()
                   if (event.key === 'Enter') {
                     event.preventDefault()
-                    commitCounterEdit(index, event.currentTarget.value)
+                    commitCounterEdit(activeCounterIndex, event.currentTarget.value)
                     event.currentTarget.blur()
                   } else if (event.key === 'Escape') {
                     event.preventDefault()
@@ -1415,9 +1597,31 @@ export default function Viewer() {
                   }
                 }}
               />
-              : <button type="button" className="number-counter-value" aria-label={'카운터 ' + (index + 1) + ' 숫자 직접 입력'} onClick={() => updateCounterSession((current) => ({ ...current, draft: String(value), editingIndex: index }))}>{value}</button>}
-            <button type="button" className="number-counter-step" aria-label={'카운터 ' + (index + 1) + ' 증가'} disabled={value >= 99} onClick={() => adjustCounter(index, 1)}>+</button>
-          </div>)}
+              : <button type="button" className="number-counter-value" aria-label={'카운터 ' + (activeCounterIndex + 1) + ' 숫자 직접 입력'} onClick={() => updateCounterSession((current) => ({ ...current, draft: String(activeCounter.value), editingIndex: activeCounterIndex }))}>{activeCounter.value}</button>}
+            <button type="button" className="number-counter-step" aria-label={activeCounter.mode === 'repeat' ? '현재 단 완료 후 다음 단' : '카운터 증가'} title={activeCounter.mode === 'repeat' ? '이 단 완료' : '증가'} disabled={activeCounter.value >= (activeCounter.mode === 'repeat' ? MAX_COUNTER_ROW : 99)} onClick={() => activeCounter.mode === 'repeat' ? requestCounterAdvance(activeCounterIndex) : adjustCounter(activeCounterIndex, 1)}>+</button>
+          </div>
+          {currentDueTasks.length > 0 && counterSession.dismissedAlertKey !== currentDueKey && <section className="number-counter-alert" aria-label="이번 단 작업 알림">
+            <div className="number-counter-alert-heading"><strong>이번 단은 {Array.from(new Set(currentDueTasks.map((task) => task.rule.kind === 'decrease' ? '줄임' : '늘림'))).join('·')}단</strong><button type="button" aria-label="알림 닫기" onClick={() => updateCounterSession((current) => ({ ...current, dismissedAlertKey: currentDueKey }))}><X size={16} /></button></div>
+            {currentDueTasks.map((task) => {
+              const progress = counterTaskProgress(activeCounter, task.rule)
+              const label = task.rule.kind === 'decrease' ? '줄임' : '늘림'
+              return <p key={task.rule.id}>{label} {progress.completed}회 완료 / 총 {task.rule.total}회 · {progress.remaining}회 남음{task.status === 'done' ? ' · 이번 단 완료' : task.status === 'missed' ? ' · 미완료' : ''}</p>
+            })}
+            <label className="number-counter-task-complete"><input type="checkbox" checked={currentDueTasks.every((task) => task.status === 'done')} onChange={(event) => event.currentTarget.checked ? markCurrentCounterTasksDone(activeCounterIndex) : clearCurrentCounterTaskCompletion(activeCounterIndex)} />이번 작업 완료</label>
+          </section>}
+          {currentDueTasks.length > 0 && counterSession.dismissedAlertKey === currentDueKey && <button type="button" className="number-counter-alert-reopen" onClick={() => updateCounterSession((current) => ({ ...current, dismissedAlertKey: null }))}>이번 단 작업 다시 보기</button>}
+          {missedCounterTasks.length > 0 && <section className="number-counter-missed">
+            <button type="button" className="number-counter-missed-toggle" aria-expanded={counterSession.historyExpanded} onClick={() => updateCounterSession((current) => ({ ...current, historyExpanded: !current.historyExpanded }))}>미완료 기록 {missedCounterTasks.length}개{counterSession.historyExpanded ? <ChevronUp size={14} /> : <ChevronDown size={14} />}</button>
+            {counterSession.historyExpanded && missedCounterTasks.map((item) => <div className="number-counter-missed-item" key={counterTaskKey(item.rule.id, item.occurrence)}>
+              <span>{item.rule.kind === 'decrease' ? '줄임' : '늘림'} {item.occurrence}회차 · {item.rule.interval}단 간격</span><button type="button" onClick={() => markMissedCounterTaskDone(activeCounterIndex, item.rule, item.occurrence)}>완료 처리</button>
+            </div>)}
+          </section>}
+          {counterSession.advanceConfirmation && pendingDueTasks.length > 0 && <section className="number-counter-advance-confirm" role="alertdialog" aria-label="미완료 작업 확인">
+            <p>이번 단 작업을 완료로 표시하지 않았습니다. 다음 단으로 이동할까요?</p>
+            <button type="button" className="primary-button" onClick={() => advanceCounter(activeCounterIndex, 'done')}>완료 후 다음 단</button>
+            <button type="button" className="secondary-button" onClick={() => advanceCounter(activeCounterIndex, 'missed')}>미완료로 다음 단</button>
+            <button type="button" className="number-counter-cancel" onClick={() => updateCounterSession((current) => ({ ...current, advanceConfirmation: false }))}>취소</button>
+          </section>}
         </aside>}
       </section>
       <section className={'viewer-footer' + (thumbnailCollapsed ? ' thumbnail-collapsed' : '')}>
@@ -1535,6 +1739,17 @@ export default function Viewer() {
           </div>
         </section>}
       </section>
+      {counterSettingsOpen && <CounterSettingsDialog
+        key={activeCounterIndex}
+        initial={activeCounter}
+        index={activeCounterIndex}
+        onClose={() => setCounterSettingsOpen(false)}
+        onSave={(counter) => {
+          updateCounter(activeCounterIndex, () => counter)
+          updateCounterSession((current) => ({ ...current, advanceConfirmation: false, dismissedAlertKey: null }))
+          setCounterSettingsOpen(false)
+        }}
+      />}
       {renameDialog && <div className="modal-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) setRenameDialog(false) }}><section className="modal-card" role="dialog" aria-modal="true" aria-label="PDF 이름 변경"><div className="modal-heading"><h2>PDF 이름 변경</h2><button className="icon-button" aria-label="닫기" onClick={() => setRenameDialog(false)}><X size={20} /></button></div><form className="modal-form" onSubmit={(event) => void saveDocumentName(event)}><label htmlFor="viewer-pdf-name">PDF 이름</label><input id="viewer-pdf-name" autoFocus required maxLength={120} value={renameDraft} onChange={(event) => setRenameDraft(event.currentTarget.value)} />{renameError && <p className="rename-error" role="alert">{renameError}</p>}<div className="modal-actions"><button type="button" className="secondary-button" onClick={() => setRenameDialog(false)}>취소</button><button className="primary-button" type="submit"><Check size={17} />저장</button></div></form></section></div>}
       {progressDialog && <ProgressSettingsDialog
         settings={progressSettings}

@@ -126,6 +126,33 @@ export interface PaneSnapshot {
   rotations?: Record<number, PageRotation>
 }
 
+export type CounterTaskKind = 'decrease' | 'increase'
+export type CounterTaskStatus = 'done' | 'missed'
+
+export interface CounterTaskRule {
+  id: string
+  kind: CounterTaskKind
+  interval: number
+  total: number
+}
+
+export interface CounterTaskOccurrence {
+  ruleId: string
+  occurrence: number
+  status: CounterTaskStatus
+}
+
+export interface CounterSnapshot {
+  mode: 'simple' | 'repeat'
+  value: number
+  repeatName: string
+  startRow: number
+  repeatLength: number
+  repeatCount: number | null
+  taskRules: CounterTaskRule[]
+  taskOccurrences: CounterTaskOccurrence[]
+}
+
 export interface ViewerSnapshot {
   documentId: string
   split: boolean
@@ -137,6 +164,7 @@ export interface ViewerSnapshot {
   tallRatio: number
   progressSettings?: ProgressSettings
   annotationSettings?: AnnotationSettings
+  counters?: CounterSnapshot[]
   updatedAt: number
 }
 

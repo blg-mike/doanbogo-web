@@ -1,5 +1,6 @@
 import { openDB, type DBSchema, type IDBPDatabase } from 'idb'
 import type { ChartDocument, DocumentRecord, KnittingReport, PageRecognitionRecord, PageRecord, PageWorkRecord, PaneSnapshot, PreferenceRecord, ProgressGuide, SortMode, ViewerSnapshot } from './types'
+import { normalizeCounterSnapshots } from './smartCounter'
 
 interface DoanBogoDB extends DBSchema {
   documents: {
@@ -54,7 +55,7 @@ const pageKey = (id: string, page: number) => id + '\u0000' + page
 function stripLegacyTechniqueSlots(viewer: ViewerSnapshot): ViewerSnapshot {
   const cleaned = { ...viewer } as ViewerSnapshot & { techniqueSlots?: unknown }
   delete cleaned.techniqueSlots
-  return cleaned
+  return { ...cleaned, counters: normalizeCounterSnapshots(cleaned.counters) }
 }
 
 export function normalizePageWork(work: PageWorkRecord): PageWorkRecord {
@@ -535,6 +536,7 @@ export async function getViewer(id: string, pageCount: number): Promise<ViewerSn
     activePane: 'primary',
     primary: { ...defaultPane },
     secondary: { ...defaultPane },
+    counters: normalizeCounterSnapshots(undefined),
     wideRatio: 0.5,
     tallRatio: 0.5,
     updatedAt: Date.now(),

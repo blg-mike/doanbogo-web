@@ -80,6 +80,8 @@ describe('portable workspace backup', () => {
       const restored = await readWorkspaceBackup(legacyBackup)
       const restoredViewer = restored.viewers.find((item) => item.documentId === id)!
       expect(restoredViewer).not.toHaveProperty('techniqueSlots')
+      expect(restoredViewer.counters).toHaveLength(5)
+      expect(restoredViewer.counters?.[0]).toMatchObject({ mode: 'simple', value: 0 })
       const legacyRestoredViewer = restoredViewer as unknown as { techniqueSlots?: unknown }
       legacyRestoredViewer.techniqueSlots = techniqueSlots
       await importWorkspaceData(restored)
@@ -163,6 +165,12 @@ describe('portable workspace backup', () => {
     const viewer = await getViewer(original.id, original.pageCount)
     await saveViewer({
       ...viewer,
+      counters: viewer.counters?.map((counter, index) => index === 0 ? {
+        ...counter,
+        mode: 'repeat', value: 19, repeatName: '몸판 무늬', startRow: 5, repeatLength: 12, repeatCount: 3,
+        taskRules: [{ id: 'decrease-1', kind: 'decrease', interval: 6, total: 8 }],
+        taskOccurrences: [{ ruleId: 'decrease-1', occurrence: 1, status: 'done' }, { ruleId: 'decrease-1', occurrence: 2, status: 'missed' }],
+      } : counter),
       primary: { ...viewer.primary, page: 4, zoom: 2, centerX: 0.37, centerY: 0.68, rotations: { 4: 90 } },
       secondary: { ...viewer.secondary, rotations: { 1: 270 } },
       progressSettings: {
@@ -176,6 +184,7 @@ describe('portable workspace backup', () => {
         text: { color: '#28384c', thickness: 2, opacity: 1, fontSize: 20 },
       },
     })
+    expect((await getViewer(original.id, original.pageCount)).counters?.[0]).toMatchObject({ mode: 'repeat', value: 19, repeatName: '몸판 무늬' })
     await savePageWork({
       documentId: original.id,
       pageNumber: 4,
@@ -210,14 +219,22 @@ describe('portable workspace backup', () => {
 
     const backup = await createWorkspaceBackup()
     const restored = await readWorkspaceBackup(new File([backup], 'backup.doanbogo'))
+    const archiveEntries = unzipSync(new Uint8Array(await backup.arrayBuffer()))
+    expect(JSON.parse(strFromU8(archiveEntries['manifest.json'])).version).toBe(9)
+    const restoredViewer = restored.viewers.find((entry) => entry.documentId === original.id)!
     expect(restored.documents[0].fileName).toBe(original.fileName)
     expect(new TextDecoder().decode(await restored.documents[0].pdf.arrayBuffer())).toBe('%PDF-1.7 sample')
     expect(restored.pages[0]).toMatchObject({ documentId: original.id, pageNumber: 3, bookmarked: true })
-    expect(restored.viewers[0].primary).toMatchObject({ page: 4, zoom: 2, centerX: 0.37, centerY: 0.68 })
-    expect(restored.viewers[0].primary.rotations).toEqual({ 4: 90 })
-    expect(restored.viewers[0].secondary.rotations).toEqual({ 1: 270 })
-    expect(restored.viewers[0].progressSettings?.horizontal).toMatchObject({ color: '#edc21b', thickness: 5, opacity: 0.4 })
-    expect(restored.viewers[0].annotationSettings?.text).toMatchObject({ color: '#28384c', fontSize: 20 })
+    expect(restoredViewer.primary).toMatchObject({ page: 4, zoom: 2, centerX: 0.37, centerY: 0.68 })
+    expect(restoredViewer.primary.rotations).toEqual({ 4: 90 })
+    expect(restoredViewer.secondary.rotations).toEqual({ 1: 270 })
+    expect(restoredViewer.progressSettings?.horizontal).toMatchObject({ color: '#edc21b', thickness: 5, opacity: 0.4 })
+    expect(restoredViewer.annotationSettings?.text).toMatchObject({ color: '#28384c', fontSize: 20 })
+    expect(restoredViewer.counters?.[0]).toMatchObject({
+      mode: 'repeat', value: 19, repeatName: '몸판 무늬', startRow: 5, repeatLength: 12, repeatCount: 3,
+      taskRules: [{ id: 'decrease-1', kind: 'decrease', interval: 6, total: 8 }],
+      taskOccurrences: [{ ruleId: 'decrease-1', occurrence: 1, status: 'done' }, { ruleId: 'decrease-1', occurrence: 2, status: 'missed' }],
+    })
     expect(restored.pageWork[0]).toMatchObject({
       pageNumber: 4,
       horizontalGuides: [{ id: 'h-1', position: 0.32 }, { id: 'h-2', position: 0.68 }],
@@ -236,6 +253,7 @@ describe('portable workspace backup', () => {
     expect(imported?.id).toBeTruthy()
     expect((await getPages(imported!.id))[0]).toMatchObject({ documentId: imported!.id, pageNumber: 3, bookmarked: true })
     expect((await getViewer(imported!.id, original.pageCount)).primary).toMatchObject({ page: 4, zoom: 2, centerX: 0.37, centerY: 0.68 })
+    expect((await getViewer(imported!.id, original.pageCount)).counters?.[0]).toMatchObject({ mode: 'repeat', value: 19, repeatName: '몸판 무늬' })
     expect(await getPageWork(imported!.id, 4)).toMatchObject({
       horizontalGuides: [{ id: 'h-1', position: 0.32 }, { id: 'h-2', position: 0.68 }],
       verticalGuides: [{ id: 'v-1', position: 0.72 }],
