@@ -98,7 +98,7 @@ function copyCanvas(target: HTMLCanvasElement, source: HTMLCanvasElement) {
   target.getContext('2d', { alpha: false })?.drawImage(source, 0, 0)
 }
 
-export function PdfThumbnail({ pdf, pageNumber, active, hidden, bookmarked, selected, disabled, root, onSelect }: {
+export function PdfThumbnail({ pdf, pageNumber, active, hidden, bookmarked, selected, disabled, renderEnabled = true, root, onSelect }: {
   pdf: PDFDocumentProxy
   pageNumber: number
   active: boolean
@@ -106,6 +106,7 @@ export function PdfThumbnail({ pdf, pageNumber, active, hidden, bookmarked, sele
   bookmarked: boolean
   selected?: boolean
   disabled?: boolean
+  renderEnabled?: boolean
   root: RefObject<HTMLDivElement | null>
   onSelect: () => void
 }) {
@@ -134,11 +135,12 @@ export function PdfThumbnail({ pdf, pageNumber, active, hidden, bookmarked, sele
 
   useEffect(() => {
     if (!canvas) return
-    if (!visible) {
+    const cache = cacheSessionRef.current?.cache
+    cache?.excludePage(pageNumber, hidden)
+    if (!visible || !renderEnabled) {
       clearCanvas(canvas)
       return
     }
-    const cache = cacheSessionRef.current?.cache
     const cached = cache?.get(pageNumber)
     if (cached) {
       copyCanvas(canvas, cached)
@@ -203,7 +205,7 @@ export function PdfThumbnail({ pdf, pageNumber, active, hidden, bookmarked, sele
       removeQueuedThumbnail(job)
       clearCanvas(canvas)
     }
-  }, [canvas, pageNumber, pdf, visible])
+  }, [canvas, hidden, pageNumber, pdf, renderEnabled, visible])
 
   return (
     <button
@@ -216,7 +218,7 @@ export function PdfThumbnail({ pdf, pageNumber, active, hidden, bookmarked, sele
     >
       <span className="page-thumbnail-image">
         <canvas ref={setCanvas} width={0} height={0} aria-hidden="true" />
-        {!ready && <span className="thumbnail-placeholder">{pageNumber}</span>}
+        {(!ready || !visible || !renderEnabled) && <span className="thumbnail-placeholder">{pageNumber}</span>}
         {hidden && <span className="thumbnail-badge">숨김</span>}
         {selected && <span className="thumbnail-selection-mark">✓</span>}
         {bookmarked && <span className="thumbnail-bookmark">★</span>}

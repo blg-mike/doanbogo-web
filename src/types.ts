@@ -115,14 +115,6 @@ export interface PaneSnapshot {
   rotations?: Record<number, PageRotation>
 }
 
-export interface TechniqueCropSlot {
-  pageNumber: number
-  x: number
-  y: number
-  width: number
-  height: number
-}
-
 export interface ViewerSnapshot {
   documentId: string
   split: boolean
@@ -134,7 +126,6 @@ export interface ViewerSnapshot {
   tallRatio: number
   progressSettings?: ProgressSettings
   annotationSettings?: AnnotationSettings
-  techniqueSlots?: (TechniqueCropSlot | null)[]
   updatedAt: number
 }
 

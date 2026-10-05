@@ -22,6 +22,7 @@ function releaseCanvas(canvas: CanvasResource) {
 
 export class ThumbnailCanvasCache<TCanvas extends CanvasResource = HTMLCanvasElement> {
   private readonly entries = new Map<number, { canvas: TCanvas; bytes: number }>()
+  private readonly excludedPages = new Set<number>()
   private bytes = 0
   private readonly maxEntries: number
   private readonly maxBytes: number
@@ -32,6 +33,7 @@ export class ThumbnailCanvasCache<TCanvas extends CanvasResource = HTMLCanvasEle
   }
 
   get(pageNumber: number) {
+    if (this.excludedPages.has(pageNumber)) return undefined
     const entry = this.entries.get(pageNumber)
     if (!entry) return undefined
     this.entries.delete(pageNumber)
@@ -41,6 +43,10 @@ export class ThumbnailCanvasCache<TCanvas extends CanvasResource = HTMLCanvasEle
 
   set(pageNumber: number, canvas: TCanvas) {
     this.delete(pageNumber)
+    if (this.excludedPages.has(pageNumber)) {
+      releaseCanvas(canvas)
+      return
+    }
     const bytes = canvas.width * canvas.height * 4
     if (!bytes || bytes > this.maxBytes) {
       releaseCanvas(canvas)
@@ -59,6 +65,15 @@ export class ThumbnailCanvasCache<TCanvas extends CanvasResource = HTMLCanvasEle
     for (const { canvas } of this.entries.values()) releaseCanvas(canvas)
     this.entries.clear()
     this.bytes = 0
+  }
+
+  excludePage(pageNumber: number, excluded: boolean) {
+    if (excluded) {
+      this.excludedPages.add(pageNumber)
+      this.delete(pageNumber)
+    } else {
+      this.excludedPages.delete(pageNumber)
+    }
   }
 
   private delete(pageNumber: number) {

@@ -43,6 +43,25 @@ describe('PDF render resource limits', () => {
     expect(cache.get(2)).toBe(second)
   })
 
+  it('releases and excludes hidden page thumbnails until the page is restored', () => {
+    const cache = new ThumbnailCanvasCache<{ width: number; height: number }>()
+    const hiddenCanvas = { width: 20, height: 10 }
+    cache.set(8, hiddenCanvas)
+
+    cache.excludePage(8, true)
+    expect(hiddenCanvas.width).toBe(0)
+    expect(cache.get(8)).toBeUndefined()
+
+    const lateCanvas = { width: 20, height: 10 }
+    cache.set(8, lateCanvas)
+    expect(lateCanvas.width).toBe(0)
+
+    cache.excludePage(8, false)
+    const restoredCanvas = { width: 20, height: 10 }
+    cache.set(8, restoredCanvas)
+    expect(cache.get(8)).toBe(restoredCanvas)
+  })
+
   it('releases a document cache only after its last thumbnail is disposed', () => {
     const pdf = {} as PDFDocumentProxy
     const first = acquireThumbnailCache(pdf)

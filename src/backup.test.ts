@@ -4,7 +4,7 @@ import { strFromU8, strToU8, unzipSync, zipSync } from 'fflate'
 import { createWorkspaceBackup, readWorkspaceBackup } from './backup'
 import { addDocument, deleteChart, deleteDocument, duplicateDocument, getChart, getKnittingReport, getPageWork, getPages, getViewer, importWorkspaceData, listCharts, listDocuments, saveChart, saveKnittingReport, savePageWork, savePreference, saveViewer, setPageFlag } from './storage'
 import { createKnittingChart, makeRasterPdf } from './charts'
-import type { DocumentRecord, KnittingReport, TechniqueCropSlot } from './types'
+import type { DocumentRecord, KnittingReport } from './types'
 
 describe('portable workspace backup', () => {
   it('adds page work storage when opening an existing v1 database', async () => {
@@ -16,7 +16,13 @@ describe('portable workspace backup', () => {
       documents.createIndex('by-opened', 'lastOpenedAt')
       const pages = db.createObjectStore('pages', { keyPath: ['documentId', 'pageNumber'] })
       pages.createIndex('by-document', 'documentId')
-      db.createObjectStore('viewers', { keyPath: 'documentId' })
+      const viewers = db.createObjectStore('viewers', { keyPath: 'documentId' })
+      viewers.put({
+        documentId: 'migration-check', split: false, activePane: 'primary',
+        primary: { page: 1, zoom: 1, centerX: 0.5, centerY: 0.5 },
+        secondary: { page: 1, zoom: 1, centerX: 0.5, centerY: 0.5 },
+        wideRatio: 0.5, tallRatio: 0.5, techniqueSlots: [null, null, null, null, null], updatedAt: Date.now(),
+      })
       db.createObjectStore('preferences', { keyPath: 'key' })
     }
     const oldDatabase = await new Promise<IDBDatabase>((resolve, reject) => {
@@ -30,6 +36,7 @@ describe('portable workspace backup', () => {
       id: 'migration-check', fileName: 'migration.pdf', size: pdf.size, pageCount: 1,
       createdAt: Date.now(), lastOpenedAt: null, tags: [], pdf, cover: null,
     })
+    expect(await getViewer('migration-check', 1)).not.toHaveProperty('techniqueSlots')
     const work = await getPageWork('migration-check', 1)
     expect(work).toMatchObject({ horizontalPosition: 0.5, verticalPosition: 0.5, annotations: [] })
     await savePageWork({ ...work, horizontalPosition: 0.25 })
@@ -37,32 +44,44 @@ describe('portable workspace backup', () => {
     await deleteDocument('migration-check')
   })
 
-  it('round-trips ten crop slots and still accepts five-slot viewer backups', async () => {
+  it('discards legacy crop slots from five-slot, ten-slot, and malformed viewer backups', async () => {
     const id = crypto.randomUUID()
     const pdf = new Blob(['%PDF-1.7 slot-test'], { type: 'application/pdf' })
     await addDocument({
-      id, fileName: 'slots.pdf', size: pdf.size, pageCount: 1, createdAt: Date.now(),
+      id, fileName: 'legacy-slots.pdf', size: pdf.size, pageCount: 1, createdAt: Date.now(),
       lastOpenedAt: null, tags: [], pdf, cover: null,
     })
-    const viewer = await getViewer(id, 1)
-    const slots = Array<TechniqueCropSlot | null>(10).fill(null)
-    slots[9] = { pageNumber: 1, x: 0.1, y: 0.2, width: 0.3, height: 0.4 }
-    await saveViewer({ ...viewer, techniqueSlots: slots })
+    await saveViewer(await getViewer(id, 1))
 
     const exported = await createWorkspaceBackup()
-    const restored = await readWorkspaceBackup(new File([exported], 'ten-slots.doanbogo'))
-    expect(restored.viewers.find((item) => item.techniqueSlots?.[9])?.techniqueSlots).toHaveLength(10)
-
     const entries = unzipSync(new Uint8Array(await exported.arrayBuffer()))
-    const manifest = JSON.parse(strFromU8(entries['manifest.json'])) as { viewers: { techniqueSlots?: (TechniqueCropSlot | null)[] }[] }
-    const savedViewer = manifest.viewers.find((item) => item.techniqueSlots?.[9])
+    const manifest = JSON.parse(strFromU8(entries['manifest.json'])) as { viewers: Record<string, unknown>[] }
+    const savedViewer = manifest.viewers.find((item) => item.documentId === id)
     expect(savedViewer).toBeDefined()
-    savedViewer!.techniqueSlots = savedViewer!.techniqueSlots!.slice(0, 5)
-    const fiveSlotBackup = new File([zipSync({ ...entries, 'manifest.json': strToU8(JSON.stringify(manifest)) })], 'five-slots.doanbogo')
-    const legacy = await readWorkspaceBackup(fiveSlotBackup)
-    expect(legacy.viewers.some((item) => item.techniqueSlots?.length === 5)).toBe(true)
+    for (const techniqueSlots of [
+      Array(5).fill(null),
+      Array(10).fill(null),
+      'invalid legacy data',
+    ]) {
+      const legacyManifest = JSON.parse(JSON.stringify(manifest)) as typeof manifest
+      const legacyViewer = legacyManifest.viewers.find((item) => item.documentId === id)!
+      legacyViewer.techniqueSlots = techniqueSlots
+      const legacyBackup = new File([zipSync({ ...entries, 'manifest.json': strToU8(JSON.stringify(legacyManifest)) })], 'legacy-slots.doanbogo')
+      const restored = await readWorkspaceBackup(legacyBackup)
+      const restoredViewer = restored.viewers.find((item) => item.documentId === id)!
+      expect(restoredViewer).not.toHaveProperty('techniqueSlots')
+      const legacyRestoredViewer = restoredViewer as unknown as { techniqueSlots?: unknown }
+      legacyRestoredViewer.techniqueSlots = techniqueSlots
+      await importWorkspaceData(restored)
+    }
 
-    await deleteDocument(id)
+    const reexported = await createWorkspaceBackup()
+    const reexportedEntries = unzipSync(new Uint8Array(await reexported.arrayBuffer()))
+    const reexportedManifest = JSON.parse(strFromU8(reexportedEntries['manifest.json'])) as { viewers: Record<string, unknown>[] }
+    expect(reexportedManifest.viewers.every((item) => !Object.hasOwn(item, 'techniqueSlots'))).toBe(true)
+    for (const document of (await listDocuments('name')).filter((item) => item.fileName === 'legacy-slots.pdf')) {
+      await deleteDocument(document.id)
+    }
   })
 
   it('restores an associated knitting report and its photos with a new document id', async () => {
@@ -127,9 +146,6 @@ describe('portable workspace backup', () => {
         highlight: { color: '#f3de41', thickness: 18, opacity: 0.3, fontSize: 16 },
         text: { color: '#28384c', thickness: 2, opacity: 1, fontSize: 20 },
       },
-      techniqueSlots: [
-        { pageNumber: 4, x: 0.12, y: 0.23, width: 0.45, height: 0.38 }, null, null, null, null,
-      ],
     })
     await savePageWork({
       documentId: original.id,
@@ -173,7 +189,6 @@ describe('portable workspace backup', () => {
     expect(restored.viewers[0].secondary.rotations).toEqual({ 1: 270 })
     expect(restored.viewers[0].progressSettings?.horizontal).toMatchObject({ color: '#edc21b', thickness: 5, opacity: 0.4 })
     expect(restored.viewers[0].annotationSettings?.text).toMatchObject({ color: '#28384c', fontSize: 20 })
-    expect(restored.viewers[0].techniqueSlots?.[0]).toEqual({ pageNumber: 4, x: 0.12, y: 0.23, width: 0.45, height: 0.38 })
     expect(restored.pageWork[0]).toMatchObject({
       pageNumber: 4,
       horizontalGuides: [{ id: 'h-1', position: 0.32 }, { id: 'h-2', position: 0.68 }],
@@ -304,23 +319,6 @@ describe('portable workspace backup', () => {
     await expect(readWorkspaceBackup(backup)).rejects.toThrow('올바르지 않은 진행선·필기 정보')
   })
 
-  it('rejects crop slots whose region extends beyond the PDF page', async () => {
-    const pdf = new TextEncoder().encode('%PDF-1.7 invalid-crop')
-    const pane = { page: 1, zoom: 1, centerX: 0.5, centerY: 0.5 }
-    const manifest = {
-      format: 'doanbogo', version: 7, exportedAt: Date.now(),
-      documents: [{ id: 'invalid-crop', fileName: 'crop.pdf', size: pdf.byteLength, pageCount: 1, createdAt: 1, lastOpenedAt: null, tags: [], pdfPath: 'documents/000000.pdf', coverPath: null }],
-      pages: [],
-      viewers: [{
-        documentId: 'invalid-crop', split: false, activePane: 'primary', primary: pane, secondary: pane,
-        wideRatio: 0.65, tallRatio: 0.65, updatedAt: 1,
-        techniqueSlots: [{ pageNumber: 1, x: 0.8, y: 0.2, width: 0.3, height: 0.4 }, null, null, null, null],
-      }],
-      preferences: [], pageWork: [], charts: [], knittingReports: [],
-    }
-    const backup = new File([zipSync({ 'manifest.json': strToU8(JSON.stringify(manifest)), 'documents/000000.pdf': pdf })], 'invalid-crop.doanbogo')
-    await expect(readWorkspaceBackup(backup)).rejects.toThrow('올바르지 않은 뷰어 정보')
-  })
 })
 
 describe('raster PDF output', () => {

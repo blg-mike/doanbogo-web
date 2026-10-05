@@ -48,6 +48,12 @@ const temporary = {
 
 const pageKey = (id: string, page: number) => id + '\u0000' + page
 
+function stripLegacyTechniqueSlots(viewer: ViewerSnapshot): ViewerSnapshot {
+  const cleaned = { ...viewer } as ViewerSnapshot & { techniqueSlots?: unknown }
+  delete cleaned.techniqueSlots
+  return cleaned
+}
+
 export function normalizePageWork(work: PageWorkRecord): PageWorkRecord {
   const normalized = { ...work } as PageWorkRecord & { rectangles?: unknown }
   delete normalized.rectangles
@@ -80,8 +86,8 @@ async function database(): Promise<Database | null> {
     try {
       let abandoned = false
       let timeoutId = 0
-      const opening = openDB<DoanBogoDB>('doanbogo-web', 4, {
-        upgrade(db, oldVersion) {
+      const opening = openDB<DoanBogoDB>('doanbogo-web', 5, {
+        async upgrade(db, oldVersion, _newVersion, transaction) {
           if (oldVersion < 1) {
             const documents = db.createObjectStore('documents', { keyPath: 'id' })
             documents.createIndex('by-created', 'createdAt')
@@ -100,6 +106,15 @@ async function database(): Promise<Database | null> {
             charts.createIndex('by-updated', 'updatedAt')
           }
           if (oldVersion < 4) db.createObjectStore('knittingReports', { keyPath: 'documentId' })
+          if (oldVersion < 5) {
+            let cursor = await transaction.objectStore('viewers').openCursor()
+            while (cursor) {
+              if ('techniqueSlots' in cursor.value) {
+                await cursor.update(stripLegacyTechniqueSlots(cursor.value))
+              }
+              cursor = await cursor.continue()
+            }
+          }
         },
       }).then((db) => {
         if (abandoned) {
@@ -151,7 +166,7 @@ async function loadIntoTemporary(db: Database) {
     ])
     documents.forEach((item) => temporary.documents.set(item.id, item))
     pages.forEach((item) => temporary.pages.set(pageKey(item.documentId, item.pageNumber), item))
-    viewers.forEach((item) => temporary.viewers.set(item.documentId, item))
+    viewers.forEach((item) => temporary.viewers.set(item.documentId, stripLegacyTechniqueSlots(item)))
     preferences.forEach((item) => temporary.preferences.set(item.key, item))
     pageWork.forEach((item) => temporary.pageWork.set(pageKey(item.documentId, item.pageNumber), item))
     charts.forEach((item) => temporary.charts.set(item.id, item))
@@ -420,14 +435,17 @@ export async function setPagesFlag(id: string, pageNumbers: number[], flag: 'hid
 const defaultPane: PaneSnapshot = { page: 1, zoom: 1, centerX: 0.5, centerY: 0.5 }
 
 export async function getViewer(id: string, pageCount: number): Promise<ViewerSnapshot> {
-  const saved = await access((db) => db.get('viewers', id), () => temporary.viewers.get(id))
-  if (saved) return {
-    ...saved,
-    splitInitialized: saved.splitInitialized ?? saved.split,
-    wideRatio: saved.wideRatio === 0.65 ? 0.5 : saved.wideRatio ?? 0.5,
-    tallRatio: saved.tallRatio === 0.65 ? 0.5 : saved.tallRatio ?? 0.5,
-    primary: { ...saved.primary, page: Math.min(pageCount, Math.max(1, saved.primary.page)) },
-    secondary: { ...saved.secondary, page: Math.min(pageCount, Math.max(1, saved.secondary.page)) },
+  const stored = await access((db) => db.get('viewers', id), () => temporary.viewers.get(id))
+  if (stored) {
+    const saved = stripLegacyTechniqueSlots(stored)
+    return {
+      ...saved,
+      splitInitialized: saved.splitInitialized ?? saved.split,
+      wideRatio: saved.wideRatio === 0.65 ? 0.5 : saved.wideRatio ?? 0.5,
+      tallRatio: saved.tallRatio === 0.65 ? 0.5 : saved.tallRatio ?? 0.5,
+      primary: { ...saved.primary, page: Math.min(pageCount, Math.max(1, saved.primary.page)) },
+      secondary: { ...saved.secondary, page: Math.min(pageCount, Math.max(1, saved.secondary.page)) },
+    }
   }
   return {
     documentId: id,
@@ -443,8 +461,9 @@ export async function getViewer(id: string, pageCount: number): Promise<ViewerSn
 }
 
 export async function saveViewer(snapshot: ViewerSnapshot) {
-  await access(async (db) => { await db.put('viewers', { ...snapshot, updatedAt: Date.now() }) }, () => {
-    temporary.viewers.set(snapshot.documentId, { ...snapshot, updatedAt: Date.now() })
+  const viewer = stripLegacyTechniqueSlots(snapshot)
+  await access(async (db) => { await db.put('viewers', { ...viewer, updatedAt: Date.now() }) }, () => {
+    temporary.viewers.set(viewer.documentId, { ...viewer, updatedAt: Date.now() })
   })
 }
 
@@ -462,7 +481,7 @@ export async function readWorkspaceData(): Promise<WorkspaceData> {
   if (!db) return {
     documents: [...temporary.documents.values()],
     pages: [...temporary.pages.values()],
-    viewers: [...temporary.viewers.values()],
+    viewers: [...temporary.viewers.values()].map(stripLegacyTechniqueSlots),
     preferences: [...temporary.preferences.values()],
     pageWork: [...temporary.pageWork.values()].map(normalizePageWork),
     charts: [...temporary.charts.values()],
@@ -470,10 +489,10 @@ export async function readWorkspaceData(): Promise<WorkspaceData> {
   }
   return access((activeDb) => Promise.all([
     activeDb.getAll('documents'), activeDb.getAll('pages'), activeDb.getAll('viewers'), activeDb.getAll('preferences'), activeDb.getAll('pageWork'), activeDb.getAll('charts'), activeDb.getAll('knittingReports'),
-  ]).then(([documents, pages, viewers, preferences, pageWork, charts, knittingReports]) => ({ documents, pages, viewers, preferences, pageWork: pageWork.map(normalizePageWork), charts, knittingReports })), () => ({
+  ]).then(([documents, pages, viewers, preferences, pageWork, charts, knittingReports]) => ({ documents, pages, viewers: viewers.map(stripLegacyTechniqueSlots), preferences, pageWork: pageWork.map(normalizePageWork), charts, knittingReports })), () => ({
     documents: [...temporary.documents.values()],
     pages: [...temporary.pages.values()],
-    viewers: [...temporary.viewers.values()],
+    viewers: [...temporary.viewers.values()].map(stripLegacyTechniqueSlots),
     preferences: [...temporary.preferences.values()],
     pageWork: [...temporary.pageWork.values()].map(normalizePageWork),
     charts: [...temporary.charts.values()],
@@ -494,7 +513,7 @@ export async function importWorkspaceData(incoming: WorkspaceData) {
   }
   const documents = incoming.documents.map((item) => ({ ...item, id: idMap.get(item.id)! }))
   const pages = incoming.pages.map((item) => ({ ...item, documentId: idMap.get(item.documentId)! }))
-  const viewers = incoming.viewers.map((item) => ({ ...item, documentId: idMap.get(item.documentId)! }))
+  const viewers = incoming.viewers.map((item) => ({ ...stripLegacyTechniqueSlots(item), documentId: idMap.get(item.documentId)! }))
   const pageWork = (incoming.pageWork ?? []).map((item) => normalizePageWork({ ...item, documentId: idMap.get(item.documentId)! }))
   const charts = (incoming.charts ?? []).map((item) => {
     let id = item.id

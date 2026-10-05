@@ -2,16 +2,15 @@ import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent as Re
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import type { PDFDocumentProxy } from 'pdfjs-dist'
 import QrWorker from './qrDecode.worker?worker&inline'
-import { ArrowLeft, Bookmark, CaseSensitive, Check, Columns2, Eraser, Eye, EyeOff, Grid3X3, Hash, Highlighter, Minus, MousePointer2, Pencil, Plus, Redo2, SlidersHorizontal, Type, Undo2, X } from 'lucide-react'
+import { ArrowLeft, Bookmark, Check, Columns2, Eraser, Eye, EyeOff, Grid3X3, Hash, Highlighter, Minus, MousePointer2, Pencil, Plus, Redo2, SlidersHorizontal, Type, Undo2, X } from 'lucide-react'
 import yyLogo from './assets/yy-logo.png'
 import { PdfPage, PdfThumbnail } from './PdfPage'
 import { getDocument, getPageWork, getPages, getViewer, markOpened, renameDocument, savePageWork, saveViewer, setPageFlag, setPagesFlag } from './storage'
 import { openPdf, pdfErrorMessage } from './pdf'
 import KnittingReport from './KnittingReport'
-import type { AnnotationSettings, AnnotationStyle, AnnotationTool, ColorworkCreateRequest, ColorworkSettings, PageRecord, PageRotation, PageWorkRecord, PaneId, PaneSnapshot, ProgressSettings, TechniqueCropSlot, ViewerSnapshot } from './types'
+import type { AnnotationSettings, AnnotationStyle, AnnotationTool, ColorworkCreateRequest, ColorworkSettings, PageRecord, PageRotation, PageWorkRecord, PaneId, PaneSnapshot, ProgressSettings, ViewerSnapshot } from './types'
 import { defaultColorworkSettings, getColorworkDimensions, resizeColorworkGrid } from './colorwork'
 import { clampCounterValue, counterValueFromInput } from './counter'
-import { TechniqueDialog, TechniquePopover } from './Technique'
 import { extractPdfPageLinks, type PdfQrLink } from './qr'
 import { captureAndEnqueueQrPixels } from './qrCapture'
 import { PageWorkPersistence } from './pageWorkPersistence'
@@ -147,7 +146,7 @@ function HiddenPagesDialog({ pdf, documentId, records, onClose, onApply }: {
         </div>
         {pageList.length ? <div className="hidden-page-grid" ref={gridRef}>{pageList.map((page) => <PdfThumbnail
             key={page.pageNumber} pdf={pdf} pageNumber={page.pageNumber} active={false} hidden={page.hidden} bookmarked={page.bookmarked}
-            selected={selected.has(page.pageNumber)} disabled={isSaving} root={gridRef} onSelect={() => toggleSelection(page.pageNumber)}
+            selected={selected.has(page.pageNumber)} disabled={isSaving} renderEnabled={!page.hidden || tab === 'hidden'} root={gridRef} onSelect={() => toggleSelection(page.pageNumber)}
           />)}</div>
           : <div className="no-hidden-pages">숨긴 페이지가 없습니다.</div>}
         <div className="hidden-page-actions">
@@ -326,8 +325,6 @@ export default function Viewer() {
   const [colorworkEraser, setColorworkEraser] = useState(false)
   const [pageDialog, setPageDialog] = useState(false)
   const [progressDialog, setProgressDialog] = useState(false)
-  const [techniqueDialog, setTechniqueDialog] = useState(false)
-  const [techniquePopoverIndex, setTechniquePopoverIndex] = useState<number | null>(null)
   const [pdfLinksByPage, setPdfLinksByPage] = useState<Record<number, PdfQrLink[]>>({})
   const pdfLinkPagesRef = useRef(new Set<number>())
   const pdfLinkPendingRef = useRef(new Set<string>())
@@ -461,8 +458,6 @@ export default function Viewer() {
       qrSchedulerRef.current = qrScheduler
       setPdfLinksByPage({})
       setQrLinksByPage({})
-      setTechniqueDialog(false)
-      setTechniquePopoverIndex(null)
       workRef.current = {}
       pageWorkLoadRef.current.clear()
       historyRef.current.clear()
@@ -522,7 +517,6 @@ export default function Viewer() {
   const activeAnnotationStyle = tool === 'pen' || tool === 'line' || tool === 'highlight' || tool === 'text' ? annotationSettings[tool] : null
   const activeHistory = histories[activePage] ?? { actions: [], cursor: 0 }
   const activeWork = pageWorks[activePage] ?? blankWork(id, activePage)
-  const techniqueSlots = Array.from({ length: 10 }, (_, index) => snapshot?.techniqueSlots?.[index] ?? null)
   const activeColorworkGrid = activeWork.colorworkGrid ?? null
   const canUndo = activeHistory.cursor > 0
   const canRedo = activeHistory.cursor < activeHistory.actions.length
@@ -780,7 +774,6 @@ export default function Viewer() {
       splitInitialized: true,
       wideRatio: !current.split && !current.splitInitialized ? 0.5 : current.wideRatio,
       tallRatio: !current.split && !current.splitInitialized ? 0.5 : current.tallRatio,
-      activePane: 'primary',
       secondary: current.split || current.splitInitialized ? current.secondary : { ...current.secondary, page: current.primary.page, zoom: current.primary.zoom, centerX: current.primary.centerX, centerY: current.primary.centerY, rotations: { ...current.primary.rotations } },
     }), true)
   }
@@ -832,14 +825,6 @@ export default function Viewer() {
       const existing = current.annotationSettings ?? defaultAnnotationSettings
       return { ...current, annotationSettings: { ...existing, [toolId]: { ...existing[toolId], ...change } } }
     }, true)
-  }
-
-  function updateTechniqueSlot(index: number, slot: TechniqueCropSlot | null) {
-    const current = snapshotRef.current
-    if (!current) return
-    const slots = Array.from({ length: 10 }, (_, slotIndex) => current.techniqueSlots?.[slotIndex] ?? null)
-    slots[index] = slot
-    pushSnapshot({ ...current, techniqueSlots: slots }, true)
   }
 
   function applyColorworkSettings(settings: ColorworkSettings) {
@@ -921,7 +906,6 @@ export default function Viewer() {
         <div className="viewer-header-actions">
           {!reportMode && <>
             <button className={'viewer-action ' + (snapshot.split ? 'selected' : '')} onClick={toggleSplit}><Columns2 size={18} /><span>{snapshot.split ? '한 영역 보기' : '두 영역 보기'}</span></button>
-            <button className="viewer-action" onClick={() => setTechniqueDialog(true)}><CaseSensitive size={17} /><span>기법</span></button>
             <button className="viewer-action page-management-action" aria-label="숨기기" title="페이지 숨기기 및 복구" onClick={() => setPageDialog(true)}><EyeOff size={17} /><span>숨기기</span><span className="hidden-count">{pages.filter((page) => page.hidden).length}</span></button>
             <button className={'viewer-action ' + (isBookmarked ? 'selected' : '')} type="button" aria-label={isBookmarked ? '북마크 해제' : '북마크'} title={isBookmarked ? '북마크 해제' : '북마크'} aria-pressed={isBookmarked} onClick={() => void toggleBookmark()}><Bookmark size={17} fill={isBookmarked ? 'currentColor' : 'none'} /><span>북마크</span></button>
           </>}
@@ -934,8 +918,7 @@ export default function Viewer() {
           <div className="split-section" style={orientation === 'wide' ? { flex: '0 0 ' + splitBasis(displayedRatio) } : { width: '100%', flex: '0 0 ' + splitBasis(displayedRatio) }}>{renderPane('primary', snapshot.primary, snapshot.activePane === 'primary')}</div>
           <button className={'split-divider ' + orientation} aria-label="영역 크기 조정" onPointerDown={beginDivider} onPointerMove={moveDivider} onPointerUp={finishDivider} onPointerCancel={finishDivider} onLostPointerCapture={finishDivider}><span /></button>
           <div className="split-section split-section-secondary" style={orientation === 'wide' ? { flex: '0 0 ' + splitBasis(1 - displayedRatio) } : { width: '100%', flex: '0 0 ' + splitBasis(1 - displayedRatio) }}>{renderPane('secondary', snapshot.secondary, snapshot.activePane === 'secondary')}</div>
-        </> : renderPane('primary', snapshot.primary, true)}
-        {!reportMode && techniquePopoverIndex !== null && techniqueSlots[techniquePopoverIndex] && <TechniquePopover pdf={pdf} slots={techniqueSlots} slotIndex={techniquePopoverIndex} onNavigate={setTechniquePopoverIndex} onClose={() => setTechniquePopoverIndex(null)} />}
+        </> : renderPane(snapshot.activePane, snapshot[snapshot.activePane], true)}
         </div>
         {!reportMode && counterPanelVisible && <aside
           ref={counterPopoverRef}
@@ -1065,16 +1048,6 @@ export default function Viewer() {
         initial={activeColorworkGrid ?? defaultColorworkSettings}
         onClose={() => setColorworkDialog(false)}
         onApply={applyColorworkSettings}
-      />}
-      {techniqueDialog && <TechniqueDialog
-        pdf={pdf}
-        pages={pages}
-        slots={techniqueSlots}
-        initialPage={activePage}
-        onClose={() => setTechniqueDialog(false)}
-        onSave={updateTechniqueSlot}
-        onDelete={(index) => updateTechniqueSlot(index, null)}
-        onOpen={(index) => { setTechniqueDialog(false); setTechniquePopoverIndex(index) }}
       />}
     </main>
   )

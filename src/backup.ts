@@ -1,5 +1,5 @@
 import { strFromU8, strToU8, unzipSync, zipSync } from 'fflate'
-import type { AnnotationRecord, ChartDocument, ColorworkGrid, DocumentRecord, KnittingReport, PageRecord, PageWorkRecord, PreferenceRecord, TechniqueCropSlot, ViewerSnapshot } from './types'
+import type { AnnotationRecord, ChartDocument, ColorworkGrid, DocumentRecord, KnittingReport, PageRecord, PageWorkRecord, PreferenceRecord, ViewerSnapshot } from './types'
 import { normalizePageWork, readWorkspaceData, type WorkspaceData } from './storage'
 
 interface BackupDocument extends Omit<DocumentRecord, 'pdf' | 'cover'> {
@@ -26,17 +26,6 @@ function isObject(value: unknown): value is Record<string, unknown> {
 
 function isStringArray(value: unknown): value is string[] {
   return Array.isArray(value) && value.every((item) => typeof item === 'string')
-}
-
-function isTechniqueSlots(value: unknown, pageCount: number): value is (TechniqueCropSlot | null)[] {
-  return Array.isArray(value) && (value.length === 5 || value.length === 10) && value.every((slot) => {
-    if (slot === null) return true
-    if (!isObject(slot) || !Number.isSafeInteger(slot.pageNumber) || (slot.pageNumber as number) < 1 || (slot.pageNumber as number) > pageCount) return false
-    const { x, y, width, height } = slot
-    return [x, y, width, height].every(Number.isFinite) &&
-      (x as number) >= 0 && (y as number) >= 0 && (width as number) > 0 && (height as number) > 0 &&
-      (x as number) + (width as number) <= 1.000001 && (y as number) + (height as number) <= 1.000001
-  })
 }
 
 function isPaneRotations(value: unknown, pageCount: number) {
@@ -278,11 +267,12 @@ export async function readWorkspaceBackup(file: File): Promise<WorkspaceData> {
       !isPaneRotations(entry.secondary.rotations, pageCounts.get(entry.documentId)!) ||
       !Number.isFinite(entry.wideRatio) || !Number.isFinite(entry.tallRatio) || !Number.isFinite(entry.updatedAt) ||
       (entry.progressSettings !== undefined && !isProgressSettings(entry.progressSettings)) ||
-      (entry.annotationSettings !== undefined && !isAnnotationSettings(entry.annotationSettings)) ||
-      (entry.techniqueSlots !== undefined && !isTechniqueSlots(entry.techniqueSlots, pageCounts.get(entry.documentId)!))) {
+      (entry.annotationSettings !== undefined && !isAnnotationSettings(entry.annotationSettings))) {
       throw new Error('작업 파일에 올바르지 않은 뷰어 정보가 있습니다.')
     }
-    return entry as unknown as ViewerSnapshot
+    const viewer = { ...entry }
+    delete viewer.techniqueSlots
+    return viewer as unknown as ViewerSnapshot
   })
 
   const preferences = manifest.preferences.map((entry): PreferenceRecord => {
