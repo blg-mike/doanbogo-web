@@ -24,6 +24,7 @@ export class PdfPageRenderQueue {
     }
     if (this.active?.key === key) this.cancelJob(this.active)
     this.queued.push(job)
+    if (this.active && this.active.priority < 0 && priority >= 0) this.cancelJob(this.active)
     this.pump()
 
     return () => {
@@ -31,6 +32,11 @@ export class PdfPageRenderQueue {
       const index = this.queued.indexOf(job)
       this.cancelJob(job, index >= 0 ? index : undefined)
     }
+  }
+
+  setPriority(key: object, priority: number) {
+    if (this.active?.key === key) this.active.priority = priority
+    for (const job of this.queued) if (job.key === key) job.priority = priority
   }
 
   private cancelJob(job: PageRenderJob, queueIndex?: number) {

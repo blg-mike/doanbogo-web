@@ -24,7 +24,8 @@ type ColorworkTransform = {
 type ColorworkStroke = {
   pointerId: number
   before: PageWorkRecord
-  cells: ColorworkGrid['cells']
+  cells: Map<number, ColorworkCell | null>
+  originalCells: Map<number, ColorworkCell | null>
   previous: { column: number; row: number } | null
   changed: boolean
 }
@@ -387,7 +388,7 @@ export function PdfPage({ pdf, page, paneId, pane, splitView, rotation, active, 
   qrLinks: PdfQrLink[] | undefined
   onPageRendered: (pageNumber: number, canvas: HTMLCanvasElement) => void
   onActivate: () => void
-  onWorkChange: (work: PageWorkRecord, immediate: boolean, recordHistory?: boolean, historyBefore?: PageWorkRecord) => void
+  onWorkChange: (work: PageWorkRecord, immediate: boolean, recordHistory?: boolean, historyBefore?: PageWorkRecord, cellChanges?: { index: number; before: ColorworkCell | null; after: ColorworkCell | null }[]) => void
   onZoom: (zoom: number) => void
   onCenter: (x: number, y: number) => void
   onColorworkRequestHandled: (id: string) => void
@@ -403,6 +404,7 @@ export function PdfPage({ pdf, page, paneId, pane, splitView, rotation, active, 
   const colorworkPanelRef = useRef<HTMLDivElement>(null)
   const colorworkCanvasRef = useRef<HTMLCanvasElement>(null)
   const renderQueueKey = useRef<object>({})
+  const renderPriority = useRef(active ? 1 : 0)
   const displayCanvasKey = useRef<object>({})
   const stagingCanvasKey = useRef<object>({})
   const handledColorworkRequest = useRef<string | null>(null)
@@ -467,14 +469,27 @@ export function PdfPage({ pdf, page, paneId, pane, splitView, rotation, active, 
   }, [])
 
   useEffect(() => {
+    renderPriority.current = active ? 1 : 0
+    pdfPageRenderQueue.setPriority(renderQueueKey.current, renderPriority.current)
+  }, [active])
+
+  useEffect(() => {
     if (!size.width || !size.height) return
     const sequence = ++renderSequence.current
     let cancelled = false
     let timedOut = false
+    let renderStarted = false
     let renderTask: RenderTask | undefined
     let pendingPageRequest: Promise<PDFPageProxy> | null = null
     let renderSettled = false
     let timeoutId = 0
+    let queueTimeoutId = window.setTimeout(() => {
+      if (renderStarted || cancelled) return
+      timedOut = true
+      cancelQueuedRender?.()
+      cancelRender()
+      setRenderError({ key: renderKey, message: 'PDF 페이지 표시 요청이 20초 동안 대기했습니다. 다시 시도해 주세요.' })
+    }, 20000)
     let debounceId = 0
     let finishDebounce: (() => void) | undefined
     let cancelPending: (() => void) | undefined
@@ -487,6 +502,7 @@ export function PdfPage({ pdf, page, paneId, pane, splitView, rotation, active, 
     const cancelRender = () => {
       if (cancelled) return
       cancelled = true
+      window.clearTimeout(queueTimeoutId)
       window.clearTimeout(debounceId)
       finishDebounce?.()
       window.clearTimeout(timeoutId)
@@ -495,6 +511,8 @@ export function PdfPage({ pdf, page, paneId, pane, splitView, rotation, active, 
     }
     const runRender = async () => {
       if (cancelled || sequence !== renderSequence.current) return
+      renderStarted = true
+      window.clearTimeout(queueTimeoutId)
       releasePriority = prioritizePdfPageRender()
       const cancelledRender = Symbol('cancelled')
       const cancellationPromise = new Promise<typeof cancelledRender>((resolve) => {
@@ -606,6 +624,7 @@ export function PdfPage({ pdf, page, paneId, pane, splitView, rotation, active, 
         renderSettled = true
         if (cancelled && pendingPageRequest) await pendingPageRequest.catch(() => {})
         window.clearTimeout(timeoutId)
+        window.clearTimeout(queueTimeoutId)
         if (staging) clearCanvas(staging)
         viewerCanvasMemory.release(stagingCanvasKey.current)
         releasePriority?.()
@@ -619,19 +638,19 @@ export function PdfPage({ pdf, page, paneId, pane, splitView, rotation, active, 
         })
       }
       if (cancelled || sequence !== renderSequence.current) return
-      cancelQueuedRender = pdfPageRenderQueue.enqueue(renderQueueKey.current, runRender, cancelRender, active ? 1 : 0)
+      cancelQueuedRender = pdfPageRenderQueue.enqueue(renderQueueKey.current, runRender, cancelRender, renderPriority.current)
     })()
     return () => {
       cancelRender()
       cancelQueuedRender?.()
     }
-  }, [pdf, page, pane.zoom, rotation, size.width, size.height, retry, renderKey, splitView, active, resourcePolicy])
+  }, [pdf, page, pane.zoom, rotation, size.width, size.height, retry, renderKey, splitView, resourcePolicy])
 
   useEffect(() => {
     if (readyKey !== renderKey) return
     const canvas = canvasRef.current
     if (canvas) onPageRendered(page, canvas)
-  }, [pageLinks, qrLinks, readyKey, renderKey, page, active, onPageRendered])
+  }, [readyKey, renderKey, page, onPageRendered])
 
   useEffect(() => {
     const element = scrollRef.current
@@ -854,6 +873,10 @@ export function PdfPage({ pdf, page, paneId, pane, splitView, rotation, active, 
     }
   }
 
+  function sameColorworkCell(first: ColorworkCell | null | undefined, second: ColorworkCell | null | undefined) {
+    return first === second || Boolean(first && second && first.color === second.color && first.opacity === second.opacity)
+  }
+
   function paintColorworkSegment(stroke: ColorworkStroke, target: { column: number; row: number }, grid: ColorworkGrid, canvas: HTMLCanvasElement) {
     const previous = stroke.previous ?? target
     let column = previous.column
@@ -863,12 +886,13 @@ export function PdfPage({ pdf, page, paneId, pane, splitView, rotation, active, 
     const dy = -Math.abs(target.row - row)
     const sy = row < target.row ? 1 : -1
     let error = dx + dy
+    const nextCell: ColorworkCell | null = colorworkEraser ? null : { color: colorworkBrushColor, opacity: colorworkBrushOpacity }
     while (true) {
       const index = row * grid.columns + column
-      const nextCell: ColorworkCell | null = colorworkEraser ? null : { color: colorworkBrushColor, opacity: colorworkBrushOpacity }
-      const currentCell = stroke.cells[index]
-      if (JSON.stringify(currentCell) !== JSON.stringify(nextCell)) {
-        stroke.cells[index] = nextCell
+      const currentCell = (stroke.cells.has(index) ? stroke.cells.get(index) : grid.cells[index]) ?? null
+      if (!sameColorworkCell(currentCell, nextCell)) {
+        if (!stroke.originalCells.has(index)) stroke.originalCells.set(index, currentCell)
+        stroke.cells.set(index, nextCell)
         stroke.changed = true
         drawColorworkCell(canvas, grid, column, row, nextCell)
       }
@@ -886,7 +910,7 @@ export function PdfPage({ pdf, page, paneId, pane, splitView, rotation, active, 
     event.preventDefault()
     event.stopPropagation()
     onActivate()
-    const stroke: ColorworkStroke = { pointerId: event.pointerId, before: work, cells: [...grid.cells], previous: null, changed: false }
+    const stroke: ColorworkStroke = { pointerId: event.pointerId, before: work, cells: new Map(), originalCells: new Map(), previous: null, changed: false }
     colorworkStroke.current = stroke
     event.currentTarget.setPointerCapture(event.pointerId)
     paintColorworkSegment(stroke, colorworkCellAt(event, grid), grid, event.currentTarget)
@@ -910,7 +934,15 @@ export function PdfPage({ pdf, page, paneId, pane, splitView, rotation, active, 
     if (!stroke.changed) return
     const grid = stroke.before.colorworkGrid
     if (!grid) return
-    onWorkChange({ ...stroke.before, colorworkGrid: { ...grid, cells: stroke.cells } }, true, true, stroke.before)
+    const changes = [...stroke.originalCells].flatMap(([index, before]) => {
+      const after = stroke.cells.get(index) ?? null
+      return sameColorworkCell(before, after) ? [] : [{ index, before, after }]
+    })
+    if (changes.length) {
+      const cells = [...grid.cells]
+      for (const change of changes) cells[change.index] = change.after
+      onWorkChange({ ...stroke.before, colorworkGrid: { ...grid, cells } }, false, true, stroke.before, changes)
+    }
   }
 
   function beginColorworkTransform(event: ReactPointerEvent<HTMLElement>, kind: ColorworkTransform['kind']) {

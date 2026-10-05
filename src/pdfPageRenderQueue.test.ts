@@ -67,4 +67,28 @@ describe('PDF page render queue', () => {
     expect(calls).toEqual(['active', 'other'])
     expect(calls).not.toContain('stale')
   })
+
+  it('yields an active background render to a viewer render without overlapping them', async () => {
+    const queue = new PdfPageRenderQueue()
+    const backgroundKey = {}
+    const viewerKey = {}
+    const background = deferred()
+    const calls: string[] = []
+    let cancelled = false
+
+    queue.enqueue(backgroundKey, async () => {
+      calls.push('background:start')
+      await background.promise
+      calls.push('background:end')
+    }, () => {
+      cancelled = true
+      background.resolve()
+    }, -1)
+    await Promise.resolve()
+    queue.enqueue(viewerKey, async () => { calls.push('viewer') }, vi.fn(), 1)
+
+    await vi.waitFor(() => expect(calls).toContain('viewer'))
+    expect(cancelled).toBe(true)
+    expect(calls).toEqual(['background:start', 'background:end', 'viewer'])
+  })
 })

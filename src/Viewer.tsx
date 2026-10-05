@@ -1,33 +1,35 @@
 import { useCallback, useEffect, useRef, useState, type FormEvent as ReactFormEvent, type MouseEvent as ReactMouseEvent, type PointerEvent as ReactPointerEvent, type UIEvent as ReactUIEvent } from 'react'
 import type { PDFDocumentProxy } from 'pdfjs-dist'
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
-import QrWorker from './qrDecode.worker?worker&inline'
 import { ArrowLeft, Bookmark, Check, ChevronDown, ChevronUp, Columns2, Eraser, Eye, EyeOff, Grid3X3, Hash, Highlighter, Minus, MousePointer2, Pencil, Plus, Redo2, RotateCw, Settings2, SlidersHorizontal, Type, Undo2, X } from 'lucide-react'
 import BrandLoading from './BrandLoading'
 import yyLogo from './assets/yy-logo.png'
 import { cancelThumbnailRenders, PdfPage, PdfThumbnail, setThumbnailRenderingPaused, waitForThumbnailQueueIdle } from './PdfPage'
-import { getDocument, getPageRecognition, getPageWork, getPages, getViewer, markOpened, renameDocument, savePageRecognition, savePageWork, saveViewer, setPageFlag, setPagesFlag } from './storage'
+import { getDocument, getPageRecognition, getPageWork, getPages, getViewer, markOpened, renameDocument, savePageWork, saveViewer, setPageFlag, setPagesFlag } from './storage'
 import { pdfPageRenderQueue } from './pdfPageRenderQueue'
 import { openPdf, pdfErrorMessage } from './pdf'
 import KnittingReport from './KnittingReport'
-import type { AnnotationSettings, AnnotationStyle, AnnotationTool, ColorworkCreateRequest, ColorworkSettings, CounterSnapshot, CounterTaskRule, PageRecord, PageRotation, PageWorkRecord, PaneId, PaneSnapshot, ProgressSettings, ViewerSnapshot } from './types'
+import type { AnnotationSettings, AnnotationStyle, AnnotationTool, ColorworkCreateRequest, ColorworkSettings, CounterSnapshot, CounterTaskRule, DocumentRecord, PageRecord, PageRotation, PageWorkRecord, PaneId, PaneSnapshot, ProgressSettings, ViewerSnapshot } from './types'
 import { defaultColorworkSettings, getColorworkDimensions, resizeColorworkGrid } from './colorwork'
 import { clampCounterValue, counterValueFromInput } from './counter'
 import { MAX_COUNTER_ROW, MAX_COUNTER_TASK_RULES, counterPatternState, counterTaskProgress, counterTaskKey, createCounterTaskRule, dueCounterTasks, normalizeCounterSnapshots, setCounterTaskOccurrences } from './smartCounter'
-import { extractPdfPageLinks, type PdfQrLink } from './qr'
-import { captureAndEnqueueQrPixels } from './qrCapture'
+import type { PdfQrLink } from './qr'
+import { withRecentPdfLinks } from './pdfRecognitionState'
+import { applyColorworkCellChanges, type ColorworkCellChange } from './colorworkHistory'
 import { PageWorkPersistence } from './pageWorkPersistence'
-import { QrScanScheduler } from './qrScanScheduler'
+import { enqueuePdfRecognition, releasePdfRecognitionViewer, subscribePdfRecognition, updatePdfRecognitionPageVisibility } from './pdfRecognition'
 import { getViewerResourcePolicy } from './pdfRenderResources'
 import { canHidePageSelection, compactPageThumbnails, completePageList, nextVisiblePageAfterHide, visiblePageRange } from './pageManagement'
 
 type Size = { width: number; height: number }
-type WorkAction = { before: PageWorkRecord; after: PageWorkRecord }
-type PageHistory = { actions: WorkAction[]; cursor: number }
+type WorkAction = { before?: PageWorkRecord; after?: PageWorkRecord; cellChanges?: ColorworkCellChange[] }
+type PageHistory = { actions: WorkAction[]; cursor: number; byteCosts: number[] }
 type CounterSessionState = { documentId: string; visible: boolean; activeIndex: number; expanded: boolean; editingIndex: number | null; draft: string; popoverPosition: CounterPopoverPosition | null; dismissedAlertKey: string | null; advanceConfirmation: boolean; historyExpanded: boolean }
 type CounterPopoverPosition = { x: number; y: number }
 type CounterPopoverDrag = { pointerId: number; offsetX: number; offsetY: number; width: number; height: number }
 const MAX_CACHED_PAGE_WORKS = getViewerResourcePolicy().cachedPageWorks
+const MAX_PAGE_HISTORY_ACTIONS = 30
+const MAX_PAGE_HISTORY_BYTES = getViewerResourcePolicy().tablet ? 8 * 1024 * 1024 : 32 * 1024 * 1024
 type ThumbnailSelection = { pages: number[]; anchor: number; lastPage: number }
 type ThumbnailTouchGesture = {
   pointerId: number
@@ -74,33 +76,34 @@ function splitBasis(ratio: number) {
   return 'calc(' + ratio * 100 + '% - ' + ratio * 14 + 'px)'
 }
 
+function estimatePageWorkBytes(work: PageWorkRecord) {
+  const gridBytes = (work.colorworkGrid?.cells.length ?? 0) * 8
+  const annotationBytes = work.annotations.reduce((sum, annotation) => sum + annotation.points.length * 16 + (annotation.text?.length ?? 0) * 2 + 96, 0)
+  const guideBytes = ((work.horizontalGuides?.length ?? 0) + (work.verticalGuides?.length ?? 0)) * 32
+  return gridBytes + annotationBytes + guideBytes + 256
+}
+
+function estimateHistoryActionBytes(action: WorkAction) {
+  if (action.cellChanges) return action.cellChanges.length * 48
+  return (action.before ? estimatePageWorkBytes(action.before) : 0) + (action.after ? estimatePageWorkBytes(action.after) : 0)
+}
+
 function cancelPageWorksFrame(frame: { current: number | undefined }) {
   if (frame.current === undefined) return
   cancelAnimationFrame(frame.current)
   frame.current = undefined
 }
 
-function invalidateQrScans(generation: { current: number }, pending: { current: Set<string> }) {
-  generation.current++
-  pending.current.clear()
-}
-
 interface ViewerPdfSession {
+  pdf: PDFDocumentProxy
   dispose: () => Promise<void>
-  scheduler: QrScanScheduler
   released: boolean
 }
 
 async function releaseViewerPdfSession(session: ViewerPdfSession) {
   if (session.released) return
   session.released = true
-  session.scheduler.dispose()
   await session.dispose()
-}
-
-function withRecentPageValue<T>(current: Record<number, T>, pageNumber: number, value: T, limit = 4): Record<number, T> {
-  const entries = Object.entries(current).filter(([page]) => Number(page) !== pageNumber)
-  return { ...Object.fromEntries(entries.slice(-(limit - 1))), [pageNumber]: value }
 }
 
 function rememberRecentPage<T>(cache: Map<number, T>, pageNumber: number, value: T, limit = 4) {
@@ -352,7 +355,6 @@ export default function Viewer() {
   const initializedDocumentRef = useRef('')
   const linkTasksRef = useRef(new Set<Promise<void>>())
   const pdfCleanupTasksRef = useRef(new Set<Promise<void>>())
-  const recognitionResolutionRef = useRef(new Map<number, number>())
   const thumbnailScrollRef = useRef(0)
   const thumbnailScrollTimerRef = useRef<number | undefined>(undefined)
   const [pdfOpenCycle, setPdfOpenCycle] = useState(0)
@@ -413,13 +415,10 @@ export default function Viewer() {
   const [progressDialog, setProgressDialog] = useState(false)
   const [pdfLinksByPage, setPdfLinksByPage] = useState<Record<number, PdfQrLink[]>>({})
   const pdfLinkPagesRef = useRef(new Map<number, true>())
-  const pdfLinkPendingRef = useRef(new Set<string>())
   const recognitionLoadPendingRef = useRef(new Set<string>())
   const [qrLinksByPage, setQrLinksByPage] = useState<Record<number, PdfQrLink[]>>({})
   const qrLinksRef = useRef(new Map<number, PdfQrLink[]>())
-  const qrScanPendingRef = useRef(new Set<string>())
-  const qrDocumentGenerationRef = useRef(0)
-  const qrSchedulerRef = useRef<QrScanScheduler | null>(null)
+  const recognitionRecordRef = useRef<Pick<DocumentRecord, 'id' | 'pageCount' | 'pdf'> | null>(null)
   const [loading, setLoading] = useState(true)
   const [loadError, setLoadError] = useState<{ id: string; message: string } | null>(null)
   const [splitPreview, setSplitPreview] = useState<number | null>(null)
@@ -525,76 +524,59 @@ export default function Viewer() {
   }, [flushPendingPageWorks, saveViewerWithNotice])
 
   const updateHistory = useCallback((page: number, history: PageHistory) => {
+    historyRef.current.delete(page)
     historyRef.current.set(page, history)
-    setHistories((current) => ({ ...current, [page]: history }))
+    const totalBytes = () => [...historyRef.current.values()].reduce((sum, value) => sum + value.byteCosts.reduce((pageSum, bytes) => pageSum + bytes, 0), 0)
+    while (totalBytes() > MAX_PAGE_HISTORY_BYTES && historyRef.current.size) {
+      const oldest = historyRef.current.entries().next().value as [number, PageHistory] | undefined
+      if (!oldest) break
+      const [oldestPage, oldestHistory] = oldest
+      const actions = oldestHistory.actions.slice(1)
+      const byteCosts = oldestHistory.byteCosts.slice(1)
+      if (!actions.length) historyRef.current.delete(oldestPage)
+      else historyRef.current.set(oldestPage, { actions, byteCosts, cursor: Math.max(0, oldestHistory.cursor - 1) })
+    }
+    setHistories(Object.fromEntries(historyRef.current))
   }, [])
 
-  const onPageRendered = useCallback((pageNumber: number, source: HTMLCanvasElement) => {
-    const generation = qrDocumentGenerationRef.current
-    const scanKey = generation + ':' + pageNumber
-    if (!pdf || viewerLifecycleRef.current !== 'active' || recognitionLoadPendingRef.current.has(scanKey)) return
+  const onPageRendered = useCallback((pageNumber: number) => {
+    const scanKey = id + ':' + pageNumber
+    const hasPdfLinks = pdfLinkPagesRef.current.has(pageNumber)
+    const hasQrLinks = qrLinksRef.current.has(pageNumber)
+    if (viewerLifecycleRef.current !== 'active' || hasPdfLinks && hasQrLinks || recognitionLoadPendingRef.current.has(scanKey)) return
     recognitionLoadPendingRef.current.add(scanKey)
     const task = (async () => {
       const storedRecognition = await getPageRecognition(id, pageNumber).catch(() => undefined)
       const cached = storedRecognition?.version === 1 ? storedRecognition : undefined
-      if (generation !== qrDocumentGenerationRef.current || viewerLifecycleRef.current !== 'active') return
+      if (viewerLifecycleRef.current !== 'active') return
 
-      if (cached?.pdfLinksDone) {
+      if (!hasPdfLinks && cached?.pdfLinksDone) {
         rememberRecentPage(pdfLinkPagesRef.current, pageNumber, true)
-        setPdfLinksByPage((current) => withRecentPageValue(current, pageNumber, cached.pdfLinks))
-      } else if (!pdfLinkPagesRef.current.has(pageNumber) && !pdfLinkPendingRef.current.has(scanKey)) {
-        pdfLinkPendingRef.current.add(scanKey)
-        try {
-          const pageProxy = await pdf.getPage(pageNumber)
-          const [annotations, content] = await Promise.all([
-            pageProxy.getAnnotations({ intent: 'display' }),
-            pageProxy.getTextContent(),
-          ])
-          const textRuns = content.items.flatMap((item) => 'str' in item ? [item] : [])
-          const links = extractPdfPageLinks(annotations, textRuns, pageProxy.getViewport({ scale: 1 }))
-          if (generation === qrDocumentGenerationRef.current && viewerLifecycleRef.current === 'active') {
-            rememberRecentPage(pdfLinkPagesRef.current, pageNumber, true)
-            setPdfLinksByPage((current) => withRecentPageValue(current, pageNumber, links))
-            void savePageRecognition(id, pageNumber, { pdfLinksDone: true, pdfLinks: links }).catch(() => {})
-          }
-        } catch {
-          // A canceled or failed page read remains uncached and can be retried.
-        } finally {
-          pdfLinkPendingRef.current.delete(scanKey)
-        }
+        setPdfLinksByPage((current) => withRecentPdfLinks(current, pageNumber, cached.pdfLinks))
       }
 
-      if (cached?.qrLinksDone) {
+      if (!hasQrLinks && cached?.qrLinksDone) {
         rememberRecentPage(qrLinksRef.current, pageNumber, cached.qrLinks)
-        rememberRecentPage(recognitionResolutionRef.current, pageNumber, cached.qrInputMaxDimension)
-        setQrLinksByPage((current) => withRecentPageValue(current, pageNumber, cached.qrLinks))
-      }
-
-      const previousLinks = qrLinksRef.current.get(pageNumber)
-      const previousResolution = recognitionResolutionRef.current.get(pageNumber) ?? 0
-      const sourceResolution = Math.max(source.width, source.height)
-      const needsQrScan = previousLinks === undefined || (!previousLinks.length && previousResolution < 1400 && sourceResolution > previousResolution)
-      if (!needsQrScan || qrScanPendingRef.current.has(scanKey)) return
-      qrScanPendingRef.current.add(scanKey)
-      try {
-        const result = captureAndEnqueueQrPixels({
-          generation,
-          pageNumber,
-          source,
-          getCurrentGeneration: () => qrDocumentGenerationRef.current,
-          getScheduler: () => qrSchedulerRef.current,
-          createCanvas: () => document.createElement('canvas'),
-        })
-        if (result !== 'submitted') qrScanPendingRef.current.delete(scanKey)
-      } catch {
-        qrScanPendingRef.current.delete(scanKey)
+        setQrLinksByPage((current) => withRecentPdfLinks(current, pageNumber, cached.qrLinks))
       }
     })().finally(() => {
       recognitionLoadPendingRef.current.delete(scanKey)
     })
     linkTasksRef.current.add(task)
     void task.finally(() => linkTasksRef.current.delete(task)).catch(() => {})
-  }, [id, pdf])
+  }, [id])
+
+  useEffect(() => subscribePdfRecognition((documentId, pageNumber, result) => {
+    if (documentId !== id || viewerLifecycleRef.current !== 'active') return
+    if (result.pdfLinksDone) {
+      rememberRecentPage(pdfLinkPagesRef.current, pageNumber, true)
+      setPdfLinksByPage((current) => withRecentPdfLinks(current, pageNumber, result.pdfLinks))
+    }
+    if (result.qrLinksDone) {
+      rememberRecentPage(qrLinksRef.current, pageNumber, result.qrLinks)
+      setQrLinksByPage((current) => withRecentPdfLinks(current, pageNumber, result.qrLinks))
+    }
+  }), [id])
 
   useEffect(() => {
     const linkTasks = linkTasksRef.current
@@ -610,6 +592,7 @@ export default function Viewer() {
     }
     let disposed = false
     let session: ViewerPdfSession | undefined
+    let recognitionPdf: PDFDocumentProxy | null = null
     void (async () => {
       const record = await getDocument(id)
       if (!record) throw new Error('이 PDF를 찾을 수 없습니다. 도안 목록에서 다시 열어 주세요.')
@@ -622,28 +605,13 @@ export default function Viewer() {
         await opened.dispose()
         return
       }
-      invalidateQrScans(qrDocumentGenerationRef, qrScanPendingRef)
+      recognitionPdf = opened.document
+      recognitionRecordRef.current = { id, pageCount: record.pageCount, pdf: record.pdf }
       pdfLinkPagesRef.current.clear()
-      pdfLinkPendingRef.current.clear()
       recognitionLoadPendingRef.current.clear()
       qrLinksRef.current.clear()
-      recognitionResolutionRef.current.clear()
-      const qrScheduler = new QrScanScheduler(
-        () => new QrWorker(),
-        (request, links) => {
-          qrScanPendingRef.current.delete(request.generation + ':' + request.pageNumber)
-          if (request.generation !== qrDocumentGenerationRef.current || viewerLifecycleRef.current !== 'active') return
-          rememberRecentPage(qrLinksRef.current, request.pageNumber, links)
-          rememberRecentPage(recognitionResolutionRef.current, request.pageNumber, request.inputMaxDimension ?? 0)
-          setQrLinksByPage((current) => withRecentPageValue(current, request.pageNumber, links))
-          void savePageRecognition(id, request.pageNumber, { qrLinksDone: true, qrLinks: links, qrInputMaxDimension: request.inputMaxDimension ?? 0 }).catch(() => {})
-        },
-        (request) => qrScanPendingRef.current.delete(request.generation + ':' + request.pageNumber),
-      )
-      qrScheduler.setActivePage(restored[restored.activePane].page)
-      session = { dispose: opened.dispose, scheduler: qrScheduler, released: false }
+      session = { pdf: opened.document, dispose: opened.dispose, released: false }
       pdfSessionRef.current = session
-      qrSchedulerRef.current = qrScheduler
       if (firstOpen) {
         workRef.current = {}
         pageWorkLoadRef.current.clear()
@@ -659,6 +627,7 @@ export default function Viewer() {
       setSnapshot(restored)
       snapshotRef.current = restored
       setPdf(opened.document)
+      enqueuePdfRecognition({ id, pageCount: record.pageCount, pdf: record.pdf }, opened.document)
       setLoadedId(id)
       initializedDocumentRef.current = id
       setLoadError(null)
@@ -681,9 +650,7 @@ export default function Viewer() {
     })
     return () => {
       disposed = true
-      invalidateQrScans(qrDocumentGenerationRef, qrScanPendingRef)
-      if (qrSchedulerRef.current === session?.scheduler) qrSchedulerRef.current = null
-      session?.scheduler.dispose()
+      const recognitionRelease = recognitionPdf ? releasePdfRecognitionViewer(id, recognitionPdf) : Promise.resolve()
       if (saveTimer.current !== undefined) window.clearTimeout(saveTimer.current)
       const current = snapshotRef.current
       if (current) void saveViewer(current)
@@ -691,6 +658,7 @@ export default function Viewer() {
       cancelPageWorksFrame(pageWorksFrameRef)
       if (session && !session.released) void (async () => {
         await Promise.allSettled([
+          recognitionRelease,
           ...linkTasks,
           ...pdfCleanupTasks,
           pdfPageRenderQueue.whenIdle(),
@@ -724,13 +692,14 @@ export default function Viewer() {
         saveFailed = true
       }
 
-      invalidateQrScans(qrDocumentGenerationRef, qrScanPendingRef)
-      qrSchedulerRef.current = null
-      pdfSessionRef.current?.scheduler.dispose()
-      await Promise.allSettled([...linkTasksRef.current, ...pdfCleanupTasksRef.current])
+      const session = pdfSessionRef.current
+      await Promise.allSettled([
+        ...(session ? [releasePdfRecognitionViewer(id, session.pdf)] : []),
+        ...linkTasksRef.current,
+        ...pdfCleanupTasksRef.current,
+      ])
       await Promise.allSettled([pdfPageRenderQueue.whenIdle(), waitForThumbnailQueueIdle()])
 
-      const session = pdfSessionRef.current
       if (session) await releaseViewerPdfSession(session)
       if (pdfSessionRef.current === session) pdfSessionRef.current = null
       if (cancelled) return
@@ -750,7 +719,7 @@ export default function Viewer() {
       }
     })
     return () => { cancelled = true }
-  }, [suspended, pageWorkPersistence, requestPdfResume])
+  }, [suspended, pageWorkPersistence, requestPdfResume, id])
 
   useEffect(() => {
     const handleVisibilityChange = () => {
@@ -816,7 +785,7 @@ export default function Viewer() {
   const progressSettings = snapshot?.progressSettings ?? defaultProgressSettings
   const annotationSettings = snapshot?.annotationSettings ?? defaultAnnotationSettings
   const activeAnnotationStyle = tool === 'pen' || tool === 'line' || tool === 'highlight' || tool === 'text' ? annotationSettings[tool] : null
-  const activeHistory = histories[activePage] ?? { actions: [], cursor: 0 }
+  const activeHistory = histories[activePage] ?? { actions: [], cursor: 0, byteCosts: [] }
   const activeWork = pageWorks[activePage] ?? blankWork(id, activePage)
   const activeZoom = snapshot ? snapshot[snapshot.activePane].zoom : 1
   const activeRotation = snapshot ? snapshot[snapshot.activePane].rotations?.[activePage] ?? activeWork.rotation ?? 0 : 0
@@ -846,10 +815,6 @@ export default function Viewer() {
       window.clearTimeout(timer)
     }
   }, [pdf, suspended, primaryPage, secondaryPage, isSplit, tabletResourcePolicy, thumbnailCollapsed])
-
-  useEffect(() => {
-    qrSchedulerRef.current?.setActivePage(activePage)
-  }, [activePage])
 
   const trimPageWorkCache = useCallback(() => {
     if (pageWorkCacheTrimRef.current) return pageWorkCacheTrimRef.current
@@ -963,12 +928,12 @@ export default function Viewer() {
     setSavedCounterSession((current) => change(current.documentId === id ? current : createCounterSession(id)))
   }
 
-  function updateCounter(index: number, change: (current: CounterSnapshot) => CounterSnapshot) {
+  function updateCounter(index: number, change: (current: CounterSnapshot) => CounterSnapshot, immediate = true) {
     const current = snapshotRef.current
     if (!current) return
     const nextCounters = normalizeCounterSnapshots(current.counters)
     nextCounters[index] = change(nextCounters[index])
-    pushSnapshot({ ...current, counters: nextCounters }, true)
+    pushSnapshot({ ...current, counters: nextCounters }, immediate)
   }
 
   function adjustCounter(index: number, amount: number) {
@@ -977,7 +942,7 @@ export default function Viewer() {
       value: counter.mode === 'repeat'
         ? clampCounterValue(counter.value + amount, 1, MAX_COUNTER_ROW)
         : clampCounterValue(counter.value + amount),
-    }))
+    }), false)
     updateCounterSession((current) => ({ ...current, advanceConfirmation: false, dismissedAlertKey: null }))
   }
 
@@ -1093,16 +1058,24 @@ export default function Viewer() {
     })
   }
 
-  function setPageWork(work: PageWorkRecord, immediate: boolean, recordHistory = false, historyBefore?: PageWorkRecord) {
+  function setPageWork(work: PageWorkRecord, immediate: boolean, recordHistory = false, historyBefore?: PageWorkRecord, cellChanges?: ColorworkCellChange[]) {
     const current = workRef.current[work.pageNumber]
     if (!current) return
     touchPageWork(work.pageNumber)
-    if (recordHistory && JSON.stringify(historyBefore ?? current) !== JSON.stringify(work)) {
-      const state = historyRef.current.get(work.pageNumber) ?? { actions: [], cursor: 0 }
+    if (recordHistory) {
+      const before = historyBefore ?? current
+      const action: WorkAction = cellChanges?.length ? { cellChanges } : { before, after: work }
+      const state = historyRef.current.get(work.pageNumber) ?? { actions: [], cursor: 0, byteCosts: [] }
       const actions = state.actions.slice(0, state.cursor)
-      actions.push({ before: historyBefore ?? current, after: work })
-      if (actions.length > 100) actions.shift()
-      updateHistory(work.pageNumber, { actions, cursor: actions.length })
+      const byteCosts = state.byteCosts.slice(0, state.cursor)
+      const actionBytes = estimateHistoryActionBytes(action)
+      actions.push(action)
+      byteCosts.push(actionBytes)
+      while (actions.length > MAX_PAGE_HISTORY_ACTIONS) {
+        actions.shift()
+        byteCosts.shift()
+      }
+      updateHistory(work.pageNumber, { actions, cursor: actions.length, byteCosts })
     }
     workRef.current = { ...workRef.current, [work.pageNumber]: work }
     schedulePageWorksRender()
@@ -1113,13 +1086,26 @@ export default function Viewer() {
   }
 
   function undoRedo(direction: 'undo' | 'redo') {
-    const state = histories[activePage]
+    const state = historyRef.current.get(activePage)
     if (!state) return
     const nextCursor = direction === 'undo' ? state.cursor - 1 : state.cursor + 1
     const action = state.actions[direction === 'undo' ? state.cursor - 1 : state.cursor]
     if (!action) return
+    let nextWork: PageWorkRecord | undefined
+    if (action.cellChanges) {
+      const current = workRef.current[activePage]
+      const grid = current?.colorworkGrid
+      if (!current || !grid) return
+      nextWork = {
+        ...current,
+        colorworkGrid: { ...grid, cells: applyColorworkCellChanges(grid.cells, action.cellChanges, direction) },
+      }
+    } else {
+      nextWork = direction === 'undo' ? action.before : action.after
+    }
+    if (!nextWork) return
     updateHistory(activePage, { ...state, cursor: nextCursor })
-    setPageWork(direction === 'undo' ? action.before : action.after, true, false)
+    setPageWork(nextWork, true, false)
   }
 
   function stepPage(direction: -1 | 1) {
@@ -1341,7 +1327,9 @@ export default function Viewer() {
 
       const nextPages = completePageList(id, pdf.numPages, pages).map((page) => requestedPages.has(page.pageNumber) ? { ...page, hidden } : page)
       await setPagesFlag(id, requested, 'hidden', hidden)
+      updatePdfRecognitionPageVisibility(id, requested, hidden)
       setPages(nextPages)
+      if (!hidden && pdf && recognitionRecordRef.current) enqueuePdfRecognition(recognitionRecordRef.current, pdf, true)
       if (hidden) {
         setThumbnailSelection((current) => {
           if (!current) return null
