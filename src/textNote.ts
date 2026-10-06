@@ -5,6 +5,10 @@ export interface TextNoteBox {
   height: number
 }
 
+export function textNoteCounterRotation(rotation: number): number {
+  return (360 - rotation % 360) % 360
+}
+
 export function textNoteBoxAt(point: { x: number; y: number }): TextNoteBox {
   const width = 0.3
   const height = 0.12

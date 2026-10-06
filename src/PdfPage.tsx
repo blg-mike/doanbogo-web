@@ -4,7 +4,7 @@ import { Minus, Plus, Trash2 } from 'lucide-react'
 import BrandLoading from './BrandLoading'
 import type { AnnotationRecord, AnnotationStyle, AnnotationTool, ColorworkCell, ColorworkCreateRequest, ColorworkGrid, CounterSnapshot, PageRotation, PageWorkRecord, PaneId, PaneSnapshot, ProgressGuide, ProgressSettings } from './types'
 import { createColorworkGrid, resizeColorworkGridDisplay } from './colorwork'
-import { textNoteBoxAt } from './textNote'
+import { textNoteBoxAt, textNoteCounterRotation } from './textNote'
 import type { PdfQrLink } from './qr'
 import { rotatedPageSize } from './pageGeometry'
 import { displayRectToPageRect, focusRowSpacing, guidePositionForRotation, pageRectToDisplayRect } from './focusGeometry'
@@ -478,6 +478,7 @@ export function PdfPage({ pdf, page, paneId, pane, splitView, rotation, active, 
   const currentWorkRef = useRef(work)
   const [selectedNoteId, setSelectedNoteId] = useState<string | null>(null)
   const [editingNoteId, setEditingNoteId] = useState<string | null>(null)
+  const [textDraft, setTextDraft] = useState<{ id: string; value: string } | null>(null)
   const [textPreviewPoint, setTextPreviewPoint] = useState<Point | null>(null)
   const [textToolbarPosition, setTextToolbarPosition] = useState<Point | null>(null)
   const [fontSizeDraft, setFontSizeDraft] = useState<{ id: string; value: string } | null>(null)
@@ -874,8 +875,9 @@ export function PdfPage({ pdf, page, paneId, pane, splitView, rotation, active, 
     let top = noteRect.top - layerRect.top - toolbarRect.height - 8
     if (top < 0) top = noteRect.bottom - layerRect.top + 8
     top = Math.min(Math.max(0, top), Math.max(0, layerRect.height - toolbarRect.height))
-    setTextToolbarPosition({ x: left, y: top })
-  }, [active, selectedNoteId, displayedSize, work])
+    const localCenter = pointFromEvent({ clientX: layerRect.left + left + toolbarRect.width / 2, clientY: layerRect.top + top + toolbarRect.height / 2 }, layer, rotation)
+    setTextToolbarPosition({ x: localCenter.x * layer.clientWidth - toolbar.offsetWidth / 2, y: localCenter.y * layer.clientHeight - toolbar.offsetHeight / 2 })
+  }, [active, selectedNoteId, displayedSize, rotation, work])
 
   function pointerDown(event: ReactPointerEvent<HTMLDivElement>) {
     const target = event.target
@@ -1005,6 +1007,7 @@ export function PdfPage({ pdf, page, paneId, pane, splitView, rotation, active, 
       boxWidth: box.width, boxHeight: box.height, style: { ...annotationStyle },
     }
     textEditBefore.current.set(id, before)
+    setTextDraft({ id, value: '' })
     setSelectedNoteId(id)
     setEditingNoteId(id)
     setTextPreviewPoint(null)
@@ -1248,13 +1251,15 @@ export function PdfPage({ pdf, page, paneId, pane, splitView, rotation, active, 
   }, [createColorworkRequest, displayedSize, paneId, page, rotation, work, onActivate, onWorkChange, onColorworkRequestHandled])
 
   function updateText(id: string, value: string) {
+    const text = value.slice(0, 500)
+    setTextDraft({ id, value: text })
     const current = currentWorkRef.current
     const before = textEditBefore.current.get(id) ?? current
     textEditBefore.current.set(id, before)
     const next = {
       ...current,
       annotations: current.annotations.map((annotation) => annotation.id === id
-        ? { ...withTextBox(annotation, displayedSize?.page.height ?? 1), text: value.slice(0, 500) }
+        ? { ...withTextBox(annotation, displayedSize?.page.height ?? 1), text }
         : annotation),
     }
     currentWorkRef.current = next
@@ -1267,6 +1272,7 @@ export function PdfPage({ pdf, page, paneId, pane, splitView, rotation, active, 
     const current = currentWorkRef.current
     const annotation = current.annotations.find((item) => item.id === id)
     if (!annotation) {
+      setTextDraft((draft) => draft?.id === id ? null : draft)
       setEditingNoteId((active) => active === id ? null : active)
       return
     }
@@ -1277,6 +1283,7 @@ export function PdfPage({ pdf, page, paneId, pane, splitView, rotation, active, 
     currentWorkRef.current = next
     onWorkChange(next, true, true, before ?? current)
     textEditBefore.current.delete(id)
+    setTextDraft((draft) => draft?.id === id ? null : draft)
     setEditingNoteId((active) => active === id ? null : active)
     if (!annotation.text?.trim()) setSelectedNoteId((active) => active === id ? null : active)
   }
@@ -1318,6 +1325,7 @@ export function PdfPage({ pdf, page, paneId, pane, splitView, rotation, active, 
       onWorkChange(before, true, false)
     }
     textEditBefore.current.delete(id)
+    setTextDraft((draft) => draft?.id === id ? null : draft)
     setSelectedNoteId((active) => active === id ? null : active)
     setEditingNoteId((active) => active === id ? null : active)
   }
@@ -1700,7 +1708,7 @@ export function PdfPage({ pdf, page, paneId, pane, splitView, rotation, active, 
             <div className="annotation-layer" ref={annotationLayerRef} style={{ width: cssSize.width, height: cssSize.height }}>
               {tool === 'text' && textPreviewPoint && (() => {
                 const box = textNoteBoxAt(textPreviewPoint)
-                return <div className="note-preview" aria-hidden="true" style={{ left: box.x * cssSize.width, top: box.y * cssSize.height, width: box.width * cssSize.width, height: box.height * cssSize.height, fontSize: annotationStyle.fontSize * cssSize.width / pageSize.width }}>텍스트 입력</div>
+                return <div className="note-preview" aria-hidden="true" style={{ left: box.x * cssSize.width, top: box.y * cssSize.height, width: box.width * cssSize.width, height: box.height * cssSize.height, fontSize: annotationStyle.fontSize * cssSize.width / pageSize.width, transform: 'rotate(' + textNoteCounterRotation(rotation) + 'deg)' }}>텍스트 입력</div>
               })()}
               {work.annotations.filter((annotation) => annotation.type === 'text').map((annotation) => {
                 const box = textBox(annotation, pageSize.height)
@@ -1712,7 +1720,7 @@ export function PdfPage({ pdf, page, paneId, pane, splitView, rotation, active, 
                   className={'page-note ' + (selected ? 'selected' : '') + (editing ? ' editing' : '')}
                   role="group"
                   aria-label="페이지 노트"
-                  style={{ left: box.x * cssSize.width, top: box.y * cssSize.height, width: box.width * cssSize.width, height: box.height * cssSize.height, color: annotation.style.color, fontSize }}
+                  style={{ left: box.x * cssSize.width, top: box.y * cssSize.height, width: box.width * cssSize.width, height: box.height * cssSize.height, color: annotation.style.color, fontSize, transform: 'rotate(' + textNoteCounterRotation(rotation) + 'deg)' }}
                   onPointerDown={(event) => {
                     event.stopPropagation()
                     onActivate()
@@ -1720,6 +1728,7 @@ export function PdfPage({ pdf, page, paneId, pane, splitView, rotation, active, 
                     if (event.target instanceof Element && event.target.closest('textarea')) return
                     if (tool === 'text') {
                       if (!textEditBefore.current.has(annotation.id)) textEditBefore.current.set(annotation.id, currentWorkRef.current)
+                      setTextDraft({ id: annotation.id, value: annotation.text ?? '' })
                       setEditingNoteId(annotation.id)
                     } else {
                       setEditingNoteId(null)
@@ -1738,7 +1747,7 @@ export function PdfPage({ pdf, page, paneId, pane, splitView, rotation, active, 
                       autoFocus
                       maxLength={500}
                       placeholder="여기에 텍스트 입력"
-                      value={annotation.text ?? ''}
+                      value={textDraft?.id === annotation.id ? textDraft.value : annotation.text ?? ''}
                       onFocus={() => {
                         suppressTextBlur.current.delete(annotation.id)
                         if (!textEditBefore.current.has(annotation.id)) textEditBefore.current.set(annotation.id, work)
@@ -1760,7 +1769,7 @@ export function PdfPage({ pdf, page, paneId, pane, splitView, rotation, active, 
                   className="text-style-toolbar"
                   role="toolbar"
                   aria-label="선택한 텍스트 설정"
-                  style={textToolbarPosition ? { left: textToolbarPosition.x, top: textToolbarPosition.y } : { left: 0, top: 0, visibility: 'hidden' }}
+                  style={textToolbarPosition ? { left: textToolbarPosition.x, top: textToolbarPosition.y, transform: 'rotate(' + textNoteCounterRotation(rotation) + 'deg)' } : { left: 0, top: 0, visibility: 'hidden', transform: 'rotate(' + textNoteCounterRotation(rotation) + 'deg)' }}
                   onPointerDown={(event) => event.stopPropagation()}
                 >
                   <label className="text-style-size" title="글자 크기">
