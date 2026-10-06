@@ -7,6 +7,7 @@ import { createColorworkGrid, resizeColorworkGridDisplay } from './colorwork'
 import { textNoteBoxAt } from './textNote'
 import type { PdfQrLink } from './qr'
 import { rotatedPageSize } from './pageGeometry'
+import { displayRectToPageRect, focusRowSpacing, guidePositionForRotation, pageRectToDisplayRect } from './focusGeometry'
 import { clientPointForPagePosition, classifyWheelInput, isEditableTarget, pagePositionAtClientPoint, scrollOffsetForZoomFocus, wheelActionForBurst, wheelZoom, type WheelInput, type ZoomFocus } from './viewerInteraction'
 import { acquireThumbnailCache, getViewerResourcePolicy, pdfRasterScale, releaseCanvasWhenSettled, viewerCanvasMemory } from './pdfRenderResources'
 import { pdfPageRenderQueue } from './pdfPageRenderQueue'
@@ -353,17 +354,18 @@ function guidesFor(work: PageWorkRecord, axis: 'horizontal' | 'vertical'): Progr
   }]
 }
 
-function counterRowAtGuidePosition(guide: ProgressGuide, position: number, counter?: CounterSnapshot) {
+function counterRowAtGuidePosition(guide: ProgressGuide, position: number, rotation: PageRotation, counter?: CounterSnapshot) {
   const region = guide.chartRegion
   if (!region) return null
   const rowCount = Math.max(1, region.lastRow - region.firstRow + 1)
+  const display = region.rowLayout ? { y: region.rowLayout.top, height: region.rowLayout.height } : pageRectToDisplayRect(region, rotation)
   let closestIndex = 0
   let closestDistance = Number.POSITIVE_INFINITY
   for (let index = 0; index < rowCount; index++) {
     const fraction = rowCount < 2 ? 0 : index / (rowCount - 1)
     const candidate = region.rowPositions?.length === rowCount
       ? region.rowPositions[index]
-      : region.y + region.height * (region.direction === 'bottom-to-top' ? 1 - fraction : fraction)
+      : display.y + display.height * (region.direction === 'bottom-to-top' ? 1 - fraction : fraction)
     const distance = Math.abs(candidate - position)
     if (distance < closestDistance) { closestDistance = distance; closestIndex = index }
   }
@@ -1507,7 +1509,7 @@ export function PdfPage({ pdf, page, paneId, pane, splitView, rotation, active, 
     const position = drag.axis === 'horizontal' ? point.y : point.x
     const guide = guidesFor(currentWorkRef.current, drag.axis).find((item) => item.id === drag.id)
     if (guide?.linkedCounterId && drag.axis === 'horizontal' && guide.chartRegion) {
-      const nextRow = counterRowAtGuidePosition(guide, position, counters.find((counter) => counter.id === guide.linkedCounterId))
+      const nextRow = counterRowAtGuidePosition(guide, position, rotation, counters.find((counter) => counter.id === guide.linkedCounterId))
       setLinePositionPreview(null)
       setFocusDragging(false)
       if (nextRow !== null && window.confirm((guide.name ?? '연결된 카운터') + '를 ' + nextRow + '단으로 이동할까요?')) onCounterGuideMove(guide.linkedCounterId, nextRow)
@@ -1542,22 +1544,41 @@ export function PdfPage({ pdf, page, paneId, pane, splitView, rotation, active, 
   const colorworkRowFontSize = Math.min(10, Math.max(1, colorworkRowCellHeight * 0.72))
   const horizontalGuides = guidesFor(work, 'horizontal')
   const verticalGuides = guidesFor(work, 'vertical')
-  const quarterTurn = rotation === 90 || rotation === 270
-  const visibleHorizontalGuides = quarterTurn ? horizontalGuides.filter((guide) => !guide.linkedCounterId) : horizontalGuides
-  const visibleVerticalGuides = quarterTurn ? verticalGuides.filter((guide) => !guide.linkedCounterId) : verticalGuides
-  const focusGuides = quarterTurn ? [] : horizontalGuides.filter((guide) => guide.focus?.enabled).map((guide) => linePositionPreview?.id === guide.id && focusDragging ? { ...guide, position: linePositionPreview.position } : guide)
+  const displayGuide = (guide: ProgressGuide) => {
+    if (linePositionPreview?.id === guide.id) return { ...guide, position: linePositionPreview.position }
+    if (!guide.linkedCounterId) return guide
+    const counter = counters.find((item) => item.id === guide.linkedCounterId)
+    if (!counter) return guide
+    const row = counter.kind === 'simple' ? counter.value : counter.currentRow ?? 1
+    return { ...guide, position: guidePositionForRotation(guide, row, rotation) }
+  }
+  const visibleHorizontalGuides = horizontalGuides.map(displayGuide)
+  const visibleVerticalGuides = verticalGuides.map(displayGuide)
+  const focusGuides = visibleHorizontalGuides.filter((guide) => guide.focus?.enabled)
   const focusSignature = JSON.stringify(focusGuides.map((guide) => [guide.id, guide.position, guide.focus, guide.chartRegion]))
-  const focusBands = focusGuides.map((guide) => {
+  const focusBandRects = focusGuides.map((guide) => {
     const focus = guide.focus!
-    const count = guide.chartRegion ? Math.max(1, guide.chartRegion.lastRow - guide.chartRegion.firstRow + 1) : 0
-    const spacing = count > 1 && guide.chartRegion ? guide.chartRegion.height / (count - 1) : focus.rowSpacing
-    const center = rotation === 180 ? 1 - guide.position : guide.position
+    const region = guide.chartRegion
+    const displayRegion = region ? pageRectToDisplayRect(region, rotation) : undefined
+    const spacing = focusRowSpacing(region, focus.rowSpacing, rotation)
     const half = Math.max(0.002, spacing * (focus.range * 2 + 1) / 2)
-    return [Math.max(0, center - half), Math.min(1, center + half)] as const
-  }).sort((first, second) => first[0] - second[0])
+    const top = Math.max(0, guide.position - half)
+    const bottom = Math.min(1, guide.position + half)
+    const x = focus.scope === 'region' && displayRegion ? displayRegion.x : 0
+    const width = focus.scope === 'region' && displayRegion ? displayRegion.width : 1
+    return displayRectToPageRect({ x, y: top, width, height: Math.max(0, bottom - top) }, rotation)
+  })
+  const focusAxis = rotation === 90 || rotation === 270 ? 'x' : 'y'
+  const focusIntervals = focusBandRects.map((rect) => focusAxis === 'x' ? [rect.x, rect.x + rect.width] as const : [rect.y, rect.y + rect.height] as const).sort((first, second) => first[0] - second[0])
+  const mergedFocusIntervals: [number, number][] = []
+  for (const [start, end] of focusIntervals) {
+    const previous = mergedFocusIntervals[mergedFocusIntervals.length - 1]
+    if (previous && start <= previous[1]) previous[1] = Math.max(previous[1], end)
+    else mergedFocusIntervals.push([start, end])
+  }
   const fallbackMaskStops = ['#000 0%']
   let maskCursor = 0
-  for (const [start, end] of focusBands) {
+  for (const [start, end] of mergedFocusIntervals) {
     const startPercent = start * 100
     const endPercent = end * 100
     if (startPercent > maskCursor) fallbackMaskStops.push('#000 ' + maskCursor + '%', 'transparent ' + startPercent + '%')
@@ -1568,10 +1589,10 @@ export function PdfPage({ pdf, page, paneId, pane, splitView, rotation, active, 
   if (maskCursor < 100) fallbackMaskStops.push('#000 100%')
   const fallbackRegions = focusGuides.filter((guide) => guide.focus?.scope === 'region' && guide.chartRegion).map((guide) => guide.chartRegion!)
   const fallbackClipPath = focusGuides.some((guide) => guide.focus?.scope === 'page') || !fallbackRegions.length ? undefined : (() => {
-    const left = Math.min(...fallbackRegions.map((region) => rotation === 180 ? 1 - region.x - region.width : region.x))
-    const top = Math.min(...fallbackRegions.map((region) => rotation === 180 ? 1 - region.y - region.height : region.y))
-    const right = Math.max(...fallbackRegions.map((region) => rotation === 180 ? 1 - region.x : region.x + region.width))
-    const bottom = Math.max(...fallbackRegions.map((region) => rotation === 180 ? 1 - region.y : region.y + region.height))
+    const left = Math.min(...fallbackRegions.map((region) => region.x))
+    const top = Math.min(...fallbackRegions.map((region) => region.y))
+    const right = Math.max(...fallbackRegions.map((region) => region.x + region.width))
+    const bottom = Math.max(...fallbackRegions.map((region) => region.y + region.height))
     return 'inset(' + top * 100 + '% ' + (1 - right) * 100 + '% ' + (1 - bottom) * 100 + '% ' + left * 100 + '%)'
   })()
   const currentDraft: AnnotationRecord | null = draft.length ? {
@@ -1618,25 +1639,17 @@ export function PdfPage({ pdf, page, paneId, pane, splitView, rotation, active, 
           if (regions.length) {
             context.globalCompositeOperation = 'destination-in'
             context.fillStyle = '#fff'
+            context.beginPath()
             regions.forEach((region) => {
-              const x = rotation === 180 ? 1 - region.x - region.width : region.x
-              const y = rotation === 180 ? 1 - region.y - region.height : region.y
-              context.fillRect(x * width, y * height, region.width * width, region.height * height)
+              context.rect(region.x * width, region.y * height, region.width * width, region.height * height)
             })
+            context.fill()
             context.globalCompositeOperation = 'source-over'
           }
         }
         context.globalCompositeOperation = 'destination-out'
-        focusGuides.forEach((guide) => {
-          const focus = guide.focus!
-          const region = guide.chartRegion
-          const rowCount = region ? Math.max(1, region.lastRow - region.firstRow + 1) : 0
-          const spacing = rowCount > 1 && region ? region.height / (rowCount - 1) : focus.rowSpacing
-          const center = rotation === 180 ? 1 - guide.position : guide.position
-          const bandHeight = Math.max(2 / height, spacing * (focus.range * 2 + 1))
-          const regionX = focus.scope === 'region' && region ? (rotation === 180 ? 1 - region.x - region.width : region.x) : 0
-          const regionWidth = focus.scope === 'region' && region ? region.width : 1
-          context.fillRect(regionX * width, Math.max(0, center - bandHeight / 2) * height, regionWidth * width, Math.min(1, bandHeight) * height)
+        focusBandRects.forEach((rect) => {
+          context.fillRect(rect.x * width, rect.y * height, rect.width * width, rect.height * height)
         })
         context.globalCompositeOperation = 'source-over'
         if (!focusDragging && !focusFallback) {
@@ -1660,14 +1673,13 @@ export function PdfPage({ pdf, page, paneId, pane, splitView, rotation, active, 
   return (
     <div className={'pdf-pane ' + (active ? 'is-active' : '')} onPointerDown={onActivate}>
       <div className="pane-label">{active ? '현재 작업 영역' : '보조 영역'}</div>
-      {quarterTurn && [...horizontalGuides, ...verticalGuides].some((guide) => guide.linkedCounterId || guide.focus?.enabled) && <div className="progress-rotation-notice" role="status">90°·270° 회전 중에는 연결 진행선과 집중 보기를 잠시 멈춥니다.</div>}
       <div className="pdf-scroll-area" ref={scrollRef} onScroll={recordCenter} onPointerDown={pointerDown} onPointerMove={pointerMove} onPointerUp={pointerEnd} onPointerCancel={pointerEnd} onDoubleClick={doubleTap}>
         <div className="pdf-page-wrap" style={pageWrapStyle}>
           <div ref={rotationLayerRef} className="pdf-rotation-content" style={cssSize ? { width: cssSize.width, height: cssSize.height, transform: 'rotate(' + rotation + 'deg) scale(' + zoomPreviewScale + ')' } : undefined}>
           <div className="pdf-image-layer" style={cssSize ? { width: cssSize.width, height: cssSize.height } : undefined}>
             <canvas ref={canvasRef} aria-label={'PDF ' + page + '페이지'} />
             <canvas ref={focusCanvasRef} className="pdf-focus-overlay" aria-hidden="true" />
-            {focusCanvasUnavailable && focusGuides.length > 0 && <div className="pdf-focus-dim-fallback" aria-hidden="true" style={{ maskImage: 'linear-gradient(to bottom, ' + fallbackMaskStops.join(', ') + ')', WebkitMaskImage: 'linear-gradient(to bottom, ' + fallbackMaskStops.join(', ') + ')', clipPath: fallbackClipPath }} />}
+            {focusCanvasUnavailable && focusGuides.length > 0 && <div className="pdf-focus-dim-fallback" aria-hidden="true" style={{ maskImage: 'linear-gradient(to ' + (focusAxis === 'x' ? 'right' : 'bottom') + ', ' + fallbackMaskStops.join(', ') + ')', WebkitMaskImage: 'linear-gradient(to ' + (focusAxis === 'x' ? 'right' : 'bottom') + ', ' + fallbackMaskStops.join(', ') + ')', clipPath: fallbackClipPath }} />}
             {pageSize && cssSize && <>
             <svg
                 className={'pdf-svg-overlay ' + (tool === 'pan' ? 'pan-mode' : tool === 'text' ? 'text-mode' : 'draw-mode')}

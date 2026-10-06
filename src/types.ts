@@ -36,6 +36,7 @@ export interface ProgressChartRegion {
   repeat: boolean
   direction: 'top-to-bottom' | 'bottom-to-top'
   rowPositions?: number[]
+  rowLayout?: { top: number; height: number }
 }
 
 export interface ProgressFocusSettings {
