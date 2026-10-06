@@ -1668,6 +1668,12 @@ export default function Viewer() {
         <div id={thumbnailContentId} className="thumbnail-content" hidden={thumbnailCollapsed}>
         {!thumbnailCollapsed && <>
         <div className="page-thumbnail-strip" aria-label="모든 페이지 썸네일" ref={thumbnailRailRef} onScroll={handleThumbnailScroll}
+          onWheel={(event) => {
+            if (event.ctrlKey || Math.abs(event.deltaX) >= Math.abs(event.deltaY)) return
+            const rail = event.currentTarget
+            const delta = event.deltaY * (event.deltaMode === 1 ? 16 : event.deltaMode === 2 ? rail.clientWidth : 1)
+            rail.scrollLeft += delta
+          }}
           onPointerDown={beginThumbnailMouseDrag} onPointerMove={moveThumbnailMouseDrag}
           onPointerUp={finishThumbnailMouseDrag} onPointerCancel={finishThumbnailMouseDrag} onLostPointerCapture={finishThumbnailMouseDrag}
           onDragStart={(event) => event.preventDefault()}
