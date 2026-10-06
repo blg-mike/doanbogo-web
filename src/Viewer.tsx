@@ -343,6 +343,7 @@ export default function Viewer() {
   const reportMode = searchParams.get('report') === '1'
   const areaRef = useRef<HTMLDivElement>(null)
   const thumbnailRailRef = useRef<HTMLDivElement>(null)
+  const thumbnailMouseDragRef = useRef<{ pointerId: number; startX: number; scrollLeft: number; dragging: boolean } | null>(null)
   const counterPopoverAreaRef = useRef<HTMLElement>(null)
   const counterPopoverRef = useRef<HTMLElement>(null)
   const counterPopoverDragRef = useRef<CounterPopoverDrag | null>(null)
@@ -1126,9 +1127,8 @@ export default function Viewer() {
     mutateSnapshot((current) => ({ ...current, activePane: pane, [pane]: { ...current[pane], page } }), true)
   }
 
-  async function selectThumbnail(page: number) {
+  function selectThumbnail(page: number) {
     if (!snapshot || hiddenNumbers.has(page)) return
-    await ensurePageWork(page)
     if (reportMode) setSearchParams({})
     mutateSnapshot((current) => ({ ...current, activePane: current.activePane, [current.activePane]: { ...current[current.activePane], page } }), true)
   }
@@ -1140,6 +1140,36 @@ export default function Viewer() {
     const visiblePages = Array.from({ length: pdf.numPages }, (_, index) => index + 1).filter((page) => !hiddenNumbers.has(page))
     const selectedPages = visiblePageRange(visiblePages, gesture.pageNumber, pageNumber)
     if (selectedPages.length) setThumbnailSelection({ pages: selectedPages, anchor: gesture.pageNumber, lastPage: pageNumber })
+  }
+
+  function beginThumbnailMouseDrag(event: ReactPointerEvent<HTMLDivElement>) {
+    if (event.pointerType !== 'mouse' || event.button !== 0 || event.ctrlKey || pageVisibilitySaving) return
+    if ((event.target as HTMLElement).closest('.thumbnail-hide-button')) return
+    suppressThumbnailClickRef.current = false
+    thumbnailMouseDragRef.current = { pointerId: event.pointerId, startX: event.clientX, scrollLeft: event.currentTarget.scrollLeft, dragging: false }
+  }
+
+  function moveThumbnailMouseDrag(event: ReactPointerEvent<HTMLDivElement>) {
+    const gesture = thumbnailMouseDragRef.current
+    if (!gesture || gesture.pointerId !== event.pointerId) return
+    const delta = event.clientX - gesture.startX
+    if (!gesture.dragging && Math.abs(delta) <= 8) return
+    if (!gesture.dragging) {
+      gesture.dragging = true
+      event.currentTarget.setPointerCapture(event.pointerId)
+      event.currentTarget.classList.add('dragging')
+    }
+    event.preventDefault()
+    event.currentTarget.scrollLeft = gesture.scrollLeft - delta
+  }
+
+  function finishThumbnailMouseDrag(event: ReactPointerEvent<HTMLDivElement>) {
+    const gesture = thumbnailMouseDragRef.current
+    if (!gesture || gesture.pointerId !== event.pointerId) return
+    thumbnailMouseDragRef.current = null
+    event.currentTarget.classList.remove('dragging')
+    if (gesture.dragging) suppressThumbnailClickRef.current = true
+    if (event.currentTarget.hasPointerCapture(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId)
   }
 
   function beginThumbnailTouch(pageNumber: number, event: ReactPointerEvent<HTMLButtonElement>) {
@@ -1626,7 +1656,17 @@ export default function Viewer() {
         </button>
         <div id={thumbnailContentId} className="thumbnail-content" hidden={thumbnailCollapsed}>
         {!thumbnailCollapsed && <>
-        <div className="page-thumbnail-strip" aria-label="모든 페이지 썸네일" ref={thumbnailRailRef} onScroll={handleThumbnailScroll}>
+        <div className="page-thumbnail-strip" aria-label="모든 페이지 썸네일" ref={thumbnailRailRef} onScroll={handleThumbnailScroll}
+          onPointerDown={beginThumbnailMouseDrag} onPointerMove={moveThumbnailMouseDrag}
+          onPointerUp={finishThumbnailMouseDrag} onPointerCancel={finishThumbnailMouseDrag} onLostPointerCapture={finishThumbnailMouseDrag}
+          onDragStart={(event) => event.preventDefault()}
+          onClickCapture={(event) => {
+            if (!suppressThumbnailClickRef.current) return
+            suppressThumbnailClickRef.current = false
+            event.preventDefault()
+            event.stopPropagation()
+          }}
+        >
           {compactPageThumbnails(pdf.numPages, hiddenNumbers).map((item) => {
             if (item.type === 'hidden-run') {
               const pageNumbers = Array.from({ length: item.lastPage - item.firstPage + 1 }, (_, index) => item.firstPage + index)

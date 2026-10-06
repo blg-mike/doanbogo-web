@@ -648,3 +648,5 @@
   .counter-task-setting > .icon-button { grid-column: 3; grid-row: 1; }
   .counter-settings-grid { gap: 7px; }
 }
+
+@media (pointer: fine) { .page-thumbnail-strip { cursor: grab; user-select: none; } .page-thumbnail-strip.dragging, .page-thumbnail-strip.dragging * { cursor: grabbing; } }
