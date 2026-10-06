@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { addVisibleLoadingTime, getBrandLoadingMessage, getNextLoadingDelay, selectBrandLoadingCopy, type BrandLoadingKind } from './brandLoadingState'
+import { addVisibleLoadingTime, getNextLoadingDelay, selectBrandLoadingCopy, type BrandLoadingKind } from './brandLoadingState'
 
 type BrandLoadingProps = {
   kind: BrandLoadingKind
@@ -12,10 +12,10 @@ export default function BrandLoading(props: BrandLoadingProps) {
   return <TimedBrandLoading key={props.requestId} {...props} />
 }
 
-function TimedBrandLoading({ kind, layout = 'pane', messageOverride, requestId }: BrandLoadingProps) {
+function TimedBrandLoading({ layout = 'pane', messageOverride, requestId }: BrandLoadingProps) {
   const [elapsedMs, setElapsedMs] = useState(0)
   const [paused, setPaused] = useState(() => document.visibilityState === 'hidden')
-  const [selectedCopy] = useState(() => selectBrandLoadingCopy(Math.random()))
+  const [selectedCopy, setSelectedCopy] = useState(() => selectBrandLoadingCopy(Math.random()))
 
   useEffect(() => {
     let accumulatedMs = 0
@@ -34,6 +34,7 @@ function TimedBrandLoading({ kind, layout = 'pane', messageOverride, requestId }
         accumulatedMs = addVisibleLoadingTime(accumulatedMs, activeSince, performance.now())
         activeSince = performance.now()
         setElapsedMs(accumulatedMs)
+        if (accumulatedMs >= 2400) setSelectedCopy((previous) => selectBrandLoadingCopy(Math.random(), previous))
         scheduleNextMilestone()
       }, delay)
     }
@@ -61,9 +62,9 @@ function TimedBrandLoading({ kind, layout = 'pane', messageOverride, requestId }
       document.removeEventListener('visibilitychange', handleVisibilityChange)
       if (timer !== undefined) window.clearTimeout(timer)
     }
-  }, [kind, requestId])
+  }, [requestId])
 
-  const message = messageOverride ?? getBrandLoadingMessage(kind, elapsedMs, selectedCopy)
+  const message = messageOverride ?? selectedCopy
   const visible = messageOverride !== undefined || elapsedMs >= 400
   const className = 'brand-loading brand-loading--' + layout + (visible ? ' brand-loading--visible' : ' brand-loading--waiting')
   const content = !visible ? null : messageOverride !== undefined
