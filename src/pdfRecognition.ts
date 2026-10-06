@@ -34,6 +34,7 @@ class RecognitionYieldError extends Error {
 
 const jobs = new Map<string, RecognitionJob>()
 const pausedRecords = new Map<string, RecognitionJob['record']>()
+const reportPausedDocuments = new Set<string>()
 const queue: RecognitionJob[] = []
 const listeners = new Set<RecognitionListener>()
 const pdfOperations = new Map<PDFDocumentProxy, Set<Promise<unknown>>>()
@@ -366,13 +367,20 @@ document.addEventListener('visibilitychange', () => {
     }
     return
   }
-  const records = [...pausedRecords.values()]
-  pausedRecords.clear()
-  records.forEach((record) => enqueuePdfRecognition(record))
+  for (const [documentId, record] of [...pausedRecords]) {
+    if (reportPausedDocuments.has(documentId)) continue
+    pausedRecords.delete(documentId)
+    enqueuePdfRecognition(record)
+  }
 })
 
 export function enqueuePdfRecognition(record: Pick<DocumentRecord, 'id' | 'pageCount' | 'pdf'>, viewerPdf: PDFDocumentProxy | null = null, restart = false) {
   const existing = jobs.get(record.id)
+  if (reportPausedDocuments.has(record.id)) {
+    pausedRecords.set(record.id, record)
+    if (existing) stopJob(existing)
+    return
+  }
   if (document.visibilityState !== 'visible') {
     pausedRecords.set(record.id, record)
     if (existing) stopJob(existing)
@@ -387,6 +395,21 @@ export function enqueuePdfRecognition(record: Pick<DocumentRecord, 'id' | 'pageC
   jobs.set(record.id, job)
   queue.push(job)
   pump()
+}
+
+export function pausePdfRecognitionForReport(record: Pick<DocumentRecord, 'id' | 'pageCount' | 'pdf'>) {
+  reportPausedDocuments.add(record.id)
+  pausedRecords.set(record.id, record)
+  const job = jobs.get(record.id)
+  if (job) stopJob(job)
+}
+
+export function resumePdfRecognitionFromReport(record: Pick<DocumentRecord, 'id' | 'pageCount' | 'pdf'>, viewerPdf: PDFDocumentProxy | null) {
+  reportPausedDocuments.delete(record.id)
+  if (document.visibilityState !== 'visible') return
+  const savedRecord = pausedRecords.get(record.id) ?? record
+  pausedRecords.delete(record.id)
+  enqueuePdfRecognition(savedRecord, viewerPdf)
 }
 
 export function releasePdfRecognitionViewer(documentId: string, viewerPdf: PDFDocumentProxy) {
@@ -408,6 +431,7 @@ export function updatePdfRecognitionPageVisibility(documentId: string, pageNumbe
 
 export function cancelPdfRecognition(documentId: string) {
   pausedRecords.delete(documentId)
+  reportPausedDocuments.delete(documentId)
   const job = jobs.get(documentId)
   if (!job) return
   stopJob(job)

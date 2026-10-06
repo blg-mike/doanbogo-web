@@ -150,7 +150,8 @@ export async function exportKnittingReportPdf(report: KnittingReport) {
     drawTableHeader(['항목', '도안', '완성', ''])
     const widths = [260, 350, 350, RIGHT - LEFT - 960]
     for (const row of rows) {
-      const entries = [row.label, row.pattern, row.finished, '']
+      const formatMeasure = (value: string) => value.trim() && !/(?:cm|inch|in)\s*$/i.test(value.trim()) ? `${value} ${row.unit ?? 'cm'}` : value
+      const entries = [row.label, formatMeasure(row.pattern), formatMeasure(row.finished), '']
       const height = Math.max(46, ...entries.map((value, index) => {
         page.context.font = '18px "Noto Sans KR", sans-serif'
         return wrapText(page.context, value || '—', widths[index] - 24).length * 25 + 18
@@ -216,12 +217,12 @@ export async function exportKnittingReportPdf(report: KnittingReport) {
   const yarnFields: [keyof ReportYarn, string][] = [
     ['brand', '브랜드'], ['product', '제품명'], ['colorName', '색상명'], ['colorNumber', '색상번호'], ['lot', 'Lot No.'], ['fiber', '성분'], ['country', '제조국'],
     ['weightClass', '두께'], ['recommendedNeedle', '권장 바늘'], ['skeinWeight', '한 타래 중량'], ['skeinLength', '한 타래 길이'], ['retailer', '구매처'],
-    ['purchaseLink', '구매 링크'], ['price', '구매 가격'], ['quantity', '구매 수량'], ['usedSkeins', '사용 타래 수'], ['usedWeight', '사용 중량'], ['leftover', '남은 실'],
+    ['purchaseLink', '구매 링크'], ['price', '구매 가격'], ['quantity', '구매 수량'], ['usedSkeins', '사용 타래 수'], ['usedWeight', '사용 중량'], ['usedMeters', '사용 길이'], ['memo', '실 메모'], ['leftover', '남은 실'],
   ]
-  const printableYarns = report.yarns.filter((yarn) => yarnFields.some(([key]) => String(yarn[key]).trim()) || yarn.photo)
+  const printableYarns = report.yarns.filter((yarn) => yarnFields.some(([key]) => String(yarn[key] ?? '').trim()) || yarn.photo)
   if (printableYarns.length) {
     drawSection('03', '사용한 실')
-    for (const [index, yarn] of printableYarns.entries()) await drawCard(yarn.product || yarn.brand || '실 ' + (index + 1), yarn.photo, yarnFields.map(([key, label]) => [label, String(yarn[key])] as [string, string]))
+    for (const [index, yarn] of printableYarns.entries()) await drawCard(yarn.product || yarn.brand || '실 ' + (index + 1), yarn.photo, yarnFields.map(([key, label]) => [label, String(yarn[key] ?? '')] as [string, string]))
   }
 
   const needleFields: [keyof ReportNeedle, string][] = [['section', '구간'], ['type', '바늘 종류'], ['size', '사이즈'], ['cableLength', '케이블 길이'], ['memo', '메모']]
@@ -278,6 +279,7 @@ export async function exportKnittingReportPdf(report: KnittingReport) {
     ['세탁 여부', values['finished.washed']], ['세탁 방법', values['finished.washingMethod']], ['블로킹 방법', values['finished.blockingMethod']],
     ['세탁 전 크기', values['finished.beforeSize']], ['세탁 후 크기', values['finished.afterSize']], ['세탁·블로킹 변화', values['finished.washMemo']],
     ['난이도', values['review.difficulty']], ['핏', values['review.fit']], ['전체 만족도', values['review.satisfaction']],
+    ['실 메모', values['private.yarnMemo']],
     ['실 만족도', values['review.yarnSatisfaction']], ['도안 만족도', values['review.patternSatisfaction']], ['다시 뜰 의향', values['review.makeAgain']],
     ['문제와 해결', values['review.problems']], ['다음에 바꾸고 싶은 점', values['review.nextChanges']], ['완성 메모', values['review.memo']],
   ]

@@ -1,31 +1,55 @@
 import type { KnittingReport } from './types'
 
+export type InstagramCaptionField = 'pattern' | 'size' | 'yarn' | 'usage' | 'needles' | 'modifications' | 'oneLine' | 'gauge' | 'measurements' | 'fit' | 'yarnMemo'
+
+export const recommendedCaptionFields: InstagramCaptionField[] = ['pattern', 'size', 'yarn', 'usage', 'needles', 'modifications', 'oneLine']
+export const optionalCaptionFields: InstagramCaptionField[] = ['gauge', 'measurements', 'fit', 'yarnMemo']
+
 function line(label: string, value?: string) {
   const text = value?.trim()
-  return text ? `${label}: ${text}` : ''
+  return text ? `${label}\n${text}` : ''
 }
 
-export function buildInstagramCaption(report: KnittingReport) {
+export function buildInstagramCaption(report: KnittingReport, selected: InstagramCaptionField[] = recommendedCaptionFields) {
   const fields = report.fields
+  const include = new Set(selected)
   const title = fields['project.name']?.trim() || report.title
-  const parts = [
-    title,
-    [
+  const sections: string[] = [title]
+
+  if (include.has('pattern')) {
+    sections.push([
       line('도안', fields['pattern.name']),
       line('디자이너', fields['pattern.designer']),
-      line('뜨개', fields['project.craft']),
-      line('작업 기간', [fields['project.co'], fields['project.fo']].filter(Boolean).join(' ~ ')),
-    ].filter(Boolean).join('\n'),
-    report.yarns.map((yarn) => line('사용 실', [yarn.brand, yarn.product, yarn.colorName, yarn.colorNumber].filter(Boolean).join(' · '))).filter(Boolean).join('\n'),
-    report.modifications.map((item) => line(item.section || '변형', item.changed || item.memo)).filter(Boolean).join('\n'),
-    report.workPhotos
-      .slice()
-      .sort((left, right) => left.activityDate.localeCompare(right.activityDate) || left.uploadedAt - right.uploadedAt)
-      .map((photo) => `🧶 ${photo.activityDate}${photo.label.trim() ? ` · ${photo.label.trim()}` : ''}`)
-      .join('\n'),
-    fields['review.memo']?.trim(),
-    fields['review.nextChanges']?.trim() ? `다음에는 ${fields['review.nextChanges'].trim()} 도전해보기` : '',
-    '#뜨개기록 #뜨개완성',
-  ].filter(Boolean)
-  return parts.join('\n\n')
+    ].filter(Boolean).join('\n'))
+  }
+  if (include.has('size')) sections.push(line('Size', fields['pattern.selectedSize'] || fields['pattern.originalSizes']))
+  if (include.has('yarn')) {
+    sections.push(report.yarns.map((yarn) => line('Yarn', [yarn.brand, yarn.product, yarn.colorName, yarn.colorNumber].filter(Boolean).join(' '))).filter(Boolean).join('\n'))
+  }
+  if (include.has('usage')) {
+    sections.push(report.yarns.map((yarn) => {
+      const amount = [yarn.usedSkeins && `${yarn.usedSkeins}볼`, yarn.usedWeight && `${yarn.usedWeight}g`, yarn.usedMeters && `${yarn.usedMeters}m`].filter(Boolean).join(' · ')
+      return amount ? `사용량\n${amount}` : ''
+    }).filter(Boolean).join('\n'))
+  }
+  if (include.has('needles')) {
+    sections.push(line('Needles', report.needles.map((needle) => [needle.section, needle.size && needle.size + (needle.size.toLowerCase().includes('mm') ? '' : 'mm')].filter(Boolean).join(' ')).filter(Boolean).join(' / ')))
+  }
+  if (include.has('modifications')) sections.push(line('Modifications', report.modifications.map((item) => `- ${[item.section, item.changed || item.memo].filter(Boolean).join(' ')}`).filter((item) => item !== '- ').join('\n')))
+  if (include.has('oneLine')) sections.push(fields['review.nextChanges']?.trim() ?? '')
+  if (include.has('gauge')) sections.push(line('Gauge', [fields['gauge.afterStitches'] && `${fields['gauge.afterStitches']}코`, fields['gauge.afterRows'] && `${fields['gauge.afterRows']}단`].filter(Boolean).join(' × ')))
+  if (include.has('measurements')) sections.push(line('Measurements', report.measurements.map((row) => row.finished.trim() ? `${row.label}: ${row.finished}` : '').filter(Boolean).join('\n')))
+  if (include.has('fit')) sections.push(line('Fit', fields['review.fit']))
+  if (include.has('yarnMemo')) {
+    const notes = [fields['private.yarnMemo'], ...report.yarns.map((yarn) => yarn.memo)].filter((value): value is string => Boolean(value?.trim()))
+    sections.push(line('Yarn note', notes.join('\n')))
+  }
+
+  const hashtags = (include.has('pattern') ? [fields['pattern.name'], fields['pattern.designer']] : [])
+    .map((value) => value?.replace(/[^\p{L}\p{N}_]/gu, ''))
+    .filter((value): value is string => Boolean(value))
+    .map((value) => '#' + value)
+  hashtags.push('#뜨개기록')
+  sections.push([...new Set(hashtags)].join(' '))
+  return sections.filter((section) => section.trim()).join('\n\n')
 }

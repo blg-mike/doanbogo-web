@@ -17,7 +17,7 @@ import type { PdfQrLink } from './qr'
 import { withRecentPdfLinks } from './pdfRecognitionState'
 import { applyColorworkCellChanges, type ColorworkCellChange } from './colorworkHistory'
 import { PageWorkPersistence } from './pageWorkPersistence'
-import { enqueuePdfRecognition, releasePdfRecognitionViewer, subscribePdfRecognition, updatePdfRecognitionPageVisibility } from './pdfRecognition'
+import { enqueuePdfRecognition, pausePdfRecognitionForReport, releasePdfRecognitionViewer, resumePdfRecognitionFromReport, subscribePdfRecognition, updatePdfRecognitionPageVisibility } from './pdfRecognition'
 import { getViewerResourcePolicy } from './pdfRenderResources'
 import { displayRectToPageRect, guidePositionForRotation, pageRectToDisplayRect, formatFocusSpacingPercent, parseFocusSpacingPercent } from './focusGeometry'
 import { canHidePageSelection, compactPageThumbnails, completePageList, nextVisiblePageAfterHide, visiblePageRange } from './pageManagement'
@@ -514,7 +514,7 @@ export default function Viewer() {
     const scanKey = id + ':' + pageNumber
     const hasPdfLinks = pdfLinkPagesRef.current.has(pageNumber)
     const hasQrLinks = qrLinksRef.current.has(pageNumber)
-    if (viewerLifecycleRef.current !== 'active' || hasPdfLinks && hasQrLinks || recognitionLoadPendingRef.current.has(scanKey)) return
+    if (reportMode || viewerLifecycleRef.current !== 'active' || hasPdfLinks && hasQrLinks || recognitionLoadPendingRef.current.has(scanKey)) return
     recognitionLoadPendingRef.current.add(scanKey)
     const task = (async () => {
       const storedRecognition = await getPageRecognition(id, pageNumber).catch(() => undefined)
@@ -535,7 +535,7 @@ export default function Viewer() {
     })
     linkTasksRef.current.add(task)
     void task.finally(() => linkTasksRef.current.delete(task)).catch(() => {})
-  }, [id])
+  }, [id, reportMode])
 
   useEffect(() => subscribePdfRecognition((documentId, pageNumber, result) => {
     if (documentId !== id || viewerLifecycleRef.current !== 'active') return
@@ -598,7 +598,8 @@ export default function Viewer() {
       setSnapshot(restored)
       snapshotRef.current = restored
       setPdf(opened.document)
-      enqueuePdfRecognition({ id, pageCount: record.pageCount, pdf: record.pdf }, opened.document)
+      const recognitionRecord = { id, pageCount: record.pageCount, pdf: record.pdf }
+      enqueuePdfRecognition(recognitionRecord, opened.document)
       setLoadedId(id)
       initializedDocumentRef.current = id
       setLoadError(null)
@@ -640,6 +641,13 @@ export default function Viewer() {
       if (pdfSessionRef.current === session) pdfSessionRef.current = null
     }
   }, [id, pdfOpenCycle, pageWorkPersistence, tabletResourcePolicy, requestPdfSuspend])
+
+  useEffect(() => {
+    const record = recognitionRecordRef.current
+    if (loadedId !== id || !pdf || !record) return
+    if (reportMode) pausePdfRecognitionForReport(record)
+    else resumePdfRecognitionFromReport(record, pdf)
+  }, [id, loadedId, pdf, reportMode])
 
   useEffect(() => {
     if (!suspended || viewerLifecycleRef.current !== 'suspending') return
@@ -1600,7 +1608,7 @@ export default function Viewer() {
   if (!pdf || !snapshot) return null
 
   return (
-    <main className="viewer-shell">
+    <main className={'viewer-shell' + (reportMode ? ' report-mode' : '')}>
       {suspendError && <div className="viewer-save-warning" role="alert"><span>{suspendError}</span><button type="button" aria-label="저장 알림 닫기" onClick={() => setSuspendError('')}><X size={14} /></button></div>}
       {showZoomHint && !reportMode && <aside className="viewer-zoom-hint" role="status"><span>마우스 휠로 확대 · 이동 도구에서 드래그로 이동</span><button type="button" aria-label="확대·이동 안내 닫기" onClick={() => setShowZoomHint(false)}><X size={15} /></button></aside>}
       <header className="viewer-header">
@@ -1617,7 +1625,7 @@ export default function Viewer() {
       </header>
       <section className={'pdf-work-area' + (reportMode ? ' report-work-area' : '')}>
         <div className={'pdf-document-area ' + (reportMode ? '' : snapshot.split ? (orientation === 'wide' ? 'split-wide' : 'split-tall') : 'single-pane')} ref={areaRef}>
-        {reportMode ? <KnittingReport documentId={id} fileName={documentName} /> : snapshot.split ? <>
+        {reportMode ? <KnittingReport documentId={id} fileName={documentName} pageCount={pdf.numPages} onBack={() => setSearchParams({})} /> : snapshot.split ? <>
           <div className="split-section" style={orientation === 'wide' ? { flex: '0 0 ' + splitBasis(displayedRatio) } : { width: '100%', flex: '0 0 ' + splitBasis(displayedRatio) }}>{renderPane('primary', snapshot.primary, snapshot.activePane === 'primary')}</div>
           <button className={'split-divider ' + orientation} aria-label="영역 크기 조정" onPointerDown={beginDivider} onPointerMove={moveDivider} onPointerUp={finishDivider} onPointerCancel={finishDivider} onLostPointerCapture={finishDivider}><span /></button>
           <div className="split-section split-section-secondary" style={orientation === 'wide' ? { flex: '0 0 ' + splitBasis(1 - displayedRatio) } : { width: '100%', flex: '0 0 ' + splitBasis(1 - displayedRatio) }}>{renderPane('secondary', snapshot.secondary, snapshot.activePane === 'secondary')}</div>

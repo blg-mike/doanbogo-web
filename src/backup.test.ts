@@ -2,7 +2,7 @@ import 'fake-indexeddb/auto'
 import { describe, expect, it } from 'vitest'
 import { strFromU8, strToU8, unzipSync, zipSync } from 'fflate'
 import { createWorkspaceBackup, readWorkspaceBackup } from './backup'
-import { createCounter } from './smartCounter'
+import { createCounter, isLegacyCounterSnapshots } from './smartCounter'
 import { addDocument, deleteChart, deleteDocument, duplicateDocument, getChart, getKnittingReport, getKnittingReports, getPageWork, getPages, getViewer, importWorkspaceData, listCharts, listDocuments, saveChart, saveKnittingReport, savePageWork, savePreference, saveViewer, setPageFlag } from './storage'
 import { createKnittingChart, makeRasterPdf } from './charts'
 import type { DocumentRecord, KnittingReport } from './types'
@@ -223,16 +223,16 @@ describe('portable workspace backup', () => {
       id: crypto.randomUUID(), documentId: original.id, title: '겨울 스웨터', createdAt: Date.now(), updatedAt: Date.now(),
       fields: { 'project.name': '겨울 스웨터', 'project.status': '완성' },
       representativePhoto: 'data:image/jpeg;base64,/9j/4AAQ',
-      yarns: [], needles: [], accessories: [],
-      measurements: [{ id: 'measure-1', label: '기장', pattern: '54cm', finished: '57cm' }],
-      modifications: [], finishedPhotos: [{ id: 'photo-1', label: '정면', dataUrl: 'data:image/jpeg;base64,/9j/4AAQ' }], workPhotos: [],
+      yarns: [{ id: 'yarn-1', photo: '', brand: '실가게', product: '메리노', colorName: '크림', colorNumber: '1012', lot: '', fiber: '', country: '', weightClass: '', recommendedNeedle: '', skeinWeight: '', skeinLength: '', retailer: '', purchaseLink: '', price: '', quantity: '', usedSkeins: '4.3', usedWeight: '215', usedMeters: '850', memo: '부드러운 실', leftover: '' }], needles: [], accessories: [],
+      measurements: [{ id: 'measure-1', label: '기장', pattern: '54cm', finished: '57cm', unit: 'inch' }],
+      modifications: [], analysisCandidates: [{ id: 'candidate-1', section: '소매', original: '', changed: '-2cm', memo: '', source: 'note_extraction', status: 'suggested', evidence: '소매 2cm 짧게', fingerprint: 'note:1:a' }], finishedPhotos: [{ id: 'photo-1', label: '정면', dataUrl: 'data:image/jpeg;base64,/9j/4AAQ' }], workPhotos: [],
     }
     const savedReport = await saveKnittingReport(report)
 
     const backup = await createWorkspaceBackup()
     const restored = await readWorkspaceBackup(new File([backup], 'backup.doanbogo'))
     const archiveEntries = unzipSync(new Uint8Array(await backup.arrayBuffer()))
-    expect(JSON.parse(strFromU8(archiveEntries['manifest.json'])).version).toBe(10)
+    expect(JSON.parse(strFromU8(archiveEntries['manifest.json'])).version).toBe(11)
     const restoredViewer = restored.viewers.find((entry) => entry.documentId === original.id)!
     const restoredDocument = restored.documents.find((document) => document.id === original.id)!
     expect(restoredDocument.fileName).toBe(original.fileName)
@@ -308,6 +308,7 @@ describe('portable workspace backup', () => {
       taskRules: index === 0 ? [{ id: 'decrease-1', kind: 'decrease', interval: 6, total: 8 }] : [],
       taskOccurrences: index === 0 ? [{ ruleId: 'decrease-1', occurrence: 1, status: 'done' }, { ruleId: 'decrease-1', occurrence: 2, status: 'missed' }] : [],
     }))
+    expect(isLegacyCounterSnapshots(viewer.counters)).toBe(true)
     const legacy = new File([zipSync({ ...entries, 'manifest.json': strToU8(JSON.stringify(manifest)) })], 'v9.doanbogo')
     const restored = await readWorkspaceBackup(legacy)
     const migrated = restored.viewers.find((item) => item.documentId === documentId)!

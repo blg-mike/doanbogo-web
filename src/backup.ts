@@ -10,7 +10,7 @@ interface BackupDocument extends Omit<DocumentRecord, 'pdf' | 'cover'> {
 
 interface BackupManifest {
   format: 'doanbogo'
-  version: 10
+  version: 11
   exportedAt: number
   documents: BackupDocument[]
   pages: PageRecord[]
@@ -143,12 +143,16 @@ function isKnittingReport(value: unknown, documentIds: Set<string>): value is Kn
     !isReportRows(value.modifications, ['section', 'original', 'changed', 'memo']) ||
     !Array.isArray(value.finishedPhotos) || value.finishedPhotos.length > 500 ||
     !value.finishedPhotos.every((photo) => isObject(photo) && typeof photo.id === 'string' && typeof photo.label === 'string' && photo.label.length <= 500 && isReportPhoto(photo.dataUrl)) ||
+    (value.analysisCandidates !== undefined && (!Array.isArray(value.analysisCandidates) || value.analysisCandidates.length > 500 ||
+      !value.analysisCandidates.every((candidate) => isObject(candidate) && typeof candidate.id === 'string' && typeof candidate.section === 'string' && typeof candidate.original === 'string' && typeof candidate.changed === 'string' && typeof candidate.memo === 'string' && typeof candidate.evidence === 'string' && typeof candidate.fingerprint === 'string' && (candidate.source === 'note_extraction' || candidate.source === 'counter') && (candidate.status === 'suggested' || candidate.status === 'confirmed' || candidate.status === 'dismissed')))) ||
     (value.workPhotos !== undefined && (!Array.isArray(value.workPhotos) || value.workPhotos.length > 500 ||
       !value.workPhotos.every((photo) => isObject(photo) && typeof photo.id === 'string' && typeof photo.label === 'string' && photo.label.length <= 500 &&
         isReportPhoto(photo.dataUrl) && Number.isFinite(photo.uploadedAt) && typeof photo.activityDate === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(photo.activityDate))))) return false
   const yarns = value.yarns as unknown[]
   const accessories = value.accessories as unknown[]
-  return yarns.every((row) => isObject(row) && isReportPhoto(row.photo)) && accessories.every((row) => isObject(row) && isReportPhoto(row.photo))
+  const measurements = value.measurements as unknown[]
+  return yarns.every((row) => isObject(row) && isReportPhoto(row.photo) && (row.usedMeters === undefined || typeof row.usedMeters === 'string') && (row.memo === undefined || typeof row.memo === 'string')) &&
+    accessories.every((row) => isObject(row) && isReportPhoto(row.photo)) && measurements.every((row) => isObject(row) && (row.unit === undefined || row.unit === 'cm' || row.unit === 'inch'))
 }
 
 function normalizeKnittingReport(value: KnittingReport): KnittingReport {
@@ -196,7 +200,7 @@ export async function createWorkspaceBackup() {
 
   const manifest: BackupManifest = {
     format: 'doanbogo',
-    version: 10,
+    version: 11,
     exportedAt: Date.now(),
     documents,
     pages: data.pages,
@@ -227,7 +231,7 @@ export async function readWorkspaceBackup(file: File): Promise<WorkspaceData> {
   } catch {
     throw new Error('작업 파일의 안내 정보가 손상됐습니다.')
   }
-  if (!isObject(manifest) || manifest.format !== 'doanbogo' || ![1, 2, 3, 4, 5, 6, 7, 8, 9, 10].includes(manifest.version as number) ||
+  if (!isObject(manifest) || manifest.format !== 'doanbogo' || ![1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11].includes(manifest.version as number) ||
     !Array.isArray(manifest.documents) || !Array.isArray(manifest.pages) ||
     !Array.isArray(manifest.viewers) || !Array.isArray(manifest.preferences) ||
     ((manifest.version as number) >= 2 && !Array.isArray(manifest.pageWork)) ||

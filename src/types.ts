@@ -314,6 +314,8 @@ export interface ReportYarn {
   quantity: string
   usedSkeins: string
   usedWeight: string
+  usedMeters?: string
+  memo?: string
   leftover: string
 }
 
@@ -340,6 +342,7 @@ export interface ReportMeasurement {
   label: string
   pattern: string
   finished: string
+  unit?: 'cm' | 'inch'
 }
 
 export interface ReportModification {
@@ -348,6 +351,13 @@ export interface ReportModification {
   original: string
   changed: string
   memo: string
+}
+
+export interface ReportModificationCandidate extends ReportModification {
+  source: 'note_extraction' | 'counter'
+  status: 'suggested' | 'confirmed' | 'dismissed'
+  evidence: string
+  fingerprint: string
 }
 
 export interface KnittingReport {
@@ -365,4 +375,5 @@ export interface KnittingReport {
   modifications: ReportModification[]
   finishedPhotos: ReportPhoto[]
   workPhotos: ReportTimelinePhoto[]
+  analysisCandidates?: ReportModificationCandidate[]
 }
