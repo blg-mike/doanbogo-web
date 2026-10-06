@@ -1286,6 +1286,17 @@ export default function Viewer() {
       void restoreHiddenPage(pageNumber)
       return
     }
+    if (event.ctrlKey && event.shiftKey) {
+      event.preventDefault()
+      setThumbnailSelection((current) => {
+        const anchor = current?.anchor ?? snapshot?.[snapshot.activePane].page ?? pageNumber
+        const visiblePages = Array.from({ length: pdf?.numPages ?? 0 }, (_, index) => index + 1).filter((page) => !hiddenNumbers.has(page))
+        const range = visiblePageRange(visiblePages, anchor, pageNumber)
+        const pages = Array.from(new Set([...(current?.pages ?? []), ...range]))
+        return { pages, anchor, lastPage: pageNumber }
+      })
+      return
+    }
     if (event.ctrlKey) {
       event.preventDefault()
       setThumbnailSelection((current) => {
