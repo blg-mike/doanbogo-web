@@ -1143,7 +1143,7 @@ export default function Viewer() {
   }
 
   function beginThumbnailMouseDrag(event: ReactPointerEvent<HTMLDivElement>) {
-    if (event.pointerType !== 'mouse' || event.button !== 0 || event.ctrlKey || pageVisibilitySaving) return
+    if (event.pointerType !== 'mouse' || event.button !== 0 || event.ctrlKey || event.shiftKey || pageVisibilitySaving) return
     if ((event.target as HTMLElement).closest('.thumbnail-hide-button')) return
     suppressThumbnailClickRef.current = false
     thumbnailMouseDragRef.current = { pointerId: event.pointerId, startX: event.clientX, scrollLeft: event.currentTarget.scrollLeft, dragging: false }
@@ -1286,7 +1286,7 @@ export default function Viewer() {
       void restoreHiddenPage(pageNumber)
       return
     }
-    if (event.ctrlKey && event.shiftKey) {
+    if (event.shiftKey) {
       event.preventDefault()
       setThumbnailSelection((current) => {
         const anchor = current?.anchor ?? snapshot?.[snapshot.activePane].page ?? pageNumber
