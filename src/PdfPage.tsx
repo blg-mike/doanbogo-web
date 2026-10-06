@@ -2,11 +2,12 @@ import { useCallback, useEffect, useLayoutEffect, useRef, useState, type MouseEv
 import type { PDFDocumentProxy, PDFPageProxy, RenderTask } from 'pdfjs-dist'
 import { Minus, Plus, Trash2 } from 'lucide-react'
 import BrandLoading from './BrandLoading'
-import type { AnnotationRecord, AnnotationStyle, AnnotationTool, ColorworkCell, ColorworkCreateRequest, ColorworkGrid, PageRotation, PageWorkRecord, PaneId, PaneSnapshot, ProgressGuide, ProgressSettings } from './types'
+import type { AnnotationRecord, AnnotationStyle, AnnotationTool, ColorworkCell, ColorworkCreateRequest, ColorworkGrid, CounterSnapshot, PageRotation, PageWorkRecord, PaneId, PaneSnapshot, ProgressGuide, ProgressSettings } from './types'
 import { createColorworkGrid, resizeColorworkGridDisplay } from './colorwork'
 import { textNoteBoxAt } from './textNote'
 import type { PdfQrLink } from './qr'
-import { inverseRotatePoint, rotatedPageSize } from './pageGeometry'
+import { rotatedPageSize } from './pageGeometry'
+import { clientPointForPagePosition, classifyWheelInput, isEditableTarget, pagePositionAtClientPoint, scrollOffsetForZoomFocus, wheelActionForBurst, wheelZoom, type WheelInput, type ZoomFocus } from './viewerInteraction'
 import { acquireThumbnailCache, getViewerResourcePolicy, pdfRasterScale, releaseCanvasWhenSettled, viewerCanvasMemory } from './pdfRenderResources'
 import { pdfPageRenderQueue } from './pdfPageRenderQueue'
 
@@ -317,10 +318,12 @@ function annotationPath(annotation: AnnotationRecord, width: number, height: num
 
 function pointFromEvent(event: { clientX: number; clientY: number }, element: Element, rotation: PageRotation): Point {
   const rect = element.getBoundingClientRect()
-  return inverseRotatePoint({
-    x: Math.min(1, Math.max(0, (event.clientX - rect.left) / Math.max(rect.width, 1))),
-    y: Math.min(1, Math.max(0, (event.clientY - rect.top) / Math.max(rect.height, 1))),
-  }, rotation)
+  const width = element.clientWidth || rect.width
+  const height = element.clientHeight || rect.height
+  const rotatedSize = rotatedPageSize({ width, height }, rotation)
+  const scaleX = rect.width / Math.max(rotatedSize.width, 1)
+  const scaleY = rect.height / Math.max(rotatedSize.height, 1)
+  return pagePositionAtClientPoint(rect, width, height, rotation, (scaleX + scaleY) / 2, event.clientX, event.clientY)
 }
 
 function distanceToSegment(point: Point, start: Point, end: Point, width: number, height: number) {
@@ -350,6 +353,27 @@ function guidesFor(work: PageWorkRecord, axis: 'horizontal' | 'vertical'): Progr
   }]
 }
 
+function counterRowAtGuidePosition(guide: ProgressGuide, position: number, counter?: CounterSnapshot) {
+  const region = guide.chartRegion
+  if (!region) return null
+  const rowCount = Math.max(1, region.lastRow - region.firstRow + 1)
+  let closestIndex = 0
+  let closestDistance = Number.POSITIVE_INFINITY
+  for (let index = 0; index < rowCount; index++) {
+    const fraction = rowCount < 2 ? 0 : index / (rowCount - 1)
+    const candidate = region.rowPositions?.length === rowCount
+      ? region.rowPositions[index]
+      : region.y + region.height * (region.direction === 'bottom-to-top' ? 1 - fraction : fraction)
+    const distance = Math.abs(candidate - position)
+    if (distance < closestDistance) { closestDistance = distance; closestIndex = index }
+  }
+  const baseRow = region.startCounterRow + closestIndex
+  if (!region.repeat) return baseRow
+  const currentRow = counter?.kind === 'simple' ? counter.value : counter?.currentRow ?? region.startCounterRow
+  const cycle = Math.round((currentRow - baseRow) / rowCount)
+  return Math.max(1, baseRow + cycle * rowCount)
+}
+
 function textBox(annotation: AnnotationRecord, pageHeight: number) {
   const legacy = annotation.boxWidth === undefined || annotation.boxHeight === undefined
   const width = annotation.boxWidth ?? 0.3
@@ -367,7 +391,7 @@ function withTextBox(annotation: AnnotationRecord, pageHeight: number): Annotati
   return { ...annotation, points: [{ x: box.x, y: box.y }], boxWidth: box.width, boxHeight: box.height }
 }
 
-export function PdfPage({ pdf, page, paneId, pane, splitView, rotation, active, tool, lineSettings, annotationStyle, work, workReady, colorworkBrushColor, colorworkBrushOpacity, colorworkEraser, createColorworkRequest, pageLinks, qrLinks, onPageRendered, onActivate, onWorkChange, onZoom, onCenter, onColorworkRequestHandled, onTextToolConsumed }: {
+export function PdfPage({ pdf, page, paneId, pane, splitView, rotation, active, tool, lineSettings, counters, annotationStyle, work, workReady, colorworkBrushColor, colorworkBrushOpacity, colorworkEraser, createColorworkRequest, pageLinks, qrLinks, onPageRendered, onActivate, onWorkChange, onZoom, onCenter, onCounterGuideMove, onColorworkRequestHandled, onTextToolConsumed }: {
   pdf: PDFDocumentProxy
   page: number
   paneId: PaneId
@@ -377,6 +401,7 @@ export function PdfPage({ pdf, page, paneId, pane, splitView, rotation, active, 
   active: boolean
   tool: AnnotationTool
   lineSettings: ProgressSettings
+  counters: CounterSnapshot[]
   annotationStyle: AnnotationStyle
   work: PageWorkRecord
   workReady: boolean
@@ -389,8 +414,9 @@ export function PdfPage({ pdf, page, paneId, pane, splitView, rotation, active, 
   onPageRendered: (pageNumber: number, canvas: HTMLCanvasElement) => void
   onActivate: () => void
   onWorkChange: (work: PageWorkRecord, immediate: boolean, recordHistory?: boolean, historyBefore?: PageWorkRecord, cellChanges?: { index: number; before: ColorworkCell | null; after: ColorworkCell | null }[]) => void
-  onZoom: (zoom: number) => void
+  onZoom: (zoom: number, focus?: ZoomFocus) => void
   onCenter: (x: number, y: number) => void
+  onCounterGuideMove: (counterId: string, row: number) => void
   onColorworkRequestHandled: (id: string) => void
   onTextToolConsumed: () => void
 }) {
@@ -398,6 +424,8 @@ export function PdfPage({ pdf, page, paneId, pane, splitView, rotation, active, 
   const scrollRef = useRef<HTMLDivElement>(null)
   const rotationLayerRef = useRef<HTMLDivElement>(null)
   const canvasRef = useRef<HTMLCanvasElement>(null)
+  const focusCanvasRef = useRef<HTMLCanvasElement>(null)
+  const focusCanvasKey = useRef<object>({})
   const annotationLayerRef = useRef<HTMLDivElement>(null)
   const textInputRef = useRef<HTMLTextAreaElement>(null)
   const textStyleToolbarRef = useRef<HTMLDivElement>(null)
@@ -411,6 +439,11 @@ export function PdfPage({ pdf, page, paneId, pane, splitView, rotation, active, 
   const colorworkTransform = useRef<ColorworkTransform | null>(null)
   const colorworkStroke = useRef<ColorworkStroke | null>(null)
   const centerRef = useRef({ x: pane.centerX, y: pane.centerY })
+  const onCenterRef = useRef(onCenter)
+  const zoomFocusRef = useRef<ZoomFocus | null>(null)
+  const trackpadBurstUntilRef = useRef(0)
+  const spacePressedRef = useRef(false)
+  const temporaryPanRef = useRef<{ pointerId: number; x: number; y: number; scrollLeft: number; scrollTop: number } | null>(null)
   const renderSequence = useRef(0)
   const lastRenderPage = useRef<{ page: number; rotation: PageRotation } | null>(null)
   const [size, setSize] = useState<Size>({ width: 0, height: 0 })
@@ -418,6 +451,11 @@ export function PdfPage({ pdf, page, paneId, pane, splitView, rotation, active, 
   const [displayedRaster, setDisplayedRaster] = useState<{ pdf: PDFDocumentProxy; page: number; zoom: number; rotation: PageRotation } | null>(null)
   const [readyKey, setReadyKey] = useState('')
   const [renderError, setRenderError] = useState<{ key: string; message: string } | null>(null)
+  const [linePositionPreview, setLinePositionPreview] = useState<{ id: string; position: number } | null>(null)
+  const [focusDragging, setFocusDragging] = useState(false)
+  const [focusFallback, setFocusFallback] = useState(false)
+  const [focusCanvasUnavailable, setFocusCanvasUnavailable] = useState(false)
+  const focusSlowRenderCount = useRef(0)
   const [retry, setRetry] = useState(0)
   const pinchZoom = useRef<number | null>(null)
   const [draft, setDraft] = useState<Point[]>([])
@@ -461,8 +499,104 @@ export function PdfPage({ pdf, page, paneId, pane, splitView, rotation, active, 
     }
   }, [])
 
+  useEffect(() => {
+    const area = scrollRef.current
+    if (!area) return
+    const normalizeDelta = (event: WheelEvent, delta: number, axis: 'x' | 'y') => delta * (event.deltaMode === 1 ? 16 : event.deltaMode === 2 ? (axis === 'x' ? area.clientWidth : area.clientHeight) : 1)
+    const onWheel = (event: WheelEvent) => {
+      if (isEditableTarget(event.target)) return
+      if (!event.cancelable) return
+      const input: WheelInput = { deltaX: event.deltaX, deltaY: event.deltaY, deltaMode: event.deltaMode, ctrlKey: event.ctrlKey }
+      const now = performance.now()
+      const decision = wheelActionForBurst(classifyWheelInput(input), now, trackpadBurstUntilRef.current)
+      trackpadBurstUntilRef.current = decision.burstUntil
+      const layer = rotationLayerRef.current
+      const rect = layer?.getBoundingClientRect()
+      const insideDocument = event.target instanceof Element && Boolean(event.target.closest('.pdf-rotation-content'))
+      if (decision.action === 'zoom' && insideDocument && layer && rect?.width && rect.height) {
+        event.preventDefault()
+        onActivate()
+        const targetZoom = wheelZoom(pane.zoom, input)
+        const position = pagePositionAtClientPoint(rect, layer.clientWidth, layer.clientHeight, rotation, zoomPreviewScale, event.clientX, event.clientY)
+        const focus = { ...position, clientX: event.clientX, clientY: event.clientY, zoom: targetZoom }
+        if (targetZoom !== pane.zoom) zoomFocusRef.current = focus
+        onZoom(targetZoom, focus)
+        return
+      }
+      onActivate()
+      event.preventDefault()
+      area.scrollLeft += normalizeDelta(event, event.deltaX, 'x')
+      area.scrollTop += normalizeDelta(event, event.deltaY, 'y')
+    }
+    area.addEventListener('wheel', onWheel, { passive: false })
+    return () => area.removeEventListener('wheel', onWheel)
+  }, [onActivate, onZoom, pane.zoom, rotation, zoomPreviewScale])
+
+  useEffect(() => {
+    const area = scrollRef.current
+    if (!area) return
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.code !== 'Space' || event.repeat || isEditableTarget(event.target)) return
+      spacePressedRef.current = true
+      event.preventDefault()
+    }
+    const onKeyUp = (event: KeyboardEvent) => {
+      if (event.code === 'Space') spacePressedRef.current = false
+    }
+    const onBlur = () => {
+      spacePressedRef.current = false
+      temporaryPanRef.current = null
+      area.classList.remove('is-space-panning')
+    }
+    const onPointerDownCapture = (event: PointerEvent) => {
+      if (!spacePressedRef.current || event.button !== 0 || isEditableTarget(event.target)) return
+      event.preventDefault()
+      event.stopPropagation()
+      onActivate()
+      const gesture = { pointerId: event.pointerId, x: event.clientX, y: event.clientY, scrollLeft: area.scrollLeft, scrollTop: area.scrollTop }
+      temporaryPanRef.current = gesture
+      area.classList.add('is-space-panning')
+      try { area.setPointerCapture(event.pointerId) } catch { /* Pointer capture can fail after browser cancellation. */ }
+    }
+    const onPointerMove = (event: PointerEvent) => {
+      const gesture = temporaryPanRef.current
+      if (!gesture || gesture.pointerId !== event.pointerId) return
+      event.preventDefault()
+      area.scrollLeft = gesture.scrollLeft - (event.clientX - gesture.x)
+      area.scrollTop = gesture.scrollTop - (event.clientY - gesture.y)
+    }
+    const finishPan = (event: PointerEvent) => {
+      const gesture = temporaryPanRef.current
+      if (!gesture || gesture.pointerId !== event.pointerId) return
+      temporaryPanRef.current = null
+      area.classList.remove('is-space-panning')
+      if (area.hasPointerCapture(event.pointerId)) area.releasePointerCapture(event.pointerId)
+    }
+    const onVisibilityChange = () => { if (document.visibilityState === 'hidden') onBlur() }
+    window.addEventListener('keydown', onKeyDown)
+    window.addEventListener('keyup', onKeyUp)
+    window.addEventListener('blur', onBlur)
+    document.addEventListener('visibilitychange', onVisibilityChange)
+    area.addEventListener('pointerdown', onPointerDownCapture, true)
+    area.addEventListener('pointermove', onPointerMove)
+    area.addEventListener('pointerup', finishPan)
+    area.addEventListener('pointercancel', finishPan)
+    return () => {
+      window.removeEventListener('keydown', onKeyDown)
+      window.removeEventListener('keyup', onKeyUp)
+      window.removeEventListener('blur', onBlur)
+      document.removeEventListener('visibilitychange', onVisibilityChange)
+      area.removeEventListener('pointerdown', onPointerDownCapture, true)
+      area.removeEventListener('pointermove', onPointerMove)
+      area.removeEventListener('pointerup', finishPan)
+      area.removeEventListener('pointercancel', finishPan)
+      area.classList.remove('is-space-panning')
+    }
+  }, [onActivate])
+
   useEffect(() => () => {
     if (canvasRef.current) clearCanvas(canvasRef.current)
+    if (focusCanvasRef.current) clearCanvas(focusCanvasRef.current)
     if (colorworkCanvasRef.current) clearCanvas(colorworkCanvasRef.current)
     viewerCanvasMemory.release(displayCanvasKey.current)
     viewerCanvasMemory.release(stagingCanvasKey.current)
@@ -646,6 +780,30 @@ export function PdfPage({ pdf, page, paneId, pane, splitView, rotation, active, 
     }
   }, [pdf, page, pane.zoom, rotation, size.width, size.height, retry, renderKey, splitView, resourcePolicy])
 
+  const applyZoomFocus = useCallback((focus: ZoomFocus) => {
+    const area = scrollRef.current
+    const layer = rotationLayerRef.current
+    if (!area || !layer) return false
+    if (Math.abs(focus.zoom - pane.zoom) > 0.001) {
+      zoomFocusRef.current = null
+      return false
+    }
+    const pageRect = layer.getBoundingClientRect()
+    const point = clientPointForPagePosition(pageRect, layer.clientWidth, layer.clientHeight, rotation, zoomPreviewScale, focus.x, focus.y)
+    area.scrollLeft = scrollOffsetForZoomFocus(area.scrollLeft, point.x, focus.clientX, area.scrollWidth, area.clientWidth)
+    area.scrollTop = scrollOffsetForZoomFocus(area.scrollTop, point.y, focus.clientY, area.scrollHeight, area.clientHeight)
+    return true
+  }, [pane.zoom, rotation, zoomPreviewScale])
+
+  const recordCenter = useCallback(() => {
+    const element = scrollRef.current
+    if (!element) return
+    const x = element.scrollWidth > element.clientWidth ? (element.scrollLeft + element.clientWidth / 2) / element.scrollWidth : 0.5
+    const y = element.scrollHeight > element.clientHeight ? (element.scrollTop + element.clientHeight / 2) / element.scrollHeight : 0.5
+    centerRef.current = { x, y }
+    onCenterRef.current(x, y)
+  }, [])
+
   useEffect(() => {
     if (readyKey !== renderKey) return
     const canvas = canvasRef.current
@@ -655,12 +813,18 @@ export function PdfPage({ pdf, page, paneId, pane, splitView, rotation, active, 
   useEffect(() => {
     const element = scrollRef.current
     if (!element || readyKey !== renderKey) return
+    const focus = zoomFocusRef.current
     const frame = requestAnimationFrame(() => {
-      element.scrollLeft = Math.max(0, centerRef.current.x * element.scrollWidth - element.clientWidth / 2)
-      element.scrollTop = Math.max(0, centerRef.current.y * element.scrollHeight - element.clientHeight / 2)
+      if (focus && applyZoomFocus(focus)) {
+        zoomFocusRef.current = null
+        recordCenter()
+      } else {
+        element.scrollLeft = Math.max(0, pane.centerX * element.scrollWidth - element.clientWidth / 2)
+        element.scrollTop = Math.max(0, pane.centerY * element.scrollHeight - element.clientHeight / 2)
+      }
     })
     return () => cancelAnimationFrame(frame)
-  }, [readyKey, renderKey, page, pane.zoom])
+  }, [readyKey, renderKey, page, pane.zoom, pane.centerX, pane.centerY, rotation, zoomPreviewScale, applyZoomFocus, recordCenter])
 
   useEffect(() => {
     centerRef.current = { x: pane.centerX, y: pane.centerY }
@@ -670,12 +834,16 @@ export function PdfPage({ pdf, page, paneId, pane, splitView, rotation, active, 
     if (!canPreviewZoom) return
     const element = scrollRef.current
     if (!element) return
+    const focus = zoomFocusRef.current
     const frame = requestAnimationFrame(() => {
-      element.scrollLeft = Math.max(0, centerRef.current.x * element.scrollWidth - element.clientWidth / 2)
-      element.scrollTop = Math.max(0, centerRef.current.y * element.scrollHeight - element.clientHeight / 2)
+      if (focus) applyZoomFocus(focus)
+      else {
+        element.scrollLeft = Math.max(0, pane.centerX * element.scrollWidth - element.clientWidth / 2)
+        element.scrollTop = Math.max(0, pane.centerY * element.scrollHeight - element.clientHeight / 2)
+      }
     })
     return () => cancelAnimationFrame(frame)
-  }, [zoomPreviewScale, canPreviewZoom])
+  }, [zoomPreviewScale, canPreviewZoom, rotation, pane.centerX, pane.centerY, applyZoomFocus])
 
   useEffect(() => {
     if (editingNoteId !== null) textInputRef.current?.focus()
@@ -684,6 +852,10 @@ export function PdfPage({ pdf, page, paneId, pane, splitView, rotation, active, 
   useEffect(() => {
     currentWorkRef.current = work
   }, [work])
+
+  useEffect(() => {
+    onCenterRef.current = onCenter
+  }, [onCenter])
 
   useLayoutEffect(() => {
     const layer = annotationLayerRef.current
@@ -702,15 +874,6 @@ export function PdfPage({ pdf, page, paneId, pane, splitView, rotation, active, 
     top = Math.min(Math.max(0, top), Math.max(0, layerRect.height - toolbarRect.height))
     setTextToolbarPosition({ x: left, y: top })
   }, [active, selectedNoteId, displayedSize, work])
-
-  function recordCenter() {
-    const element = scrollRef.current
-    if (!element) return
-    const x = element.scrollWidth > element.clientWidth ? (element.scrollLeft + element.clientWidth / 2) / element.scrollWidth : 0.5
-    const y = element.scrollHeight > element.clientHeight ? (element.scrollTop + element.clientHeight / 2) / element.scrollHeight : 0.5
-    centerRef.current = { x, y }
-    onCenter(x, y)
-  }
 
   function pointerDown(event: ReactPointerEvent<HTMLDivElement>) {
     const target = event.target
@@ -794,6 +957,7 @@ export function PdfPage({ pdf, page, paneId, pane, splitView, rotation, active, 
       onCenter(x, y)
       onZoom(2)
     } else {
+      zoomFocusRef.current = null
       centerRef.current = { x: 0.5, y: 0.5 }
       onCenter(0.5, 0.5)
       onZoom(1)
@@ -1315,22 +1479,42 @@ export function PdfPage({ pdf, page, paneId, pane, splitView, rotation, active, 
     event.currentTarget.setPointerCapture(event.pointerId)
     lineDrag.current = { axis, id, pointerId: event.pointerId }
     actionStartWork.current = work
+    setFocusDragging(true)
   }
 
   function handleGuidePointerMove(event: ReactPointerEvent<SVGSVGElement>) {
     const drag = lineDrag.current
     if (!drag || drag.pointerId !== event.pointerId) return
     const point = pointFromEvent(event, event.currentTarget, 0)
-    updateGuide(drag.axis, drag.id, drag.axis === 'horizontal' ? point.y : point.x, false)
+    const position = drag.axis === 'horizontal' ? point.y : point.x
+    const guide = guidesFor(currentWorkRef.current, drag.axis).find((item) => item.id === drag.id)
+    if (guide?.linkedCounterId && drag.axis === 'horizontal') setLinePositionPreview({ id: drag.id, position })
+    else updateGuide(drag.axis, drag.id, position, false)
   }
 
   function handleGuidePointerUp(event: ReactPointerEvent<SVGSVGElement>) {
     const drag = lineDrag.current
     if (!drag || drag.pointerId !== event.pointerId) return
+    if (event.type !== 'pointerup') {
+      lineDrag.current = null
+      setLinePositionPreview(null)
+      setFocusDragging(false)
+      return
+    }
     event.preventDefault()
     event.stopPropagation()
     const point = pointFromEvent(event, event.currentTarget, 0)
-    updateGuide(drag.axis, drag.id, drag.axis === 'horizontal' ? point.y : point.x, true)
+    const position = drag.axis === 'horizontal' ? point.y : point.x
+    const guide = guidesFor(currentWorkRef.current, drag.axis).find((item) => item.id === drag.id)
+    if (guide?.linkedCounterId && drag.axis === 'horizontal' && guide.chartRegion) {
+      const nextRow = counterRowAtGuidePosition(guide, position, counters.find((counter) => counter.id === guide.linkedCounterId))
+      setLinePositionPreview(null)
+      setFocusDragging(false)
+      if (nextRow !== null && window.confirm((guide.name ?? '연결된 카운터') + '를 ' + nextRow + '단으로 이동할까요?')) onCounterGuideMove(guide.linkedCounterId, nextRow)
+    } else {
+      updateGuide(drag.axis, drag.id, position, true)
+      setFocusDragging(false)
+    }
     lineDrag.current = null
   }
 
@@ -1338,6 +1522,9 @@ export function PdfPage({ pdf, page, paneId, pane, splitView, rotation, active, 
   const cssSize = displayedSize?.css
   const rotatedCssSize = cssSize ? rotatedPageSize(cssSize, rotation) : null
   const guidePageSize = pageSize ? rotatedPageSize(pageSize, rotation) : null
+  const guideControlSize = 44 / Math.max(zoomPreviewScale, 0.0001)
+  const horizontalGuideHitStroke = rotatedCssSize && guidePageSize ? 44 * guidePageSize.height / (rotatedCssSize.height * Math.max(zoomPreviewScale, 0.0001)) : 24
+  const verticalGuideHitStroke = rotatedCssSize && guidePageSize ? 44 * guidePageSize.width / (rotatedCssSize.width * Math.max(zoomPreviewScale, 0.0001)) : 24
   const guideLayerStyle = cssSize && rotatedCssSize ? {
     left: (cssSize.width - rotatedCssSize.width) / 2,
     top: (cssSize.height - rotatedCssSize.height) / 2,
@@ -1355,18 +1542,132 @@ export function PdfPage({ pdf, page, paneId, pane, splitView, rotation, active, 
   const colorworkRowFontSize = Math.min(10, Math.max(1, colorworkRowCellHeight * 0.72))
   const horizontalGuides = guidesFor(work, 'horizontal')
   const verticalGuides = guidesFor(work, 'vertical')
+  const quarterTurn = rotation === 90 || rotation === 270
+  const visibleHorizontalGuides = quarterTurn ? horizontalGuides.filter((guide) => !guide.linkedCounterId) : horizontalGuides
+  const visibleVerticalGuides = quarterTurn ? verticalGuides.filter((guide) => !guide.linkedCounterId) : verticalGuides
+  const focusGuides = quarterTurn ? [] : horizontalGuides.filter((guide) => guide.focus?.enabled).map((guide) => linePositionPreview?.id === guide.id && focusDragging ? { ...guide, position: linePositionPreview.position } : guide)
+  const focusSignature = JSON.stringify(focusGuides.map((guide) => [guide.id, guide.position, guide.focus, guide.chartRegion]))
+  const focusBands = focusGuides.map((guide) => {
+    const focus = guide.focus!
+    const count = guide.chartRegion ? Math.max(1, guide.chartRegion.lastRow - guide.chartRegion.firstRow + 1) : 0
+    const spacing = count > 1 && guide.chartRegion ? guide.chartRegion.height / (count - 1) : focus.rowSpacing
+    const center = rotation === 180 ? 1 - guide.position : guide.position
+    const half = Math.max(0.002, spacing * (focus.range * 2 + 1) / 2)
+    return [Math.max(0, center - half), Math.min(1, center + half)] as const
+  }).sort((first, second) => first[0] - second[0])
+  const fallbackMaskStops = ['#000 0%']
+  let maskCursor = 0
+  for (const [start, end] of focusBands) {
+    const startPercent = start * 100
+    const endPercent = end * 100
+    if (startPercent > maskCursor) fallbackMaskStops.push('#000 ' + maskCursor + '%', 'transparent ' + startPercent + '%')
+    else fallbackMaskStops.push('transparent ' + startPercent + '%')
+    fallbackMaskStops.push('transparent ' + endPercent + '%', '#000 ' + endPercent + '%')
+    maskCursor = endPercent
+  }
+  if (maskCursor < 100) fallbackMaskStops.push('#000 100%')
+  const fallbackRegions = focusGuides.filter((guide) => guide.focus?.scope === 'region' && guide.chartRegion).map((guide) => guide.chartRegion!)
+  const fallbackClipPath = focusGuides.some((guide) => guide.focus?.scope === 'page') || !fallbackRegions.length ? undefined : (() => {
+    const left = Math.min(...fallbackRegions.map((region) => rotation === 180 ? 1 - region.x - region.width : region.x))
+    const top = Math.min(...fallbackRegions.map((region) => rotation === 180 ? 1 - region.y - region.height : region.y))
+    const right = Math.max(...fallbackRegions.map((region) => rotation === 180 ? 1 - region.x : region.x + region.width))
+    const bottom = Math.max(...fallbackRegions.map((region) => rotation === 180 ? 1 - region.y : region.y + region.height))
+    return 'inset(' + top * 100 + '% ' + (1 - right) * 100 + '% ' + (1 - bottom) * 100 + '% ' + left * 100 + '%)'
+  })()
   const currentDraft: AnnotationRecord | null = draft.length ? {
     id: 'draft', type: tool === 'line' || tool === 'highlight' || tool === 'pen' ? tool : 'pen', points: draft, style: annotationStyle,
   } : null
 
+  useEffect(() => {
+    const overlay = focusCanvasRef.current
+    const source = canvasRef.current
+    if (!overlay || !source || !focusGuides.length || !source.width || !source.height || readyKey !== renderKey) {
+      if (overlay) { overlay.width = 0; overlay.height = 0 }
+      viewerCanvasMemory.release(focusCanvasKey.current)
+      setFocusCanvasUnavailable(false)
+      return
+    }
+    const timer = window.setTimeout(() => {
+      const startedAt = performance.now()
+      try {
+        const availablePixels = Math.min(500_000, Math.floor(viewerCanvasMemory.availableBytes(focusCanvasKey.current) / 4))
+        if (availablePixels < 10_000) throw new Error('focus canvas budget exhausted')
+        const scale = Math.min(1, Math.sqrt(availablePixels / (source.width * source.height)))
+        const width = Math.max(1, Math.floor(source.width * scale))
+        const height = Math.max(1, Math.floor(source.height * scale))
+        if (!viewerCanvasMemory.reserve(focusCanvasKey.current, width * height * 4)) throw new Error('focus canvas budget exhausted')
+        overlay.width = width
+        overlay.height = height
+        setFocusCanvasUnavailable(false)
+        const context = overlay.getContext('2d')
+        if (!context) throw new Error('focus canvas unavailable')
+        context.clearRect(0, 0, width, height)
+        const dimOnly = focusDragging || focusFallback
+        if (dimOnly) {
+          context.fillStyle = 'rgba(19, 31, 49, .22)'
+          context.fillRect(0, 0, width, height)
+        } else {
+          const strength = Math.max(...focusGuides.map((guide) => guide.focus?.strength === 'high' ? 4 : guide.focus?.strength === 'medium' ? 2.5 : 1.25))
+          const cssScale = width / Math.max(1, displayedSize?.css.width ?? width)
+          context.filter = 'blur(' + Math.max(1, strength * cssScale) + 'px)'
+          context.drawImage(source, 0, 0, width, height)
+          context.filter = 'none'
+        }
+        if (!focusGuides.some((guide) => guide.focus?.scope === 'page')) {
+          const regions = focusGuides.map((guide) => guide.chartRegion).filter((region): region is NonNullable<ProgressGuide['chartRegion']> => Boolean(region))
+          if (regions.length) {
+            context.globalCompositeOperation = 'destination-in'
+            context.fillStyle = '#fff'
+            regions.forEach((region) => {
+              const x = rotation === 180 ? 1 - region.x - region.width : region.x
+              const y = rotation === 180 ? 1 - region.y - region.height : region.y
+              context.fillRect(x * width, y * height, region.width * width, region.height * height)
+            })
+            context.globalCompositeOperation = 'source-over'
+          }
+        }
+        context.globalCompositeOperation = 'destination-out'
+        focusGuides.forEach((guide) => {
+          const focus = guide.focus!
+          const region = guide.chartRegion
+          const rowCount = region ? Math.max(1, region.lastRow - region.firstRow + 1) : 0
+          const spacing = rowCount > 1 && region ? region.height / (rowCount - 1) : focus.rowSpacing
+          const center = rotation === 180 ? 1 - guide.position : guide.position
+          const bandHeight = Math.max(2 / height, spacing * (focus.range * 2 + 1))
+          const regionX = focus.scope === 'region' && region ? (rotation === 180 ? 1 - region.x - region.width : region.x) : 0
+          const regionWidth = focus.scope === 'region' && region ? region.width : 1
+          context.fillRect(regionX * width, Math.max(0, center - bandHeight / 2) * height, regionWidth * width, Math.min(1, bandHeight) * height)
+        })
+        context.globalCompositeOperation = 'source-over'
+        if (!focusDragging && !focusFallback) {
+          focusSlowRenderCount.current = performance.now() - startedAt > 100 ? focusSlowRenderCount.current + 1 : 0
+          if (focusSlowRenderCount.current >= 2) setFocusFallback(true)
+        }
+      } catch {
+        overlay.width = 0
+        overlay.height = 0
+        viewerCanvasMemory.release(focusCanvasKey.current)
+        setFocusFallback(true)
+        setFocusCanvasUnavailable(true)
+      }
+    }, focusDragging ? 0 : 200)
+    return () => window.clearTimeout(timer)
+    // oxlint-disable-next-line react-hooks/exhaustive-deps -- focusSignature serializes the guide values used by this canvas effect.
+  }, [focusSignature, focusDragging, focusFallback, readyKey, renderKey, rotation, displayedSize?.css.width])
+
+  useEffect(() => () => viewerCanvasMemory.release(focusCanvasKey.current), [])
+
   return (
     <div className={'pdf-pane ' + (active ? 'is-active' : '')} onPointerDown={onActivate}>
       <div className="pane-label">{active ? '현재 작업 영역' : '보조 영역'}</div>
+      {quarterTurn && [...horizontalGuides, ...verticalGuides].some((guide) => guide.linkedCounterId || guide.focus?.enabled) && <div className="progress-rotation-notice" role="status">90°·270° 회전 중에는 연결 진행선과 집중 보기를 잠시 멈춥니다.</div>}
       <div className="pdf-scroll-area" ref={scrollRef} onScroll={recordCenter} onPointerDown={pointerDown} onPointerMove={pointerMove} onPointerUp={pointerEnd} onPointerCancel={pointerEnd} onDoubleClick={doubleTap}>
         <div className="pdf-page-wrap" style={pageWrapStyle}>
           <div ref={rotationLayerRef} className="pdf-rotation-content" style={cssSize ? { width: cssSize.width, height: cssSize.height, transform: 'rotate(' + rotation + 'deg) scale(' + zoomPreviewScale + ')' } : undefined}>
           <div className="pdf-image-layer" style={cssSize ? { width: cssSize.width, height: cssSize.height } : undefined}>
             <canvas ref={canvasRef} aria-label={'PDF ' + page + '페이지'} />
+            <canvas ref={focusCanvasRef} className="pdf-focus-overlay" aria-hidden="true" />
+            {focusCanvasUnavailable && focusGuides.length > 0 && <div className="pdf-focus-dim-fallback" aria-hidden="true" style={{ maskImage: 'linear-gradient(to bottom, ' + fallbackMaskStops.join(', ') + ')', WebkitMaskImage: 'linear-gradient(to bottom, ' + fallbackMaskStops.join(', ') + ')', clipPath: fallbackClipPath }} />}
             {pageSize && cssSize && <>
             <svg
                 className={'pdf-svg-overlay ' + (tool === 'pan' ? 'pan-mode' : tool === 'text' ? 'text-mode' : 'draw-mode')}
@@ -1605,19 +1906,28 @@ export function PdfPage({ pdf, page, paneId, pane, splitView, rotation, active, 
                 onLostPointerCapture={handleGuidePointerUp}
                 aria-label="진행선"
               >
-                {lineSettings.horizontal.visible && horizontalGuides.map((guide) => <g key={guide.id}>
-                  <line x1="0" x2={guidePageSize.width} y1={guide.position * guidePageSize.height} y2={guide.position * guidePageSize.height} stroke={lineSettings.horizontal.color} strokeWidth={lineSettings.horizontal.thickness} strokeOpacity={lineSettings.horizontal.opacity} pointerEvents="none" />
-                  <line data-progress="horizontal" data-guide-id={guide.id} x1="0" x2={guidePageSize.width} y1={guide.position * guidePageSize.height} y2={guide.position * guidePageSize.height} stroke="transparent" strokeWidth="24" pointerEvents={tool === 'text' ? 'none' : 'stroke'} />
-                </g>)}
-                {lineSettings.vertical.visible && verticalGuides.map((guide) => <g key={guide.id}>
-                  <line x1={guide.position * guidePageSize.width} x2={guide.position * guidePageSize.width} y1="0" y2={guidePageSize.height} stroke={lineSettings.vertical.color} strokeWidth={lineSettings.vertical.thickness} strokeOpacity={lineSettings.vertical.opacity} pointerEvents="none" />
-                  <line data-progress="vertical" data-guide-id={guide.id} x1={guide.position * guidePageSize.width} x2={guide.position * guidePageSize.width} y1="0" y2={guidePageSize.height} stroke="transparent" strokeWidth="24" pointerEvents={tool === 'text' ? 'none' : 'stroke'} />
-                </g>)}
+                {lineSettings.horizontal.visible && visibleHorizontalGuides.map((guide) => {
+                  const position = linePositionPreview?.id === guide.id ? linePositionPreview.position : guide.position
+                  const color = counters.find((counter) => counter.id === guide.linkedCounterId)?.color ?? guide.color ?? lineSettings.horizontal.color
+                  return <g key={guide.id}>
+                    <line x1="0" x2={guidePageSize.width} y1={position * guidePageSize.height} y2={position * guidePageSize.height} stroke={color} strokeWidth={lineSettings.horizontal.thickness} strokeOpacity={lineSettings.horizontal.opacity} pointerEvents="none" />
+                    {guide.name && <text x="4" y={Math.max(12, position * guidePageSize.height - 4)} fill={color} fontSize={Math.max(10, guidePageSize.width / 100)} pointerEvents="none">{guide.name}</text>}
+                    <line data-progress="horizontal" data-guide-id={guide.id} x1="0" x2={guidePageSize.width} y1={position * guidePageSize.height} y2={position * guidePageSize.height} stroke="transparent" strokeWidth={horizontalGuideHitStroke} pointerEvents={tool === 'text' ? 'none' : 'stroke'} />
+                  </g>
+                })}
+                {lineSettings.vertical.visible && visibleVerticalGuides.map((guide) => {
+                  const color = counters.find((counter) => counter.id === guide.linkedCounterId)?.color ?? guide.color ?? lineSettings.vertical.color
+                  return <g key={guide.id}>
+                    <line x1={guide.position * guidePageSize.width} x2={guide.position * guidePageSize.width} y1="0" y2={guidePageSize.height} stroke={color} strokeWidth={lineSettings.vertical.thickness} strokeOpacity={lineSettings.vertical.opacity} pointerEvents="none" />
+                    {guide.name && <text x={guide.position * guidePageSize.width + 4} y="14" fill={color} fontSize={Math.max(10, guidePageSize.width / 100)} pointerEvents="none">{guide.name}</text>}
+                    <line data-progress="vertical" data-guide-id={guide.id} x1={guide.position * guidePageSize.width} x2={guide.position * guidePageSize.width} y1="0" y2={guidePageSize.height} stroke="transparent" strokeWidth={verticalGuideHitStroke} pointerEvents={tool === 'text' ? 'none' : 'stroke'} />
+                  </g>
+                })}
               </svg>
-              <button type="button" className="guide-remove-button guide-remove-horizontal" aria-label="마지막 가로선 삭제" title={horizontalGuides.length ? '마지막 가로선 삭제' : '삭제할 가로선 없음'} disabled={!horizontalGuides.length} onPointerDown={(event) => event.stopPropagation()} onClick={() => removeGuide('horizontal')}><Minus size={15} /></button>
-              <button type="button" className="guide-remove-button guide-remove-vertical" aria-label="마지막 세로선 삭제" title={verticalGuides.length ? '마지막 세로선 삭제' : '삭제할 세로선 없음'} disabled={!verticalGuides.length} onPointerDown={(event) => event.stopPropagation()} onClick={() => removeGuide('vertical')}><Minus size={15} /></button>
-              <button type="button" className="guide-add-button guide-add-vertical" aria-label="세로선 추가" title={verticalGuides.length >= 10 ? '세로선 최대 10개' : '세로선 추가'} disabled={verticalGuides.length >= 10} onPointerDown={(event) => event.stopPropagation()} onClick={() => addGuide('vertical')}><Plus size={15} /></button>
-              <button type="button" className="guide-add-button guide-add-horizontal" aria-label="가로선 추가" title={horizontalGuides.length >= 10 ? '가로선 최대 10개' : '가로선 추가'} disabled={horizontalGuides.length >= 10} onPointerDown={(event) => event.stopPropagation()} onClick={() => addGuide('horizontal')}><Plus size={15} /></button>
+              <button type="button" className="guide-remove-button guide-remove-horizontal" style={{ width: guideControlSize, height: guideControlSize }} aria-label="마지막 가로선 삭제" title={horizontalGuides.length ? '마지막 가로선 삭제' : '삭제할 가로선 없음'} disabled={!horizontalGuides.length} onPointerDown={(event) => event.stopPropagation()} onClick={() => removeGuide('horizontal')}><Minus size={15} /></button>
+              <button type="button" className="guide-remove-button guide-remove-vertical" style={{ width: guideControlSize, height: guideControlSize }} aria-label="마지막 세로선 삭제" title={verticalGuides.length ? '마지막 세로선 삭제' : '삭제할 세로선 없음'} disabled={!verticalGuides.length} onPointerDown={(event) => event.stopPropagation()} onClick={() => removeGuide('vertical')}><Minus size={15} /></button>
+              <button type="button" className="guide-add-button guide-add-vertical" style={{ width: guideControlSize, height: guideControlSize }} aria-label="세로선 추가" title={verticalGuides.length >= 10 ? '세로선 최대 10개' : '세로선 추가'} disabled={verticalGuides.length >= 10} onPointerDown={(event) => event.stopPropagation()} onClick={() => addGuide('vertical')}><Plus size={15} /></button>
+              <button type="button" className="guide-add-button guide-add-horizontal" style={{ width: guideControlSize, height: guideControlSize }} aria-label="가로선 추가" title={horizontalGuides.length >= 10 ? '가로선 최대 10개' : '가로선 추가'} disabled={horizontalGuides.length >= 10} onPointerDown={(event) => event.stopPropagation()} onClick={() => addGuide('horizontal')}><Plus size={15} /></button>
             </div>}
             </>}
           </div>

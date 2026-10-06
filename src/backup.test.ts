@@ -2,6 +2,7 @@ import 'fake-indexeddb/auto'
 import { describe, expect, it } from 'vitest'
 import { strFromU8, strToU8, unzipSync, zipSync } from 'fflate'
 import { createWorkspaceBackup, readWorkspaceBackup } from './backup'
+import { createCounter } from './smartCounter'
 import { addDocument, deleteChart, deleteDocument, duplicateDocument, getChart, getKnittingReport, getKnittingReports, getPageWork, getPages, getViewer, importWorkspaceData, listCharts, listDocuments, saveChart, saveKnittingReport, savePageWork, savePreference, saveViewer, setPageFlag } from './storage'
 import { createKnittingChart, makeRasterPdf } from './charts'
 import type { DocumentRecord, KnittingReport } from './types'
@@ -21,6 +22,10 @@ describe('portable workspace backup', () => {
         documentId: 'migration-check', split: false, activePane: 'primary',
         primary: { page: 1, zoom: 1, centerX: 0.5, centerY: 0.5 },
         secondary: { page: 1, zoom: 1, centerX: 0.5, centerY: 0.5 },
+        counters: Array.from({ length: 5 }, (_, index) => ({
+          mode: index === 0 ? 'repeat' : 'simple', value: index === 0 ? 13 : 0, repeatName: '몸판', startRow: 1,
+          repeatLength: 8, repeatCount: null, taskRules: [], taskOccurrences: [],
+        })),
         wideRatio: 0.5, tallRatio: 0.5, techniqueSlots: [null, null, null, null, null], updatedAt: Date.now(),
       })
       db.createObjectStore('preferences', { keyPath: 'key' })
@@ -46,6 +51,11 @@ describe('portable workspace backup', () => {
       createdAt: Date.now(), lastOpenedAt: null, tags: [], pdf, cover: null,
     })
     expect(await getViewer('migration-check', 1)).not.toHaveProperty('techniqueSlots')
+    expect((await getViewer('migration-check', 1)).counters).toHaveLength(6)
+    expect((await getViewer('migration-check', 1)).counters?.slice(0, 2)).toMatchObject([
+      { kind: 'simple', value: 13, name: '몸판 단' },
+      { kind: 'pattern', currentRow: 13, patternRow: 5, repeatLength: 8 },
+    ])
     expect(await getKnittingReports('migration-check')).toMatchObject([{ id: 'migration-check', workPhotos: [], title: '기존 보고서' }])
     const work = await getPageWork('migration-check', 1)
     expect(work).toMatchObject({ horizontalPosition: 0.5, verticalPosition: 0.5, annotations: [] })
@@ -80,8 +90,7 @@ describe('portable workspace backup', () => {
       const restored = await readWorkspaceBackup(legacyBackup)
       const restoredViewer = restored.viewers.find((item) => item.documentId === id)!
       expect(restoredViewer).not.toHaveProperty('techniqueSlots')
-      expect(restoredViewer.counters).toHaveLength(5)
-      expect(restoredViewer.counters?.[0]).toMatchObject({ mode: 'simple', value: 0 })
+      expect(restoredViewer.counters).toEqual([])
       const legacyRestoredViewer = restoredViewer as unknown as { techniqueSlots?: unknown }
       legacyRestoredViewer.techniqueSlots = techniqueSlots
       await importWorkspaceData(restored)
@@ -163,14 +172,17 @@ describe('portable workspace backup', () => {
     await addDocument(original)
     await setPageFlag(original.id, 3, 'bookmarked', true)
     const viewer = await getViewer(original.id, original.pageCount)
+    const rowCounter = { ...createCounter('simple', '몸판 단'), id: 'body-row', value: 19, unit: 'row' as const }
+    const patternCounter = { ...createCounter('pattern', '몸판 무늬'), id: 'body-pattern', linkedToId: rowCounter.id, value: 3, currentRow: 19, patternRow: 3, startRow: 5, repeatLength: 12, repeatCount: 3, repeatStartNumber: 1 }
+    const taskCounter = { ...createCounter('task', '몸판 줄임'), id: 'body-decrease', linkedToId: rowCounter.id, value: 1, currentRow: 19, taskKind: 'decrease' as const, firstTaskRow: 6, interval: 6, total: 8, completedCount: 1, nextTaskRow: 24, taskRecords: [{ row: 6, status: 'done' as const }, { row: 12, status: 'missed' as const }] }
+    const counters = [rowCounter, patternCounter, taskCounter]
     await saveViewer({
       ...viewer,
-      counters: viewer.counters?.map((counter, index) => index === 0 ? {
-        ...counter,
-        mode: 'repeat', value: 19, repeatName: '몸판 무늬', startRow: 5, repeatLength: 12, repeatCount: 3,
-        taskRules: [{ id: 'decrease-1', kind: 'decrease', interval: 6, total: 8 }],
-        taskOccurrences: [{ ruleId: 'decrease-1', occurrence: 1, status: 'done' }, { ruleId: 'decrease-1', occurrence: 2, status: 'missed' }],
-      } : counter),
+      counters,
+      counterHistory: [{ id: 'history-1', label: '몸판 단 · 19단 완료', counters, guides: [], actualRow: 19, savedAt: Date.now() }],
+      counterSoundEnabled: false,
+      counterPreviewEnabled: true,
+      counterGuideAutoPanId: 'h-1',
       primary: { ...viewer.primary, page: 4, zoom: 2, centerX: 0.37, centerY: 0.68, rotations: { 4: 90 } },
       secondary: { ...viewer.secondary, rotations: { 1: 270 } },
       progressSettings: {
@@ -184,13 +196,13 @@ describe('portable workspace backup', () => {
         text: { color: '#28384c', thickness: 2, opacity: 1, fontSize: 20 },
       },
     })
-    expect((await getViewer(original.id, original.pageCount)).counters?.[0]).toMatchObject({ mode: 'repeat', value: 19, repeatName: '몸판 무늬' })
+    expect((await getViewer(original.id, original.pageCount)).counters?.[1]).toMatchObject({ kind: 'pattern', value: 3, name: '몸판 무늬' })
     await savePageWork({
       documentId: original.id,
       pageNumber: 4,
       horizontalPosition: 0.32,
       verticalPosition: 0.72,
-      horizontalGuides: [{ id: 'h-1', position: 0.32 }, { id: 'h-2', position: 0.68 }],
+      horizontalGuides: [{ id: 'h-1', position: 0.32, linkedCounterId: patternCounter.id, name: patternCounter.name, color: patternCounter.color, chartRegion: { x: 0.1, y: 0.2, width: 0.8, height: 0.6, firstRow: 1, lastRow: 12, startCounterRow: 5, repeat: true, direction: 'top-to-bottom' }, focus: { enabled: true, strength: 'low', range: 1, scope: 'region', rowSpacing: 0.05 } }, { id: 'h-2', position: 0.68 }],
       verticalGuides: [{ id: 'v-1', position: 0.72 }],
       colorworkGrid: {
         chartWidthCm: 2, chartHeightCm: 3, gaugeStitches: 18, gaugeRows: 24, columns: 4, rows: 7,
@@ -220,24 +232,28 @@ describe('portable workspace backup', () => {
     const backup = await createWorkspaceBackup()
     const restored = await readWorkspaceBackup(new File([backup], 'backup.doanbogo'))
     const archiveEntries = unzipSync(new Uint8Array(await backup.arrayBuffer()))
-    expect(JSON.parse(strFromU8(archiveEntries['manifest.json'])).version).toBe(9)
+    expect(JSON.parse(strFromU8(archiveEntries['manifest.json'])).version).toBe(10)
     const restoredViewer = restored.viewers.find((entry) => entry.documentId === original.id)!
-    expect(restored.documents[0].fileName).toBe(original.fileName)
-    expect(new TextDecoder().decode(await restored.documents[0].pdf.arrayBuffer())).toBe('%PDF-1.7 sample')
+    const restoredDocument = restored.documents.find((document) => document.id === original.id)!
+    expect(restoredDocument.fileName).toBe(original.fileName)
+    expect(new TextDecoder().decode(await restoredDocument.pdf.arrayBuffer())).toBe('%PDF-1.7 sample')
     expect(restored.pages[0]).toMatchObject({ documentId: original.id, pageNumber: 3, bookmarked: true })
     expect(restoredViewer.primary).toMatchObject({ page: 4, zoom: 2, centerX: 0.37, centerY: 0.68 })
     expect(restoredViewer.primary.rotations).toEqual({ 4: 90 })
     expect(restoredViewer.secondary.rotations).toEqual({ 1: 270 })
     expect(restoredViewer.progressSettings?.horizontal).toMatchObject({ color: '#edc21b', thickness: 5, opacity: 0.4 })
     expect(restoredViewer.annotationSettings?.text).toMatchObject({ color: '#28384c', fontSize: 20 })
-    expect(restoredViewer.counters?.[0]).toMatchObject({
-      mode: 'repeat', value: 19, repeatName: '몸판 무늬', startRow: 5, repeatLength: 12, repeatCount: 3,
-      taskRules: [{ id: 'decrease-1', kind: 'decrease', interval: 6, total: 8 }],
-      taskOccurrences: [{ ruleId: 'decrease-1', occurrence: 1, status: 'done' }, { ruleId: 'decrease-1', occurrence: 2, status: 'missed' }],
-    })
+    expect(restoredViewer.counters).toMatchObject([
+      { id: 'body-row', kind: 'simple', value: 19, name: '몸판 단' },
+      { id: 'body-pattern', kind: 'pattern', currentRow: 19, patternRow: 3, repeatLength: 12, repeatCount: 3 },
+      { id: 'body-decrease', kind: 'task', completedCount: 1, nextTaskRow: 24, taskRecords: [{ row: 6, status: 'done' }, { row: 12, status: 'missed' }] },
+    ])
+    expect(restoredViewer.counterHistory).toHaveLength(1)
+    expect(restoredViewer.counterPreviewEnabled).toBe(true)
+    expect(restoredViewer.counterGuideAutoPanId).toBe('h-1')
     expect(restored.pageWork[0]).toMatchObject({
       pageNumber: 4,
-      horizontalGuides: [{ id: 'h-1', position: 0.32 }, { id: 'h-2', position: 0.68 }],
+      horizontalGuides: [{ id: 'h-1', position: 0.32, linkedCounterId: 'body-pattern', focus: { enabled: true, strength: 'low', range: 1, scope: 'region', rowSpacing: 0.05 } }, { id: 'h-2', position: 0.68 }],
       verticalGuides: [{ id: 'v-1', position: 0.72 }],
       colorworkGrid: { chartWidthCm: 2, chartHeightCm: 3, columns: 4, rows: 7, visible: true },
       annotations: [{ id: 'ink-1', type: 'line' }, { id: 'note-1', text: '앞판\n무늬 반복', boxWidth: 0.42, boxHeight: 0.18 }],
@@ -253,7 +269,7 @@ describe('portable workspace backup', () => {
     expect(imported?.id).toBeTruthy()
     expect((await getPages(imported!.id))[0]).toMatchObject({ documentId: imported!.id, pageNumber: 3, bookmarked: true })
     expect((await getViewer(imported!.id, original.pageCount)).primary).toMatchObject({ page: 4, zoom: 2, centerX: 0.37, centerY: 0.68 })
-    expect((await getViewer(imported!.id, original.pageCount)).counters?.[0]).toMatchObject({ mode: 'repeat', value: 19, repeatName: '몸판 무늬' })
+    expect((await getViewer(imported!.id, original.pageCount)).counters?.[1]).toMatchObject({ kind: 'pattern', value: 3, name: '몸판 무늬' })
     expect(await getPageWork(imported!.id, 4)).toMatchObject({
       horizontalGuides: [{ id: 'h-1', position: 0.32 }, { id: 'h-2', position: 0.68 }],
       verticalGuides: [{ id: 'v-1', position: 0.72 }],
@@ -274,6 +290,34 @@ describe('portable workspace backup', () => {
     await deleteChart(importedChart!.id)
     await deleteDocument(original.id)
     await deleteDocument(imported!.id)
+  })
+
+  it('imports v9 counters into the independent simple, pattern, and task model', async () => {
+    const pdf = new Blob(['%PDF-1.7 v9 migration'], { type: 'application/pdf' })
+    const documentId = crypto.randomUUID()
+    await addDocument({ id: documentId, fileName: 'v9.pdf', size: pdf.size, pageCount: 1, createdAt: Date.now(), lastOpenedAt: null, tags: [], pdf, cover: null })
+    await saveViewer(await getViewer(documentId, 1))
+    const exported = await createWorkspaceBackup()
+    const entries = unzipSync(new Uint8Array(await exported.arrayBuffer()))
+    const manifest = JSON.parse(strFromU8(entries['manifest.json'])) as { version: number; viewers: Record<string, unknown>[] }
+    manifest.version = 9
+    const viewer = manifest.viewers.find((item) => item.documentId === documentId)!
+    viewer.counters = Array.from({ length: 5 }, (_, index) => ({
+      mode: index === 0 ? 'repeat' : 'simple', value: index === 0 ? 19 : 0, repeatName: '몸판 무늬', startRow: 5,
+      repeatLength: 12, repeatCount: 3,
+      taskRules: index === 0 ? [{ id: 'decrease-1', kind: 'decrease', interval: 6, total: 8 }] : [],
+      taskOccurrences: index === 0 ? [{ ruleId: 'decrease-1', occurrence: 1, status: 'done' }, { ruleId: 'decrease-1', occurrence: 2, status: 'missed' }] : [],
+    }))
+    const legacy = new File([zipSync({ ...entries, 'manifest.json': strToU8(JSON.stringify(manifest)) })], 'v9.doanbogo')
+    const restored = await readWorkspaceBackup(legacy)
+    const migrated = restored.viewers.find((item) => item.documentId === documentId)!
+    expect(migrated.counters).toHaveLength(7)
+    expect(migrated.counters?.slice(0, 3)).toMatchObject([
+      { kind: 'simple', value: 19, name: '몸판 무늬 단' },
+      { kind: 'pattern', currentRow: 19, patternRow: 3, repeatLength: 12, repeatCount: 3 },
+      { kind: 'task', completedCount: 1, nextTaskRow: 24, taskRecords: [{ row: 6, status: 'done' }, { row: 12, status: 'missed' }] },
+    ])
+    await deleteDocument(documentId)
   })
 
   it('imports v1 backups without page work', async () => {

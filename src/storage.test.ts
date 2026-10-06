@@ -1,6 +1,7 @@
 import 'fake-indexeddb/auto'
 import { describe, expect, it } from 'vitest'
-import { addDocument, deleteDocument, duplicateDocument, getPageRecognition, getPageWork, getPages, getViewer, listDocuments, markOpened, renameDocument, savePageRecognition, savePageWork, saveViewer, setPageFlag, updateTags } from './storage'
+import { addDocument, deleteDocument, duplicateDocument, getPageRecognition, getPageWork, getPages, getViewer, listDocuments, markOpened, renameDocument, savePageRecognition, savePageWork, saveViewer, saveViewerAndPageWorks, setPageFlag, updateTags } from './storage'
+import { createCounter } from './smartCounter'
 import type { DocumentRecord } from './types'
 
 function makeDocument(id: string, fileName: string, createdAt: number, tags: string[] = []): DocumentRecord {
@@ -119,5 +120,38 @@ describe('local document storage', () => {
     expect(await getPageRecognition(document.id, 5)).toBeUndefined()
     expect(await getPageWork(document.id, 5)).toMatchObject({ horizontalPosition: 0.5, verticalPosition: 0.5, annotations: [] })
     expect((await listDocuments('name')).some((item) => item.id === document.id)).toBe(false)
+  })
+
+  it('commits counter state and linked guide work in the same storage transaction', async () => {
+    const document = makeDocument(crypto.randomUUID(), 'Counter transaction.pdf', Date.now())
+    await addDocument(document)
+    const viewer = await getViewer(document.id, document.pageCount)
+    const counter = { ...createCounter('simple', '몸판 단'), value: 8, unit: 'row' as const }
+    const guide = { id: 'linked-guide', position: 0.4, linkedCounterId: counter.id, name: counter.name, color: counter.color, chartRegion: { x: 0.1, y: 0.1, width: 0.8, height: 0.8, firstRow: 1, lastRow: 8, startCounterRow: 1, repeat: false, direction: 'top-to-bottom' as const } }
+    await saveViewerAndPageWorks({ ...viewer, counters: [counter] }, [{
+      documentId: document.id, pageNumber: 2, horizontalPosition: 0.4, verticalPosition: 0.5,
+      horizontalGuides: [guide], verticalGuides: [], annotations: [],
+    }])
+    expect((await getViewer(document.id, document.pageCount)).counters).toMatchObject([{ id: counter.id, value: 8 }])
+    expect(await getPageWork(document.id, 2)).toMatchObject({ horizontalGuides: [{ id: 'linked-guide', linkedCounterId: counter.id, position: 0.4 }] })
+    await deleteDocument(document.id)
+  })
+
+  it('does not save only the viewer when one linked page work makes the transaction fail', async () => {
+    const document = makeDocument(crypto.randomUUID(), 'Counter rollback.pdf', Date.now())
+    await addDocument(document)
+    const viewer = await getViewer(document.id, document.pageCount)
+    const initial = { ...createCounter('simple', '몸판 단'), value: 8, unit: 'row' as const }
+    const initialWork = {
+      documentId: document.id, pageNumber: 2, horizontalPosition: 0.4, verticalPosition: 0.5,
+      horizontalGuides: [{ id: 'guide', position: 0.4 }], verticalGuides: [], annotations: [],
+    }
+    await saveViewerAndPageWorks({ ...viewer, counters: [initial] }, [initialWork])
+    const changed = { ...initial, value: 9 }
+    await expect(saveViewerAndPageWorks({ ...viewer, counters: [changed] }, [{ ...initialWork, pageNumber: Number.NaN }])).rejects.toThrow()
+
+    expect((await getViewer(document.id, document.pageCount)).counters).toMatchObject([{ id: initial.id, value: 8 }])
+    expect(await getPageWork(document.id, 2)).toMatchObject({ horizontalGuides: [{ id: 'guide', position: 0.4 }] })
+    await deleteDocument(document.id)
   })
 })

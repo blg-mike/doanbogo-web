@@ -1,6 +1,6 @@
 import { openDB, type DBSchema, type IDBPDatabase } from 'idb'
-import type { ChartDocument, DocumentRecord, KnittingReport, PageRecognitionRecord, PageRecord, PageWorkRecord, PaneSnapshot, PreferenceRecord, ProgressGuide, SortMode, ViewerSnapshot } from './types'
-import { normalizeCounterSnapshots } from './smartCounter'
+import type { ChartDocument, CounterHistoryEntry, DocumentRecord, KnittingReport, PageRecognitionRecord, PageRecord, PageWorkRecord, PaneSnapshot, PreferenceRecord, ProgressGuide, SortMode, ViewerSnapshot } from './types'
+import { MAX_COUNTER_HISTORY, normalizeCounterSnapshots } from './smartCounter'
 
 interface DoanBogoDB extends DBSchema {
   documents: {
@@ -55,7 +55,9 @@ const pageKey = (id: string, page: number) => id + '\u0000' + page
 function stripLegacyTechniqueSlots(viewer: ViewerSnapshot): ViewerSnapshot {
   const cleaned = { ...viewer } as ViewerSnapshot & { techniqueSlots?: unknown }
   delete cleaned.techniqueSlots
-  return { ...cleaned, counters: normalizeCounterSnapshots(cleaned.counters) }
+  const counterHistory = Array.isArray(cleaned.counterHistory) ? cleaned.counterHistory.slice(-MAX_COUNTER_HISTORY).filter((item): item is CounterHistoryEntry =>
+    Boolean(item && typeof item === 'object' && Array.isArray(item.counters) && Array.isArray(item.guides))) : []
+  return { ...cleaned, counters: normalizeCounterSnapshots(cleaned.counters), counterHistory }
 }
 
 export function normalizePageWork(work: PageWorkRecord): PageWorkRecord {
@@ -90,7 +92,7 @@ async function database(): Promise<Database | null> {
     try {
       let abandoned = false
       let timeoutId = 0
-      const opening = openDB<DoanBogoDB>('doanbogo-web', 7, {
+      const opening = openDB<DoanBogoDB>('doanbogo-web', 8, {
         async upgrade(db, oldVersion, _newVersion, transaction) {
           if (oldVersion < 1) {
             const documents = db.createObjectStore('documents', { keyPath: 'id' })
@@ -134,6 +136,14 @@ async function database(): Promise<Database | null> {
           if (oldVersion < 7) {
             const recognition = db.createObjectStore('pageRecognition', { keyPath: ['documentId', 'pageNumber'] })
             recognition.createIndex('by-document', 'documentId')
+          }
+          if (oldVersion < 8 && db.objectStoreNames.contains('viewers')) {
+            let cursor = await transaction.objectStore('viewers').openCursor()
+            while (cursor) {
+              const viewer = stripLegacyTechniqueSlots(cursor.value)
+              await cursor.update(viewer)
+              cursor = await cursor.continue()
+            }
           }
         },
       }).then((db) => {
@@ -492,6 +502,32 @@ export async function savePageWork(work: PageWorkRecord) {
   const normalized = normalizePageWork(work)
   await access(async (db) => { await db.put('pageWork', normalized) }, () => {
     temporary.pageWork.set(pageKey(normalized.documentId, normalized.pageNumber), normalized)
+  })
+}
+
+export async function getPageWorks(id: string) {
+  return access((db) => db.getAllFromIndex('pageWork', 'by-document', id).then((works) => works.map(normalizePageWork)), () =>
+    [...temporary.pageWork.values()].filter((work) => work.documentId === id).map(normalizePageWork))
+}
+
+export async function saveViewerAndPageWorks(snapshot: ViewerSnapshot, works: PageWorkRecord[]) {
+  const viewer = stripLegacyTechniqueSlots(snapshot)
+  const normalizedWorks = works.map(normalizePageWork)
+  await access(async (db) => {
+    const tx = db.transaction(['viewers', 'pageWork'], 'readwrite')
+    const done = tx.done
+    try {
+      await tx.objectStore('viewers').put({ ...viewer, updatedAt: Date.now() })
+      for (const work of normalizedWorks) await tx.objectStore('pageWork').put(work)
+      await done
+    } catch (error) {
+      try { tx.abort() } catch { /* The transaction may already have finished. */ }
+      await done.catch(() => {})
+      throw error
+    }
+  }, () => {
+    temporary.viewers.set(viewer.documentId, { ...viewer, updatedAt: Date.now() })
+    normalizedWorks.forEach((work) => temporary.pageWork.set(pageKey(work.documentId, work.pageNumber), work))
   })
 }
 

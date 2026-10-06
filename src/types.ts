@@ -18,6 +18,32 @@ export interface ProgressSettings {
 export interface ProgressGuide {
   id: string
   position: number
+  name?: string
+  color?: string
+  linkedCounterId?: string
+  chartRegion?: ProgressChartRegion
+  focus?: ProgressFocusSettings
+}
+
+export interface ProgressChartRegion {
+  x: number
+  y: number
+  width: number
+  height: number
+  firstRow: number
+  lastRow: number
+  startCounterRow: number
+  repeat: boolean
+  direction: 'top-to-bottom' | 'bottom-to-top'
+  rowPositions?: number[]
+}
+
+export interface ProgressFocusSettings {
+  enabled: boolean
+  strength: 'low' | 'medium' | 'high'
+  range: 0 | 1 | 2
+  scope: 'page' | 'region'
+  rowSpacing: number
 }
 
 export interface AnnotationStyle {
@@ -128,6 +154,8 @@ export interface PaneSnapshot {
 
 export type CounterTaskKind = 'decrease' | 'increase'
 export type CounterTaskStatus = 'done' | 'missed'
+export type CounterKind = 'simple' | 'pattern' | 'task'
+export type CounterUnit = 'row' | 'stitch' | 'round'
 
 export interface CounterTaskRule {
   id: string
@@ -142,15 +170,50 @@ export interface CounterTaskOccurrence {
   status: CounterTaskStatus
 }
 
+export interface CounterTaskRecord {
+  row: number
+  status: CounterTaskStatus
+}
+
+export interface CounterPatternInstruction {
+  id: string
+  row: number
+  message: string
+}
+
 export interface CounterSnapshot {
-  mode: 'simple' | 'repeat'
+  id: string
+  kind: CounterKind
+  name: string
+  color: string
+  pinned: boolean
+  linkedToId?: string
+  legacyOverflow?: boolean
   value: number
-  repeatName: string
-  startRow: number
-  repeatLength: number
-  repeatCount: number | null
-  taskRules: CounterTaskRule[]
-  taskOccurrences: CounterTaskOccurrence[]
+  unit?: CounterUnit
+  currentRow?: number
+  patternRow?: number
+  repeatLength?: number
+  startRow?: number
+  repeatStartNumber?: number
+  repeatCount?: number | null
+  taskKind?: CounterTaskKind
+  firstTaskRow?: number
+  interval?: number
+  total?: number
+  completedCount?: number
+  nextTaskRow?: number
+  taskRecords?: CounterTaskRecord[]
+  instructions?: CounterPatternInstruction[]
+}
+
+export interface CounterHistoryEntry {
+  id: string
+  label: string
+  counters: CounterSnapshot[]
+  guides: { pageNumber: number; horizontalGuides: ProgressGuide[]; verticalGuides: ProgressGuide[] }[]
+  actualRow: number
+  savedAt: number
 }
 
 export interface ViewerSnapshot {
@@ -165,6 +228,12 @@ export interface ViewerSnapshot {
   progressSettings?: ProgressSettings
   annotationSettings?: AnnotationSettings
   counters?: CounterSnapshot[]
+  counterHistory?: CounterHistoryEntry[]
+  collapsedCounterKinds?: Partial<Record<CounterKind, boolean>>
+  counterSoundEnabled?: boolean
+  counterPreviewEnabled?: boolean
+  counterGuideAutoPanId?: string | null
+  counterPanelCollapsed?: boolean
   updatedAt: number
 }
 

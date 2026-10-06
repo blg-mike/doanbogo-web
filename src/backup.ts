@@ -1,7 +1,7 @@
 import { strFromU8, strToU8, unzipSync, zipSync } from 'fflate'
 import type { AnnotationRecord, ChartDocument, ColorworkGrid, DocumentRecord, KnittingReport, PageRecord, PageWorkRecord, PreferenceRecord, ReportTimelinePhoto, ViewerSnapshot } from './types'
 import { normalizePageWork, readWorkspaceData, type WorkspaceData } from './storage'
-import { createDefaultCounters, isCounterSnapshots } from './smartCounter'
+import { createDefaultCounters, isCurrentCounterSnapshots, isLegacyCounterSnapshots, normalizeCounterSnapshots, MAX_COUNTER_HISTORY } from './smartCounter'
 
 interface BackupDocument extends Omit<DocumentRecord, 'pdf' | 'cover'> {
   pdfPath: string
@@ -10,7 +10,7 @@ interface BackupDocument extends Omit<DocumentRecord, 'pdf' | 'cover'> {
 
 interface BackupManifest {
   format: 'doanbogo'
-  version: 9
+  version: 10
   exportedAt: number
   documents: BackupDocument[]
   pages: PageRecord[]
@@ -56,7 +56,27 @@ function isProgressSettings(value: unknown) {
 function isGuideArray(value: unknown) {
   return Array.isArray(value) && value.length <= 10 && value.every((guide) => isObject(guide) &&
     typeof guide.id === 'string' && guide.id.length > 0 && guide.id.length <= 64 &&
-    Number.isFinite(guide.position) && (guide.position as number) >= 0 && (guide.position as number) <= 1)
+    Number.isFinite(guide.position) && (guide.position as number) >= 0 && (guide.position as number) <= 1 &&
+    (guide.name === undefined || typeof guide.name === 'string' && guide.name.length <= 100) &&
+    (guide.color === undefined || typeof guide.color === 'string' && /^#[\da-f]{6}$/i.test(guide.color)) &&
+    (guide.linkedCounterId === undefined || typeof guide.linkedCounterId === 'string' && guide.linkedCounterId.length <= 100) &&
+    (guide.chartRegion === undefined || isObject(guide.chartRegion) && Number.isFinite(guide.chartRegion.x) && Number(guide.chartRegion.x) >= 0 && Number(guide.chartRegion.x) <= 1 &&
+      Number.isFinite(guide.chartRegion.y) && Number(guide.chartRegion.y) >= 0 && Number(guide.chartRegion.y) <= 1 && Number.isFinite(guide.chartRegion.width) && Number(guide.chartRegion.width) > 0 && Number(guide.chartRegion.width) <= 1 &&
+      Number.isFinite(guide.chartRegion.height) && Number(guide.chartRegion.height) > 0 && Number(guide.chartRegion.height) <= 1 && Number(guide.chartRegion.x) + Number(guide.chartRegion.width) <= 1.000001 &&
+      Number(guide.chartRegion.y) + Number(guide.chartRegion.height) <= 1.000001 && Number.isSafeInteger(guide.chartRegion.firstRow) && Number(guide.chartRegion.firstRow) >= 1 &&
+      Number.isSafeInteger(guide.chartRegion.lastRow) && Number(guide.chartRegion.lastRow) >= Number(guide.chartRegion.firstRow) && Number(guide.chartRegion.lastRow) <= 9999 &&
+      Number.isSafeInteger(guide.chartRegion.startCounterRow) && Number(guide.chartRegion.startCounterRow) >= 1 && typeof guide.chartRegion.repeat === 'boolean' &&
+      ['top-to-bottom', 'bottom-to-top'].includes(String(guide.chartRegion.direction)) &&
+      (guide.chartRegion.rowPositions === undefined || Array.isArray(guide.chartRegion.rowPositions) && guide.chartRegion.rowPositions.length === Number(guide.chartRegion.lastRow) - Number(guide.chartRegion.firstRow) + 1 && guide.chartRegion.rowPositions.every((position) => Number.isFinite(position) && Number(position) >= 0 && Number(position) <= 1))) &&
+    (guide.focus === undefined || isObject(guide.focus) && typeof guide.focus.enabled === 'boolean' && ['low', 'medium', 'high'].includes(String(guide.focus.strength)) &&
+      [0, 1, 2].includes(guide.focus.range as number) && ['page', 'region'].includes(String(guide.focus.scope)) && Number.isFinite(guide.focus.rowSpacing) && Number(guide.focus.rowSpacing) > 0 && Number(guide.focus.rowSpacing) <= 1))
+}
+
+function isCounterHistory(value: unknown) {
+  return Array.isArray(value) && value.length <= MAX_COUNTER_HISTORY && value.every((entry) => isObject(entry) && typeof entry.id === 'string' && entry.id.length <= 100 &&
+    typeof entry.label === 'string' && entry.label.length <= 200 && Number.isFinite(entry.savedAt) && Number.isSafeInteger(entry.actualRow) && Number(entry.actualRow) >= 0 &&
+    isCurrentCounterSnapshots(entry.counters) && Array.isArray(entry.guides) && entry.guides.length <= 1000 && entry.guides.every((item) => isObject(item) && Number.isSafeInteger(item.pageNumber) &&
+      Number(item.pageNumber) >= 1 && isGuideArray(item.horizontalGuides) && isGuideArray(item.verticalGuides)))
 }
 
 function isLegacyRectangleArray(value: unknown) {
@@ -175,7 +195,7 @@ export async function createWorkspaceBackup() {
 
   const manifest: BackupManifest = {
     format: 'doanbogo',
-    version: 9,
+    version: 10,
     exportedAt: Date.now(),
     documents,
     pages: data.pages,
@@ -206,7 +226,7 @@ export async function readWorkspaceBackup(file: File): Promise<WorkspaceData> {
   } catch {
     throw new Error('작업 파일의 안내 정보가 손상됐습니다.')
   }
-  if (!isObject(manifest) || manifest.format !== 'doanbogo' || ![1, 2, 3, 4, 5, 6, 7, 8, 9].includes(manifest.version as number) ||
+  if (!isObject(manifest) || manifest.format !== 'doanbogo' || ![1, 2, 3, 4, 5, 6, 7, 8, 9, 10].includes(manifest.version as number) ||
     !Array.isArray(manifest.documents) || !Array.isArray(manifest.pages) ||
     !Array.isArray(manifest.viewers) || !Array.isArray(manifest.preferences) ||
     ((manifest.version as number) >= 2 && !Array.isArray(manifest.pageWork)) ||
@@ -275,7 +295,9 @@ export async function readWorkspaceBackup(file: File): Promise<WorkspaceData> {
       !Number.isFinite(entry.secondary.centerX) || !Number.isFinite(entry.secondary.centerY) ||
       !isPaneRotations(entry.primary.rotations, pageCounts.get(entry.documentId)!) ||
       !isPaneRotations(entry.secondary.rotations, pageCounts.get(entry.documentId)!) ||
-      ((manifest.version as number) >= 9 && !isCounterSnapshots(entry.counters)) ||
+      ((manifest.version as number) === 9 && !isLegacyCounterSnapshots(entry.counters)) ||
+      ((manifest.version as number) >= 10 && (!isCurrentCounterSnapshots(entry.counters) || entry.counterHistory !== undefined && !isCounterHistory(entry.counterHistory))) ||
+      ((manifest.version as number) >= 10 && (entry.counterSoundEnabled !== undefined && typeof entry.counterSoundEnabled !== 'boolean' || entry.counterPreviewEnabled !== undefined && typeof entry.counterPreviewEnabled !== 'boolean' || entry.counterPanelCollapsed !== undefined && typeof entry.counterPanelCollapsed !== 'boolean' || entry.counterGuideAutoPanId !== undefined && entry.counterGuideAutoPanId !== null && typeof entry.counterGuideAutoPanId !== 'string' || entry.collapsedCounterKinds !== undefined && (!isObject(entry.collapsedCounterKinds) || Object.values(entry.collapsedCounterKinds).some((value) => typeof value !== 'boolean')))) ||
       !Number.isFinite(entry.wideRatio) || !Number.isFinite(entry.tallRatio) || !Number.isFinite(entry.updatedAt) ||
       (entry.progressSettings !== undefined && !isProgressSettings(entry.progressSettings)) ||
       (entry.annotationSettings !== undefined && !isAnnotationSettings(entry.annotationSettings))) {
@@ -284,6 +306,8 @@ export async function readWorkspaceBackup(file: File): Promise<WorkspaceData> {
     const viewer = { ...entry }
     delete viewer.techniqueSlots
     if ((manifest.version as number) < 9) viewer.counters = createDefaultCounters()
+    else if ((manifest.version as number) < 10) viewer.counters = normalizeCounterSnapshots(viewer.counters)
+    viewer.counterHistory = Array.isArray(viewer.counterHistory) ? viewer.counterHistory.slice(-MAX_COUNTER_HISTORY) : []
     return viewer as unknown as ViewerSnapshot
   })
 
