@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { advanceLinkedCounters, createCounter, createDefaultCounters, guidePositionForRow, isCounterSnapshots, isCurrentCounterSnapshots, isLegacyCounterSnapshots, maxCountersForType, normalizeCounterSnapshots, patternRowAfterCompletion, progressGuideForCounter, setCounterGroupRow, shouldPlayCounterTaskSound, taskSchedule } from './smartCounter'
+import { advanceLinkedCounters, counterAlertState, counterSideForRow, createCounter, createDefaultCounters, findCounterRewindCheckpoint, guidePositionForRow, isCounterSnapshots, isCurrentCounterSnapshots, isLegacyCounterSnapshots, maxCountersForType, nextPatternAlertRow, normalizeCounterSnapshots, patternRowAfterCompletion, progressGuideForCounter, restoreCounterGroup, setCounterGroupRow, shouldPlayCounterTaskSound, taskSchedule } from './smartCounter'
 
 describe('counter model', () => {
   it('starts with no counters and enforces each type limit in the model', () => {
@@ -98,5 +98,38 @@ describe('counter model', () => {
     expect(maxCountersForType(counters, 'simple')).toBe(6)
     counters[5] = { ...counters[5], legacyOverflow: false }
     expect(isCurrentCounterSnapshots(counters)).toBe(false)
+  })
+
+  it('derives RS/WS from the target row and advances repeat alerts from the first pattern row', () => {
+    const base = { ...createCounter('simple'), id: 'base', value: 36, goalRow: 36, goalFinalSide: 'rs' as const }
+    const pattern = { ...createCounter('pattern'), id: 'pattern', startRow: 6, repeatLength: 8 }
+    expect(counterSideForRow(base, 36)).toBe('rs')
+    expect(counterSideForRow(base, 35)).toBe('ws')
+    expect(counterSideForRow({ ...base, goalRow: null, firstSide: 'ws' }, 1)).toBe('ws')
+    expect([6, 14, 22, 30].map((row) => nextPatternAlertRow(pattern, row))).toEqual([6, 14, 22, 30])
+  })
+
+  it('shows due and one-row-ahead alerts for the selected linked counter group', () => {
+    const base = { ...createCounter('simple'), id: 'base', value: 5, goalRow: 6 }
+    const pattern = { ...createCounter('pattern'), id: 'pattern', name: '꽈배기 A', linkedToId: 'base', startRow: 6, repeatLength: 8, patternPreviewEnabled: true }
+    const task = { ...createCounter('task'), id: 'task', name: '소매 감소', linkedToId: 'base', nextTaskRow: 6, total: 4 }
+    expect(counterAlertState([base, pattern, task], 'base', true).messages).toHaveLength(3)
+    expect(counterAlertState([{ ...base, value: 6 }, pattern, { ...task, currentRow: 6 }], 'base').messages).toEqual([
+      '꽈배기 A · 무늬 반복 단이에요.',
+      '소매 감소 · 줄임 작업 단이에요.',
+    ])
+  })
+
+  it('finds an exact rewind checkpoint for one base and restores only that group', () => {
+    const base = { ...createCounter('simple'), id: 'base', name: '몸판', value: 25, unit: 'row' as const }
+    const pattern = { ...createCounter('pattern'), id: 'pattern', linkedToId: 'base', currentRow: 25 }
+    const other = { ...createCounter('simple'), id: 'other', name: '소매', value: 9, unit: 'row' as const }
+    const checkpointBase = { ...base, value: 24 }
+    const checkpointPattern = { ...pattern, currentRow: 24, patternRow: 4 }
+    const checkpoint = { id: 'row-24', label: '몸판 · 24단 완료', counters: [checkpointBase, checkpointPattern, other], guides: [], actualRow: 24, baseCounterId: 'base', savedAt: 24 }
+    expect(findCounterRewindCheckpoint([checkpoint], [base, pattern, other], 'base', 24)).toBe(checkpoint)
+    const restored = restoreCounterGroup([base, pattern, other], [checkpointBase, checkpointPattern, other], 'base')
+    expect(restored).toMatchObject([{ id: 'base', value: 24 }, { id: 'pattern', currentRow: 24, patternRow: 4 }, { id: 'other', value: 9 }])
+    expect(findCounterRewindCheckpoint([checkpoint], [base, pattern, other], 'other', 24)).toBeUndefined()
   })
 })

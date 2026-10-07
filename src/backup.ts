@@ -10,7 +10,7 @@ interface BackupDocument extends Omit<DocumentRecord, 'pdf' | 'cover'> {
 
 interface BackupManifest {
   format: 'doanbogo'
-  version: 11
+  version: 12
   exportedAt: number
   documents: BackupDocument[]
   pages: PageRecord[]
@@ -76,6 +76,7 @@ function isGuideArray(value: unknown) {
 function isCounterHistory(value: unknown) {
   return Array.isArray(value) && value.length <= MAX_COUNTER_HISTORY && value.every((entry) => isObject(entry) && typeof entry.id === 'string' && entry.id.length <= 100 &&
     typeof entry.label === 'string' && entry.label.length <= 200 && Number.isFinite(entry.savedAt) && Number.isSafeInteger(entry.actualRow) && Number(entry.actualRow) >= 0 &&
+    (entry.baseCounterId === undefined || typeof entry.baseCounterId === 'string' && entry.baseCounterId.length <= 100) &&
     isCurrentCounterSnapshots(entry.counters) && Array.isArray(entry.guides) && entry.guides.length <= 1000 && entry.guides.every((item) => isObject(item) && Number.isSafeInteger(item.pageNumber) &&
       Number(item.pageNumber) >= 1 && isGuideArray(item.horizontalGuides) && isGuideArray(item.verticalGuides)))
 }
@@ -200,7 +201,7 @@ export async function createWorkspaceBackup() {
 
   const manifest: BackupManifest = {
     format: 'doanbogo',
-    version: 11,
+    version: 12,
     exportedAt: Date.now(),
     documents,
     pages: data.pages,
@@ -231,7 +232,7 @@ export async function readWorkspaceBackup(file: File): Promise<WorkspaceData> {
   } catch {
     throw new Error('작업 파일의 안내 정보가 손상됐습니다.')
   }
-  if (!isObject(manifest) || manifest.format !== 'doanbogo' || ![1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11].includes(manifest.version as number) ||
+  if (!isObject(manifest) || manifest.format !== 'doanbogo' || ![1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12].includes(manifest.version as number) ||
     !Array.isArray(manifest.documents) || !Array.isArray(manifest.pages) ||
     !Array.isArray(manifest.viewers) || !Array.isArray(manifest.preferences) ||
     ((manifest.version as number) >= 2 && !Array.isArray(manifest.pageWork)) ||
@@ -303,6 +304,7 @@ export async function readWorkspaceBackup(file: File): Promise<WorkspaceData> {
       ((manifest.version as number) === 9 && !isLegacyCounterSnapshots(entry.counters)) ||
       ((manifest.version as number) >= 10 && (!isCurrentCounterSnapshots(entry.counters) || entry.counterHistory !== undefined && !isCounterHistory(entry.counterHistory))) ||
       ((manifest.version as number) >= 10 && (entry.counterSoundEnabled !== undefined && typeof entry.counterSoundEnabled !== 'boolean' || entry.counterPreviewEnabled !== undefined && typeof entry.counterPreviewEnabled !== 'boolean' || entry.counterPanelCollapsed !== undefined && typeof entry.counterPanelCollapsed !== 'boolean' || entry.counterGuideAutoPanId !== undefined && entry.counterGuideAutoPanId !== null && typeof entry.counterGuideAutoPanId !== 'string' || entry.collapsedCounterKinds !== undefined && (!isObject(entry.collapsedCounterKinds) || Object.values(entry.collapsedCounterKinds).some((value) => typeof value !== 'boolean')))) ||
+      ((manifest.version as number) >= 12 && (entry.counterMainId !== undefined && typeof entry.counterMainId !== 'string' || entry.counterVibrationEnabled !== undefined && typeof entry.counterVibrationEnabled !== 'boolean' || entry.counterAlertAcknowledged !== undefined && typeof entry.counterAlertAcknowledged !== 'string' || typeof entry.counterAlertAcknowledged === 'string' && entry.counterAlertAcknowledged.length > 500)) ||
       !Number.isFinite(entry.wideRatio) || !Number.isFinite(entry.tallRatio) || !Number.isFinite(entry.updatedAt) ||
       (entry.progressSettings !== undefined && !isProgressSettings(entry.progressSettings)) ||
       (entry.annotationSettings !== undefined && !isAnnotationSettings(entry.annotationSettings))) {

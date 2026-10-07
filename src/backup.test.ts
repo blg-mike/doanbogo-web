@@ -172,16 +172,19 @@ describe('portable workspace backup', () => {
     await addDocument(original)
     await setPageFlag(original.id, 3, 'bookmarked', true)
     const viewer = await getViewer(original.id, original.pageCount)
-    const rowCounter = { ...createCounter('simple', '몸판 단'), id: 'body-row', value: 19, unit: 'row' as const }
-    const patternCounter = { ...createCounter('pattern', '몸판 무늬'), id: 'body-pattern', linkedToId: rowCounter.id, value: 3, currentRow: 19, patternRow: 3, startRow: 5, repeatLength: 12, repeatCount: 3, repeatStartNumber: 1 }
+    const rowCounter = { ...createCounter('simple', '몸판 단'), id: 'body-row', value: 19, unit: 'row' as const, goalRow: 36, goalFinalSide: 'rs' as const, firstSide: 'ws' as const }
+    const patternCounter = { ...createCounter('pattern', '몸판 무늬'), id: 'body-pattern', linkedToId: rowCounter.id, value: 3, currentRow: 19, patternRow: 3, startRow: 5, repeatLength: 12, repeatCount: 3, repeatStartNumber: 1, patternPreviewEnabled: true }
     const taskCounter = { ...createCounter('task', '몸판 줄임'), id: 'body-decrease', linkedToId: rowCounter.id, value: 1, currentRow: 19, taskKind: 'decrease' as const, firstTaskRow: 6, interval: 6, total: 8, completedCount: 1, nextTaskRow: 24, taskRecords: [{ row: 6, status: 'done' as const }, { row: 12, status: 'missed' as const }] }
     const counters = [rowCounter, patternCounter, taskCounter]
     await saveViewer({
       ...viewer,
       counters,
-      counterHistory: [{ id: 'history-1', label: '몸판 단 · 19단 완료', counters, guides: [], actualRow: 19, savedAt: Date.now() }],
+      counterHistory: [{ id: 'history-1', label: '몸판 단 · 19단 완료', counters, guides: [], actualRow: 19, baseCounterId: rowCounter.id, savedAt: Date.now() }],
       counterSoundEnabled: false,
       counterPreviewEnabled: true,
+      counterVibrationEnabled: true,
+      counterMainId: rowCounter.id,
+      counterAlertAcknowledged: 'body-row:19:ack',
       counterGuideAutoPanId: 'h-1',
       primary: { ...viewer.primary, page: 4, zoom: 2, centerX: 0.37, centerY: 0.68, rotations: { 4: 90 } },
       secondary: { ...viewer.secondary, rotations: { 1: 270 } },
@@ -232,7 +235,7 @@ describe('portable workspace backup', () => {
     const backup = await createWorkspaceBackup()
     const restored = await readWorkspaceBackup(new File([backup], 'backup.doanbogo'))
     const archiveEntries = unzipSync(new Uint8Array(await backup.arrayBuffer()))
-    expect(JSON.parse(strFromU8(archiveEntries['manifest.json'])).version).toBe(11)
+    expect(JSON.parse(strFromU8(archiveEntries['manifest.json'])).version).toBe(12)
     const restoredViewer = restored.viewers.find((entry) => entry.documentId === original.id)!
     const restoredDocument = restored.documents.find((document) => document.id === original.id)!
     expect(restoredDocument.fileName).toBe(original.fileName)
@@ -244,12 +247,16 @@ describe('portable workspace backup', () => {
     expect(restoredViewer.progressSettings?.horizontal).toMatchObject({ color: '#edc21b', thickness: 5, opacity: 0.4 })
     expect(restoredViewer.annotationSettings?.text).toMatchObject({ color: '#28384c', fontSize: 20 })
     expect(restoredViewer.counters).toMatchObject([
-      { id: 'body-row', kind: 'simple', value: 19, name: '몸판 단' },
-      { id: 'body-pattern', kind: 'pattern', currentRow: 19, patternRow: 3, repeatLength: 12, repeatCount: 3 },
+      { id: 'body-row', kind: 'simple', value: 19, name: '몸판 단', goalRow: 36, goalFinalSide: 'rs', firstSide: 'ws' },
+      { id: 'body-pattern', kind: 'pattern', currentRow: 19, patternRow: 3, repeatLength: 12, repeatCount: 3, patternPreviewEnabled: true },
       { id: 'body-decrease', kind: 'task', completedCount: 1, nextTaskRow: 24, taskRecords: [{ row: 6, status: 'done' }, { row: 12, status: 'missed' }] },
     ])
     expect(restoredViewer.counterHistory).toHaveLength(1)
+    expect(restoredViewer.counterHistory?.[0].baseCounterId).toBe('body-row')
     expect(restoredViewer.counterPreviewEnabled).toBe(true)
+    expect(restoredViewer.counterVibrationEnabled).toBe(true)
+    expect(restoredViewer.counterMainId).toBe('body-row')
+    expect(restoredViewer.counterAlertAcknowledged).toBe('body-row:19:ack')
     expect(restoredViewer.counterGuideAutoPanId).toBe('h-1')
     expect(restored.pageWork[0]).toMatchObject({
       pageNumber: 4,

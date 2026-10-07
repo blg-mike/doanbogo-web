@@ -206,6 +206,13 @@ export interface CounterSnapshot {
   nextTaskRow?: number
   taskRecords?: CounterTaskRecord[]
   instructions?: CounterPatternInstruction[]
+  goalRow?: number | null
+  goalFinalSide?: 'rs' | 'ws'
+  firstSide?: 'rs' | 'ws'
+  goalAlertEnabled?: boolean
+  goalCompleted?: boolean
+  patternAlertEnabled?: boolean
+  patternPreviewEnabled?: boolean
 }
 
 export interface CounterHistoryEntry {
@@ -214,6 +221,7 @@ export interface CounterHistoryEntry {
   counters: CounterSnapshot[]
   guides: { pageNumber: number; horizontalGuides: ProgressGuide[]; verticalGuides: ProgressGuide[] }[]
   actualRow: number
+  baseCounterId?: string
   savedAt: number
 }
 
@@ -235,6 +243,9 @@ export interface ViewerSnapshot {
   counterPreviewEnabled?: boolean
   counterGuideAutoPanId?: string | null
   counterPanelCollapsed?: boolean
+  counterMainId?: string
+  counterVibrationEnabled?: boolean
+  counterAlertAcknowledged?: string
   updatedAt: number
 }
 

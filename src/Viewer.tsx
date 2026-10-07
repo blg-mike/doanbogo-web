@@ -11,7 +11,7 @@ import { openPdf, pdfErrorMessage } from './pdf'
 import KnittingReport from './KnittingReport'
 import type { AnnotationSettings, AnnotationStyle, AnnotationTool, ColorworkCreateRequest, ColorworkSettings, CounterHistoryEntry, CounterSnapshot, DocumentRecord, PageRecord, PageRotation, PageWorkRecord, PaneId, PaneSnapshot, ProgressChartRegion, ProgressFocusSettings, ProgressGuide, ProgressSettings, ViewerSnapshot } from './types'
 import { defaultColorworkSettings, getColorworkDimensions, resizeColorworkGrid } from './colorwork'
-import { MAX_COUNTER_HISTORY, MAX_COUNTER_ROW, advanceLinkedCounters, guidePositionForRow, normalizeCounterSnapshots, progressGuideForCounter, setCounterGroupRow } from './smartCounter'
+import { MAX_COUNTER_HISTORY, MAX_COUNTER_ROW, advanceLinkedCounters, counterAlertState, findCounterRewindCheckpoint, guidePositionForRow, normalizeCounterSnapshots, progressGuideForCounter, restoreCounterGroup, setCounterGroupRow } from './smartCounter'
 import CounterPanel from './CounterPanel'
 import type { PdfQrLink } from './qr'
 import { withRecentPdfLinks } from './pdfRecognitionState'
@@ -364,6 +364,8 @@ export default function Viewer() {
   const counterSession = savedCounterSession.documentId === id ? savedCounterSession : createCounterSession(id)
   const counterPanelVisible = counterSession.visible
   const counters = normalizeCounterSnapshots(snapshot?.counters)
+  const currentCounterAlerts = snapshot ? counterAlertState(counters, snapshot.counterMainId, snapshot.counterPreviewEnabled === true) : { key: '', messages: [] as string[] }
+  const counterAlertPending = Boolean(currentCounterAlerts.key && snapshot?.counterAlertAcknowledged !== currentCounterAlerts.key)
   const [pages, setPages] = useState<PageRecord[]>([])
   const pageVisibilityActionRef = useRef(false)
   const [pageVisibilitySaving, setPageVisibilitySaving] = useState(false)
@@ -903,13 +905,13 @@ export default function Viewer() {
     mutateSnapshot((current) => ({ ...current, [paneId]: change(current[paneId]) }), immediate)
   }
 
-  function commitCounterTransaction(nextCounters: CounterSnapshot[], label: string, actualRow = 0, restoreGuides?: CounterHistoryEntry['guides'], saveHistory = true, autoPanY?: number) {
+  function commitCounterTransaction(nextCounters: CounterSnapshot[], label: string, actualRow = 0, restoreGuides?: CounterHistoryEntry['guides'], saveHistory = true, autoPanY?: number, baseCounterId?: string, snapshotChanges?: Partial<ViewerSnapshot>) {
     const operation = counterActionQueueRef.current.then(async () => {
       const current = snapshotRef.current
       if (!current) return
       if (saveTimer.current !== undefined) window.clearTimeout(saveTimer.current)
       saveTimer.current = undefined
-      const provisional = { ...current, counters: nextCounters, ...(autoPanY === undefined ? {} : { [current.activePane]: { ...current[current.activePane], centerY: autoPanY } }) }
+      const provisional = { ...current, ...snapshotChanges, counters: nextCounters, ...(autoPanY === undefined ? {} : { [current.activePane]: { ...current[current.activePane], centerY: autoPanY } }) }
       snapshotRef.current = provisional
       setSnapshot(provisional)
       try {
@@ -956,7 +958,7 @@ export default function Viewer() {
         }
         let counterHistory = current.counterHistory ?? []
         if (saveHistory) {
-          const entry: CounterHistoryEntry = { id: crypto.randomUUID(), label, counters: normalizeCounterSnapshots(current.counters), guides: beforeGuides, actualRow, savedAt: Date.now() }
+          const entry: CounterHistoryEntry = { id: crypto.randomUUID(), label, counters: normalizeCounterSnapshots(current.counters), guides: beforeGuides, actualRow, ...(baseCounterId ? { baseCounterId } : {}), savedAt: Date.now() }
           counterHistory = [...counterHistory, entry].slice(-MAX_COUNTER_HISTORY)
         } else if (restoreGuides) {
           counterHistory = counterHistory.slice(0, -1)
@@ -1010,12 +1012,26 @@ export default function Viewer() {
     commitCounterTransaction(nextCounters, label)
   }
 
+  function saveCounterSettings(nextCounters: CounterSnapshot[], changes: Partial<ViewerSnapshot>, label: string) {
+    commitCounterTransaction(nextCounters, label, 0, undefined, false, undefined, undefined, changes)
+  }
+
+  function updateCounterSnapshot(changes: Partial<ViewerSnapshot>) {
+    const current = snapshotRef.current
+    if (!current) return
+    pushSnapshot({ ...current, ...changes }, true)
+  }
+
   function advanceCounterGroup(counterId: string) {
     const current = snapshotRef.current
     if (!current) return
     const base = normalizeCounterSnapshots(current.counters).find((counter) => counter.id === counterId)
-    if (!base || base.kind !== 'simple' || base.unit !== 'row' || base.linkedToId || base.value >= MAX_COUNTER_ROW) return
-    const nextCounters = advanceLinkedCounters(normalizeCounterSnapshots(current.counters), counterId, base.value)
+    if (!base || base.kind !== 'simple' || base.unit !== 'row' || base.linkedToId || base.goalCompleted || base.value >= MAX_COUNTER_ROW && base.goalRow !== base.value) return
+    const completingGoal = Boolean(base.goalRow && base.value === base.goalRow)
+    const advanced = advanceLinkedCounters(normalizeCounterSnapshots(current.counters), counterId, base.value)
+    const nextCounters = completingGoal
+      ? advanced.map((counter) => counter.id === base.id ? { ...counter, value: base.value, goalCompleted: true } : counter)
+      : advanced
     const activePage = current[current.activePane].page
     const activeWork = workRef.current[activePage]
     const activeRotation = current[current.activePane].rotations?.[activePage] ?? activeWork?.rotation ?? 0
@@ -1023,7 +1039,8 @@ export default function Viewer() {
     const linkedCounter = linkedGuide ? nextCounters.find((counter) => counter.id === linkedGuide.linkedCounterId) : undefined
     const linkedRow = linkedCounter?.kind === 'simple' ? linkedCounter.value : linkedCounter?.currentRow ?? 1
     const autoPanY = linkedGuide && linkedCounter ? guidePositionForRotation(linkedGuide, linkedRow, activeRotation) : undefined
-    commitCounterTransaction(nextCounters, base.name + ' · ' + base.value + '단 완료', base.value, undefined, true, autoPanY)
+    const label = base.name + ' · ' + base.value + (completingGoal ? '단 목표 완료' : '단 완료')
+    commitCounterTransaction(nextCounters, label, base.value, undefined, true, autoPanY, base.id)
   }
 
   function moveCounterFromGuide(counterId: string, row: number) {
@@ -1083,30 +1100,17 @@ export default function Viewer() {
     const current = snapshotRef.current
     const counters = normalizeCounterSnapshots(current?.counters)
     const base = counters.find((counter) => counter.id === baseId)
-    if (!current || !base || base.kind !== 'simple' || targetRow < 1 || targetRow > base.value) return
-    const checkpoint = [...(current.counterHistory ?? [])].reverse().find((entry) => entry.actualRow === targetRow && entry.label.endsWith('단 완료'))
-    let next = checkpoint ? checkpoint.counters : counters.map((counter) => {
-      if (counter.id === baseId) return { ...counter, value: targetRow }
-      if (counter.linkedToId !== baseId) return counter
-      if (counter.kind === 'pattern') {
-        const distance = Math.max(0, base.value - targetRow)
-        const length = counter.repeatLength ?? 1
-        const row = ((counter.patternRow ?? 1) - 1 - distance % length + length) % length + 1
-        return { ...counter, currentRow: targetRow, patternRow: row, value: row }
-      }
-      if (counter.kind === 'task') {
-        const records = (counter.taskRecords ?? []).filter((record) => record.row < targetRow)
-        const completedCount = records.filter((record) => record.status === 'done').length
-        const first = counter.firstTaskRow ?? 1
-        const interval = counter.interval ?? 1
-        const missed = Math.max(0, Math.ceil((targetRow - first) / interval))
-        return { ...counter, currentRow: targetRow, completedCount, value: completedCount, taskRecords: records, nextTaskRow: Math.min(MAX_COUNTER_ROW, first + missed * interval) }
-      }
-      if (counter.kind === 'simple') return { ...counter, value: Math.max(0, counter.value - (base.value - targetRow)) }
-      return counter
-    })
-    next = normalizeCounterSnapshots(next)
-    commitCounterTransaction(next, checkpoint ? '단 되돌아가기' : '단 되돌아가기 · 예상 복원', targetRow, checkpoint?.guides)
+    if (!current || !base || base.kind !== 'simple' || targetRow < 1 || targetRow >= base.value) return
+    const checkpoint = findCounterRewindCheckpoint(current.counterHistory ?? [], counters, baseId, targetRow)
+    if (!checkpoint) return
+    const next = normalizeCounterSnapshots(restoreCounterGroup(counters, checkpoint.counters, baseId))
+    const groupIds = new Set(checkpoint.counters.filter((counter) => counter.id === baseId || counter.linkedToId === baseId).map((counter) => counter.id))
+    const restoreGuides = checkpoint.guides.map((item) => ({
+      ...item,
+      horizontalGuides: item.horizontalGuides.filter((guide) => guide.linkedCounterId && groupIds.has(guide.linkedCounterId)),
+      verticalGuides: item.verticalGuides.filter((guide) => guide.linkedCounterId && groupIds.has(guide.linkedCounterId)),
+    })).filter((item) => item.horizontalGuides.length || item.verticalGuides.length)
+    commitCounterTransaction(next, '단 되돌아가기', targetRow, restoreGuides, true, undefined, baseId)
   }
 
   function rotatePage(paneId: PaneId, pageNumber: number) {
@@ -1631,7 +1635,7 @@ export default function Viewer() {
           <div className="split-section split-section-secondary" style={orientation === 'wide' ? { flex: '0 0 ' + splitBasis(1 - displayedRatio) } : { width: '100%', flex: '0 0 ' + splitBasis(1 - displayedRatio) }}>{renderPane('secondary', snapshot.secondary, snapshot.activePane === 'secondary')}</div>
         </> : renderPane(snapshot.activePane, snapshot[snapshot.activePane], true)}
         </div>
-        {!reportMode && counterPanelVisible && <CounterPanel snapshot={snapshot} counters={counters} onChange={updateCounterPanel} onAdvance={advanceCounterGroup} onUndo={undoCounterAction} onRewind={rewindCounter} onCounterValue={setCounterValue} />}
+        {!reportMode && counterPanelVisible && <CounterPanel snapshot={snapshot} counters={counters} onChange={updateCounterPanel} onAdvance={advanceCounterGroup} onUndo={undoCounterAction} onRewind={rewindCounter} onCounterValue={setCounterValue} onSettingsSave={saveCounterSettings} onSnapshotUpdate={updateCounterSnapshot} onClose={() => setSavedCounterSession({ documentId: id, visible: false })} />}
       </section>
       <section className={'viewer-footer' + (thumbnailCollapsed ? ' thumbnail-collapsed' : '')}>
         <button
@@ -1757,7 +1761,7 @@ export default function Viewer() {
             <button type="button" className="viewer-page-control-button" aria-label="화면 맞춤" title="100% 확대와 페이지 중앙으로 맞춤" onClick={() => changePane(snapshot.activePane, (pane) => ({ ...pane, zoom: 1, centerX: 0.5, centerY: 0.5 }), true)}><Maximize2 size={16} /></button>
           </div>
           <div className="viewer-navigation">
-            <button className={'viewer-tool ' + (counterPanelVisible ? 'active' : '')} type="button" aria-label="숫자 카운터" title="숫자 카운터" aria-pressed={counterPanelVisible} onClick={() => setSavedCounterSession({ documentId: id, visible: !counterPanelVisible })}><Hash size={17} /><span>카운터</span></button>
+            <button className={'viewer-tool counter-footer-button ' + (counterPanelVisible ? 'active' : '')} type="button" aria-label={'카운터' + (counterAlertPending ? ' · 확인할 알림 있음' : '')} title={counterAlertPending ? '카운터 · 확인할 알림 있음' : '카운터'} aria-pressed={counterPanelVisible} onClick={() => setSavedCounterSession({ documentId: id, visible: !counterPanelVisible })}><Hash size={17} /><span>카운터</span>{counterAlertPending && <i className="counter-notification-dot" aria-hidden="true" />}</button>
             <span className="control-separator" />
             <button className="text-control" disabled={activePage <= 1} onClick={() => stepPage(-1)}>이전</button>
             <label className="page-jump"><input key={activePage} aria-label="페이지 번호 입력" type="number" min="1" max={pdf.numPages} defaultValue={activePage} onBlur={(event) => jumpToPage(event.currentTarget.value)} onKeyDown={(event) => { if (event.key === 'Enter') { jumpToPage(event.currentTarget.value); event.currentTarget.blur() } }} /><span>/ {pdf.numPages}</span></label>

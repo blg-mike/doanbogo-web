@@ -27,8 +27,8 @@ export function createCounter(kind: CounterKind, name?: string): CounterSnapshot
   const id = crypto.randomUUID()
   const color = kind === 'simple' ? '#2673e8' : kind === 'pattern' ? '#8266c2' : '#df8545'
   const common = { id, kind, name: name?.trim() || defaultName(kind), color, pinned: false, value: kind === 'task' ? 0 : 1 }
-  if (kind === 'simple') return { ...common, unit: 'row' }
-  if (kind === 'pattern') return { ...common, currentRow: 1, patternRow: 1, repeatLength: 1, startRow: 1, instructions: [] }
+  if (kind === 'simple') return { ...common, unit: 'row', firstSide: 'rs', goalAlertEnabled: true }
+  if (kind === 'pattern') return { ...common, currentRow: 1, patternRow: 1, repeatLength: 1, startRow: 1, instructions: [], patternAlertEnabled: true }
   return { ...common, currentRow: 1, taskKind: 'decrease', firstTaskRow: 4, interval: 6, total: 4, completedCount: 0, nextTaskRow: 4, taskRecords: [] }
 }
 
@@ -73,12 +73,15 @@ export function isCurrentCounterSnapshots(value: unknown): value is CounterSnaps
     ids.add(counter.id)
     counts[counter.kind as CounterKind]++
     if (counter.kind === 'simple' && !['row', 'stitch', 'round'].includes(String(counter.unit))) return false
+    if (counter.kind === 'simple' && (counter.goalRow !== undefined && counter.goalRow !== null && (!Number.isSafeInteger(counter.goalRow) || Number(counter.goalRow) < 1 || Number(counter.goalRow) > MAX_COUNTER_ROW) || counter.goalFinalSide !== undefined && counter.goalFinalSide !== 'rs' && counter.goalFinalSide !== 'ws' || counter.firstSide !== undefined && counter.firstSide !== 'rs' && counter.firstSide !== 'ws' || counter.goalAlertEnabled !== undefined && typeof counter.goalAlertEnabled !== 'boolean' || counter.goalCompleted !== undefined && typeof counter.goalCompleted !== 'boolean')) return false
     if (counter.kind === 'pattern' && (!Number.isSafeInteger(counter.currentRow) || Number(counter.currentRow) < 1 ||
       !Number.isSafeInteger(counter.patternRow) || Number(counter.patternRow) < 1 ||
       !Number.isSafeInteger(counter.repeatLength) || Number(counter.repeatLength) < 1 ||
       !Number.isSafeInteger(counter.startRow) || Number(counter.startRow) < 1 ||
       !(counter.repeatCount === undefined || counter.repeatCount === null || Number.isSafeInteger(counter.repeatCount) && Number(counter.repeatCount) >= 1) ||
       !(counter.repeatStartNumber === undefined || Number.isSafeInteger(counter.repeatStartNumber) && Number(counter.repeatStartNumber) >= 1) ||
+      (counter.patternAlertEnabled !== undefined && typeof counter.patternAlertEnabled !== 'boolean') ||
+      (counter.patternPreviewEnabled !== undefined && typeof counter.patternPreviewEnabled !== 'boolean') ||
       (counter.instructions !== undefined && (!Array.isArray(counter.instructions) || !counter.instructions.every((item) => isObject(item) && typeof item.id === 'string' && Number.isSafeInteger(item.row) && Number(item.row) >= 1 && typeof item.message === 'string' && item.message.length <= 2000))))) return false
     if (counter.kind === 'task' && (!['decrease', 'increase'].includes(String(counter.taskKind)) || !Number.isSafeInteger(counter.currentRow) || Number(counter.currentRow) < 1 ||
       !Number.isSafeInteger(counter.firstTaskRow) || Number(counter.firstTaskRow) < 1 || !Number.isSafeInteger(counter.interval) || Number(counter.interval) < 1 ||
@@ -172,11 +175,19 @@ function normalizeNewCounter(value: unknown): CounterSnapshot | null {
     ...(typeof value.linkedToId === 'string' ? { linkedToId: value.linkedToId.slice(0, 100) } : {}),
     ...(value.legacyOverflow === true ? { legacyOverflow: true } : {}),
   }
-  if (kind === 'simple') return { ...common, unit: value.unit === 'stitch' || value.unit === 'round' ? value.unit : 'row' }
+  if (kind === 'simple') return {
+    ...common,
+    unit: value.unit === 'stitch' || value.unit === 'round' ? value.unit : 'row',
+    ...(value.goalRow === null ? { goalRow: null } : Number.isSafeInteger(value.goalRow) && Number(value.goalRow) > 0 ? { goalRow: integer(value.goalRow, 1, 1) } : {}),
+    ...(value.goalFinalSide === 'rs' || value.goalFinalSide === 'ws' ? { goalFinalSide: value.goalFinalSide } : {}),
+    firstSide: value.firstSide === 'ws' ? 'ws' : 'rs',
+    goalAlertEnabled: value.goalAlertEnabled !== false,
+    goalCompleted: value.goalCompleted === true,
+  }
   if (kind === 'pattern') {
     const repeatLength = integer(value.repeatLength, 1, 1)
     const instructions = Array.isArray(value.instructions) ? value.instructions.filter((item) => isObject(item) && typeof item.id === 'string' && Number.isSafeInteger(item.row) && Number(item.row) >= 1 && typeof item.message === 'string').slice(0, 40).map((item) => ({ id: String(item.id).slice(0, 100), row: integer(item.row, 1, 1), message: String(item.message).slice(0, 2000) })) : []
-    return { ...common, value: integer(value.value, 1, 1), currentRow: integer(value.currentRow, 1, 1), patternRow: integer(value.patternRow, 1, 1, repeatLength), repeatLength, startRow: integer(value.startRow, 1, 1), ...(Number.isSafeInteger(value.repeatStartNumber) && Number(value.repeatStartNumber) > 0 ? { repeatStartNumber: integer(value.repeatStartNumber, 1, 1) } : {}), ...(value.repeatCount === null ? { repeatCount: null } : Number.isSafeInteger(value.repeatCount) ? { repeatCount: integer(value.repeatCount, 1, 1) } : {}), instructions }
+    return { ...common, value: integer(value.value, 1, 1), currentRow: integer(value.currentRow, 1, 1), patternRow: integer(value.patternRow, 1, 1, repeatLength), repeatLength, startRow: integer(value.startRow, 1, 1), ...(Number.isSafeInteger(value.repeatStartNumber) && Number(value.repeatStartNumber) > 0 ? { repeatStartNumber: integer(value.repeatStartNumber, 1, 1) } : {}), ...(value.repeatCount === null ? { repeatCount: null } : Number.isSafeInteger(value.repeatCount) ? { repeatCount: integer(value.repeatCount, 1, 1) } : {}), patternAlertEnabled: value.patternAlertEnabled !== false, patternPreviewEnabled: value.patternPreviewEnabled === true, instructions }
   }
   const taskKind: CounterTaskKind = value.taskKind === 'increase' ? 'increase' : 'decrease'
   const taskRecords = Array.isArray(value.taskRecords) ? value.taskRecords.filter((item) => isObject(item) && Number.isSafeInteger(item.row) && Number(item.row) > 0 && (item.status === 'done' || item.status === 'missed')).slice(-MAX_COUNTER_TASK_OCCURRENCES).map((item) => ({ row: integer(item.row, 1, 1), status: item.status as CounterTaskStatus })) : []
@@ -288,6 +299,68 @@ export function counterTaskProgress(counter: CounterSnapshot) {
 
 export function shouldPlayCounterTaskSound(history: CounterHistoryEntry | undefined, baseName: string, currentRow: number, previousHistoryId: string | null, previousRow: number | null) {
   return Boolean(history && history.id !== previousHistoryId && history.label.startsWith(baseName + ' · ') && history.actualRow === currentRow - 1 && history.label.endsWith('단 완료') && previousRow !== currentRow)
+}
+
+export function counterSideForRow(counter: CounterSnapshot, row: number): 'rs' | 'ws' {
+  const target = counter.goalRow && counter.goalFinalSide ? counter.goalRow : 1
+  const endSide = counter.goalRow && counter.goalFinalSide ? counter.goalFinalSide : counter.firstSide ?? 'rs'
+  return Math.abs(target - row) % 2 === 0 ? endSide : endSide === 'rs' ? 'ws' : 'rs'
+}
+
+export function nextPatternAlertRow(counter: CounterSnapshot, row: number) {
+  if (counter.kind !== 'pattern') return null
+  const first = counter.startRow ?? 1
+  const interval = counter.repeatLength ?? 1
+  return row <= first ? first : first + Math.ceil((row - first) / interval) * interval
+}
+
+export function counterAlertState(counters: CounterSnapshot[], baseId?: string, previewEnabled = false) {
+  const base = counters.find((counter) => counter.id === baseId && counter.kind === 'simple' && counter.unit === 'row') ?? counters.find((counter) => counter.kind === 'simple' && counter.unit === 'row' && !counter.linkedToId)
+  if (!base || base.kind !== 'simple') return { key: '', messages: [] as string[] }
+  const row = base.value
+  const related = counters.filter((counter) => counter.linkedToId === base.id)
+  const messages: string[] = []
+  if (base.goalCompleted && base.goalAlertEnabled !== false) messages.push('목표 ' + base.goalRow + '단을 완료했어요.')
+  related.forEach((counter) => {
+    if (counter.kind === 'task' && counter.nextTaskRow === row && (counter.completedCount ?? 0) < (counter.total ?? 0)) messages.push(counter.name + ' · ' + (counter.taskKind === 'increase' ? '늘림' : '줄임') + ' 작업 단이에요.')
+    if (counter.kind === 'pattern' && counter.patternAlertEnabled !== false && nextPatternAlertRow(counter, row) === row) messages.push(counter.name + ' · 무늬 반복 단이에요.')
+  })
+  if (previewEnabled) {
+    if (base.goalRow === row + 1 && base.goalAlertEnabled !== false) messages.push('다음 단에 목표 ' + base.goalRow + '단이에요.')
+    related.forEach((counter) => {
+      if (counter.kind === 'task' && counter.nextTaskRow === row + 1 && (counter.completedCount ?? 0) < (counter.total ?? 0)) messages.push('다음 단에 ' + counter.name + ' ' + (counter.taskKind === 'increase' ? '늘림' : '줄임') + ' 작업이 있어요.')
+      if (counter.kind === 'pattern' && counter.patternPreviewEnabled === true && nextPatternAlertRow(counter, row + 1) === row + 1) messages.push('다음 단에 ' + counter.name + ' 무늬단이 시작돼요.')
+    })
+  }
+  return { key: messages.length ? base.id + ':' + row + ':' + messages.join('|') : '', messages }
+}
+
+export function findCounterRewindCheckpoint(history: CounterHistoryEntry[], counters: CounterSnapshot[], baseId: string, targetRow: number) {
+  const base = counters.find((counter) => counter.id === baseId)
+  if (!base || base.kind !== 'simple' || targetRow < 1 || targetRow >= base.value) return undefined
+  const duplicateName = counters.filter((counter) => counter.kind === 'simple' && counter.unit === 'row' && counter.name === base.name).length > 1
+  return [...history].reverse().find((entry) => {
+    if (entry.actualRow !== targetRow || !(entry.label.endsWith('단 완료') || entry.label.endsWith('목표 완료'))) return false
+    const savedBase = entry.counters.find((counter) => counter.id === baseId)
+    if (!savedBase || savedBase.kind !== 'simple' || savedBase.value !== targetRow) return false
+    if (entry.baseCounterId !== undefined) return entry.baseCounterId === baseId
+    return !duplicateName && entry.label.startsWith(base.name + ' · ')
+  })
+}
+
+export function restoreCounterGroup(current: CounterSnapshot[], saved: CounterSnapshot[], baseId: string) {
+  const groupIds = new Set([...current, ...saved].filter((counter) => counter.id === baseId || counter.linkedToId === baseId).map((counter) => counter.id))
+  const savedGroup = saved.filter((counter) => groupIds.has(counter.id))
+  const savedById = new Map(savedGroup.map((counter) => [counter.id, counter]))
+  const result = current.flatMap((counter) => {
+    if (!groupIds.has(counter.id)) return [counter]
+    const savedCounter = savedById.get(counter.id)
+    return savedCounter ? [savedCounter] : []
+  })
+  const currentGroupIds = new Set(current.map((counter) => counter.id))
+  const missingSavedMembers = savedGroup.filter((counter) => counter.id !== baseId && !currentGroupIds.has(counter.id))
+  if (missingSavedMembers.length) result.splice(result.findIndex((counter) => counter.id === baseId) + 1, 0, ...missingSavedMembers)
+  return result
 }
 
 export function createCounterTaskRule(kind: CounterTaskKind = 'decrease'): CounterTaskRule {

@@ -896,3 +896,114 @@
 .guide-counter-move label { display: grid; gap: 3px; color: #758198; font-size: 9px; }
 .guide-counter-move input { width: 78px; height: 30px; padding: 0 6px; border: 1px solid #dfe5ed; border-radius: 6px; }
 .guide-counter-move .secondary-button, .guide-counter-move .text-button { min-height: 30px; padding: 0 8px; font-size: 9px; }
+
+/* Counter quick-use popover */
+.number-counter-panel { position: absolute; z-index: 40; inset: 12px 12px auto auto; box-sizing: border-box; width: min(360px, calc(100% - 24px)); max-height: 75%; display: flex; flex-direction: column; gap: 0; padding: 12px; overflow: hidden; border: 1px solid #e8ded4; border-radius: 18px; background: rgba(255,253,250,.98); box-shadow: 0 12px 32px rgba(51,37,27,.2); }
+.number-counter-header { position: relative; min-height: 38px; flex: 0 0 auto; display: flex; align-items: center; gap: 8px; padding: 0 0 8px; color: #47352a; background: transparent; cursor: grab; touch-action: none; }
+.number-counter-header:active { cursor: grabbing; }
+.number-counter-header > strong { flex: 1; color: #3c2b22; font-size: 15px; }
+.counter-drag-handle { display: none; }
+.number-counter-header-actions { display: flex; align-items: center; gap: 3px; }
+.number-counter-settings-button, .counter-undo-button { width: 36px; height: 36px; min-height: 36px; display: grid; flex: 0 0 36px; place-items: center; padding: 0; border: 1px solid #eadfd5; border-radius: 10px; color: #77583f; background: #fff; cursor: pointer; }
+.counter-undo-button { color: #7c726b; }
+.counter-undo-button:disabled { opacity: .4; cursor: default; }
+.number-counter-settings-button:hover, .counter-undo-button:hover:not(:disabled) { color: #5f3e2e; background: #f8eee5; }
+.counter-close-button { width: 36px; height: 36px; flex: 0 0 36px; }
+.counter-collapse-mobile { display: none; }
+.counter-popover-body { min-height: 0; flex: 1 1 auto; display: grid; align-content: start; gap: 10px; overflow: auto; padding: 2px 1px 8px; overscroll-behavior: contain; }
+.counter-main-card { display: grid; gap: 8px; padding: 13px; border: 1px solid #f0e4d8; border-radius: 14px; background: linear-gradient(135deg,#fff8ef,#fffdf9); }
+.counter-main-heading { display: flex; align-items: center; justify-content: space-between; gap: 8px; color: #806347; font-size: 11px; }
+.counter-main-heading strong { min-width: 0; overflow: hidden; color: #514033; text-overflow: ellipsis; white-space: nowrap; font-size: 12px; }
+.counter-main-value { display: grid; grid-template-columns: 56px minmax(0,1fr) 72px; align-items: center; gap: 10px; }
+.counter-main-minus, .counter-main-plus { height: 52px; border: 0; border-radius: 50%; color: #684b37; background: #f2e5d8; font-size: 16px; font-weight: 650; cursor: pointer; }
+.counter-main-plus { width: 72px; height: 58px; color: #fff; background: #805941; font-size: 18px; box-shadow: 0 3px 9px rgba(92,60,39,.16); }
+.counter-main-minus:disabled, .counter-main-plus:disabled { opacity: .38; cursor: default; box-shadow: none; }
+.counter-main-number { min-width: 0; display: flex; align-items: baseline; justify-content: center; gap: 5px; color: #33251c; font-variant-numeric: tabular-nums; }
+.counter-main-number strong { font-size: clamp(40px, 7vw, 54px); line-height: 1; letter-spacing: -.055em; }
+.counter-main-number > span { color: #715943; font-size: 14px; }
+.counter-main-number small { padding: 3px 6px; border-radius: 10px; color: #704b31; background: #f3e6d9; font-size: 9px; }
+.counter-goal-progress { display: grid; gap: 5px; color: #78614d; font-size: 10px; }
+.counter-goal-progress > div { display: flex; justify-content: space-between; gap: 8px; }
+.counter-goal-progress progress { width: 100%; height: 8px; overflow: hidden; border: 0; border-radius: 99px; background: #ede5dc; accent-color: #896148; }
+.counter-goal-progress progress::-webkit-progress-bar { border-radius: 99px; background: #ede5dc; }
+.counter-goal-progress progress::-webkit-progress-value { border-radius: 99px; background: #896148; }
+.counter-goal-progress progress::-moz-progress-bar { border-radius: 99px; background: #896148; }
+.counter-goal-progress small { color: #99836f; }
+.counter-next-card { display: grid; gap: 4px; padding: 10px 12px; border: 1px solid #eee0d1; border-radius: 12px; color: #6d5140; background: #fffaf3; }
+.counter-next-card.due { border-color: #e8c99e; background: #fff4e5; }
+.counter-next-title { display: flex; align-items: center; justify-content: space-between; color: #946c49; font-size: 10px; }
+.counter-next-card > strong { color: #513b2c; font-size: 12px; }
+.counter-next-card > small, .counter-no-event { color: #8e7c6c; font-size: 10px; }
+.counter-pending-alert { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 9px 10px; border: 1px solid #f0d29f; border-radius: 11px; color: #795526; background: #fff8e9; }
+.counter-pending-alert > div { min-width: 0; display: flex; align-items: center; gap: 7px; }
+.counter-pending-alert strong { font-size: 10px; line-height: 1.4; }
+.counter-pending-alert button { min-height: 32px; flex: 0 0 auto; padding: 0 9px; border: 1px solid #e6c991; border-radius: 8px; color: #78552e; background: #fff; font-size: 10px; cursor: pointer; }
+.counter-aux-section { display: grid; gap: 7px; }
+.counter-aux-section > header { display: flex; align-items: center; gap: 6px; padding: 1px 2px; }
+.counter-aux-section h3 { flex: 1; margin: 0; color: #544034; font-size: 12px; }
+.counter-aux-section > header > span { color: #a28e7b; font-size: 10px; }
+.counter-aux-card { display: grid; gap: 7px; padding: 9px 10px; border: 1px solid #eee3d9; border-radius: 11px; background: #fff; }
+.counter-aux-card.due { border-color: #e8c99e; background: #fffaf2; }
+.counter-aux-top { min-width: 0; display: flex; align-items: center; gap: 8px; }
+.counter-aux-color, .counter-manage-kind-dot { width: 25px; height: 25px; flex: 0 0 25px; border-radius: 50%; opacity: .8; }
+.counter-aux-top > div { min-width: 0; flex: 1; display: grid; gap: 2px; }
+.counter-aux-top strong { overflow: hidden; color: #49392e; text-overflow: ellipsis; white-space: nowrap; font-size: 11px; }
+.counter-aux-top small, .counter-aux-meta { color: #958273; font-size: 9px; }
+.counter-aux-edit { width: 32px; height: 32px; flex: 0 0 32px; }
+.counter-progress-track { height: 6px; overflow: hidden; border-radius: 99px; background: #f0ebe6; }
+.counter-progress-track span { height: 100%; display: block; border-radius: inherit; }
+.counter-aux-stepper { min-height: 34px; display: flex; align-items: center; justify-content: space-between; border: 1px solid #eee6df; border-radius: 8px; }
+.counter-aux-stepper button { width: 38px; height: 34px; border: 0; color: #765a43; background: #faf5ef; font-size: 18px; cursor: pointer; }
+.counter-aux-stepper button:disabled { opacity: .4; cursor: default; }
+.counter-aux-stepper strong { display: flex; align-items: baseline; gap: 4px; color: #554033; font-size: 15px; }
+.counter-aux-stepper small { color: #978574; font-size: 9px; font-weight: 400; }
+.counter-add-area { display: grid; gap: 6px; }
+.counter-add-button { min-height: 38px; display: flex; align-items: center; justify-content: center; gap: 6px; border: 1px dashed #dbc9b9; border-radius: 10px; color: #806044; background: #fffaf5; font-size: 11px; cursor: pointer; }
+.counter-add-options { display: grid; gap: 4px; padding: 5px; border: 1px solid #ece1d7; border-radius: 10px; background: #fff; }
+.counter-add-options button { min-height: 38px; display: flex; align-items: center; justify-content: space-between; padding: 0 9px; border: 0; border-radius: 7px; color: #5e4837; background: transparent; text-align: left; font-size: 10px; cursor: pointer; }
+.counter-add-options button:hover:not(:disabled) { background: #fbf3eb; }
+.counter-add-options button:disabled { opacity: .4; cursor: default; }
+.counter-add-options span { color: #a29182; }
+.counter-popover-footer { min-height: 38px; flex: 0 0 auto; display: flex; align-items: center; justify-content: space-between; gap: 8px; padding-top: 6px; border-top: 1px solid #eee5dd; color: #988575; font-size: 9px; }
+.counter-rewind-open { min-height: 34px; display: inline-flex; align-items: center; gap: 6px; padding: 0 8px; border: 0; border-radius: 8px; color: #7d6049; background: #f7eee6; font-size: 10px; cursor: pointer; }
+.counter-rewind-open:disabled { opacity: .4; cursor: default; }
+.counter-global-settings { width: min(100%, 520px); }
+.counter-global-settings .counter-settings-body { max-height: min(76vh, 720px); overflow: auto; }
+.counter-global-section { display: grid; gap: 9px; padding: 11px; border: 1px solid #eee5dc; border-radius: 12px; background: #fffdfa; }
+.counter-global-section > h3 { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin: 0; color: #4e3c30; font-size: 12px; }
+.counter-global-section > h3 span, .counter-field-hint { color: #a29080; font-size: 9px; font-weight: 400; }
+.counter-settings-choice { display: flex; align-items: center; gap: 5px; color: #6d5848; font-size: 10px; }
+.counter-settings-choice > span { flex: 1; }
+.counter-settings-choice button { min-width: 54px; min-height: 34px; border: 1px solid #e7ded5; border-radius: 8px; color: #766455; background: #fff; font-size: 10px; cursor: pointer; }
+.counter-settings-choice button.selected { border-color: #a17a5b; color: #fff; background: #865f43; }
+.counter-settings-checks { display: grid; gap: 7px; color: #685647; font-size: 10px; }
+.counter-settings-checks label, .counter-settings-toggle { min-height: 38px; display: flex; align-items: center; gap: 8px; color: #665346; font-size: 10px; }
+.counter-settings-checks input, .counter-settings-toggle input { width: 16px; height: 16px; accent-color: #865f43; }
+.counter-settings-toggle svg { color: #8c694c; }
+.counter-manage-row { min-width: 0; display: flex; align-items: center; gap: 2px; padding: 4px; border: 1px solid #eee5dc; border-radius: 9px; background: #fff; }
+.counter-manage-main { min-width: 0; flex: 1; display: flex; align-items: center; gap: 8px; padding: 4px; border: 0; color: #665042; background: transparent; text-align: left; cursor: pointer; }
+.counter-manage-main > span:last-child { min-width: 0; display: grid; gap: 2px; }
+.counter-manage-main strong, .counter-manage-main small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.counter-manage-main strong { font-size: 10px; }
+.counter-manage-main small { color: #9a8879; font-size: 8px; }
+.counter-manage-main.selected { color: #805b3f; }
+.counter-manage-main .counter-manage-kind-dot { width: 16px; height: 16px; flex-basis: 16px; }
+.counter-settings-note { margin: 0; color: #988777; font-size: 10px; }
+.counter-editor-layer { position: relative; z-index: 2; }
+.counter-editor-layer .counter-modal-backdrop { z-index: 82; }
+.counter-rewind-dialog .counter-settings-field { margin: 0 18px; }
+.counter-rewind-dialog > p { margin: 12px 18px; }
+.counter-footer-button { position: relative; }
+.counter-notification-dot { position: absolute; top: 4px; right: 4px; width: 8px; height: 8px; border: 1px solid #fff; border-radius: 50%; background: #db7a3c; }
+@media (max-width: 600px) {
+  .number-counter-panel { inset: auto 0 0; width: 100%; max-height: 78%; padding: 9px 12px max(9px, env(safe-area-inset-bottom)); border-radius: 18px 18px 0 0; }
+  .number-counter-panel.mobile-collapsed { height: 58px; max-height: 58px; }
+  .number-counter-header { min-height: 38px; cursor: ns-resize; }
+  .counter-drag-handle { position: absolute; top: 0; left: 50%; width: 36px; height: 4px; display: block; border-radius: 9px; background: #d9cec5; transform: translateX(-50%); }
+  .number-counter-header > strong { padding-top: 7px; }
+  .counter-collapse-mobile { width: 36px; height: 36px; display: inline-grid; place-items: center; }
+}
+@media (min-width: 601px) and (max-height: 620px) {
+  .number-counter-panel { max-height: calc(100% - 24px); }
+  .counter-popover-body { gap: 7px; }
+}
