@@ -125,6 +125,7 @@ export function ProgressLineOverlay({ width, height, cssWidth, cssHeight, work, 
   const svgId = useId().replace(/:/g, '')
   const dragRef = useRef<Drag | null>(null)
   const longPressTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const styleMenuRef = useRef<HTMLDivElement | null>(null)
   const [previewGuide, setPreviewGuide] = useState<ProgressGuide | null>(null)
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [menuGuideId, setMenuGuideId] = useState<string | null>(null)
@@ -155,6 +156,17 @@ export function ProgressLineOverlay({ width, height, cssWidth, cssHeight, work, 
   useEffect(() => () => {
     if (longPressTimerRef.current) clearTimeout(longPressTimerRef.current)
   }, [])
+
+  useEffect(() => {
+    if (!styleGuideId) return
+    const dismissOnOutsidePointer = (event: PointerEvent) => {
+      if (event.target instanceof Node && styleMenuRef.current?.contains(event.target)) return
+      setStyleGuideId(null)
+      setMenuGuideId(null)
+    }
+    document.addEventListener('pointerdown', dismissOnOutsidePointer, true)
+    return () => document.removeEventListener('pointerdown', dismissOnOutsidePointer, true)
+  }, [styleGuideId])
 
   useEffect(() => {
     if (!calibration) return
@@ -607,7 +619,7 @@ export function ProgressLineOverlay({ width, height, cssWidth, cssHeight, work, 
       const connectedCounter = counters.find((counter) => counter.id === guide.linkedCounterId)
       const left = clamp((guide.xEndRatio ?? 0.85) * cssWidth, 6, Math.max(6, cssWidth - 226))
       const top = clamp(guide.position * cssHeight + 28, 6, Math.max(6, cssHeight - 360))
-      return <div className="progress-line-menu" role="menu" style={{ left, top }} onPointerDown={(event) => event.stopPropagation()}>
+      return <div ref={styleGuideId === menuGuideId ? styleMenuRef : undefined} className="progress-line-menu" role="menu" style={{ left, top }} onPointerDown={(event) => event.stopPropagation()}>
         {styleGuideId === menuGuideId ? <>
           <strong>표시 스타일</strong>
           <div className="progress-color-presets">{presets.map((preset) => <button key={preset.color} type="button" aria-label={preset.name} title={preset.name} style={{ background: preset.color }} onClick={() => updateGuide(menuGuideId, { color: preset.color })} />)}</div>
