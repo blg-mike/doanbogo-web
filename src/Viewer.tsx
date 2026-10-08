@@ -22,7 +22,7 @@ import { enqueuePdfRecognition, pausePdfRecognitionForReport, releasePdfRecognit
 import { getViewerResourcePolicy } from './pdfRenderResources'
 import { guidePositionForRotation } from './focusGeometry'
 import { canHidePageSelection, compactPageThumbnails, completePageList, nextVisiblePageAfterHide, visiblePageRange } from './pageManagement'
-import { migrateProgressGuides, progressGuideCandidates } from './progressLines'
+import { migrateProgressGuides, prepareProgressGuidesForDirectInteraction, progressGuideCandidates } from './progressLines'
 
 type Size = { width: number; height: number }
 type WorkAction = { before?: PageWorkRecord; after?: PageWorkRecord; cellChanges?: ColorworkCellChange[] }
@@ -719,23 +719,30 @@ export default function Viewer() {
       return loaded
     }
     let loadingWork: Promise<PageWorkRecord>
-    loadingWork = getPageWork(id, page).then((loaded) => {
-      if (workDocumentIdRef.current !== id) return loaded
+    loadingWork = getPageWork(id, page).then((savedWork) => {
+      if (workDocumentIdRef.current !== id) return savedWork
       const current = workRef.current[page]
       if (current) {
         touchPageWork(page)
         return current
       }
+      const loaded = prepareProgressGuidesForDirectInteraction(savedWork)
       workRef.current = { ...workRef.current, [page]: loaded }
       touchPageWork(page)
       setPageWorks(workRef.current)
+      if (loaded !== savedWork) {
+        void pageWorkPersistence.schedule(loaded, true).catch((error: unknown) => {
+          console.warn('[PDF] Legacy progress guides could not be migrated.', error)
+          setSuspendError(pageWorkSaveErrorMessage)
+        })
+      }
       return loaded
     }).finally(() => {
       if (pageWorkLoadRef.current.get(page) === loadingWork) pageWorkLoadRef.current.delete(page)
     })
     pageWorkLoadRef.current.set(page, loadingWork)
     return loadingWork
-  }, [id, touchPageWork])
+  }, [id, pageWorkPersistence, touchPageWork])
 
   useEffect(() => {
     if (primaryPage === undefined || !id || loadedId !== id) return
@@ -1481,7 +1488,6 @@ export default function Viewer() {
       annotationStyle={style}
       work={work}
       workReady={Boolean(pageWorks[pane.page])}
-      progressMigrationPending={pageWorks[pane.page]?.progressMigration === 'pending'}
       createColorworkRequest={colorworkRequest?.paneId === paneId && colorworkRequest.pageNumber === pane.page ? colorworkRequest : null}
       colorworkBrushColor={colorworkBrushColor}
       colorworkBrushOpacity={colorworkBrushOpacity}

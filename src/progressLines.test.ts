@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { guideRowPosition, migrateProgressGuides, progressGuideCandidates } from './progressLines'
+import { guideRowPosition, migrateProgressGuides, prepareProgressGuidesForDirectInteraction, progressGuideCandidates } from './progressLines'
 import type { PageWorkRecord } from './types'
 
 function legacyWork(): PageWorkRecord {
@@ -26,6 +26,33 @@ describe('progress line migration', () => {
     expect(migrated.verticalGuides).toEqual([])
     expect(migrated.progressMigration).toBe('complete')
     expect(migrated.legacyProgressGuides).toEqual({ horizontalGuides: work.horizontalGuides, verticalGuides: work.verticalGuides })
+  })
+
+  it('prepares legacy baselines for direct interaction and preserves their source data', () => {
+    const work = legacyWork()
+
+    const prepared = prepareProgressGuidesForDirectInteraction(work)
+
+    expect(prepared).toMatchObject({
+      progressMigration: 'complete',
+      horizontalGuides: [{ id: 'h1', role: 'primary', xStartRatio: 0.15, xEndRatio: 0.85 }],
+      verticalGuides: [],
+      legacyProgressGuides: { horizontalGuides: work.horizontalGuides, verticalGuides: work.verticalGuides },
+    })
+  })
+
+  it('migrates explicitly complete records that still contain roleless legacy guides', () => {
+    const work = { ...legacyWork(), progressMigration: 'complete' as const }
+
+    expect(prepareProgressGuidesForDirectInteraction(work).horizontalGuides).toContainEqual(
+      expect.objectContaining({ id: 'h1', role: 'primary' }),
+    )
+  })
+
+  it('leaves a new page with no guides empty', () => {
+    const work: PageWorkRecord = { documentId: 'doc', pageNumber: 1, horizontalPosition: 0.5, verticalPosition: 0.5, annotations: [], horizontalGuides: [], verticalGuides: [], progressMigration: 'complete' }
+
+    expect(prepareProgressGuidesForDirectInteraction(work)).toBe(work)
   })
 
   it('rejects an unknown primary and clamps automatic row positions to the page', () => {

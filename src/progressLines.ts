@@ -12,6 +12,15 @@ export function progressGuideCandidates(work: PageWorkRecord): ProgressGuideCand
   ]
 }
 
+export function prepareProgressGuidesForDirectInteraction(work: PageWorkRecord): PageWorkRecord {
+  const candidates = progressGuideCandidates(work)
+  const hasLegacyGuide = candidates.some(({ guide }) => guide.role !== 'primary' && guide.role !== 'reference')
+  if (work.progressMigration !== 'pending' && !hasLegacyGuide) return work
+  const preferred = candidates.find(({ axis, guide }) => axis === 'horizontal' && guide.linkedCounterId) ??
+    candidates.find(({ axis }) => axis === 'horizontal') ?? candidates[0]
+  return migrateProgressGuides(work, preferred ? preferred.axis + ':' + preferred.guide.id : '', [])
+}
+
 export function migrateProgressGuides(work: PageWorkRecord, primaryKey: string, referenceKeys: string[]): PageWorkRecord {
   const candidates = progressGuideCandidates(work)
   const keyOf = ({ axis, guide }: ProgressGuideCandidate) => axis + ':' + guide.id

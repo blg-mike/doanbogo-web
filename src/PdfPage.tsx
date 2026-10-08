@@ -373,7 +373,7 @@ function withTextBox(annotation: AnnotationRecord, pageHeight: number): Annotati
   return { ...annotation, points: [{ x: box.x, y: box.y }], boxWidth: box.width, boxHeight: box.height }
 }
 
-export function PdfPage({ pdf, page, paneId, pane, splitView, rotation, active, tool, lineSettings, counters, annotationStyle, work, workReady, progressMigrationPending, colorworkBrushColor, colorworkBrushOpacity, colorworkEraser, createColorworkRequest, pageLinks, qrLinks, onPageRendered, onActivate, onWorkChange, onZoom, onCenter, onColorworkRequestHandled, onTextToolConsumed }: {
+export function PdfPage({ pdf, page, paneId, pane, splitView, rotation, active, tool, lineSettings, counters, annotationStyle, work, workReady, colorworkBrushColor, colorworkBrushOpacity, colorworkEraser, createColorworkRequest, pageLinks, qrLinks, onPageRendered, onActivate, onWorkChange, onZoom, onCenter, onColorworkRequestHandled, onTextToolConsumed }: {
   pdf: PDFDocumentProxy
   page: number
   paneId: PaneId
@@ -387,7 +387,6 @@ export function PdfPage({ pdf, page, paneId, pane, splitView, rotation, active, 
   annotationStyle: AnnotationStyle
   work: PageWorkRecord
   workReady: boolean
-  progressMigrationPending: boolean
   colorworkBrushColor: string
   colorworkBrushOpacity: number
   colorworkEraser: boolean
@@ -1597,7 +1596,6 @@ export function PdfPage({ pdf, page, paneId, pane, splitView, rotation, active, 
   const colorworkColumnFontSize = Math.min(10, Math.max(1, colorworkColumnCellWidth * 0.72))
   const colorworkRowFontSize = Math.min(10, Math.max(1, colorworkRowCellHeight * 0.72))
   const horizontalGuides = guidesFor(work, 'horizontal')
-  const verticalGuides = guidesFor(work, 'vertical')
   const displayGuide = (guide: ProgressGuide) => {
     const screenPosition = guide.rotationPositions?.[String(rotation) as '0' | '90' | '180' | '270']
     const oriented = screenPosition ? { ...guide, ...screenPosition } : guide
@@ -1608,7 +1606,6 @@ export function PdfPage({ pdf, page, paneId, pane, splitView, rotation, active, 
     return { ...oriented, position: guidePositionForRotation(guide, row, rotation) }
   }
   const visibleHorizontalGuides = horizontalGuides.map(displayGuide)
-  const visibleVerticalGuides = verticalGuides.map(displayGuide)
   const focusGuides = active ? visibleHorizontalGuides.filter((guide) => !guide.role && guide.focus?.enabled) : []
   const focusBandRects = focusGuides.map((guide) => {
     const focus = guide.focus!
@@ -1900,13 +1897,7 @@ export function PdfPage({ pdf, page, paneId, pane, splitView, rotation, active, 
               <button type="button" className="colorwork-resize-both" aria-label="컬러워크 비율 유지하며 크기 조절" title="드래그해 비율을 유지하며 크기 조절" onPointerDown={(event) => beginColorworkTransform(event, 'resize')} onPointerMove={moveColorworkTransform} onPointerUp={finishColorworkTransform} onPointerCancel={finishColorworkTransform} onLostPointerCapture={finishColorworkTransform} />
             </div>}
             {guidePageSize && rotatedCssSize && lineSettings.horizontal.visible && <div className="pdf-guide-layer" style={guideLayerStyle}>
-              {progressMigrationPending ? <svg className="pdf-guide-svg" viewBox={'0 0 ' + guidePageSize.width + ' ' + guidePageSize.height} preserveAspectRatio="none" aria-label="기존 진행선">
-                {visibleHorizontalGuides.map((guide) => {
-                  const color = counters.find((counter) => counter.id === guide.linkedCounterId)?.color ?? guide.color ?? lineSettings.horizontal.color
-                  return <g key={guide.id}><line x1="0" x2={guidePageSize.width} y1={guide.position * guidePageSize.height} y2={guide.position * guidePageSize.height} stroke={color} strokeWidth={lineSettings.horizontal.thickness} strokeOpacity={lineSettings.horizontal.opacity} pointerEvents="none" />{guide.name && <text x="4" y={Math.max(12, guide.position * guidePageSize.height - 4)} fill={color} fontSize={Math.max(10, guidePageSize.width / 100)} pointerEvents="none">{guide.name}</text>}</g>
-                })}
-                {lineSettings.vertical.visible && visibleVerticalGuides.map((guide) => <line key={guide.id} x1={guide.position * guidePageSize.width} x2={guide.position * guidePageSize.width} y1="0" y2={guidePageSize.height} stroke={guide.color ?? lineSettings.vertical.color} strokeWidth={lineSettings.vertical.thickness} strokeOpacity={lineSettings.vertical.opacity} pointerEvents="none" />)}
-              </svg> : <ProgressLineOverlay
+              <ProgressLineOverlay
                 key={work.documentId + ':' + page + ':' + paneId}
                 width={guidePageSize.width}
                 height={guidePageSize.height}
@@ -1922,7 +1913,7 @@ export function PdfPage({ pdf, page, paneId, pane, splitView, rotation, active, 
                 defaultThickness={lineSettings.horizontal.thickness}
                 onActivate={onActivate}
                 onWorkChange={onWorkChange}
-              />}
+              />
             </div>}
             </>}
           </div>

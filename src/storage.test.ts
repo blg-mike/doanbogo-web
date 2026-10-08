@@ -25,7 +25,7 @@ describe('local document storage', () => {
     expect(work).toMatchObject({ progressMigration: 'complete', horizontalGuides: [], verticalGuides: [] })
   })
 
-  it('marks legacy progress guides for user-directed migration', () => {
+  it('marks legacy progress guides for Viewer compatibility migration', () => {
     const work = normalizePageWork({
       documentId: 'legacy-doc', pageNumber: 1, horizontalPosition: 0.4, verticalPosition: 0.7, annotations: [],
       horizontalGuides: [{ id: 'legacy-h', position: 0.4 }], verticalGuides: [{ id: 'legacy-v', position: 0.7 }],
