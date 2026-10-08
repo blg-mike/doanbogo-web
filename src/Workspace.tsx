@@ -99,6 +99,12 @@ export default function Workspace() {
   const [storageMode, setStorageMode] = useState<StorageMode>('checking')
   const [undoProject, setUndoProject] = useState<HomeProject | null>(null)
   const collectionMode = searchParams.get('view') === 'archived' || searchParams.get('view') === 'trash' ? searchParams.get('view') : 'active'
+  const openDocument = (record: DocumentRecord) => navigate(
+    collectionMode === 'active' && record.kind !== 'photos'
+      ? '/viewer/' + record.id
+      : '/projects/document/' + record.id,
+  )
+  const documentAction = (record: DocumentRecord) => collectionMode === 'active' && record.kind !== 'photos' ? '뷰어 열기' : '상세'
 
   const refresh = useCallback(async () => {
     const [pdfs, charts, projects] = await Promise.all([listDocuments(sort, query), listCharts(sort, query), listHomeProjects()])
@@ -417,12 +423,12 @@ export default function Workspace() {
           <section className={view === 'cover' ? 'document-grid' : 'document-list'} aria-label="도안 목록">
             {documents.map((item) => item.type === 'document' ? (
               <article key={'document-' + item.record.id} className={'document-card ' + (view === 'list' ? 'list-card' : '')}>
-                <button className="cover-button" onClick={() => navigate('/projects/document/' + item.record.id)} aria-label={item.record.fileName + ' 상세'}>
+                <button className="cover-button" onClick={() => openDocument(item.record)} aria-label={item.record.fileName + ' ' + documentAction(item.record)}>
                   {item.record.kind === 'photos' ? item.record.cover ? <CoverImage blob={item.record.cover} /> : <PhotoCover documentId={item.record.id} /> : item.record.cover ? <CoverImage blob={item.record.cover} /> : <span className="cover-placeholder"><BookOpen size={32} /></span>}
                   <span className="pdf-label">{item.record.kind === 'photos' ? '사진' : 'PDF'}</span>
                 </button>
                 <div className="document-info">
-                  <div className="card-title-line"><button className="card-title" onClick={() => navigate('/projects/document/' + item.record.id)} title={item.record.fileName}>{item.record.kind === 'photos' ? item.record.fileName : item.record.fileName.replace(/\.pdf$/i, '')}</button><button className="card-more" aria-label={item.record.fileName + ' 메뉴'} onClick={() => openMenu(item.record)}><MoreHorizontal size={20} /></button></div>
+                  <div className="card-title-line"><button className="card-title" onClick={() => openDocument(item.record)} title={item.record.fileName}>{item.record.kind === 'photos' ? item.record.fileName : item.record.fileName.replace(/\.pdf$/i, '')}</button><button className="card-more" aria-label={item.record.fileName + ' 메뉴'} onClick={() => openMenu(item.record)}><MoreHorizontal size={20} /></button></div>
                   <p className="document-meta">{item.record.pageCount}페이지 <span>·</span> {formatSize(item.record.size)}</p>
                   {item.record.tags.length > 0 && <div className="tag-list">{item.record.tags.map((tag) => <span className="tag-chip" key={tag}>{tag}</span>)}</div>}
                 </div>

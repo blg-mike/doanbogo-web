@@ -130,6 +130,7 @@ export function ProgressLineOverlay({ width, height, cssWidth, cssHeight, work, 
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [menuGuideId, setMenuGuideId] = useState<string | null>(null)
   const [styleGuideId, setStyleGuideId] = useState<string | null>(null)
+  const [styleMenuAnchor, setStyleMenuAnchor] = useState<{ x: number; y: number } | null>(null)
   const [connectingGuideId, setConnectingGuideId] = useState<string | null>(null)
   const [connectingCounterId, setConnectingCounterId] = useState('')
   const [calibration, setCalibration] = useState<Calibration | null>(null)
@@ -163,6 +164,7 @@ export function ProgressLineOverlay({ width, height, cssWidth, cssHeight, work, 
       if (event.target instanceof Node && styleMenuRef.current?.contains(event.target)) return
       setStyleGuideId(null)
       setMenuGuideId(null)
+      setStyleMenuAnchor(null)
     }
     document.addEventListener('pointerdown', dismissOnOutsidePointer, true)
     return () => document.removeEventListener('pointerdown', dismissOnOutsidePointer, true)
@@ -224,6 +226,7 @@ export function ProgressLineOverlay({ width, height, cssWidth, cssHeight, work, 
     setSelectedId(guide.id)
     setMenuGuideId(null)
     setStyleGuideId(null)
+    setStyleMenuAnchor(null)
     setConnectingGuideId(null)
     if (action === 'body' && !calibration) {
       const pointerId = event.pointerId
@@ -233,6 +236,7 @@ export function ProgressLineOverlay({ width, height, cssWidth, cssHeight, work, 
         currentDrag.longPressOpened = true
         setMenuGuideId(guide.id)
         setStyleGuideId(guide.id)
+        setStyleMenuAnchor({ x: pos.x * cssWidth, y: pos.y * cssHeight })
       }, 500)
     }
   }
@@ -289,6 +293,7 @@ export function ProgressLineOverlay({ width, height, cssWidth, cssHeight, work, 
       if (drag.longPressOpened) {
         setMenuGuideId(null)
         setStyleGuideId(null)
+        setStyleMenuAnchor(null)
       }
       dragRef.current = null
       return
@@ -611,21 +616,27 @@ export function ProgressLineOverlay({ width, height, cssWidth, cssHeight, work, 
       aria-label={guide.role === 'primary' ? '진행선 옵션' : '참고선 옵션'}
       title={guide.role === 'primary' ? '진행선 옵션' : '참고선 옵션'}
       onPointerDown={(event) => { event.preventDefault(); event.stopPropagation(); if (!active) onActivate() }}
-      onClick={() => { setSelectedId(guide.id); setConnectingGuideId(null); setStyleGuideId(null); setMenuGuideId(menuGuideId === guide.id ? null : guide.id) }}
+      onClick={() => { setSelectedId(guide.id); setConnectingGuideId(null); setStyleGuideId(null); setStyleMenuAnchor(null); setMenuGuideId(menuGuideId === guide.id ? null : guide.id) }}
     >⋯</button>)}
     {menuGuideId && displayedGuides.find((guide) => guide.id === menuGuideId) && (() => {
       const guide = displayedGuides.find((item) => item.id === menuGuideId)!
       const menuGuide = guides.find((item) => item.id === menuGuideId) ?? guide
       const connectedCounter = counters.find((counter) => counter.id === guide.linkedCounterId)
-      const left = clamp((guide.xEndRatio ?? 0.85) * cssWidth, 6, Math.max(6, cssWidth - 226))
-      const top = clamp(guide.position * cssHeight + 28, 6, Math.max(6, cssHeight - 360))
+      const stylePanelOpen = styleGuideId === menuGuideId && styleMenuAnchor !== null
+      const anchorLeft = styleMenuAnchor ? styleMenuAnchor.x + 14 : 0
+      const left = stylePanelOpen
+        ? clamp(anchorLeft + 226 <= cssWidth - 6 ? anchorLeft : styleMenuAnchor.x - 240, 6, Math.max(6, cssWidth - 226))
+        : clamp((guide.xEndRatio ?? 0.85) * cssWidth, 6, Math.max(6, cssWidth - 226))
+      const top = stylePanelOpen
+        ? clamp(styleMenuAnchor.y - 18, 6, Math.max(6, cssHeight - 360))
+        : clamp(guide.position * cssHeight + 28, 6, Math.max(6, cssHeight - 360))
       return <div ref={styleGuideId === menuGuideId ? styleMenuRef : undefined} className="progress-line-menu" role="menu" style={{ left, top }} onPointerDown={(event) => event.stopPropagation()}>
         {styleGuideId === menuGuideId ? <>
           <strong>표시 스타일</strong>
           <div className="progress-color-presets">{presets.map((preset) => <button key={preset.color} type="button" aria-label={preset.name} title={preset.name} style={{ background: preset.color }} onClick={() => updateGuide(menuGuideId, { color: preset.color })} />)}</div>
           {renderStyleRange(menuGuide, 'thickness', '두께')}
           {renderStyleRange(menuGuide, 'opacity', '투명도')}
-          <button type="button" role="menuitem" onClick={() => { setStyleGuideId(null); setMenuGuideId(null) }}>닫기</button>
+          <button type="button" role="menuitem" onClick={() => { setStyleGuideId(null); setMenuGuideId(null); setStyleMenuAnchor(null) }}>닫기</button>
         </> : <>
           {guide.role === 'primary' && <>
             <button type="button" role="menuitem" onClick={() => addMarker(menuGuide)}>{guide.markerProgress === undefined ? '마커 표시' : '마커 지우기'}</button>
