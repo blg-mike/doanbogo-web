@@ -15,9 +15,27 @@ export interface ProgressSettings {
   vertical: ProgressLineStyle
 }
 
+export interface ProgressGuideScreenPosition {
+  position: number
+  xStartRatio: number
+  xEndRatio: number
+  rowSpacing?: number
+  rowSpacingStartRow?: number
+  rowSpacingDirection?: 'up' | 'down'
+}
+
 export interface ProgressGuide {
   id: string
   position: number
+  role?: 'primary' | 'reference'
+  xStartRatio?: number
+  xEndRatio?: number
+  markerProgress?: number
+  opacity?: number
+  rotationPositions?: Partial<Record<'0' | '90' | '180' | '270', ProgressGuideScreenPosition>>
+  rowSpacing?: number
+  rowSpacingStartRow?: number
+  rowSpacingDirection?: 'up' | 'down'
   name?: string
   color?: string
   linkedCounterId?: string
@@ -109,6 +127,8 @@ export interface PageWorkRecord {
   verticalPosition: number
   horizontalGuides?: ProgressGuide[]
   verticalGuides?: ProgressGuide[]
+  progressMigration?: 'pending' | 'complete'
+  legacyProgressGuides?: { horizontalGuides: ProgressGuide[]; verticalGuides: ProgressGuide[] }
   annotations: AnnotationRecord[]
   colorworkGrid?: ColorworkGrid
 }
@@ -117,14 +137,45 @@ export type PageRotation = 0 | 90 | 180 | 270
 
 export interface DocumentRecord {
   id: string
+  kind?: 'pdf' | 'photos'
   fileName: string
   size: number
   pageCount: number
   createdAt: number
   lastOpenedAt: number | null
   tags: string[]
-  pdf: Blob
+  pdf: Blob | null
   cover: Blob | null
+}
+
+export type HomeProjectStatus = 'active' | 'paused' | 'completed'
+
+export interface HomeProject {
+  key: string
+  entityId: string
+  kind: 'document' | 'chart'
+  title: string
+  fileName?: string
+  documentKind?: 'pdf' | 'photos'
+  pageCount?: number
+  chartCraft?: ChartCraft
+  cover: Blob | null
+  tags: string[]
+  status: HomeProjectStatus
+  archivedAt: number | null
+  deletedAt: number | null
+  lastWorkedAt: number | null
+  createdAt: number
+}
+
+export interface PhotoPageRecord {
+  documentId: string
+  pageNumber: number
+  blob: Blob
+  width: number
+  height: number
+  addedAt: number
+  sourceName: string
 }
 
 export interface PageRecognitionRecord {
@@ -377,6 +428,8 @@ export interface KnittingReport {
   title: string
   createdAt: number
   updatedAt: number
+  status?: 'draft' | 'complete'
+  completedAt?: number | null
   fields: Record<string, string>
   representativePhoto: string
   yarns: ReportYarn[]

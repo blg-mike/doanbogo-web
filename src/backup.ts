@@ -1,16 +1,22 @@
 import { strFromU8, strToU8, unzipSync, zipSync } from 'fflate'
-import type { AnnotationRecord, ChartDocument, ColorworkGrid, DocumentRecord, KnittingReport, PageRecord, PageWorkRecord, PreferenceRecord, ReportTimelinePhoto, ViewerSnapshot } from './types'
+import type { AnnotationRecord, ChartDocument, ColorworkGrid, DocumentRecord, HomeProject, KnittingReport, PageRecord, PageWorkRecord, PhotoPageRecord, PreferenceRecord, ReportTimelinePhoto, ViewerSnapshot } from './types'
 import { normalizePageWork, readWorkspaceData, type WorkspaceData } from './storage'
 import { createDefaultCounters, isCurrentCounterSnapshots, isLegacyCounterSnapshots, normalizeCounterSnapshots, MAX_COUNTER_HISTORY } from './smartCounter'
 
 interface BackupDocument extends Omit<DocumentRecord, 'pdf' | 'cover'> {
-  pdfPath: string
+  pdfPath: string | null
   coverPath: string | null
 }
 
+interface BackupPhotoPage extends Omit<PhotoPageRecord, 'blob'> {
+  path: string
+}
+
+type BackupHomeProject = Omit<HomeProject, 'cover'>
+
 interface BackupManifest {
   format: 'doanbogo'
-  version: 12
+  version: 14
   exportedAt: number
   documents: BackupDocument[]
   pages: PageRecord[]
@@ -19,6 +25,8 @@ interface BackupManifest {
   pageWork: PageWorkRecord[]
   charts: ChartDocument[]
   knittingReports: KnittingReport[]
+  photoPages: BackupPhotoPage[]
+  homeProjects: BackupHomeProject[]
 }
 
 function isObject(value: unknown): value is Record<string, unknown> {
@@ -57,6 +65,24 @@ function isGuideArray(value: unknown) {
   return Array.isArray(value) && value.length <= 10 && value.every((guide) => isObject(guide) &&
     typeof guide.id === 'string' && guide.id.length > 0 && guide.id.length <= 64 &&
     Number.isFinite(guide.position) && (guide.position as number) >= 0 && (guide.position as number) <= 1 &&
+    (guide.role === undefined || guide.role === 'primary' || guide.role === 'reference') &&
+    (guide.xStartRatio === undefined || Number.isFinite(guide.xStartRatio) && (guide.xStartRatio as number) >= 0 && (guide.xStartRatio as number) < 1) &&
+    (guide.xEndRatio === undefined || Number.isFinite(guide.xEndRatio) && (guide.xEndRatio as number) > 0 && (guide.xEndRatio as number) <= 1) &&
+    (guide.xStartRatio === undefined || guide.xEndRatio === undefined || (guide.xStartRatio as number) < (guide.xEndRatio as number)) &&
+    (guide.markerProgress === undefined || Number.isFinite(guide.markerProgress) && (guide.markerProgress as number) >= 0 && (guide.markerProgress as number) <= 1) &&
+    (guide.opacity === undefined || Number.isFinite(guide.opacity) && (guide.opacity as number) >= 0.3 && (guide.opacity as number) <= 1) &&
+    (guide.rowSpacing === undefined || Number.isFinite(guide.rowSpacing) && (guide.rowSpacing as number) > 0 && (guide.rowSpacing as number) <= 1) &&
+    (guide.rowSpacingStartRow === undefined || Number.isSafeInteger(guide.rowSpacingStartRow) && (guide.rowSpacingStartRow as number) >= 1 && (guide.rowSpacingStartRow as number) <= 9999) &&
+    (guide.rowSpacingDirection === undefined || guide.rowSpacingDirection === 'up' || guide.rowSpacingDirection === 'down') &&
+    (guide.rotationPositions === undefined || isObject(guide.rotationPositions) && Object.entries(guide.rotationPositions).every(([rotation, value]) => {
+      if (!['0', '90', '180', '270'].includes(rotation) || !isObject(value)) return false
+      return Number.isFinite(value.position) && Number(value.position) >= 0 && Number(value.position) <= 1 &&
+        Number.isFinite(value.xStartRatio) && Number(value.xStartRatio) >= 0 && Number(value.xStartRatio) < 1 &&
+        Number.isFinite(value.xEndRatio) && Number(value.xEndRatio) > 0 && Number(value.xEndRatio) <= 1 && Number(value.xStartRatio) < Number(value.xEndRatio) &&
+        (value.rowSpacing === undefined || Number.isFinite(value.rowSpacing) && Number(value.rowSpacing) > 0 && Number(value.rowSpacing) <= 1) &&
+        (value.rowSpacingStartRow === undefined || Number.isSafeInteger(value.rowSpacingStartRow) && Number(value.rowSpacingStartRow) >= 1 && Number(value.rowSpacingStartRow) <= 9999) &&
+        (value.rowSpacingDirection === undefined || value.rowSpacingDirection === 'up' || value.rowSpacingDirection === 'down')
+    })) &&
     (guide.name === undefined || typeof guide.name === 'string' && guide.name.length <= 100) &&
     (guide.color === undefined || typeof guide.color === 'string' && /^#[\da-f]{6}$/i.test(guide.color)) &&
     (guide.linkedCounterId === undefined || typeof guide.linkedCounterId === 'string' && guide.linkedCounterId.length <= 100) &&
@@ -142,6 +168,8 @@ function isKnittingReport(value: unknown, documentIds: Set<string>): value is Kn
     !isReportRows(value.accessories, ['photo', 'type', 'size', 'quantity', 'detail']) ||
     !isReportRows(value.measurements, ['label', 'pattern', 'finished']) ||
     !isReportRows(value.modifications, ['section', 'original', 'changed', 'memo']) ||
+        (value.status !== undefined && value.status !== 'draft' && value.status !== 'complete') ||
+    (value.completedAt !== undefined && value.completedAt !== null && !Number.isFinite(value.completedAt)) ||
     !Array.isArray(value.finishedPhotos) || value.finishedPhotos.length > 500 ||
     !value.finishedPhotos.every((photo) => isObject(photo) && typeof photo.id === 'string' && typeof photo.label === 'string' && photo.label.length <= 500 && isReportPhoto(photo.dataUrl)) ||
     (value.analysisCandidates !== undefined && (!Array.isArray(value.analysisCandidates) || value.analysisCandidates.length > 500 ||
@@ -158,7 +186,7 @@ function isKnittingReport(value: unknown, documentIds: Set<string>): value is Kn
 
 function normalizeKnittingReport(value: KnittingReport): KnittingReport {
   const legacy = value as KnittingReport & { id?: string; workPhotos?: ReportTimelinePhoto[] }
-  return { ...legacy, id: legacy.id || legacy.documentId, workPhotos: legacy.workPhotos ?? [] }
+  return { ...legacy, id: legacy.id || legacy.documentId, workPhotos: legacy.workPhotos ?? [], status: legacy.status ?? 'draft', completedAt: legacy.completedAt ?? null }
 }
 
 function isChart(entry: unknown): entry is ChartDocument {
@@ -188,20 +216,30 @@ export async function createWorkspaceBackup() {
   const data = await readWorkspaceData()
   const files: Record<string, Uint8Array> = {}
   const documents: BackupDocument[] = []
+  const photoPages: BackupPhotoPage[] = []
 
   for (const [index, document] of data.documents.entries()) {
     const number = String(index).padStart(6, '0')
-    const pdfPath = 'documents/' + number + '.pdf'
+    const photoFolder = document.kind === 'photos'
+    const pdfPath = photoFolder ? null : 'documents/' + number + '.pdf'
     const coverPath = document.cover ? 'covers/' + number + '.jpg' : null
-    files[pdfPath] = new Uint8Array(await document.pdf.arrayBuffer())
+    if (pdfPath && document.pdf) files[pdfPath] = new Uint8Array(await document.pdf.arrayBuffer())
     if (document.cover && coverPath) files[coverPath] = new Uint8Array(await document.cover.arrayBuffer())
     const { pdf: _pdf, cover: _cover, ...metadata } = document
     documents.push({ ...metadata, pdfPath, coverPath })
+    if (photoFolder) {
+      for (const photo of (data.photoPages ?? []).filter((item) => item.documentId === document.id).sort((a, b) => a.pageNumber - b.pageNumber)) {
+        const path = 'photos/' + number + '/' + String(photo.pageNumber).padStart(6, '0') + '.jpg'
+        files[path] = new Uint8Array(await photo.blob.arrayBuffer())
+        const { blob: _blob, ...photoMetadata } = photo
+        photoPages.push({ ...photoMetadata, path })
+      }
+    }
   }
 
   const manifest: BackupManifest = {
     format: 'doanbogo',
-    version: 12,
+    version: 14,
     exportedAt: Date.now(),
     documents,
     pages: data.pages,
@@ -210,6 +248,8 @@ export async function createWorkspaceBackup() {
     pageWork: data.pageWork,
     charts: data.charts,
     knittingReports: data.knittingReports,
+    photoPages,
+    homeProjects: (data.homeProjects ?? []).map(({ cover: _cover, ...project }) => project),
   }
   files['manifest.json'] = strToU8(JSON.stringify(manifest))
   const zipped = zipSync(files, { level: 0 })
@@ -232,12 +272,13 @@ export async function readWorkspaceBackup(file: File): Promise<WorkspaceData> {
   } catch {
     throw new Error('작업 파일의 안내 정보가 손상됐습니다.')
   }
-  if (!isObject(manifest) || manifest.format !== 'doanbogo' || ![1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12].includes(manifest.version as number) ||
+  if (!isObject(manifest) || manifest.format !== 'doanbogo' || ![1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14].includes(manifest.version as number) ||
     !Array.isArray(manifest.documents) || !Array.isArray(manifest.pages) ||
     !Array.isArray(manifest.viewers) || !Array.isArray(manifest.preferences) ||
     ((manifest.version as number) >= 2 && !Array.isArray(manifest.pageWork)) ||
     ((manifest.version as number) >= 4 && !Array.isArray(manifest.charts)) ||
-    ((manifest.version as number) >= 6 && !Array.isArray(manifest.knittingReports))) {
+    ((manifest.version as number) >= 6 && !Array.isArray(manifest.knittingReports)) ||
+    ((manifest.version as number) >= 13 && !Array.isArray(manifest.photoPages))) {
     throw new Error('지원하지 않는 작업 파일 형식입니다.')
   }
 
@@ -245,10 +286,12 @@ export async function readWorkspaceBackup(file: File): Promise<WorkspaceData> {
   const documents: DocumentRecord[] = manifest.documents.map((entry, index) => {
     if (!isObject(entry)) throw new Error('작업 파일에 올바르지 않은 도안 정보가 있습니다.')
     const { id, fileName, size, pageCount, createdAt, lastOpenedAt, tags, pdfPath, coverPath } = entry
+    const photoFolder = (manifest.version as number) >= 13 && entry.kind === 'photos'
     if (typeof id !== 'string' || !id || ids.has(id) || typeof fileName !== 'string' || !fileName ||
       !Number.isSafeInteger(size) || (size as number) < 0 || !Number.isSafeInteger(pageCount) || (pageCount as number) < 1 ||
       typeof createdAt !== 'number' || !Number.isFinite(createdAt) ||
-      !(lastOpenedAt === null || (typeof lastOpenedAt === 'number' && Number.isFinite(lastOpenedAt))) || !isStringArray(tags)) {
+      !(lastOpenedAt === null || (typeof lastOpenedAt === 'number' && Number.isFinite(lastOpenedAt))) || !isStringArray(tags) ||
+      (entry.kind !== undefined && entry.kind !== 'pdf' && entry.kind !== 'photos')) {
       throw new Error('작업 파일에 올바르지 않은 도안 정보가 있습니다.')
     }
     ids.add(id)
@@ -256,11 +299,16 @@ export async function readWorkspaceBackup(file: File): Promise<WorkspaceData> {
     const expectedNumber = String(index).padStart(6, '0')
     const expectedPdfPath = 'documents/' + expectedNumber + '.pdf'
     const expectedCoverPath = 'covers/' + expectedNumber + '.jpg'
-    if (pdfPath !== expectedPdfPath || !(coverPath === null || coverPath === expectedCoverPath) || !Object.hasOwn(files, expectedPdfPath)) {
-      throw new Error('작업 파일에서 PDF 자료를 찾을 수 없습니다.')
+    if (!(coverPath === null || coverPath === expectedCoverPath)) throw new Error('작업 파일에 올바르지 않은 표지 이미지 경로가 있습니다.')
+    let pdfBlob: Blob | null = null
+    if (photoFolder) {
+      if (pdfPath !== null) throw new Error('사진 폴더에 PDF 경로가 포함되어 있습니다.')
+    } else {
+      if (pdfPath !== expectedPdfPath || !Object.hasOwn(files, expectedPdfPath)) throw new Error('작업 파일에서 PDF 자료를 찾을 수 없습니다.')
+      const pdf = files[expectedPdfPath]
+      if (pdf.byteLength !== size) throw new Error('작업 파일의 PDF 크기가 안내 정보와 다릅니다.')
+      pdfBlob = new Blob([archiveBytes(pdf)], { type: 'application/pdf' })
     }
-    const pdf = files[expectedPdfPath]
-    if (pdf.byteLength !== size) throw new Error('작업 파일의 PDF 크기가 안내 정보와 다릅니다.')
 
     let cover: Blob | null = null
     if (coverPath !== null) {
@@ -269,16 +317,61 @@ export async function readWorkspaceBackup(file: File): Promise<WorkspaceData> {
     }
     return {
       id,
+      kind: photoFolder ? 'photos' : 'pdf',
       fileName,
       size: size as number,
       pageCount: pageCount as number,
       createdAt,
       lastOpenedAt,
       tags,
-      pdf: new Blob([archiveBytes(pdf)], { type: 'application/pdf' }),
+      pdf: pdfBlob,
       cover,
     }
   })
+
+  const photoPages: PhotoPageRecord[] = []
+  if ((manifest.version as number) >= 13) {
+    const documentIndexes = new Map(documents.map((document, index) => [document.id, index]))
+    const photoKeys = new Set<string>()
+    photoPages.push(...(manifest.photoPages as unknown[]).map((entry): PhotoPageRecord => {
+      if (!isObject(entry) || typeof entry.documentId !== 'string' || !ids.has(entry.documentId) ||
+        !Number.isSafeInteger(entry.pageNumber) || (entry.pageNumber as number) < 1 || !Number.isFinite(entry.width) ||
+        !Number.isSafeInteger(entry.width) || (entry.width as number) < 1 || (entry.width as number) > 2560 ||
+        !Number.isSafeInteger(entry.height) || (entry.height as number) < 1 || (entry.height as number) > 2560 ||
+        (entry.width as number) * (entry.height as number) > 6_000_000 || !Number.isFinite(entry.addedAt) ||
+        typeof entry.sourceName !== 'string' || entry.sourceName.length > 500) {
+        throw new Error('작업 파일에 올바르지 않은 사진 페이지 정보가 있습니다.')
+      }
+      const documentIndex = documentIndexes.get(entry.documentId)!
+      const photoFolder = documents[documentIndex]
+      const expectedPath = 'photos/' + String(documentIndex).padStart(6, '0') + '/' + String(entry.pageNumber).padStart(6, '0') + '.jpg'
+      const key = entry.documentId + '\u0000' + entry.pageNumber
+      if (photoFolder.kind !== 'photos' || (entry.pageNumber as number) > photoFolder.pageCount || photoKeys.has(key) || entry.path !== expectedPath || !Object.hasOwn(files, expectedPath)) {
+        throw new Error('작업 파일에서 사진 페이지를 찾을 수 없습니다.')
+      }
+      const bytes = files[expectedPath]
+      if (!bytes.byteLength) throw new Error('작업 파일의 사진 자료가 비어 있습니다.')
+      photoKeys.add(key)
+      return {
+        documentId: entry.documentId,
+        pageNumber: entry.pageNumber as number,
+        width: entry.width as number,
+        height: entry.height as number,
+        addedAt: entry.addedAt as number,
+        sourceName: entry.sourceName,
+        blob: new Blob([archiveBytes(bytes)], { type: 'image/jpeg' }),
+      }
+    }))
+    for (const photoFolder of documents.filter((document) => document.kind === 'photos')) {
+      const pages = photoPages.filter((photo) => photo.documentId === photoFolder.id).sort((a, b) => a.pageNumber - b.pageNumber)
+      if (pages.length !== photoFolder.pageCount || pages.some((photo, index) => photo.pageNumber !== index + 1) || pages.reduce((sum, photo) => sum + photo.blob.size, 0) !== photoFolder.size) {
+        throw new Error('작업 파일의 사진 수 또는 용량이 안내 정보와 다릅니다.')
+      }
+    }
+    if (documents.some((document) => document.kind !== 'photos' && photoPages.some((photo) => photo.documentId === document.id))) {
+      throw new Error('PDF 도안에 사진 페이지가 연결되어 있습니다.')
+    }
+  }
 
   const pageCounts = new Map(documents.map((document) => [document.id, document.pageCount]))
   const pages = manifest.pages.map((entry): PageRecord => {
@@ -334,6 +427,8 @@ export async function readWorkspaceBackup(file: File): Promise<WorkspaceData> {
       (entry.rotation !== undefined && ![0, 90, 180, 270].includes(entry.rotation as number)) ||
       (entry.horizontalGuides !== undefined && !isGuideArray(entry.horizontalGuides)) ||
       (entry.verticalGuides !== undefined && !isGuideArray(entry.verticalGuides)) ||
+      (entry.progressMigration !== undefined && !['pending', 'complete'].includes(String(entry.progressMigration))) ||
+      (entry.legacyProgressGuides !== undefined && (!isObject(entry.legacyProgressGuides) || !isGuideArray(entry.legacyProgressGuides.horizontalGuides) || !isGuideArray(entry.legacyProgressGuides.verticalGuides))) ||
       ((manifest.version as number) >= 5 && (manifest.version as number) <= 6 && !isLegacyRectangleArray(entry.rectangles)) ||
       ((entry.rectangles !== undefined) && (manifest.version as number) <= 6 && !isLegacyRectangleArray(entry.rectangles)) ||
       (entry.colorworkGrid !== undefined && !isColorworkGrid(entry.colorworkGrid)) ||
@@ -383,5 +478,34 @@ export async function readWorkspaceBackup(file: File): Promise<WorkspaceData> {
     reportIds.add(report.id)
   }
 
-  return { documents, pages, viewers, preferences, pageWork, charts, knittingReports }
+  const documentById = new Map(documents.map((item) => [item.id, item]))
+  const chartById = new Map(charts.map((item) => [item.id, item]))
+  const storedProjects = (Array.isArray(manifest.homeProjects) ? manifest.homeProjects : []).map((entry): HomeProject => {
+    if (!isObject(entry) || (entry.kind !== 'document' && entry.kind !== 'chart') || typeof entry.entityId !== 'string' ||
+      entry.key !== entry.kind + ':' + entry.entityId || typeof entry.title !== 'string' ||
+      !['active', 'paused', 'completed'].includes(String(entry.status)) ||
+      !(entry.archivedAt === null || typeof entry.archivedAt === 'number' && Number.isFinite(entry.archivedAt)) ||
+      !(entry.deletedAt === null || typeof entry.deletedAt === 'number' && Number.isFinite(entry.deletedAt)) ||
+      !(entry.lastWorkedAt === null || typeof entry.lastWorkedAt === 'number' && Number.isFinite(entry.lastWorkedAt)) ||
+      !Number.isFinite(entry.createdAt) || !isStringArray(entry.tags) ||
+      (entry.kind === 'document' && !documentById.has(entry.entityId)) || (entry.kind === 'chart' && !chartById.has(entry.entityId))) {
+      throw new Error('작업 파일에 올바르지 않은 프로젝트 상태가 있습니다.')
+    }
+    const document = entry.kind === 'document' ? documentById.get(entry.entityId) : undefined
+    return { ...entry, cover: document?.cover ?? null } as unknown as HomeProject
+  })
+  const projectByKey = new Map(storedProjects.map((project) => [project.key, project]))
+  const homeProjects = [
+    ...documents.map((item): HomeProject => {
+      const saved = projectByKey.get('document:' + item.id)
+      return saved ? { ...saved, fileName: item.fileName, documentKind: item.kind ?? 'pdf', pageCount: item.pageCount, cover: item.cover } :
+        { key: 'document:' + item.id, entityId: item.id, kind: 'document', title: item.fileName.replace(/\.pdf$/i, ''), fileName: item.fileName, documentKind: item.kind ?? 'pdf', pageCount: item.pageCount, cover: item.cover, tags: item.tags, status: 'active', archivedAt: null, deletedAt: null, lastWorkedAt: item.lastOpenedAt, createdAt: item.createdAt }
+    }),
+    ...charts.map((item): HomeProject => {
+      const saved = projectByKey.get('chart:' + item.id)
+      return saved ? { ...saved, chartCraft: item.craft } :
+        { key: 'chart:' + item.id, entityId: item.id, kind: 'chart', title: item.title, chartCraft: item.craft, cover: null, tags: [], status: 'active', archivedAt: null, deletedAt: null, lastWorkedAt: item.lastOpenedAt, createdAt: item.createdAt }
+    }),
+  ]
+  return { documents, pages, viewers, preferences, pageWork, charts, knittingReports, photoPages, homeProjects }
 }

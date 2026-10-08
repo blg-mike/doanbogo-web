@@ -1,12 +1,14 @@
 import { useCallback, useEffect, useRef, useState, type FormEvent, type ReactNode } from 'react'
-import { useNavigate } from 'react-router-dom'
-import { BookOpen, Check, FilePlus2, Grid2X2, Grid3X3, List, MoreHorizontal, Search, Settings, SlidersHorizontal, X } from 'lucide-react'
+import { useNavigate, useSearchParams } from 'react-router-dom'
+import { BookOpen, Camera, Check, ChevronDown, ChevronUp, FilePlus2, FolderPlus, Grid2X2, Grid3X3, Images, List, MoreHorizontal, Search, Settings, SlidersHorizontal, X } from 'lucide-react'
 import yyLogo from './assets/yy-logo.png'
 import { createWorkspaceBackup, readWorkspaceBackup } from './backup'
-import { addDocument, deleteChart, deleteDocument, duplicateChart, duplicateDocument, getPreference, getStorageMode, importWorkspaceData, isQuotaError, listCharts, listDocuments, markChartOpened, markOpened, renameDocument, saveChart, savePreference, storageEstimate, subscribeStorageMode, updateTags, type StorageMode } from './storage'
+import { addDocument, appendPhotoPages, createPhotoFolder, duplicateChart, duplicateDocument, getDocument, getHomeProject, getPhotoPage, getPreference, getStorageMode, importWorkspaceData, isQuotaError, listCharts, listDocuments, listHomeProjects, markChartOpened, renameDocument, saveChart, saveHomeProject, savePreference, storageEstimate, subscribeStorageMode, updateTags, type StorageMode } from './storage'
 import { inspectPdf, pdfErrorMessage } from './pdf'
+import { preparePhotoFile, sortPhotoFiles } from './photoImages'
 import { chartSvg } from './charts'
-import type { ChartDocument, DocumentRecord, SortMode, ViewMode } from './types'
+import type { ChartDocument, DocumentRecord, HomeProject, SortMode, ViewMode } from './types'
+import AppNavigation from './AppNavigation'
 import './Chart.css'
 
 const sortLabels: Record<SortMode, string> = { recent: '최근 실행순', name: '이름순', upload: '업로드순' }
@@ -27,6 +29,21 @@ function CoverImage({ blob }: { blob: Blob }) {
   return url ? <img className="cover-image" src={url} alt="" /> : <span className="cover-placeholder"><BookOpen size={32} /></span>
 }
 
+function PhotoCover({ documentId }: { documentId: string }) {
+  const [url, setUrl] = useState('')
+  useEffect(() => {
+    let active = true
+    let nextUrl = ''
+    void getPhotoPage(documentId, 1).then((photo) => {
+      if (!photo || !active) return
+      nextUrl = URL.createObjectURL(photo.blob)
+      setUrl(nextUrl)
+    }).catch(() => {})
+    return () => { active = false; if (nextUrl) URL.revokeObjectURL(nextUrl) }
+  }, [documentId])
+  return url ? <img className="cover-image" src={url} alt="" /> : <span className="cover-placeholder"><Images size={32} /></span>
+}
+
 function ChartPreview({ chart }: { chart: ChartDocument }) {
   const [url, setUrl] = useState('')
   useEffect(() => {
@@ -38,7 +55,8 @@ function ChartPreview({ chart }: { chart: ChartDocument }) {
   return url ? <img className="chart-preview-image" src={url} alt="" /> : <span className="cover-placeholder"><Grid3X3 size={32} /></span>
 }
 
-type LibraryItem = { type: 'pdf'; record: DocumentRecord } | { type: 'chart'; record: ChartDocument }
+type LibraryItem = { type: 'document'; record: DocumentRecord } | { type: 'chart'; record: ChartDocument }
+type PhotoDraftItem = { id: string; file: File }
 
 function Modal({ title, onClose, children }: { title: string; onClose: () => void; children: ReactNode }) {
   return (
@@ -53,7 +71,11 @@ function Modal({ title, onClose, children }: { title: string; onClose: () => voi
 
 export default function Workspace() {
   const navigate = useNavigate()
+  const [searchParams, setSearchParams] = useSearchParams()
   const fileInput = useRef<HTMLInputElement>(null)
+  const photoCameraInput = useRef<HTMLInputElement>(null)
+  const photoFilesInput = useRef<HTMLInputElement>(null)
+  const photoFolderInput = useRef<HTMLInputElement>(null)
   const backupInput = useRef<HTMLInputElement>(null)
   const importingRef = useRef(false)
   const [documents, setDocuments] = useState<LibraryItem[]>([])
@@ -65,18 +87,26 @@ export default function Workspace() {
   const [chartTitleDraft, setChartTitleDraft] = useState('')
   const [fileNameDraft, setFileNameDraft] = useState('')
   const [renameError, setRenameError] = useState('')
-  const [dialog, setDialog] = useState<'menu' | 'rename' | 'tags' | 'delete' | 'chart-menu' | 'chart-delete' | 'chart-rename' | 'settings' | null>(null)
+  const [dialog, setDialog] = useState<'menu' | 'rename' | 'tags' | 'delete' | 'photos' | 'chart-menu' | 'chart-delete' | 'chart-rename' | 'settings' | null>(null)
+  const [photoMode, setPhotoMode] = useState<'new' | 'append'>('new')
+  const [photoFolderName, setPhotoFolderName] = useState('')
+  const [photoDraft, setPhotoDraft] = useState<PhotoDraftItem[]>([])
+  const [photoError, setPhotoError] = useState('')
   const [tagDraft, setTagDraft] = useState('')
   const [loading, setLoading] = useState(false)
   const [notice, setNotice] = useState('')
   const [estimate, setEstimate] = useState<{ usage?: number; quota?: number } | null>(null)
   const [storageMode, setStorageMode] = useState<StorageMode>('checking')
+  const [undoProject, setUndoProject] = useState<HomeProject | null>(null)
+  const collectionMode = searchParams.get('view') === 'archived' || searchParams.get('view') === 'trash' ? searchParams.get('view') : 'active'
 
   const refresh = useCallback(async () => {
-    const [pdfs, charts] = await Promise.all([listDocuments(sort, query), listCharts(sort, query)])
-    const items: LibraryItem[] = [...pdfs.map((record) => ({ type: 'pdf' as const, record })), ...charts.map((record) => ({ type: 'chart' as const, record }))]
-    const itemName = (item: LibraryItem) => item.type === 'pdf' ? item.record.fileName : item.record.title
-    const itemOpened = (item: LibraryItem) => item.type === 'pdf'
+    const [pdfs, charts, projects] = await Promise.all([listDocuments(sort, query), listCharts(sort, query), listHomeProjects()])
+    const byKey = new Map(projects.map((project) => [project.key, project]))
+    const visible = (project: HomeProject | undefined) => Boolean(project && (collectionMode === 'trash' ? project.deletedAt !== null : collectionMode === 'archived' ? project.deletedAt === null && project.archivedAt !== null : project.deletedAt === null && project.archivedAt === null))
+    const items: LibraryItem[] = [...pdfs.filter((record) => visible(byKey.get('document:' + record.id))).map((record) => ({ type: 'document' as const, record })), ...charts.filter((record) => visible(byKey.get('chart:' + record.id))).map((record) => ({ type: 'chart' as const, record }))]
+    const itemName = (item: LibraryItem) => item.type === 'document' ? item.record.fileName : item.record.title
+    const itemOpened = (item: LibraryItem) => item.type === 'document'
       ? item.record.lastOpenedAt ?? item.record.createdAt
       : item.record.lastOpenedAt ?? item.record.updatedAt
     items.sort((a, b) => {
@@ -85,7 +115,7 @@ export default function Workspace() {
       return itemOpened(b) - itemOpened(a)
     })
     setDocuments(items)
-  }, [sort, query])
+  }, [sort, query, collectionMode])
 
   // oxlint-disable-next-line react/set-state-in-effect -- Reflect the IndexedDB result when the search or sort changes.
   useEffect(() => { void refresh() }, [refresh])
@@ -95,6 +125,16 @@ export default function Workspace() {
     void getStorageMode().then((mode) => { if (active) setStorageMode(mode) })
     return () => { active = false; unsubscribe() }
   }, [])
+  useEffect(() => {
+    const add = searchParams.get('add')
+    const settings = searchParams.get('settings')
+    if (add || settings) {
+      setSearchParams({}, { replace: true })
+      if (add === 'pdf') window.setTimeout(() => fileInput.current?.click(), 80)
+      else if (add === 'photos') startPhotoFolder()
+      else if (settings) void showSettings()
+    }
+  }, [searchParams, setSearchParams])
   useEffect(() => {
     void (async () => {
       const [savedSort, savedView] = await Promise.all([getPreference('sort'), getPreference('view')])
@@ -131,6 +171,7 @@ export default function Workspace() {
           createdAt: Date.now(),
           lastOpenedAt: null,
           tags: [],
+          kind: 'pdf',
           pdf: file.slice(0, file.size, 'application/pdf'),
           cover: inspected.cover,
         }
@@ -163,9 +204,73 @@ export default function Workspace() {
     }
   }
 
-  async function openDocument(document: DocumentRecord) {
-    await markOpened(document.id)
-    navigate('/viewer/' + document.id)
+  function startPhotoFolder() {
+    setSelected(null)
+    setPhotoMode('new')
+    setPhotoFolderName('사진 도안 ' + new Date().toLocaleDateString('ko-KR'))
+    setPhotoDraft([])
+    setPhotoError('')
+    setDialog('photos')
+  }
+
+  function startAddingPhotos(document: DocumentRecord) {
+    setSelected(document)
+    setPhotoMode('append')
+    setPhotoFolderName(document.fileName)
+    setPhotoDraft([])
+    setPhotoError('')
+    setDialog('photos')
+  }
+
+  function addPhotoFiles(files: FileList | null) {
+    if (!files?.length) return
+    const sorted = sortPhotoFiles(Array.from(files))
+    setPhotoDraft((current) => [...current, ...sorted.map((file) => ({ id: crypto.randomUUID(), file }))])
+    setPhotoError('')
+  }
+
+  function movePhotoDraft(index: number, offset: number) {
+    setPhotoDraft((current) => {
+      const destination = index + offset
+      if (destination < 0 || destination >= current.length) return current
+      const updated = [...current]
+      ;[updated[index], updated[destination]] = [updated[destination], updated[index]]
+      return updated
+    })
+  }
+
+  async function savePhotos(event: FormEvent) {
+    event.preventDefault()
+    if (!photoDraft.length || importingRef.current) return
+    importingRef.current = true
+    setLoading(true)
+    setPhotoError('')
+    try {
+      const prepared = []
+      for (const item of photoDraft) prepared.push(await preparePhotoFile(item.file))
+      let saved: DocumentRecord
+      if (photoMode === 'new') saved = await createPhotoFolder(photoFolderName, prepared)
+      else if (selected?.kind === 'photos') {
+        await appendPhotoPages(selected.id, prepared)
+        saved = await getDocument(selected.id) ?? selected
+      } else throw new Error('사진 폴더를 찾을 수 없습니다.')
+      void import('./pdfRecognition').then(({ enqueuePdfRecognition }) => enqueuePdfRecognition(saved, null, true)).catch(() => {})
+      await refresh()
+      setDialog(null)
+      setSelected(null)
+      setPhotoDraft([])
+      setNotice(photoMode === 'new' ? '사진 도안 폴더를 추가했습니다.' : '사진 페이지를 추가했습니다.')
+    } catch (error) {
+      setPhotoError(isQuotaError(error)
+        ? '브라우저 저장 공간이 부족해 사진을 저장하지 못했습니다. 저장 공간을 확보한 뒤 다시 시도해 주세요.'
+        : error instanceof Error ? error.message : '사진을 저장하지 못했습니다.')
+    } finally {
+      setLoading(false)
+      importingRef.current = false
+      if (photoCameraInput.current) photoCameraInput.current.value = ''
+      if (photoFilesInput.current) photoFilesInput.current.value = ''
+      if (photoFolderInput.current) photoFolderInput.current.value = ''
+    }
   }
 
   async function changeSort(value: SortMode) {
@@ -210,7 +315,7 @@ export default function Workspace() {
       setSelected(null)
       await refresh()
     } catch (error) {
-      setRenameError(error instanceof Error ? error.message : 'PDF 이름을 변경하지 못했습니다.')
+      setRenameError(error instanceof Error ? error.message : '이름을 변경하지 못했습니다.')
     }
   }
 
@@ -223,6 +328,7 @@ export default function Workspace() {
   }
 
   async function shareOrDownload(document: DocumentRecord) {
+    if (!document.pdf || document.kind === 'photos') throw new Error('사진 폴더에는 원본 PDF가 없습니다.')
     const file = new File([document.pdf], document.fileName, { type: 'application/pdf' })
     if (navigator.canShare?.({ files: [file] }) && navigator.share) {
       await navigator.share({ files: [file], title: document.fileName })
@@ -281,7 +387,7 @@ export default function Workspace() {
   }
 
   return (
-    <main className="workspace-shell">
+    <div className="workspace-app-frame"><AppNavigation active="projects" /><main className="workspace-shell">
       <header className="topbar">
         <a className="brand" href="#/" aria-label="도안보고 홈"><span className="brand-lockup"><img src={yyLogo} alt="도안보고 로고" /><small>YY공동제작</small></span><strong>도안보고</strong></a>
         <div className="topbar-actions">
@@ -290,38 +396,44 @@ export default function Workspace() {
         </div>
       </header>
       <section className="workspace-content">
-        <div className="welcome-row"><div><p className="eyebrow">MY LIBRARY</p><h1>내 도안</h1><p className="welcome-copy">PDF를 모아 보고, 도안 작업을 이어가세요.</p></div><div className="document-count">{documents.length}<span>개 도안</span></div></div>
+        <div className="welcome-row"><div><p className="eyebrow">MY LIBRARY</p><h1>{collectionMode === 'trash' ? '휴지통' : collectionMode === 'archived' ? '보관한 프로젝트' : '내 프로젝트'}</h1><p className="welcome-copy">도안과 차트, 작업 상태를 한곳에서 관리해요.</p></div><div className="document-count">{documents.length}<span>개 프로젝트</span></div></div>
+        <nav className="project-filter-tabs" aria-label="프로젝트 보기"><button className={collectionMode === 'active' ? 'active' : ''} onClick={() => setSearchParams({})}>전체</button><button className={collectionMode === 'archived' ? 'active' : ''} onClick={() => setSearchParams({ view: 'archived' })}>보관</button><button className={collectionMode === 'trash' ? 'active' : ''} onClick={() => setSearchParams({ view: 'trash' })}>휴지통</button></nav>
         <div className="toolbar">
           <input ref={fileInput} type="file" accept="application/pdf,.pdf" multiple hidden onChange={(event) => void importFiles(event.currentTarget.files)} />
+          <input ref={photoCameraInput} type="file" accept="image/*" capture="environment" hidden onChange={(event) => { addPhotoFiles(event.currentTarget.files); event.currentTarget.value = '' }} />
+          <input ref={photoFilesInput} type="file" accept="image/*" multiple hidden onChange={(event) => { addPhotoFiles(event.currentTarget.files); event.currentTarget.value = '' }} />
+          <input ref={photoFolderInput} type="file" accept="image/*" multiple hidden onChange={(event) => { addPhotoFiles(event.currentTarget.files); event.currentTarget.value = '' }} />
           <input ref={backupInput} type="file" accept=".doanbogo,application/zip" hidden onChange={(event) => void importWorkspace(event.currentTarget.files?.[0])} />
-          <button className="primary-button" onClick={() => fileInput.current?.click()} disabled={loading}><FilePlus2 size={18} />{loading ? 'PDF 확인 중…' : 'PDF 추가'}</button>
+          <button className="primary-button" onClick={() => fileInput.current?.click()} disabled={loading}><FilePlus2 size={18} />{loading ? '추가 중…' : 'PDF 추가'}</button>
+          <button className="secondary-button" onClick={startPhotoFolder} disabled={loading}><Images size={18} />사진 추가</button>
+          <button className="secondary-button" onClick={() => navigate('/charts/new')} disabled={loading}><Grid3X3 size={18} />차트 만들기</button>
           <label className="sort-select"><SlidersHorizontal size={16} /><span className="sr-only">정렬</span><select value={sort} onChange={(event) => void changeSort(event.target.value as SortMode)}>{Object.entries(sortLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label>
           <div className="view-toggle" aria-label="보기 방식"><button className={view === 'cover' ? 'active' : ''} aria-label="표지 보기" onClick={() => void changeView('cover')}><Grid2X2 size={17} /></button><button className={view === 'list' ? 'active' : ''} aria-label="목록 보기" onClick={() => void changeView('list')}><List size={18} /></button></div>
         </div>
-        {notice && <div className="notice" role="status"><span>{notice}</span><button aria-label="알림 닫기" onClick={() => setNotice('')}><X size={16} /></button></div>}
+        {notice && <div className="notice" role="status"><span>{notice}</span>{undoProject && <button className="notice-undo" onClick={() => void saveHomeProject({ ...undoProject, deletedAt: null }).then(() => { setUndoProject(null); setNotice('프로젝트를 복구했습니다.'); void refresh() })}>실행 취소</button>}<button aria-label="알림 닫기" onClick={() => { setNotice(''); setUndoProject(null) }}><X size={16} /></button></div>}
         {documents.length === 0 ? (
-          <section className="empty-state"><div className="empty-icon"><FilePlus2 size={27} /></div><h2>{query ? '검색 결과가 없습니다' : '아직 도안이 없습니다'}</h2><p>{query ? '이름이나 태그를 바꿔서 다시 검색해 보세요.' : 'PDF를 추가해 이곳에 모아 둘 수 있어요.'}</p>{!query && <div className="empty-actions"><button className="primary-button" onClick={() => fileInput.current?.click()}><FilePlus2 size={18} />첫 PDF 추가하기</button></div>}</section>
+          <section className="empty-state"><div className="empty-icon"><FilePlus2 size={27} /></div><h2>{query ? '검색 결과가 없습니다' : '아직 도안이 없습니다'}</h2><p>{query ? '이름이나 태그를 바꿔서 다시 검색해 보세요.' : 'PDF 또는 사진을 추가해 이곳에 모아 둘 수 있어요.'}</p>{!query && <div className="empty-actions"><button className="primary-button" onClick={() => fileInput.current?.click()}><FilePlus2 size={18} />첫 PDF 추가하기</button><button className="secondary-button" onClick={startPhotoFolder}><Images size={18} />사진 추가</button></div>}</section>
         ) : (
           <section className={view === 'cover' ? 'document-grid' : 'document-list'} aria-label="도안 목록">
-            {documents.map((item) => item.type === 'pdf' ? (
-              <article key={'pdf-' + item.record.id} className={'document-card ' + (view === 'list' ? 'list-card' : '')}>
-                <button className="cover-button" onClick={() => void openDocument(item.record)} aria-label={item.record.fileName + ' 열기'}>
-                  {item.record.cover ? <CoverImage blob={item.record.cover} /> : <span className="cover-placeholder"><BookOpen size={32} /></span>}
-                  <span className="pdf-label">PDF</span>
+            {documents.map((item) => item.type === 'document' ? (
+              <article key={'document-' + item.record.id} className={'document-card ' + (view === 'list' ? 'list-card' : '')}>
+                <button className="cover-button" onClick={() => navigate('/projects/document/' + item.record.id)} aria-label={item.record.fileName + ' 상세'}>
+                  {item.record.kind === 'photos' ? item.record.cover ? <CoverImage blob={item.record.cover} /> : <PhotoCover documentId={item.record.id} /> : item.record.cover ? <CoverImage blob={item.record.cover} /> : <span className="cover-placeholder"><BookOpen size={32} /></span>}
+                  <span className="pdf-label">{item.record.kind === 'photos' ? '사진' : 'PDF'}</span>
                 </button>
                 <div className="document-info">
-                  <div className="card-title-line"><button className="card-title" onClick={() => void openDocument(item.record)} title={item.record.fileName}>{item.record.fileName.replace(/\.pdf$/i, '')}</button><button className="card-more" aria-label={item.record.fileName + ' 메뉴'} onClick={() => openMenu(item.record)}><MoreHorizontal size={20} /></button></div>
+                  <div className="card-title-line"><button className="card-title" onClick={() => navigate('/projects/document/' + item.record.id)} title={item.record.fileName}>{item.record.kind === 'photos' ? item.record.fileName : item.record.fileName.replace(/\.pdf$/i, '')}</button><button className="card-more" aria-label={item.record.fileName + ' 메뉴'} onClick={() => openMenu(item.record)}><MoreHorizontal size={20} /></button></div>
                   <p className="document-meta">{item.record.pageCount}페이지 <span>·</span> {formatSize(item.record.size)}</p>
                   {item.record.tags.length > 0 && <div className="tag-list">{item.record.tags.map((tag) => <span className="tag-chip" key={tag}>{tag}</span>)}</div>}
                 </div>
               </article>
             ) : (
               <article key={'chart-' + item.record.id} className={'document-card chart-document-card ' + (view === 'list' ? 'list-card' : '')}>
-                <button className="cover-button chart-cover-button" onClick={() => void openChart(item.record)} aria-label={item.record.title + ' 차트 열기'}>
+                <button className="cover-button chart-cover-button" onClick={() => navigate('/projects/chart/' + item.record.id)} aria-label={item.record.title + ' 상세'}>
                   <ChartPreview chart={item.record} /><span className="chart-kind-label">{item.record.craft === 'knitting' ? 'Knitting · Colors' : 'Crochet · Free Form'}</span>
                 </button>
                 <div className="document-info">
-                  <div className="card-title-line"><button className="card-title" onClick={() => void openChart(item.record)} title={item.record.title}>{item.record.title}</button><button className="card-more" aria-label={item.record.title + ' 메뉴'} onClick={() => openChartMenu(item.record)}><MoreHorizontal size={20} /></button></div>
+                  <div className="card-title-line"><button className="card-title" onClick={() => navigate('/projects/chart/' + item.record.id)} title={item.record.title}>{item.record.title}</button><button className="card-more" aria-label={item.record.title + ' 메뉴'} onClick={() => openChartMenu(item.record)}><MoreHorizontal size={20} /></button></div>
                   <p className="document-meta">{item.record.craft === 'knitting' ? `${item.record.width}코 × ${item.record.height}단` : `${item.record.objects.length}개 기호`} <span>·</span> 차트</p>
                 </div>
               </article>
@@ -329,34 +441,43 @@ export default function Workspace() {
           </section>
         )}
         <footer className="workspace-footer">
-          <span>{storageMode === 'persistent' ? 'PDF와 차트가 이 브라우저에 자동 저장됩니다.' : storageMode === 'temporary' ? '임시 저장 중 · 종료 전에 작업 파일로 저장하세요.' : '저장 방식을 확인하고 있습니다…'}</span>
+          <span>{storageMode === 'persistent' ? 'PDF, 사진과 차트가 이 브라우저에 자동 저장됩니다.' : storageMode === 'temporary' ? '임시 저장 중 · 종료 전에 작업 파일로 저장하세요.' : '저장 방식을 확인하고 있습니다…'}</span>
           {storageMode === 'temporary' && <button className="text-control" onClick={() => void exportWorkspace()}>작업 파일 저장</button>}
         </footer>
       </section>
 
       {dialog === 'menu' && selected && <Modal title="도안 관리" onClose={() => setDialog(null)}><div className="action-list">
-        <button onClick={() => { setFileNameDraft(selected.fileName.replace(/\.pdf$/i, '')); setRenameError(''); setDialog('rename') }}>이름 변경<span>워크스페이스와 뷰어에 표시되는 PDF 이름</span></button>
+        <button onClick={() => { setFileNameDraft(selected.kind === 'photos' ? selected.fileName : selected.fileName.replace(/\.pdf$/i, '')); setRenameError(''); setDialog('rename') }}>이름 변경<span>워크스페이스와 뷰어에 표시되는 이름</span></button>
+        {selected.kind === 'photos' && <button onClick={() => startAddingPhotos(selected)}>사진 추가<span>이 폴더의 마지막 페이지 뒤에 사진을 추가합니다</span></button>}
         <button onClick={() => { setTagDraft(selected.tags.join(', ')); setDialog('tags') }}>태그 편집<span>파일명 또는 태그 검색에 사용됩니다</span></button>
         <button onClick={() => void duplicateDocument(selected.id).then(() => { setDialog(null); void refresh(); setNotice('도안 사본을 만들었습니다.') }).catch(() => setNotice('도안 사본을 만들지 못했습니다.'))}>도안 복사<span>북마크와 작업 위치는 복사하지 않습니다</span></button>
-        <button onClick={() => void shareOrDownload(selected).catch(() => setNotice('PDF를 공유하거나 다운로드하지 못했습니다.'))}>원본 PDF 공유 / 다운로드<span>지원하지 않는 기기에서는 파일을 다운로드합니다</span></button>
-        <button className="danger-action" onClick={() => setDialog('delete')}>도안 삭제<span>PDF와 해당 작업 정보를 함께 삭제합니다</span></button>
+        {selected.kind !== 'photos' && <button onClick={() => void shareOrDownload(selected).catch(() => setNotice('PDF를 공유하거나 다운로드하지 못했습니다.'))}>원본 PDF 공유 / 다운로드<span>지원하지 않는 기기에서는 파일을 다운로드합니다</span></button>}
+        <button className="danger-action" onClick={() => setDialog('delete')}>휴지통으로 이동<span>프로젝트와 작업 기록은 휴지통에서 복구할 수 있습니다</span></button>
       </div></Modal>}
-      {dialog === 'rename' && selected && <Modal title="PDF 이름 변경" onClose={() => setDialog('menu')}><form className="modal-form" onSubmit={(event) => void saveDocumentName(event)}><label htmlFor="pdf-name-draft">PDF 이름</label><input id="pdf-name-draft" autoFocus required maxLength={120} value={fileNameDraft} onChange={(event) => setFileNameDraft(event.currentTarget.value)} /><p className="modal-copy">.pdf 확장자는 저장할 때 자동으로 붙습니다.</p>{renameError && <p className="rename-error" role="alert">{renameError}</p>}<div className="modal-actions"><button type="button" className="secondary-button" onClick={() => setDialog('menu')}>취소</button><button className="primary-button" type="submit"><Check size={17} />저장</button></div></form></Modal>}
+      {dialog === 'rename' && selected && <Modal title={selected.kind === 'photos' ? '사진 폴더 이름 변경' : 'PDF 이름 변경'} onClose={() => setDialog('menu')}><form className="modal-form" onSubmit={(event) => void saveDocumentName(event)}><label htmlFor="pdf-name-draft">{selected.kind === 'photos' ? '폴더 이름' : 'PDF 이름'}</label><input id="pdf-name-draft" autoFocus required maxLength={120} value={fileNameDraft} onChange={(event) => setFileNameDraft(event.currentTarget.value)} />{selected.kind !== 'photos' && <p className="modal-copy">.pdf 확장자는 저장할 때 자동으로 붙습니다.</p>}{renameError && <p className="rename-error" role="alert">{renameError}</p>}<div className="modal-actions"><button type="button" className="secondary-button" onClick={() => setDialog('menu')}>취소</button><button className="primary-button" type="submit"><Check size={17} />저장</button></div></form></Modal>}
+      {dialog === 'photos' && <Modal title={photoMode === 'new' ? '사진 도안 만들기' : '사진 추가'} onClose={() => { setDialog(photoMode === 'append' ? 'menu' : null); setPhotoDraft([]); setPhotoError('') }}><form className="modal-form photo-import-form" onSubmit={(event) => void savePhotos(event)}>
+        {photoMode === 'new' && <><label htmlFor="photo-folder-name">폴더 이름</label><input id="photo-folder-name" required maxLength={120} value={photoFolderName} onChange={(event) => setPhotoFolderName(event.currentTarget.value)} /></>}
+        <p className="modal-copy">{photoDraft.length ? `${photoDraft.length}장 선택됨 · 촬영 순서대로 페이지가 만들어집니다. 더 촬영하거나 사진을 선택한 뒤 완료하세요.` : '사진을 찍거나 기존 사진 여러 장 또는 폴더를 선택하세요.'}</p>
+        <div className="photo-import-actions"><button type="button" className="secondary-button" onClick={() => photoCameraInput.current?.click()}><Camera size={16} />{photoDraft.length ? '계속 촬영' : '사진 찍기'}</button><button type="button" className="secondary-button" onClick={() => photoFilesInput.current?.click()}><Images size={16} />사진 선택</button><button type="button" className="secondary-button" onClick={() => { photoFolderInput.current?.setAttribute('webkitdirectory', ''); photoFolderInput.current?.click() }}><FolderPlus size={16} />폴더 선택</button></div>
+        {photoDraft.length > 0 && <ol className="photo-draft-list">{photoDraft.map((item, index) => <li key={item.id}><span><b>{index + 1}</b>{item.file.name}</span><div><button type="button" aria-label={`${item.file.name} 위로 이동`} title="위로" disabled={index === 0} onClick={() => movePhotoDraft(index, -1)}><ChevronUp size={15} /></button><button type="button" aria-label={`${item.file.name} 아래로 이동`} title="아래로" disabled={index === photoDraft.length - 1} onClick={() => movePhotoDraft(index, 1)}><ChevronDown size={15} /></button><button type="button" aria-label={`${item.file.name} 제거`} title="제거" onClick={() => setPhotoDraft((current) => current.filter((photo) => photo.id !== item.id))}><X size={15} /></button></div></li>)}</ol>}
+        {photoError && <p className="rename-error" role="alert">{photoError}</p>}
+        <div className="modal-actions"><button type="button" className="secondary-button" onClick={() => { setDialog(photoMode === 'append' ? 'menu' : null); setPhotoDraft([]); setPhotoError('') }}>취소</button><button className="primary-button" type="submit" disabled={!photoDraft.length || loading}>{loading ? '사진을 준비하고 있습니다…' : photoMode === 'new' ? '완료하고 폴더 만들기' : '사진 추가 완료'}</button></div>
+      </form></Modal>}
       {dialog === 'chart-menu' && selectedChart && <Modal title="차트 관리" onClose={() => setDialog(null)}><div className="action-list">
         <button onClick={() => { setChartTitleDraft(selectedChart.title); setDialog('chart-rename') }}>이름 변경<span>워크스페이스 카드에 표시되는 이름</span></button>
         <button onClick={() => void duplicateChart(selectedChart.id).then(() => { setDialog(null); void refresh(); setNotice('차트 사본을 만들었습니다.') }).catch(() => setNotice('차트 사본을 만들지 못했습니다.'))}>차트 복사<span>색칠, 기호와 레이어를 모두 복사합니다</span></button>
         <button onClick={() => { setDialog(null); void openChart(selectedChart) }}>차트 편집<span>{selectedChart.craft === 'knitting' ? '대바늘 색상 차트' : '코바늘 Free Form 차트'}</span></button>
-        <button className="danger-action" onClick={() => setDialog('chart-delete')}>차트 삭제<span>이 차트와 편집 내용을 삭제합니다</span></button>
+        <button className="danger-action" onClick={() => setDialog('chart-delete')}>휴지통으로 이동<span>차트는 휴지통에서 복구할 수 있습니다</span></button>
       </div></Modal>}
       {dialog === 'chart-rename' && selectedChart && <Modal title="차트 이름 변경" onClose={() => setDialog(null)}><form className="modal-form" onSubmit={(event) => void saveChartTitle(event)}><label htmlFor="chart-title-draft">차트 이름</label><input id="chart-title-draft" autoFocus maxLength={120} value={chartTitleDraft} onChange={(event) => setChartTitleDraft(event.target.value)} /><div className="modal-actions"><button type="button" className="secondary-button" onClick={() => setDialog('chart-menu')}>취소</button><button className="primary-button" type="submit"><Check size={17} />저장</button></div></form></Modal>}
-      {dialog === 'chart-delete' && selectedChart && <Modal title="차트를 삭제할까요?" onClose={() => setDialog(null)}><div className="modal-form"><p className="modal-copy"><strong>{selectedChart.title}</strong> 차트와 편집 내용이 함께 삭제됩니다.</p><div className="modal-actions"><button className="secondary-button" onClick={() => setDialog('chart-menu')}>취소</button><button className="danger-button" onClick={() => void deleteChart(selectedChart.id).then(() => { setDialog(null); setSelectedChart(null); void refresh() })}>삭제</button></div></div></Modal>}
+      {dialog === 'chart-delete' && selectedChart && <Modal title="차트를 휴지통으로 이동할까요?" onClose={() => setDialog(null)}><div className="modal-form"><p className="modal-copy"><strong>{selectedChart.title}</strong>과 편집 내용은 보존되며 휴지통에서 복구할 수 있습니다.</p><div className="modal-actions"><button className="secondary-button" onClick={() => setDialog('chart-menu')}>취소</button><button className="danger-button" onClick={() => void getHomeProject('chart', selectedChart.id).then((project) => { if (!project) return; const trashed = { ...project, deletedAt: Date.now() }; setUndoProject(trashed); return saveHomeProject(trashed) }).then(() => { setNotice('차트를 휴지통으로 옮겼습니다.'); setDialog(null); setSelectedChart(null); void refresh() })}>휴지통으로</button></div></div></Modal>}
       {dialog === 'tags' && selected && <Modal title="태그 편집" onClose={() => setDialog(null)}><form className="modal-form" onSubmit={(event) => void saveTagDraft(event)}><label htmlFor="tag-draft">쉼표로 구분해 입력</label><input id="tag-draft" autoFocus value={tagDraft} onChange={(event) => setTagDraft(event.target.value)} placeholder="예: 스웨터, 겨울, 선물" /><div className="modal-actions"><button type="button" className="secondary-button" onClick={() => setDialog('menu')}>취소</button><button className="primary-button" type="submit"><Check size={17} />저장</button></div></form></Modal>}
-      {dialog === 'delete' && selected && <Modal title="도안을 삭제할까요?" onClose={() => setDialog(null)}><div className="modal-form"><p className="modal-copy"><strong>{selected.fileName}</strong>과 이 도안의 북마크·숨김·뷰어 위치가 함께 삭제됩니다.</p><div className="modal-actions"><button className="secondary-button" onClick={() => setDialog('menu')}>취소</button><button className="danger-button" onClick={() => { void import('./pdfRecognition').then(({ cancelPdfRecognition }) => cancelPdfRecognition(selected.id)).catch(() => {}); void deleteDocument(selected.id).then(() => { setDialog(null); setSelected(null); void refresh() }) }}>삭제</button></div></div></Modal>}
+      {dialog === 'delete' && selected && <Modal title="프로젝트를 휴지통으로 이동할까요?" onClose={() => setDialog(null)}><div className="modal-form"><p className="modal-copy"><strong>{selected.fileName}</strong>과 작업 기록·보고서를 보존합니다. 휴지통에서 언제든 복구할 수 있어요.</p><div className="modal-actions"><button className="secondary-button" onClick={() => setDialog('menu')}>취소</button><button className="danger-button" onClick={() => void getHomeProject('document', selected.id).then((project) => { if (!project) return; const trashed = { ...project, deletedAt: Date.now() }; setUndoProject(trashed); return saveHomeProject(trashed) }).then(() => { setNotice('프로젝트를 휴지통으로 옮겼습니다.'); setDialog(null); setSelected(null); void refresh() })}>휴지통으로</button></div></div></Modal>}
       {dialog === 'settings' && <Modal title="저장 안내" onClose={() => setDialog(null)}><div className="settings-copy">
-        <p>{storageMode === 'persistent' ? 'PDF, 차트와 페이지 설정이 이 브라우저에 자동 저장됩니다. 다른 브라우저나 기기로 옮기려면 작업 파일을 내보내세요.' : storageMode === 'temporary' ? '이 브라우저에서는 자동 저장을 사용할 수 없습니다. 작업 파일을 내보내야 창을 닫은 뒤에도 PDF와 차트를 복원할 수 있습니다.' : '브라우저의 자동 저장 가능 여부를 확인하고 있습니다.'}</p>
+        <p>{storageMode === 'persistent' ? 'PDF, 사진, 차트와 페이지 설정이 이 브라우저에 자동 저장됩니다. 다른 브라우저나 기기로 옮기려면 작업 파일을 내보내세요.' : storageMode === 'temporary' ? '이 브라우저에서는 자동 저장을 사용할 수 없습니다. 작업 파일을 내보내야 창을 닫은 뒤에도 자료를 복원할 수 있습니다.' : '브라우저의 자동 저장 가능 여부를 확인하고 있습니다.'}</p>
         {storageMode === 'persistent' && (estimate?.quota ? <p className="storage-estimate">저장 한도 추정: {formatSize(estimate.usage ?? 0)} 사용 / {formatSize(estimate.quota)} 한도</p> : <p className="storage-estimate">브라우저가 저장 공간 추정치를 제공하지 않습니다.</p>)}
         <div className="backup-actions"><button className="secondary-button" onClick={() => void exportWorkspace()}>작업 파일 내보내기</button><button className="secondary-button" disabled={loading} onClick={() => backupInput.current?.click()}>작업 파일 가져오기</button></div>
       </div></Modal>}
-    </main>
+    </main></div>
   )
 }

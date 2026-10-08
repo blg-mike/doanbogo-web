@@ -3,7 +3,7 @@ import { useNavigate, useParams } from 'react-router-dom'
 import BrandLoading from './BrandLoading'
 import { ArrowLeft, Check, ChevronDown, Copy, Download, Eraser, FlipHorizontal2, FlipVertical2, Hand, Layers, Minus, MousePointer2, PaintBucket, Paintbrush, Plus, Redo2, RotateCcw, RotateCw, Save, Trash2, Undo2 } from 'lucide-react'
 import { crochetSymbols, exportChart } from './charts'
-import { getChart, saveChart } from './storage'
+import { getChart, markProjectWorked, saveChart } from './storage'
 import type { ChartDocument, ChartLayer, CrochetSymbolId, CrochetSymbolObject } from './types'
 import './Chart.css'
 
@@ -73,6 +73,7 @@ export default function ChartEditor() {
       setMissing(false)
       const opened = { ...saved, lastOpenedAt: Date.now() }
       const persisted = await saveChart(opened)
+      await markProjectWorked('chart', id)
       if (!active) return
       chartRef.current = persisted
       setChart(persisted)
@@ -87,6 +88,7 @@ export default function ChartEditor() {
     setSaveStatus('saving')
     const timeout = window.setTimeout(() => {
       void saveChart(chart).then((saved) => {
+        void markProjectWorked('chart', saved.id)
         if (chartRef.current?.id === saved.id) setSaveStatus('saved')
       }).catch(() => setSaveStatus('error'))
     }, 450)

@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest'
 import { strFromU8, strToU8, unzipSync, zipSync } from 'fflate'
 import { createWorkspaceBackup, readWorkspaceBackup } from './backup'
 import { createCounter, isLegacyCounterSnapshots } from './smartCounter'
-import { addDocument, deleteChart, deleteDocument, duplicateDocument, getChart, getKnittingReport, getKnittingReports, getPageWork, getPages, getViewer, importWorkspaceData, listCharts, listDocuments, saveChart, saveKnittingReport, savePageWork, savePreference, saveViewer, setPageFlag } from './storage'
+import { addDocument, createPhotoFolder, deleteChart, deleteDocument, duplicateDocument, getChart, getHomeProject, getKnittingReport, getKnittingReports, getPageWork, getPages, getPhotoPages, getViewer, importWorkspaceData, listCharts, listDocuments, saveChart, saveHomeProject, saveKnittingReport, savePageWork, savePreference, saveViewer, setPageFlag } from './storage'
 import { createKnittingChart, makeRasterPdf } from './charts'
 import type { DocumentRecord, KnittingReport } from './types'
 
@@ -62,6 +62,58 @@ describe('portable workspace backup', () => {
     await savePageWork({ ...work, horizontalPosition: 0.25 })
     expect(await getPageWork('migration-check', 1)).toMatchObject({ horizontalPosition: 0.25 })
     await deleteDocument('migration-check')
+  })
+
+  it('round-trips photo folders and image pages in the v14 backup', async () => {
+    const folder = await createPhotoFolder('종이 도안', [
+      { blob: new Blob(['first-page'], { type: 'image/jpeg' }), width: 1200, height: 1600, addedAt: 1, sourceName: '01.jpg' },
+      { blob: new Blob(['second-page'], { type: 'image/jpeg' }), width: 1600, height: 1200, addedAt: 2, sourceName: '02.jpg' },
+    ], new Blob(['small-cover'], { type: 'image/jpeg' }))
+    await setPageFlag(folder.id, 2, 'bookmarked', true)
+    const backup = await createWorkspaceBackup()
+    const entries = unzipSync(new Uint8Array(await backup.arrayBuffer()))
+    const manifest = JSON.parse(strFromU8(entries['manifest.json'])) as { version: number; documents: Record<string, unknown>[]; photoPages: Record<string, unknown>[] }
+    expect(manifest.version).toBe(14)
+    expect(manifest.documents.find((item) => item.id === folder.id)).toMatchObject({ kind: 'photos', pdfPath: null, pageCount: 2 })
+    expect(manifest.photoPages).toHaveLength(2)
+
+    const restored = await readWorkspaceBackup(new File([backup], 'photos.doanbogo'))
+    expect(restored.documents.find((item) => item.id === folder.id)).toMatchObject({ kind: 'photos', pdf: null, pageCount: 2 })
+    expect(await restored.documents.find((item) => item.id === folder.id)?.cover?.text()).toBe('small-cover')
+    expect(restored.photoPages).toHaveLength(2)
+    expect(await restored.photoPages?.[1].blob.text()).toBe('second-page')
+    expect(restored.pages).toContainEqual({ documentId: folder.id, pageNumber: 2, hidden: false, bookmarked: true })
+
+    await importWorkspaceData(restored)
+    const imported = (await listDocuments()).find((item) => item.id !== folder.id && item.kind === 'photos')!
+    expect(await getPhotoPages(imported.id)).toHaveLength(2)
+    expect((await getPhotoPages(imported.id))[1].sourceName).toBe('02.jpg')
+    await deleteDocument(folder.id)
+    await deleteDocument(imported.id)
+  })
+
+  it('round-trips migrated progress line state and preserved legacy guides', async () => {
+    const id = crypto.randomUUID()
+    const pdf = new Blob(['%PDF-1.7 progress-lines'], { type: 'application/pdf' })
+    await addDocument({ id, fileName: 'progress.pdf', size: pdf.size, pageCount: 1, createdAt: Date.now(), lastOpenedAt: null, tags: [], pdf, cover: null })
+    const work = await getPageWork(id, 1)
+    const primary = {
+      id: 'primary', role: 'primary' as const, position: 0.42, xStartRatio: 0.18, xEndRatio: 0.82, markerProgress: 0.6, opacity: 0.8,
+      rotationPositions: { '90': { position: 0.55, xStartRatio: 0.2, xEndRatio: 0.8, rowSpacing: 0.04, rowSpacingStartRow: 42, rowSpacingDirection: 'down' as const } },
+    }
+    await savePageWork({
+      ...work, progressMigration: 'complete', horizontalGuides: [primary], verticalGuides: [],
+      legacyProgressGuides: { horizontalGuides: [{ id: 'old-h', position: 0.4 }], verticalGuides: [{ id: 'old-v', position: 0.7 }] },
+    })
+    const backup = await createWorkspaceBackup()
+    const restored = await readWorkspaceBackup(new File([backup], 'progress.doanbogo'))
+    expect(restored.pageWork[0]).toMatchObject({
+      progressMigration: 'complete',
+      horizontalGuides: [{ id: 'primary', role: 'primary', xStartRatio: 0.18, xEndRatio: 0.82, markerProgress: 0.6, rotationPositions: { '90': { position: 0.55, rowSpacing: 0.04 } } }],
+      verticalGuides: [],
+      legacyProgressGuides: { horizontalGuides: [{ id: 'old-h' }], verticalGuides: [{ id: 'old-v' }] },
+    })
+    await deleteDocument(id)
   })
 
   it('discards legacy crop slots from five-slot, ten-slot, and malformed viewer backups', async () => {
@@ -170,6 +222,9 @@ describe('portable workspace backup', () => {
       cover: new Blob(['jpeg-cover'], { type: 'image/jpeg' }),
     }
     await addDocument(original)
+    const originalProject = await getHomeProject('document', original.id)
+    const archivedAt = Date.now()
+    await saveHomeProject({ ...originalProject!, status: 'paused', archivedAt })
     await setPageFlag(original.id, 3, 'bookmarked', true)
     const viewer = await getViewer(original.id, original.pageCount)
     const rowCounter = { ...createCounter('simple', '몸판 단'), id: 'body-row', value: 19, unit: 'row' as const, goalRow: 36, goalFinalSide: 'rs' as const, firstSide: 'ws' as const }
@@ -223,7 +278,7 @@ describe('portable workspace backup', () => {
     chart.cells[0] = '#e34b4b'
     await saveChart(chart)
     const report: KnittingReport = {
-      id: crypto.randomUUID(), documentId: original.id, title: '겨울 스웨터', createdAt: Date.now(), updatedAt: Date.now(),
+      id: crypto.randomUUID(), documentId: original.id, title: '겨울 스웨터', createdAt: Date.now(), updatedAt: Date.now(), status: 'complete', completedAt: Date.now(),
       fields: { 'project.name': '겨울 스웨터', 'project.status': '완성' },
       representativePhoto: 'data:image/jpeg;base64,/9j/4AAQ',
       yarns: [{ id: 'yarn-1', photo: '', brand: '실가게', product: '메리노', colorName: '크림', colorNumber: '1012', lot: '', fiber: '', country: '', weightClass: '', recommendedNeedle: '', skeinWeight: '', skeinLength: '', retailer: '', purchaseLink: '', price: '', quantity: '', usedSkeins: '4.3', usedWeight: '215', usedMeters: '850', memo: '부드러운 실', leftover: '' }], needles: [], accessories: [],
@@ -235,11 +290,11 @@ describe('portable workspace backup', () => {
     const backup = await createWorkspaceBackup()
     const restored = await readWorkspaceBackup(new File([backup], 'backup.doanbogo'))
     const archiveEntries = unzipSync(new Uint8Array(await backup.arrayBuffer()))
-    expect(JSON.parse(strFromU8(archiveEntries['manifest.json'])).version).toBe(12)
+    expect(JSON.parse(strFromU8(archiveEntries['manifest.json'])).version).toBe(14)
     const restoredViewer = restored.viewers.find((entry) => entry.documentId === original.id)!
     const restoredDocument = restored.documents.find((document) => document.id === original.id)!
     expect(restoredDocument.fileName).toBe(original.fileName)
-    expect(new TextDecoder().decode(await restoredDocument.pdf.arrayBuffer())).toBe('%PDF-1.7 sample')
+    expect(new TextDecoder().decode(await restoredDocument.pdf!.arrayBuffer())).toBe('%PDF-1.7 sample')
     expect(restored.pages[0]).toMatchObject({ documentId: original.id, pageNumber: 3, bookmarked: true })
     expect(restoredViewer.primary).toMatchObject({ page: 4, zoom: 2, centerX: 0.37, centerY: 0.68 })
     expect(restoredViewer.primary.rotations).toEqual({ 4: 90 })
@@ -269,11 +324,13 @@ describe('portable workspace backup', () => {
     expect(restored.pageWork[0].colorworkGrid?.cells[0]).toEqual({ color: '#f1c40f', opacity: 0.25 })
     expect(restored.preferences).toContainEqual({ key: 'view', value: 'list' })
     expect(restored.charts).toEqual([expect.objectContaining({ id: chart.id, title: chart.title, cells: ['#e34b4b', null, null, null, null, null] })])
+    expect(restored.homeProjects).toContainEqual(expect.objectContaining({ key: 'document:' + original.id, status: 'paused', archivedAt }))
     expect(restored.knittingReports.filter((item) => item.documentId === original.id)).toEqual([savedReport])
 
     expect(await importWorkspaceData(restored)).toBe(2)
     const imported = (await listDocuments('name')).find((item) => item.id !== original.id)
     expect(imported?.id).toBeTruthy()
+    expect(await getHomeProject('document', imported!.id)).toMatchObject({ status: 'paused', archivedAt })
     expect((await getPages(imported!.id))[0]).toMatchObject({ documentId: imported!.id, pageNumber: 3, bookmarked: true })
     expect((await getViewer(imported!.id, original.pageCount)).primary).toMatchObject({ page: 4, zoom: 2, centerX: 0.37, centerY: 0.68 })
     expect((await getViewer(imported!.id, original.pageCount)).counters?.[1]).toMatchObject({ kind: 'pattern', value: 3, name: '몸판 무늬' })
@@ -285,6 +342,8 @@ describe('portable workspace backup', () => {
     expect((await getPageWork(imported!.id, 4)).colorworkGrid?.cells[0]).toEqual({ color: '#f1c40f', opacity: 0.25 })
     expect(await getKnittingReport(imported!.id)).toMatchObject({
       documentId: imported!.id,
+      status: 'complete',
+      completedAt: savedReport.completedAt,
       fields: { 'project.name': '겨울 스웨터' },
       representativePhoto: 'data:image/jpeg;base64,/9j/4AAQ',
       finishedPhotos: [{ id: 'photo-1', label: '정면', dataUrl: 'data:image/jpeg;base64,/9j/4AAQ' }],

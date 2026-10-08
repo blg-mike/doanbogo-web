@@ -1,4 +1,5 @@
 import type { PageRotation, ProgressChartRegion, ProgressGuide } from './types'
+import { guideRowPosition } from './progressLines'
 
 export interface NormalizedRect {
   x: number
@@ -29,8 +30,11 @@ export function focusRowSpacing(region: ProgressChartRegion | undefined, fallbac
 }
 
 export function guidePositionForRotation(guide: ProgressGuide, row: number, rotation: PageRotation) {
-  const region = guide.chartRegion
-  if (!region) return guide.position
+  const screenPosition = guide.rotationPositions?.[String(rotation) as '0' | '90' | '180' | '270']
+  const orientedGuide = screenPosition ? { ...guide, ...screenPosition } : guide
+  if (screenPosition?.rowSpacingStartRow !== undefined) return guideRowPosition(orientedGuide, row)
+  const region = orientedGuide.chartRegion
+  if (!region) return guideRowPosition(orientedGuide, row)
   const rowCount = Math.max(1, region.lastRow - region.firstRow + 1)
   let index = row - region.startCounterRow
   if (region.repeat) index = ((index % rowCount) + rowCount) % rowCount

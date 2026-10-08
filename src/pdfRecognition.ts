@@ -5,9 +5,10 @@ import { getPageRecognition, getPages, savePageRecognition } from './storage'
 import { pdfPageRenderQueue } from './pdfPageRenderQueue'
 import { viewerCanvasMemory } from './pdfRenderResources'
 import { openPdf } from './pdf'
+import { openPhotoDocument } from './photoDocument'
 
 type RecognitionJob = {
-  record: Pick<DocumentRecord, 'id' | 'pageCount' | 'pdf'>
+  record: Pick<DocumentRecord, 'id' | 'pageCount' | 'pdf' | 'kind'>
   viewerPdf: PDFDocumentProxy | null
   cancelled: boolean
   restartPages: boolean
@@ -224,7 +225,9 @@ async function runJob(job: RecognitionJob) {
           }
           pdf = job.viewerPdf
         } else {
-          const opened = owned ??= await openPdf(job.record.pdf)
+          const opened = owned ??= job.record.kind === 'photos'
+            ? await openPhotoDocument(job.record.id)
+            : job.record.pdf ? await openPdf(job.record.pdf) : (() => { throw new Error('PDF 자료를 찾을 수 없습니다.') })()
           if (job.viewerPdf) {
             await opened.dispose()
             if (owned === opened) owned = null
@@ -374,7 +377,7 @@ document.addEventListener('visibilitychange', () => {
   }
 })
 
-export function enqueuePdfRecognition(record: Pick<DocumentRecord, 'id' | 'pageCount' | 'pdf'>, viewerPdf: PDFDocumentProxy | null = null, restart = false) {
+export function enqueuePdfRecognition(record: Pick<DocumentRecord, 'id' | 'pageCount' | 'pdf' | 'kind'>, viewerPdf: PDFDocumentProxy | null = null, restart = false) {
   const existing = jobs.get(record.id)
   if (reportPausedDocuments.has(record.id)) {
     pausedRecords.set(record.id, record)
@@ -387,6 +390,7 @@ export function enqueuePdfRecognition(record: Pick<DocumentRecord, 'id' | 'pageC
     return
   }
   if (existing) {
+    existing.record = record
     if (viewerPdf) existing.viewerPdf = viewerPdf
     if (restart) existing.restartPages = true
     return
@@ -397,14 +401,14 @@ export function enqueuePdfRecognition(record: Pick<DocumentRecord, 'id' | 'pageC
   pump()
 }
 
-export function pausePdfRecognitionForReport(record: Pick<DocumentRecord, 'id' | 'pageCount' | 'pdf'>) {
+export function pausePdfRecognitionForReport(record: Pick<DocumentRecord, 'id' | 'pageCount' | 'pdf' | 'kind'>) {
   reportPausedDocuments.add(record.id)
   pausedRecords.set(record.id, record)
   const job = jobs.get(record.id)
   if (job) stopJob(job)
 }
 
-export function resumePdfRecognitionFromReport(record: Pick<DocumentRecord, 'id' | 'pageCount' | 'pdf'>, viewerPdf: PDFDocumentProxy | null) {
+export function resumePdfRecognitionFromReport(record: Pick<DocumentRecord, 'id' | 'pageCount' | 'pdf' | 'kind'>, viewerPdf: PDFDocumentProxy | null) {
   reportPausedDocuments.delete(record.id)
   if (document.visibilityState !== 'visible') return
   const savedRecord = pausedRecords.get(record.id) ?? record

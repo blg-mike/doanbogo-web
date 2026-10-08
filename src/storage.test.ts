@@ -1,6 +1,6 @@
 import 'fake-indexeddb/auto'
 import { describe, expect, it } from 'vitest'
-import { addDocument, deleteDocument, duplicateDocument, getPageRecognition, getPageWork, getPages, getViewer, listDocuments, markOpened, renameDocument, savePageRecognition, savePageWork, saveViewer, saveViewerAndPageWorks, setPageFlag, updateTags } from './storage'
+import { addDocument, appendPhotoPages, createPhotoFolder, deleteDocument, duplicateDocument, getPageRecognition, getPageWork, getPages, getPhotoPage, getPhotoPages, getViewer, listDocuments, markOpened, normalizePageWork, renameDocument, savePageRecognition, savePageWork, saveViewer, saveViewerAndPageWorks, setPageFlag, updateTags } from './storage'
 import { createCounter } from './smartCounter'
 import type { DocumentRecord } from './types'
 
@@ -19,6 +19,16 @@ function makeDocument(id: string, fileName: string, createdAt: number, tags: str
 }
 
 describe('local document storage', () => {
+  it('marks legacy progress guides for user-directed migration', () => {
+    const work = normalizePageWork({
+      documentId: 'legacy-doc', pageNumber: 1, horizontalPosition: 0.4, verticalPosition: 0.7, annotations: [],
+      horizontalGuides: [{ id: 'legacy-h', position: 0.4 }], verticalGuides: [{ id: 'legacy-v', position: 0.7 }],
+    })
+    expect(work.progressMigration).toBe('pending')
+    expect(work.horizontalGuides).toEqual([{ id: 'legacy-h', position: 0.4 }])
+    expect(work.verticalGuides).toEqual([{ id: 'legacy-v', position: 0.7 }])
+  })
+
   it('renames a PDF while preserving its stored document data', async () => {
     const document = makeDocument(crypto.randomUUID(), 'Original.pdf', Date.now(), ['winter'])
     await addDocument(document)
@@ -26,7 +36,7 @@ describe('local document storage', () => {
     const renamed = await renameDocument(document.id, '  New pattern.PDF  ')
 
     expect(renamed.fileName).toBe('New pattern.pdf')
-    expect(await renamed.pdf.text()).toBe(await document.pdf.text())
+    expect(await renamed.pdf!.text()).toBe(await document.pdf!.text())
     expect(renamed.tags).toEqual(['winter'])
     expect((await listDocuments()).find((item) => item.id === document.id)?.fileName).toBe('New pattern.pdf')
     await deleteDocument(document.id)
@@ -59,11 +69,35 @@ describe('local document storage', () => {
 
     expect(savedCopy?.fileName).toBe('복사본 - Pattern.pdf')
     expect(savedCopy?.tags).toEqual([])
-    expect(savedCopy?.pdf.size).toBe(original.pdf.size)
+    expect(savedCopy?.pdf?.size).toBe(original.pdf!.size)
     expect((await getViewer(copy.id, copy.pageCount)).primary.page).toBe(1)
     expect(await getPages(copy.id)).toEqual([])
 
     await deleteDocument(original.id)
+    await deleteDocument(copy.id)
+  })
+
+  it('stores, appends, duplicates, renames, and deletes image pages in a photo folder', async () => {
+    const folder = await createPhotoFolder('뜨개 도안', [
+      { blob: new Blob(['photo-1'], { type: 'image/jpeg' }), width: 100, height: 200, addedAt: 1, sourceName: 'page-1.jpg' },
+    ], new Blob(['small-cover'], { type: 'image/jpeg' }))
+    await appendPhotoPages(folder.id, [
+      { blob: new Blob(['photo-2'], { type: 'image/jpeg' }), width: 200, height: 100, addedAt: 2, sourceName: 'page-2.jpg' },
+    ])
+    const saved = (await listDocuments()).find((item) => item.id === folder.id)!
+    expect(saved).toMatchObject({ kind: 'photos', fileName: '뜨개 도안', pageCount: 2, size: 14, pdf: null })
+    expect((await getPhotoPages(folder.id)).map((photo) => photo.sourceName)).toEqual(['page-1.jpg', 'page-2.jpg'])
+    expect((await getPhotoPage(folder.id, 2))?.width).toBe(200)
+
+    const renamed = await renameDocument(folder.id, '새 사진 도안')
+    expect(renamed.fileName).toBe('새 사진 도안')
+    const copy = await duplicateDocument(folder.id)
+    expect(copy).toMatchObject({ kind: 'photos', fileName: '복사본 - 새 사진 도안', pageCount: 2, size: 14 })
+    expect(await copy.cover?.text()).toBe('small-cover')
+    expect((await getPhotoPages(copy.id)).map((photo) => photo.blob.size)).toEqual([7, 7])
+
+    await deleteDocument(folder.id)
+    expect(await getPhotoPages(folder.id)).toEqual([])
     await deleteDocument(copy.id)
   })
 

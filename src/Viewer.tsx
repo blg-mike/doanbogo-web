@@ -8,8 +8,9 @@ import { cancelThumbnailRenders, PdfPage, PdfThumbnail, setThumbnailRenderingPau
 import { getDocument, getPageRecognition, getPageWork, getPageWorks, getPages, getViewer, markOpened, renameDocument, savePageWork, saveViewer, saveViewerAndPageWorks, setPageFlag, setPagesFlag } from './storage'
 import { pdfPageRenderQueue } from './pdfPageRenderQueue'
 import { openPdf, pdfErrorMessage } from './pdf'
+import { openPhotoDocument } from './photoDocument'
 import KnittingReport from './KnittingReport'
-import type { AnnotationSettings, AnnotationStyle, AnnotationTool, ColorworkCreateRequest, ColorworkSettings, CounterHistoryEntry, CounterSnapshot, DocumentRecord, PageRecord, PageRotation, PageWorkRecord, PaneId, PaneSnapshot, ProgressChartRegion, ProgressFocusSettings, ProgressGuide, ProgressSettings, ViewerSnapshot } from './types'
+import type { AnnotationSettings, AnnotationStyle, AnnotationTool, ColorworkCreateRequest, ColorworkSettings, CounterHistoryEntry, CounterSnapshot, DocumentRecord, PageRecord, PageRotation, PageWorkRecord, PaneId, PaneSnapshot, ProgressChartRegion, ProgressGuide, ProgressSettings, ViewerSnapshot } from './types'
 import { defaultColorworkSettings, getColorworkDimensions, resizeColorworkGrid } from './colorwork'
 import { MAX_COUNTER_HISTORY, MAX_COUNTER_ROW, advanceLinkedCounters, counterAlertState, findCounterRewindCheckpoint, guidePositionForRow, normalizeCounterSnapshots, progressGuideForCounter, restoreCounterGroup, setCounterGroupRow } from './smartCounter'
 import CounterPanel from './CounterPanel'
@@ -19,8 +20,9 @@ import { applyColorworkCellChanges, type ColorworkCellChange } from './colorwork
 import { PageWorkPersistence } from './pageWorkPersistence'
 import { enqueuePdfRecognition, pausePdfRecognitionForReport, releasePdfRecognitionViewer, resumePdfRecognitionFromReport, subscribePdfRecognition, updatePdfRecognitionPageVisibility } from './pdfRecognition'
 import { getViewerResourcePolicy } from './pdfRenderResources'
-import { displayRectToPageRect, guidePositionForRotation, pageRectToDisplayRect, formatFocusSpacingPercent, parseFocusSpacingPercent } from './focusGeometry'
+import { displayRectToPageRect, guidePositionForRotation, pageRectToDisplayRect } from './focusGeometry'
 import { canHidePageSelection, compactPageThumbnails, completePageList, nextVisiblePageAfterHide, visiblePageRange } from './pageManagement'
+import { migrateProgressGuides, progressGuideCandidates } from './progressLines'
 
 type Size = { width: number; height: number }
 type WorkAction = { before?: PageWorkRecord; after?: PageWorkRecord; cellChanges?: ColorworkCellChange[] }
@@ -46,7 +48,7 @@ type ThumbnailTouchGesture = {
 function createCounterSession(documentId: string) { return { documentId, visible: false } }
 
 const defaultProgressSettings: ProgressSettings = {
-  horizontal: { visible: true, color: '#f1c40f', thickness: 12, opacity: 0.5 },
+  horizontal: { visible: true, color: '#ed3f8a', thickness: 4, opacity: 0.8 },
   vertical: { visible: true, color: '#2673e8', thickness: 1, opacity: 1 },
 }
 
@@ -111,10 +113,45 @@ function rememberRecentPage<T>(cache: Map<number, T>, pageNumber: number, value:
 
 function blankWork(documentId: string, pageNumber: number): PageWorkRecord {
   return {
-    documentId, pageNumber, horizontalPosition: 0.5, verticalPosition: 0.5, annotations: [],
-    horizontalGuides: [{ id: 'legacy-horizontal', position: 0.5 }],
-    verticalGuides: [{ id: 'legacy-vertical', position: 0.5 }],
+    documentId, pageNumber, horizontalPosition: 0.5, verticalPosition: 0.5, annotations: [], progressMigration: 'complete',
+    horizontalGuides: [{ id: 'primary-default', position: 0.5, role: 'primary', xStartRatio: 0.15, xEndRatio: 0.85 }],
+    verticalGuides: [],
   }
+}
+
+function ProgressMigrationDialog({ work, counters, onMigrate, onDismiss }: {
+  work: PageWorkRecord
+  counters: CounterSnapshot[]
+  onMigrate: (work: PageWorkRecord) => void
+  onDismiss: () => void
+}) {
+  const candidates = progressGuideCandidates(work)
+  const initialPrimary = candidates.find(({ axis, guide }) => axis === 'horizontal' && guide.linkedCounterId) ?? candidates.find(({ axis }) => axis === 'horizontal') ?? candidates[0]
+  const keyOf = (axis: string, id: string) => axis + ':' + id
+  const [primaryKey, setPrimaryKey] = useState(initialPrimary ? keyOf(initialPrimary.axis, initialPrimary.guide.id) : '')
+  const [referenceKeys, setReferenceKeys] = useState<string[]>([])
+  const selectedPrimary = candidates.find(({ axis, guide }) => keyOf(axis, guide.id) === primaryKey)
+
+  function toggleReference(key: string) {
+    setReferenceKeys((current) => current.includes(key) ? current.filter((item) => item !== key) : current.length < 2 ? [...current, key] : current)
+  }
+
+  return <div className="modal-backdrop" role="presentation"><section className="modal-card progress-migration-modal" role="dialog" aria-modal="true" aria-label="진행선 방식 선택">
+    <div className="modal-heading"><div><p className="eyebrow">PROGRESS LINE UPDATE</p><h2>진행선 방식을 선택해 주세요</h2></div></div>
+    <p>이 페이지의 기존 선 중 하나를 주 진행선으로 고르고, 필요하면 참고선을 최대 2개까지 선택할 수 있습니다. 선택하지 않은 기존 선과 설정은 복구용으로 보관합니다.</p>
+    {candidates.length ? <label className="progress-migration-primary">주 진행선<select value={primaryKey} onChange={(event) => setPrimaryKey(event.currentTarget.value)}>{candidates.map(({ axis, guide }) => {
+      const key = keyOf(axis, guide.id)
+      const linkedName = counters.find((counter) => counter.id === guide.linkedCounterId)?.name
+      return <option key={key} value={key}>{axis === 'horizontal' ? '가로선' : '세로선'} · {linkedName ?? guide.name ?? Math.round(guide.position * 100) + '%'}</option>
+    })}</select></label> : <p className="progress-migration-note">기존 선이 없어 현재 위치에 새 주 진행선을 만듭니다.</p>}
+    {candidates.length > 1 && <fieldset className="progress-migration-references"><legend>참고선 · 최대 2개</legend>{candidates.map(({ axis, guide }) => {
+      const key = keyOf(axis, guide.id)
+      const primary = key === primaryKey
+      return <label key={key}><input type="checkbox" checked={referenceKeys.includes(key)} disabled={primary || (!referenceKeys.includes(key) && referenceKeys.length >= 2)} onChange={() => toggleReference(key)} />{axis === 'horizontal' ? '가로선' : '세로선'} · {guide.name ?? Math.round(guide.position * 100) + '%'}</label>
+    })}</fieldset>}
+    {selectedPrimary?.axis === 'vertical' && <p className="progress-migration-note">선택한 세로선의 위치 비율을 새 가로 진행선에 적용합니다. 전환 후 선 위치와 길이를 조정할 수 있습니다.</p>}
+    <div className="modal-actions"><button type="button" className="secondary-button" onClick={onDismiss}>나중에</button><button type="button" className="primary-button" disabled={candidates.length > 0 && !primaryKey} onClick={() => onMigrate(migrateProgressGuides(work, primaryKey, referenceKeys))}>{candidates.length ? '선택한 방식으로 전환' : '새 진행선으로 시작'}</button></div>
+  </section></div>
 }
 
 function ProgressSettingsDialog({ settings, work, counters, rotation, autoPanGuideId, onAutoPanChange, onCounterGuideMove, onSettingsChange, onWorkChange, onClose }: {
@@ -129,9 +166,7 @@ function ProgressSettingsDialog({ settings, work, counters, rotation, autoPanGui
   onWorkChange: (work: PageWorkRecord, before: PageWorkRecord, immediate?: boolean, recordHistory?: boolean) => void
   onClose: () => void
 }) {
-  const guideEditBefore = useRef<PageWorkRecord | null>(null)
   const [counterRowDrafts, setCounterRowDrafts] = useState<Record<string, string>>({})
-  const [focusSpacingDrafts, setFocusSpacingDrafts] = useState<Record<string, string>>({})
   const [connection, setConnection] = useState<{ guideId: string; counterId: string; region: ProgressChartRegion; positions: string; step: 1 | 2 | 3 } | null>(null)
 
   function update(axis: 'horizontal' | 'vertical', change: Partial<ProgressSettings['horizontal']>) {
@@ -139,49 +174,12 @@ function ProgressSettingsDialog({ settings, work, counters, rotation, autoPanGui
   }
 
   function guides(axis: 'horizontal' | 'vertical') {
-    return axis === 'horizontal' ? work.horizontalGuides ?? [{ id: 'legacy-horizontal', position: work.horizontalPosition }] : work.verticalGuides ?? [{ id: 'legacy-vertical', position: work.verticalPosition }]
-  }
-
-  function changeGuide(axis: 'horizontal' | 'vertical', id: string, position: number) {
-    const key = axis === 'horizontal' ? 'horizontalGuides' : 'verticalGuides'
-    const legacyKey = axis === 'horizontal' ? 'horizontalPosition' : 'verticalPosition'
-    const before = guideEditBefore.current ?? work
-    onWorkChange({ ...work, [key]: guides(axis).map((guide) => guide.id === id ? { ...guide, position } : guide), [legacyKey]: position }, before, false, false)
-  }
-
-  function beginGuideEdit() {
-    guideEditBefore.current ??= work
-  }
-
-  function finishGuideEdit() {
-    const before = guideEditBefore.current
-    if (!before) return
-    guideEditBefore.current = null
-    onWorkChange(work, before, true, true)
-  }
-
-  function addGuide(axis: 'horizontal' | 'vertical') {
-    const current = guides(axis)
-    if (current.length >= 10) return
-    const key = axis === 'horizontal' ? 'horizontalGuides' : 'verticalGuides'
-    onWorkChange({ ...work, [key]: [...current, { id: crypto.randomUUID(), position: 0.5 }] }, work)
-  }
-
-  function removeGuide(axis: 'horizontal' | 'vertical', id: string) {
-    const key = axis === 'horizontal' ? 'horizontalGuides' : 'verticalGuides'
-    onWorkChange({ ...work, [key]: guides(axis).filter((guide) => guide.id !== id) }, work)
-    if (autoPanGuideId === id) onAutoPanChange(null)
+    return axis === 'horizontal' ? (work.horizontalGuides ?? []).filter((guide) => guide.role === 'primary') : []
   }
 
   function updateGuide(axis: 'horizontal' | 'vertical', id: string, change: Partial<ProgressGuide>) {
     const key = axis === 'horizontal' ? 'horizontalGuides' : 'verticalGuides'
     onWorkChange({ ...work, [key]: guides(axis).map((guide) => guide.id === id ? { ...guide, ...change } : guide) }, work)
-  }
-
-  function updateFocus(guide: ProgressGuide, change: Partial<ProgressFocusSettings>) {
-    const current: ProgressFocusSettings = guide.focus ?? { enabled: false, strength: 'low', range: 0, scope: guide.chartRegion ? 'region' : 'page', rowSpacing: 0.03 }
-    if (change.rowSpacing !== undefined && (!Number.isFinite(change.rowSpacing) || change.rowSpacing <= 0 || change.rowSpacing > 0.5)) return
-    updateGuide('horizontal', guide.id, { focus: { ...current, ...change } })
   }
 
   function moveLinkedGuide(guide: ProgressGuide) {
@@ -219,7 +217,14 @@ function ProgressSettingsDialog({ settings, work, counters, rotation, autoPanGui
       : []
     const displayedRegion = { ...connection.region, ...(rowPositions.length ? { rowPositions } : { rowPositions: undefined }) }
     const pageRegion = { ...displayedRegion, ...displayRectToPageRect(displayedRegion, rotation), rowLayout: { top: connection.region.y, height: connection.region.height } }
-    const linkedGuide = { ...guide, linkedCounterId: counter.id, name: counter.name, color: counter.color, chartRegion: pageRegion }
+    const rotationPositions = Object.fromEntries(Object.entries(guide.rotationPositions ?? {}).map(([key, position]) => {
+      const screenPosition = { ...position }
+      delete screenPosition.rowSpacing
+      delete screenPosition.rowSpacingStartRow
+      delete screenPosition.rowSpacingDirection
+      return [key, screenPosition]
+    })) as ProgressGuide['rotationPositions']
+    const linkedGuide = { ...guide, rowSpacing: undefined, rowSpacingStartRow: undefined, rowSpacingDirection: undefined, rotationPositions, linkedCounterId: counter.id, name: counter.name, color: counter.color, chartRegion: pageRegion, markerProgress: undefined }
     const currentRow = counter.kind === 'simple' ? counter.value : counter.currentRow ?? 1
     const position = guidePositionForRow({ ...linkedGuide, chartRegion: displayedRegion }, currentRow)
     const horizontalGuides = guides('horizontal').map((item) => item.id === guide.id ? { ...linkedGuide, position } : item)
@@ -235,29 +240,20 @@ function ProgressSettingsDialog({ settings, work, counters, rotation, autoPanGui
   return (
     <div className="modal-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) onClose() }}>
       <section className="modal-card progress-settings-modal" role="dialog" aria-modal="true" aria-label="진행선 설정">
-        <div className="modal-heading"><div><p className="eyebrow">PAGE GUIDES</p><h2>가로·세로 진행선</h2></div><button className="icon-button" aria-label="닫기" onClick={onClose}><X size={20} /></button></div>
+        <div className="modal-heading"><div><p className="eyebrow">PROGRESS LINE</p><h2>진행선 설정</h2></div><button className="icon-button" aria-label="닫기" onClick={onClose}><X size={20} /></button></div>
         <div className="progress-settings-list">
-          {(['horizontal', 'vertical'] as const).map((axis) => {
-            const line = settings[axis]
-            const axisGuides = guides(axis)
-            const name = axis === 'horizontal' ? '가로선' : '세로선'
-            return <fieldset key={axis} className="progress-setting">
-              <legend><label><input type="checkbox" checked={line.visible} onChange={(event) => update(axis, { visible: event.currentTarget.checked })} />{name} 표시</label></legend>
-              <label>색상<input aria-label={name + ' 색상'} type="color" value={line.color} onChange={(event) => update(axis, { color: event.currentTarget.value })} /></label>
-              <label>굵기 <span>{line.thickness}px</span><input aria-label={name + ' 굵기'} type="range" min="1" max="12" value={line.thickness} onChange={(event) => update(axis, { thickness: Number(event.currentTarget.value) })} /></label>
-              <label>투명도 <span>{Math.round(line.opacity * 100)}%</span><input aria-label={name + ' 투명도'} type="range" min="10" max="100" value={Math.round(line.opacity * 100)} onChange={(event) => update(axis, { opacity: Number(event.currentTarget.value) / 100 })} /></label>
-              <div className="guide-position-list"><strong>{name} 위치 <span>{axisGuides.length}/10</span></strong>{axisGuides.map((guide, index) => <div key={guide.id}>
-                <label htmlFor={'guide-position-' + axis + '-' + guide.id}>{index + 1}</label>
-                <input id={'guide-position-' + axis + '-' + guide.id} aria-label={name + ' ' + (index + 1) + ' 위치'} type="range" min="0" max="100" disabled={Boolean(guide.linkedCounterId)} value={Math.round(guide.position * 100)} onPointerDown={beginGuideEdit} onPointerUp={finishGuideEdit} onPointerCancel={finishGuideEdit} onKeyDown={beginGuideEdit} onKeyUp={finishGuideEdit} onBlur={finishGuideEdit} onChange={(event) => changeGuide(axis, guide.id, Number(event.currentTarget.value) / 100)} />
-                <button type="button" className="icon-button" aria-label={name + ' ' + (index + 1) + ' 삭제'} onClick={() => removeGuide(axis, guide.id)}><X size={15} /></button>
-                {axis === 'horizontal' && guide.linkedCounterId && <div className="guide-counter-move"><label>이동할 단<input aria-label={(guide.name ?? '연결 진행선') + ' 이동할 단'} type="number" min="1" max={MAX_COUNTER_ROW} value={counterRowDrafts[guide.id] ?? String((() => { const counter = counters.find((item) => item.id === guide.linkedCounterId); return counter?.kind === 'simple' ? counter.value : counter?.currentRow ?? 1 })())} onChange={(event) => setCounterRowDrafts((current) => ({ ...current, [guide.id]: event.currentTarget.value }))} /></label><button type="button" className="secondary-button" onClick={() => moveLinkedGuide(guide)}>단 이동 확인</button><button type="button" className="text-button" onClick={() => disconnectGuide(guide)}>연결 해제</button></div>}
-                {axis === 'horizontal' && <details className="guide-focus-settings"><summary>집중 보기{guide.focus?.enabled ? ' 사용 중' : ''}</summary><label><input type="checkbox" checked={guide.focus?.enabled === true} onChange={(event) => updateFocus(guide, { enabled: event.currentTarget.checked })} />이 진행선으로 집중 보기</label><div className="guide-focus-fields"><label>블러 강도<select value={guide.focus?.strength ?? 'low'} onChange={(event) => updateFocus(guide, { strength: event.currentTarget.value as ProgressFocusSettings['strength'] })}><option value="low">약</option><option value="medium">중</option><option value="high">강</option></select></label><label>선명한 범위<select value={guide.focus?.range ?? 0} onChange={(event) => updateFocus(guide, { range: Number(event.currentTarget.value) as 0 | 1 | 2 })}><option value={0}>현재 줄만</option><option value={1}>위아래 1줄</option><option value={2}>위아래 2줄</option></select></label><label>적용 범위<select value={guide.focus?.scope ?? (guide.chartRegion ? 'region' : 'page')} onChange={(event) => updateFocus(guide, { scope: event.currentTarget.value as ProgressFocusSettings['scope'] })}><option value="page">현재 페이지 전체</option><option value="region" disabled={!guide.chartRegion}>지정 차트 영역</option></select></label>{!guide.chartRegion && <label>줄 간격(도안 높이 %)<input type="number" min="0.5" max="50" step="0.5" value={focusSpacingDrafts[guide.id] ?? formatFocusSpacingPercent(guide.focus?.rowSpacing ?? 0.03)} onFocus={(event) => setFocusSpacingDrafts((current) => ({ ...current, [guide.id]: event.currentTarget.value }))} onChange={(event) => { const value = event.currentTarget.value; setFocusSpacingDrafts((current) => ({ ...current, [guide.id]: value })); const rowSpacing = parseFocusSpacingPercent(value); if (rowSpacing !== null) updateFocus(guide, { rowSpacing }) }} onBlur={() => setFocusSpacingDrafts((current) => { const next = { ...current }; delete next[guide.id]; return next })} /></label>}</div></details>}
-                {axis === 'horizontal' && guide.linkedCounterId && <span className="guide-linked-name" style={{ color: guide.color }}>{guide.name ?? counters.find((counter) => counter.id === guide.linkedCounterId)?.name ?? '연결 카운터'}</span>}
-              </div>)}</div>
-              <button type="button" className="secondary-button guide-add-setting" disabled={axisGuides.length >= 10} onClick={() => addGuide(axis)}><Plus size={15} />{name} 추가</button>
-            </fieldset>
-          })}
-          <section className="progress-connection-settings"><h3><Link2 size={16} />카운터에 연결</h3><p>단수와 차트 줄을 연결하면 카운터 완료에 따라 진행선이 이동합니다.</p><label>자동 화면 이동 기준<select value={autoPanGuideId ?? ''} onChange={(event) => onAutoPanChange(event.currentTarget.value || null)}><option value="">사용 안 함</option>{linkedGuides.map((guide) => <option key={guide.id} value={guide.id}>{guide.name ?? counters.find((counter) => counter.id === guide.linkedCounterId)?.name ?? '연결 진행선'}</option>)}</select></label><button type="button" className="secondary-button guide-connect-start" disabled={!guides('horizontal').length || !counters.length} onClick={() => openConnection()}><Link2 size={15} />3단계 연결 설정</button>
+          <fieldset className="progress-setting">
+            <legend>진행선 표시</legend>
+            <label><input type="checkbox" checked={settings.horizontal.visible} onChange={(event) => update('horizontal', { visible: event.currentTarget.checked })} />진행선 표시</label>
+            <p>선 길이와 위치, 마커, 표시 스타일은 도안 위 진행선 메뉴에서 조정합니다.</p>
+          </fieldset>
+          <section className="progress-connection-settings"><h3><Link2 size={16} />카운터에 연결</h3><p>단수와 차트 줄을 연결하면 진행선이 이동합니다.</p><label>자동 화면 이동 기준<select value={autoPanGuideId ?? ''} onChange={(event) => onAutoPanChange(event.currentTarget.value || null)}><option value="">사용 안 함</option>{linkedGuides.map((guide) => <option key={guide.id} value={guide.id}>{guide.name ?? counters.find((counter) => counter.id === guide.linkedCounterId)?.name ?? '연결 진행선'}</option>)}</select></label>
+            {linkedGuides.length > 0 && <div className="guide-position-list"><strong>연결된 진행선</strong>{linkedGuides.map((guide) => {
+              const counter = counters.find((item) => item.id === guide.linkedCounterId)
+              const row = counter?.kind === 'simple' ? counter.value : counter?.currentRow ?? 1
+              return <div key={guide.id} className="guide-counter-move"><span>{guide.name ?? counter?.name ?? '연결 진행선'}</span><label>단 이동<input aria-label={(guide.name ?? '연결 진행선') + ' 이동할 단'} type="number" min="1" max={MAX_COUNTER_ROW} value={counterRowDrafts[guide.id] ?? String(row)} onChange={(event) => setCounterRowDrafts((current) => ({ ...current, [guide.id]: event.currentTarget.value }))} /></label><button type="button" className="secondary-button" onClick={() => moveLinkedGuide(guide)}>단 이동 확인</button><button type="button" className="text-button" onClick={() => disconnectGuide(guide)}>연결 해제</button></div>
+            })}</div>}
+            <button type="button" className="secondary-button guide-connect-start" disabled={!guides('horizontal').length || !counters.length} onClick={() => openConnection()}><Link2 size={15} />3단계 연결 설정</button>
             {connection && <div className="guide-connection-wizard"><strong>{connection.step}/3 · {connection.step === 1 ? '카운터와 가로선 선택' : connection.step === 2 ? '차트 영역 지정' : '현재 줄 확인'}</strong>{connection.step === 1 && <><label>연결할 가로선<select value={connection.guideId} onChange={(event) => setConnection((current) => current ? { ...current, guideId: event.currentTarget.value } : current)}>{guides('horizontal').map((guide, index) => <option key={guide.id} value={guide.id}>{guide.name ?? '가로선 ' + (index + 1)}</option>)}</select></label><label>카운터<select value={connection.counterId} onChange={(event) => setConnection((current) => current ? { ...current, counterId: event.currentTarget.value } : current)}>{counters.map((counter) => <option key={counter.id} value={counter.id}>{counter.name} · 현재 {counter.kind === 'simple' ? counter.value : counter.currentRow ?? 1}단</option>)}</select></label><button type="button" className="primary-button" disabled={!connection.counterId} onClick={() => setConnection((current) => current ? { ...current, step: 2 } : current)}>다음</button></>}{connection.step === 2 && <><div className="guide-region-grid">{([['x', '왼쪽'], ['y', '위쪽'], ['width', '너비'], ['height', '높이']] as const).map(([key, label]) => <label key={key}>{label} (%)<input type="number" min="0" max="100" step="1" value={Math.round(connection.region[key] * 100)} onChange={(event) => setConnection((current) => current ? { ...current, region: { ...current.region, [key]: Number(event.currentTarget.value) / 100 } } : current)} /></label>)}</div><div className="guide-region-grid"><label>첫 차트 단<input type="number" min="1" max={MAX_COUNTER_ROW} value={connection.region.firstRow} onChange={(event) => setConnection((current) => current ? { ...current, region: { ...current.region, firstRow: Number(event.currentTarget.value) } } : current)} /></label><label>마지막 차트 단<input type="number" min={connection.region.firstRow} max={MAX_COUNTER_ROW} value={connection.region.lastRow} onChange={(event) => setConnection((current) => current ? { ...current, region: { ...current.region, lastRow: Number(event.currentTarget.value) } } : current)} /></label><label>연결 시작 단<input type="number" min="1" max={MAX_COUNTER_ROW} value={connection.region.startCounterRow} onChange={(event) => setConnection((current) => current ? { ...current, region: { ...current.region, startCounterRow: Number(event.currentTarget.value) } } : current)} /></label></div><label><input type="checkbox" checked={connection.region.repeat} onChange={(event) => setConnection((current) => current ? { ...current, region: { ...current.region, repeat: event.currentTarget.checked } } : current)} />마지막 단 뒤 첫 줄로 반복</label><label>진행 방향<select value={connection.region.direction} onChange={(event) => setConnection((current) => current ? { ...current, region: { ...current.region, direction: event.currentTarget.value as ProgressChartRegion['direction'] } } : current)}><option value="top-to-bottom">위에서 아래로</option><option value="bottom-to-top">아래에서 위로</option></select></label><label>불규칙한 줄 위치 보정(페이지 위 기준 %, 쉼표 구분)<input value={connection.positions} onChange={(event) => setConnection((current) => current ? { ...current, positions: event.currentTarget.value } : current)} placeholder="예: 12, 18, 23, 31" /></label><p className="guide-wizard-hint">줄 수와 위치 개수가 다르면 균등 간격을 사용합니다.</p><div className="modal-actions"><button type="button" className="secondary-button" onClick={() => setConnection((current) => current ? { ...current, step: 1 } : current)}>이전</button><button type="button" className="primary-button" disabled={!Number.isFinite(connection.region.x) || !Number.isFinite(connection.region.y) || !Number.isFinite(connection.region.width) || !Number.isFinite(connection.region.height) || connection.region.x < 0 || connection.region.y < 0 || connection.region.width <= 0 || connection.region.height <= 0 || connection.region.x + connection.region.width > 1 || connection.region.y + connection.region.height > 1 || !Number.isSafeInteger(connection.region.firstRow) || !Number.isSafeInteger(connection.region.lastRow) || !Number.isSafeInteger(connection.region.startCounterRow) || connection.region.firstRow < 1 || connection.region.lastRow < connection.region.firstRow || connection.region.lastRow > MAX_COUNTER_ROW || connection.region.startCounterRow < 1 || connection.region.startCounterRow > MAX_COUNTER_ROW} onClick={() => setConnection((current) => current ? { ...current, step: 3 } : current)}>다음</button></div></>}{connection.step === 3 && <><p>{connectionCounter?.name} · 현재 {connectionCounter?.kind === 'simple' ? connectionCounter.value : connectionCounter?.currentRow ?? 1}단</p><p>예상 진행선 위치: {connectionPosition === undefined ? '확인할 수 없음' : Math.round(connectionPosition * 100) + '%'} · {connection.region.direction === 'top-to-bottom' ? '위에서 아래' : '아래에서 위'} 방향</p><p>연결하면 카운터의 이름과 색을 따릅니다. 위치 보정은 카운터 숫자를 바꾸지 않습니다.</p><div className="modal-actions"><button type="button" className="secondary-button" onClick={() => setConnection((current) => current ? { ...current, step: 2 } : current)}>이전</button><button type="button" className="primary-button" onClick={saveConnection}>연결 완료</button></div></>}</div>}
           </section>
         </div>
@@ -353,7 +349,8 @@ export default function Viewer() {
   const historyRef = useRef(new Map<number, PageHistory>())
   const dragRef = useRef<{ pointerId: number; orientation: 'wide' | 'tall'; rect: DOMRect } | null>(null)
   const [documentName, setDocumentName] = useState('')
-  const displayDocumentName = documentName.replace(/\.pdf$/i, '')
+  const [documentKind, setDocumentKind] = useState<'pdf' | 'photos'>('pdf')
+  const displayDocumentName = documentKind === 'photos' ? documentName : documentName.replace(/\.pdf$/i, '')
   const [renameDialog, setRenameDialog] = useState(false)
   const [renameDraft, setRenameDraft] = useState('')
   const [renameError, setRenameError] = useState('')
@@ -385,12 +382,13 @@ export default function Viewer() {
   const [colorworkBrushOpacity, setColorworkBrushOpacity] = useState(0.25)
   const [colorworkEraser, setColorworkEraser] = useState(false)
   const [progressDialog, setProgressDialog] = useState(false)
+  const [progressMigrationDismissed, setProgressMigrationDismissed] = useState<string | null>(null)
   const [pdfLinksByPage, setPdfLinksByPage] = useState<Record<number, PdfQrLink[]>>({})
   const pdfLinkPagesRef = useRef(new Map<number, true>())
   const recognitionLoadPendingRef = useRef(new Set<string>())
   const [qrLinksByPage, setQrLinksByPage] = useState<Record<number, PdfQrLink[]>>({})
   const qrLinksRef = useRef(new Map<number, PdfQrLink[]>())
-  const recognitionRecordRef = useRef<Pick<DocumentRecord, 'id' | 'pageCount' | 'pdf'> | null>(null)
+  const recognitionRecordRef = useRef<Pick<DocumentRecord, 'id' | 'pageCount' | 'pdf' | 'kind'> | null>(null)
   const [loading, setLoading] = useState(true)
   const [loadError, setLoadError] = useState<{ id: string; message: string } | null>(null)
   const [splitPreview, setSplitPreview] = useState<number | null>(null)
@@ -569,17 +567,20 @@ export default function Viewer() {
     void (async () => {
       const record = await getDocument(id)
       if (!record) throw new Error('이 PDF를 찾을 수 없습니다. 도안 목록에서 다시 열어 주세요.')
+      setDocumentKind(record.kind === 'photos' ? 'photos' : 'pdf')
       const storedSnapshot = await getViewer(id, record.pageCount)
       const restored = initializedDocumentRef.current === id && snapshotRef.current ? snapshotRef.current : storedSnapshot
       restored.primary.page = clamp(restored.primary.page, 1, record.pageCount)
       restored.secondary.page = clamp(restored.secondary.page, 1, record.pageCount)
-      const opened = await openPdf(record.pdf)
+      const opened = record.kind === 'photos'
+        ? await openPhotoDocument(id)
+        : record.pdf ? await openPdf(record.pdf) : (() => { throw new Error('PDF 자료를 찾을 수 없습니다.') })()
       if (disposed || viewerLifecycleRef.current === 'suspending' || viewerLifecycleRef.current === 'suspended') {
         await opened.dispose()
         return
       }
       recognitionPdf = opened.document
-      recognitionRecordRef.current = { id, pageCount: record.pageCount, pdf: record.pdf }
+      recognitionRecordRef.current = { id, pageCount: record.pageCount, pdf: record.pdf, kind: record.kind }
       pdfLinkPagesRef.current.clear()
       recognitionLoadPendingRef.current.clear()
       qrLinksRef.current.clear()
@@ -597,10 +598,11 @@ export default function Viewer() {
       setPdfLinksByPage({})
       setQrLinksByPage({})
       setDocumentName(record.fileName)
+      setDocumentKind(record.kind === 'photos' ? 'photos' : 'pdf')
       setSnapshot(restored)
       snapshotRef.current = restored
       setPdf(opened.document)
-      const recognitionRecord = { id, pageCount: record.pageCount, pdf: record.pdf }
+      const recognitionRecord = { id, pageCount: record.pageCount, pdf: record.pdf, kind: record.kind }
       enqueuePdfRecognition(recognitionRecord, opened.document)
       setLoadedId(id)
       initializedDocumentRef.current = id
@@ -764,10 +766,12 @@ export default function Viewer() {
   const selectedThumbnailSet = new Set(selectedThumbnailPages)
   const hideSelectionWouldRemoveLastPage = selectedThumbnailPages.length > 0 && !canHidePageSelection(pdf?.numPages ?? 0, hiddenNumbers, selectedThumbnailSet)
   const progressSettings = snapshot?.progressSettings ?? defaultProgressSettings
+  const progressMigrationKey = id + ':' + activePage
   const annotationSettings = snapshot?.annotationSettings ?? defaultAnnotationSettings
   const activeAnnotationStyle = tool === 'pen' || tool === 'line' || tool === 'highlight' || tool === 'text' ? annotationSettings[tool] : null
   const activeHistory = histories[activePage] ?? { actions: [], cursor: 0, byteCosts: [] }
   const activeWork = pageWorks[activePage] ?? blankWork(id, activePage)
+  const progressMigrationPending = activeWork.progressMigration === 'pending'
   const activeZoom = snapshot ? snapshot[snapshot.activePane].zoom : 1
   const activeRotation = snapshot ? snapshot[snapshot.activePane].rotations?.[activePage] ?? activeWork.rotation ?? 0 : 0
   const activeColorworkGrid = activeWork.colorworkGrid ?? null
@@ -1587,6 +1591,7 @@ export default function Viewer() {
       annotationStyle={style}
       work={work}
       workReady={Boolean(pageWorks[pane.page])}
+      progressMigrationPending={pageWorks[pane.page]?.progressMigration === 'pending'}
       createColorworkRequest={colorworkRequest?.paneId === paneId && colorworkRequest.pageNumber === pane.page ? colorworkRequest : null}
       colorworkBrushColor={colorworkBrushColor}
       colorworkBrushOpacity={colorworkBrushOpacity}
@@ -1594,7 +1599,6 @@ export default function Viewer() {
       onActivate={() => { if (!active) mutateSnapshot((current) => ({ ...current, activePane: paneId })) }}
       onWorkChange={setPageWork}
       onCenter={(x, y) => saveCenter(paneId, x, y)}
-      onCounterGuideMove={moveCounterFromGuide}
       onZoom={(zoom) => changePane(paneId, (current) => ({ ...current, zoom }), true)}
       onColorworkRequestHandled={finishColorworkRequest}
       onTextToolConsumed={() => setTool('pan')}
@@ -1607,7 +1611,7 @@ export default function Viewer() {
   const displayedRatio = splitPreview ?? ratio
   const pageRecords = pages.reduce((map, page) => map.set(page.pageNumber, page), new Map<number, PageRecord>())
 
-  if (loadError?.id === id) return <main className="viewer-state"><div className="viewer-error-icon"><X size={22} /></div><h1>PDF를 열지 못했습니다</h1><p>{loadError.message}</p><button className="primary-button" onClick={requestPdfResume}>다시 시도</button><button className="secondary-button" onClick={() => navigate('/')}>도안 목록으로</button></main>
+  if (loadError?.id === id) return <main className="viewer-state"><div className="viewer-error-icon"><X size={22} /></div><h1>{documentKind === 'photos' ? '사진 폴더를 열지 못했습니다' : 'PDF를 열지 못했습니다'}</h1><p>{loadError.message}</p><button className="primary-button" onClick={requestPdfResume}>다시 시도</button><button className="secondary-button" onClick={() => navigate('/')}>도안 목록으로</button></main>
   if (suspended || loading || loadedId !== id) return <BrandLoading kind="pdf" requestId={'pdf:' + id + ':' + pdfOpenCycle} layout="screen" messageOverride={suspendError || undefined} />
   if (!pdf || !snapshot) return null
 
@@ -1618,7 +1622,7 @@ export default function Viewer() {
       <header className="viewer-header">
         <div className="viewer-brand"><img src={yyLogo} alt="도안보고 로고" /><small>YY공동제작</small></div>
         <button className="viewer-back" aria-label="도안 목록으로" onClick={() => navigate('/')}><ArrowLeft size={20} /><span>내 도안</span></button>
-        <div className="viewer-title"><div className="viewer-title-name"><strong title={displayDocumentName}>{displayDocumentName}</strong><button type="button" className="viewer-title-edit" aria-label="PDF 이름 변경" title="PDF 이름 변경" onClick={() => { setRenameDraft(displayDocumentName); setRenameError(''); setRenameDialog(true) }}><Pencil size={14} /></button></div><span>{reportMode ? '뜨개보고서' : snapshot[snapshot.activePane].page + ' / ' + pdf.numPages + ' 페이지'}</span></div>
+        <div className="viewer-title"><div className="viewer-title-name"><strong title={displayDocumentName}>{displayDocumentName}</strong><button type="button" className="viewer-title-edit" aria-label="이름 변경" title="이름 변경" onClick={() => { setRenameDraft(displayDocumentName); setRenameError(''); setRenameDialog(true) }}><Pencil size={14} /></button></div><span>{reportMode ? '뜨개보고서' : snapshot[snapshot.activePane].page + ' / ' + pdf.numPages + ' 페이지'}</span></div>
         <div className="viewer-header-actions">
           {!reportMode && <>
             <button className={'viewer-action ' + (snapshot.split ? 'selected' : '')} onClick={toggleSplit}><Columns2 size={18} /><span>{snapshot.split ? '한 영역 보기' : '두 영역 보기'}</span></button>
@@ -1745,7 +1749,7 @@ export default function Viewer() {
             </div>}
             {!activeColorworkGrid?.visible && <>
               <span className="control-separator" />
-              <button className="viewer-tool" aria-label="진행선 설정" title="가로·세로 진행선 설정" disabled={!pageWorks[activePage]} onClick={() => setProgressDialog(true)}><SlidersHorizontal size={17} /><span>진행선</span></button>
+              <button className="viewer-tool" aria-label="진행선 설정" title="진행선 설정" disabled={!pageWorks[activePage] || progressMigrationPending} onClick={() => setProgressDialog(true)}><SlidersHorizontal size={17} /><span>진행선</span></button>
             </>}
             <span className="control-separator" />
             <button className="viewer-tool compact-tool" aria-label="실행 취소" title="실행 취소" disabled={!canUndo} onClick={() => undoRedo('undo')}><Undo2 size={17} /></button>
@@ -1769,7 +1773,15 @@ export default function Viewer() {
           </div>
         </section>}
       </section>
-      {renameDialog && <div className="modal-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) setRenameDialog(false) }}><section className="modal-card" role="dialog" aria-modal="true" aria-label="PDF 이름 변경"><div className="modal-heading"><h2>PDF 이름 변경</h2><button className="icon-button" aria-label="닫기" onClick={() => setRenameDialog(false)}><X size={20} /></button></div><form className="modal-form" onSubmit={(event) => void saveDocumentName(event)}><label htmlFor="viewer-pdf-name">PDF 이름</label><input id="viewer-pdf-name" autoFocus required maxLength={120} value={renameDraft} onChange={(event) => setRenameDraft(event.currentTarget.value)} />{renameError && <p className="rename-error" role="alert">{renameError}</p>}<div className="modal-actions"><button type="button" className="secondary-button" onClick={() => setRenameDialog(false)}>취소</button><button className="primary-button" type="submit"><Check size={17} />저장</button></div></form></section></div>}
+      {progressMigrationPending && progressMigrationDismissed !== progressMigrationKey && <ProgressMigrationDialog
+        key={progressMigrationKey}
+        work={activeWork}
+        counters={counters}
+        onMigrate={(next) => { setPageWork(next, true, true, activeWork); setProgressMigrationDismissed(progressMigrationKey) }}
+        onDismiss={() => setProgressMigrationDismissed(progressMigrationKey)}
+      />}
+      {progressMigrationPending && progressMigrationDismissed === progressMigrationKey && <div className="progress-migration-reminder" role="status"><span>기존 진행선은 읽기 전용입니다.</span><button type="button" onClick={() => setProgressMigrationDismissed(null)}>새 방식으로 전환</button></div>}
+      {renameDialog && <div className="modal-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) setRenameDialog(false) }}><section className="modal-card" role="dialog" aria-modal="true" aria-label="이름 변경"><div className="modal-heading"><h2>{documentKind === 'photos' ? '사진 폴더 이름 변경' : 'PDF 이름 변경'}</h2><button className="icon-button" aria-label="닫기" onClick={() => setRenameDialog(false)}><X size={20} /></button></div><form className="modal-form" onSubmit={(event) => void saveDocumentName(event)}><label htmlFor="viewer-pdf-name">{documentKind === 'photos' ? '폴더 이름' : 'PDF 이름'}</label><input id="viewer-pdf-name" autoFocus required maxLength={120} value={renameDraft} onChange={(event) => setRenameDraft(event.currentTarget.value)} />{renameError && <p className="rename-error" role="alert">{renameError}</p>}<div className="modal-actions"><button type="button" className="secondary-button" onClick={() => setRenameDialog(false)}>취소</button><button className="primary-button" type="submit"><Check size={17} />저장</button></div></form></section></div>}
       {progressDialog && <ProgressSettingsDialog
         settings={progressSettings}
         work={activeWork}

@@ -1,5 +1,5 @@
 import { openDB, type DBSchema, type IDBPDatabase } from 'idb'
-import type { ChartDocument, CounterHistoryEntry, DocumentRecord, KnittingReport, PageRecognitionRecord, PageRecord, PageWorkRecord, PaneSnapshot, PreferenceRecord, ProgressGuide, SortMode, ViewerSnapshot } from './types'
+import type { ChartDocument, CounterHistoryEntry, DocumentRecord, HomeProject, KnittingReport, PageRecognitionRecord, PageRecord, PageWorkRecord, PhotoPageRecord, PaneSnapshot, PreferenceRecord, ProgressGuide, SortMode, ViewerSnapshot } from './types'
 import { MAX_COUNTER_HISTORY, normalizeCounterSnapshots } from './smartCounter'
 
 interface DoanBogoDB extends DBSchema {
@@ -20,6 +20,9 @@ interface DoanBogoDB extends DBSchema {
   knittingReports: { key: string; value: KnittingReport }
   knittingReportEntries: { key: string; value: KnittingReport; indexes: { 'by-document': string } }
   pageRecognition: { key: [string, number]; value: PageRecognitionRecord; indexes: { 'by-document': string } }
+  photoPages: { key: [string, number]; value: PhotoPageRecord; indexes: { 'by-document': string } }
+  homeProjects: { key: string; value: HomeProject; indexes: { 'by-last-worked': number } }
+  homeReports: { key: string; value: KnittingReportSummary; indexes: { 'by-document': string; 'by-updated': number } }
 }
 
 export type StorageMode = 'checking' | 'persistent' | 'temporary'
@@ -32,6 +35,8 @@ export interface WorkspaceData {
   pageWork: PageWorkRecord[]
   charts: ChartDocument[]
   knittingReports: KnittingReport[]
+  photoPages?: PhotoPageRecord[]
+  homeProjects?: HomeProject[]
 }
 
 type Database = IDBPDatabase<DoanBogoDB>
@@ -48,6 +53,9 @@ const temporary = {
   charts: new Map<string, ChartDocument>(),
   knittingReports: new Map<string, KnittingReport>(),
   pageRecognition: new Map<string, PageRecognitionRecord>(),
+  photoPages: new Map<string, PhotoPageRecord>(),
+  homeProjects: new Map<string, HomeProject>(),
+  homeReports: new Map<string, KnittingReportSummary>(),
 }
 
 const pageKey = (id: string, page: number) => id + '\u0000' + page
@@ -63,11 +71,17 @@ function stripLegacyTechniqueSlots(viewer: ViewerSnapshot): ViewerSnapshot {
 export function normalizePageWork(work: PageWorkRecord): PageWorkRecord {
   const normalized = { ...work } as PageWorkRecord & { rectangles?: unknown }
   delete normalized.rectangles
+  const hasNewProgress = [...(work.horizontalGuides ?? []), ...(work.verticalGuides ?? [])].some((guide) => guide.role === 'primary' || guide.role === 'reference')
+  const hasLegacyProgress = work.progressMigration === undefined && !hasNewProgress && (
+    work.horizontalGuides !== undefined || work.verticalGuides !== undefined ||
+    work.horizontalPosition !== undefined || work.verticalPosition !== undefined
+  )
   return {
     ...normalized,
     rotation: [0, 90, 180, 270].includes(work.rotation ?? 0) ? (work.rotation ?? 0) : 0,
     horizontalGuides: work.horizontalGuides ?? [{ id: 'legacy-horizontal', position: work.horizontalPosition ?? 0.5 } satisfies ProgressGuide],
     verticalGuides: work.verticalGuides ?? [{ id: 'legacy-vertical', position: work.verticalPosition ?? 0.5 } satisfies ProgressGuide],
+    progressMigration: work.progressMigration ?? (hasLegacyProgress ? 'pending' : 'complete'),
   }
 }
 
@@ -92,7 +106,7 @@ async function database(): Promise<Database | null> {
     try {
       let abandoned = false
       let timeoutId = 0
-      const opening = openDB<DoanBogoDB>('doanbogo-web', 8, {
+      const opening = openDB<DoanBogoDB>('doanbogo-web', 10, {
         async upgrade(db, oldVersion, _newVersion, transaction) {
           if (oldVersion < 1) {
             const documents = db.createObjectStore('documents', { keyPath: 'id' })
@@ -145,6 +159,48 @@ async function database(): Promise<Database | null> {
               cursor = await cursor.continue()
             }
           }
+          if (oldVersion < 9) {
+            const photoPages = db.createObjectStore('photoPages', { keyPath: ['documentId', 'pageNumber'] })
+            photoPages.createIndex('by-document', 'documentId')
+          }
+          if (oldVersion < 10) {
+            const projects = db.createObjectStore('homeProjects', { keyPath: 'key' })
+            projects.createIndex('by-last-worked', 'lastWorkedAt')
+            const projectKey = (kind: HomeProject['kind'], id: string) => kind + ':' + id
+            let documentCursor = await transaction.objectStore('documents').openCursor()
+            while (documentCursor) {
+              const item = documentCursor.value as DocumentRecord
+              const project: HomeProject = {
+                key: projectKey('document', item.id), entityId: item.id, kind: 'document',
+                title: item.fileName.replace(/\.pdf$/i, ''), fileName: item.fileName, documentKind: item.kind ?? 'pdf',
+                pageCount: item.pageCount, cover: item.cover, tags: item.tags ?? [], status: 'active',
+                archivedAt: null, deletedAt: null, lastWorkedAt: item.lastOpenedAt ?? null, createdAt: item.createdAt,
+              }
+              await projects.put(project)
+              documentCursor = await documentCursor.continue()
+            }
+            let chartCursor = await transaction.objectStore('charts').openCursor()
+            while (chartCursor) {
+              const item = chartCursor.value as ChartDocument
+              await projects.put({
+                key: projectKey('chart', item.id), entityId: item.id, kind: 'chart', title: item.title,
+                chartCraft: item.craft, cover: null, tags: [], status: 'active', archivedAt: null,
+                deletedAt: null, lastWorkedAt: item.lastOpenedAt ?? null, createdAt: item.createdAt,
+              })
+              chartCursor = await chartCursor.continue()
+            }
+            const reports = db.createObjectStore('homeReports', { keyPath: 'id' })
+            reports.createIndex('by-document', 'documentId')
+            reports.createIndex('by-updated', 'updatedAt')
+            if (db.objectStoreNames.contains('knittingReportEntries')) {
+              let reportCursor = await transaction.objectStore('knittingReportEntries').openCursor()
+              while (reportCursor) {
+                const report = reportCursor.value as KnittingReport
+                await reports.put({ id: report.id, documentId: report.documentId, title: report.title, createdAt: report.createdAt, updatedAt: report.updatedAt, status: report.status ?? 'draft', completedAt: report.completedAt ?? null })
+                reportCursor = await reportCursor.continue()
+              }
+            }
+          }
         },
       }).then((db) => {
         if (abandoned) {
@@ -191,8 +247,8 @@ async function database(): Promise<Database | null> {
 
 async function loadIntoTemporary(db: Database) {
   try {
-    const [documents, pages, viewers, preferences, pageWork, charts, knittingReports] = await Promise.all([
-      db.getAll('documents'), db.getAll('pages'), db.getAll('viewers'), db.getAll('preferences'), db.getAll('pageWork'), db.getAll('charts'), db.getAll('knittingReportEntries'),
+    const [documents, pages, viewers, preferences, pageWork, charts, knittingReports, photoPages, homeProjects, homeReports] = await Promise.all([
+      db.getAll('documents'), db.getAll('pages'), db.getAll('viewers'), db.getAll('preferences'), db.getAll('pageWork'), db.getAll('charts'), db.getAll('knittingReportEntries'), db.getAll('photoPages'), db.getAll('homeProjects'), db.getAll('homeReports'),
     ])
     documents.forEach((item) => temporary.documents.set(item.id, item))
     pages.forEach((item) => temporary.pages.set(pageKey(item.documentId, item.pageNumber), item))
@@ -201,6 +257,9 @@ async function loadIntoTemporary(db: Database) {
     pageWork.forEach((item) => temporary.pageWork.set(pageKey(item.documentId, item.pageNumber), item))
     charts.forEach((item) => temporary.charts.set(item.id, item))
     knittingReports.forEach((item) => temporary.knittingReports.set(item.id, item))
+    photoPages.forEach((item) => temporary.photoPages.set(pageKey(item.documentId, item.pageNumber), item))
+    homeProjects.forEach((item) => temporary.homeProjects.set(item.key, item))
+    homeReports.forEach((item) => temporary.homeReports.set(item.id, item))
   } catch {
     // Keep the app usable in memory even when the browser refuses further reads.
   }
@@ -227,7 +286,113 @@ export async function getStorageMode() {
 }
 
 export async function addDocument(record: DocumentRecord) {
-  await access(async (db) => { await db.add('documents', record) }, () => { temporary.documents.set(record.id, record) })
+  const project = documentProject(record)
+  await access(async (db) => {
+    const tx = db.transaction(['documents', 'homeProjects'], 'readwrite')
+    await tx.objectStore('documents').add(record)
+    await tx.objectStore('homeProjects').put(project)
+    await tx.done
+  }, () => { temporary.documents.set(record.id, record); temporary.homeProjects.set(project.key, project) })
+}
+
+function documentProject(record: DocumentRecord): HomeProject {
+  return { key: 'document:' + record.id, entityId: record.id, kind: 'document', title: record.fileName.replace(/\.pdf$/i, ''), fileName: record.fileName, documentKind: record.kind ?? 'pdf', pageCount: record.pageCount, cover: record.cover, tags: record.tags ?? [], status: 'active', archivedAt: null, deletedAt: null, lastWorkedAt: record.lastOpenedAt ?? null, createdAt: record.createdAt }
+}
+
+function chartProject(record: ChartDocument): HomeProject {
+  return { key: 'chart:' + record.id, entityId: record.id, kind: 'chart', title: record.title, chartCraft: record.craft, cover: null, tags: [], status: 'active', archivedAt: null, deletedAt: null, lastWorkedAt: record.lastOpenedAt ?? null, createdAt: record.createdAt }
+}
+
+export async function listHomeProjects() {
+  return access((db) => db.getAll('homeProjects'), () => [...temporary.homeProjects.values()])
+}
+
+export async function getHomeProject(kind: HomeProject['kind'], entityId: string) {
+  const key = kind + ':' + entityId
+  return access((db) => db.get('homeProjects', key), () => temporary.homeProjects.get(key))
+}
+
+export async function saveHomeProject(project: HomeProject) {
+  await access(async (db) => { await db.put('homeProjects', project) }, () => { temporary.homeProjects.set(project.key, project) })
+  return project
+}
+
+export async function listHomeReports() {
+  return access((db) => db.getAll('homeReports'), () => [...temporary.homeReports.values()])
+}
+
+export async function markProjectWorked(kind: HomeProject['kind'], entityId: string, at = Date.now()) {
+  const project = await getHomeProject(kind, entityId)
+  if (project) await saveHomeProject({ ...project, lastWorkedAt: at })
+}
+
+export type NewPhotoPage = Omit<PhotoPageRecord, 'documentId' | 'pageNumber'> & { thumbnail?: Blob }
+
+export async function createPhotoFolder(fileName: string, photos: NewPhotoPage[], cover: Blob | null = photos[0]?.thumbnail ?? null) {
+  if (!photos.length) throw new Error('사진을 한 장 이상 선택하세요.')
+  const id = crypto.randomUUID()
+  const record: DocumentRecord = {
+    id,
+    kind: 'photos',
+    fileName: fileName.trim() || '사진 도안',
+    size: photos.reduce((total, photo) => total + photo.blob.size, 0),
+    pageCount: photos.length,
+    createdAt: Date.now(),
+    lastOpenedAt: null,
+    tags: [],
+    pdf: null,
+    cover,
+  }
+  const photoPages = photos.map(({ thumbnail: _thumbnail, ...photo }, index) => ({ ...photo, documentId: id, pageNumber: index + 1 }))
+  await access(async (db) => {
+    const tx = db.transaction(['documents', 'photoPages', 'homeProjects'], 'readwrite')
+    await tx.objectStore('documents').add(record)
+    await tx.objectStore('homeProjects').put(documentProject(record))
+    for (const photo of photoPages) await tx.objectStore('photoPages').add(photo)
+    await tx.done
+  }, () => {
+    temporary.documents.set(id, record)
+    const project = documentProject(record)
+    temporary.homeProjects.set(project.key, project)
+    photoPages.forEach((photo) => temporary.photoPages.set(pageKey(id, photo.pageNumber), photo))
+  })
+  return record
+}
+
+export async function appendPhotoPages(id: string, photos: NewPhotoPage[]) {
+  if (!photos.length) return
+  await access(async (db) => {
+    const tx = db.transaction(['documents', 'photoPages', 'homeProjects'], 'readwrite')
+    const record = await tx.objectStore('documents').get(id)
+    if (!record || record.kind !== 'photos') throw new Error('사진 폴더를 찾을 수 없습니다.')
+    const start = record.pageCount
+    for (const [index, photo] of photos.entries()) {
+      const { thumbnail: _thumbnail, ...photoPage } = photo
+      await tx.objectStore('photoPages').put({ ...photoPage, documentId: id, pageNumber: start + index + 1 })
+    }
+    record.pageCount += photos.length
+    record.size += photos.reduce((total, photo) => total + photo.blob.size, 0)
+    await tx.objectStore('documents').put(record)
+    const project = await tx.objectStore('homeProjects').get('document:' + id)
+    if (project) await tx.objectStore('homeProjects').put({ ...project, pageCount: record.pageCount })
+    await tx.done
+  }, () => {
+    const record = temporary.documents.get(id)
+    if (!record || record.kind !== 'photos') throw new Error('사진 폴더를 찾을 수 없습니다.')
+    const start = record.pageCount
+    photos.forEach(({ thumbnail: _thumbnail, ...photo }, index) => temporary.photoPages.set(pageKey(id, start + index + 1), { ...photo, documentId: id, pageNumber: start + index + 1 }))
+    temporary.documents.set(id, { ...record, pageCount: start + photos.length, size: record.size + photos.reduce((total, photo) => total + photo.blob.size, 0) })
+    const project = temporary.homeProjects.get('document:' + id)
+    if (project) temporary.homeProjects.set(project.key, { ...project, pageCount: start + photos.length })
+  })
+}
+
+export async function getPhotoPage(id: string, pageNumber: number) {
+  return access((db) => db.get('photoPages', [id, pageNumber]), () => temporary.photoPages.get(pageKey(id, pageNumber)))
+}
+
+export async function getPhotoPages(id: string) {
+  return access((db) => db.getAllFromIndex('photoPages', 'by-document', id), () => [...temporary.photoPages.values()].filter((photo) => photo.documentId === id))
 }
 
 export async function getDocument(id: string) {
@@ -251,6 +416,12 @@ export async function getChart(id: string) {
   return access((db) => db.get('charts', id), () => temporary.charts.get(id))
 }
 
+export async function renameChart(id: string, title: string) {
+  const chart = await getChart(id)
+  if (!chart) throw new Error('차트를 찾을 수 없습니다.')
+  return saveChart({ ...chart, title: title.trim() || chart.title })
+}
+
 export async function listCharts(sort: SortMode = 'recent', query = '') {
   const charts = await access((db) => db.getAll('charts'), () => [...temporary.charts.values()])
   const needle = query.trim().toLocaleLowerCase()
@@ -266,13 +437,23 @@ export async function listCharts(sort: SortMode = 'recent', query = '') {
 
 export async function saveChart(chart: ChartDocument) {
   const saved = { ...chart, updatedAt: Date.now() }
-  await access(async (db) => { await db.put('charts', saved) }, () => { temporary.charts.set(saved.id, saved) })
+  const existing = await getHomeProject('chart', saved.id)
+  const project = { ...chartProject(saved), ...(existing ?? {}), title: saved.title, chartCraft: saved.craft }
+  await access(async (db) => {
+    const tx = db.transaction(['charts', 'homeProjects'], 'readwrite')
+    await tx.objectStore('charts').put(saved)
+    await tx.objectStore('homeProjects').put(project)
+    await tx.done
+  }, () => { temporary.charts.set(saved.id, saved); temporary.homeProjects.set(project.key, project) })
   return saved
 }
 
 export async function markChartOpened(id: string) {
   const chart = await getChart(id)
-  if (chart) await saveChart({ ...chart, lastOpenedAt: Date.now() })
+  if (chart) {
+    await saveChart({ ...chart, lastOpenedAt: Date.now() })
+    await markProjectWorked('chart', id)
+  }
 }
 
 export async function duplicateChart(id: string) {
@@ -296,10 +477,15 @@ export async function duplicateChart(id: string) {
 }
 
 export async function deleteChart(id: string) {
-  await access(async (db) => { await db.delete('charts', id) }, () => { temporary.charts.delete(id) })
+  await access(async (db) => {
+    const tx = db.transaction(['charts', 'homeProjects'], 'readwrite')
+    await tx.objectStore('charts').delete(id)
+    await tx.objectStore('homeProjects').delete('chart:' + id)
+    await tx.done
+  }, () => { temporary.charts.delete(id); temporary.homeProjects.delete('chart:' + id) })
 }
 
-export type KnittingReportSummary = Pick<KnittingReport, 'id' | 'title' | 'createdAt' | 'updatedAt'>
+export type KnittingReportSummary = Pick<KnittingReport, 'id' | 'title' | 'createdAt' | 'updatedAt'> & { documentId: string; status: 'draft' | 'complete'; completedAt: number | null }
 
 export async function getKnittingReports(documentId: string) {
   const reports = await access((db) => db.getAllFromIndex('knittingReportEntries', 'by-document', documentId), () => [...temporary.knittingReports.values()].filter((report) => report.documentId === documentId))
@@ -317,58 +503,82 @@ export async function getKnittingReportById(id: string) {
 
 export async function saveKnittingReport(report: KnittingReport) {
   const saved = { ...report, updatedAt: Math.max(Date.now(), report.updatedAt + 1) }
-  await access(async (db) => { await db.put('knittingReportEntries', saved) }, () => { temporary.knittingReports.set(saved.id, saved) })
+  const summary: KnittingReportSummary = { id: saved.id, documentId: saved.documentId, title: saved.title, createdAt: saved.createdAt, updatedAt: saved.updatedAt, status: saved.status ?? 'draft', completedAt: saved.completedAt ?? null }
+  await access(async (db) => {
+    const tx = db.transaction(['knittingReportEntries', 'homeReports'], 'readwrite')
+    await tx.objectStore('knittingReportEntries').put(saved)
+    await tx.objectStore('homeReports').put(summary)
+    await tx.done
+  }, () => { temporary.knittingReports.set(saved.id, saved); temporary.homeReports.set(saved.id, summary) })
   return saved
 }
 
 export async function markOpened(id: string) {
+  const now = Date.now()
   await access(async (db) => {
-    const tx = db.transaction('documents', 'readwrite')
-    const item = await tx.store.get(id)
+    const tx = db.transaction(['documents', 'homeProjects'], 'readwrite')
+    const item = await tx.objectStore('documents').get(id)
     if (item) {
-      item.lastOpenedAt = Date.now()
-      await tx.store.put(item)
+      item.lastOpenedAt = now
+      await tx.objectStore('documents').put(item)
     }
+    const project = await tx.objectStore('homeProjects').get('document:' + id)
+    if (project) await tx.objectStore('homeProjects').put({ ...project, lastWorkedAt: now })
     await tx.done
   }, () => {
     const item = temporary.documents.get(id)
-    if (item) temporary.documents.set(id, { ...item, lastOpenedAt: Date.now() })
+    if (item) temporary.documents.set(id, { ...item, lastOpenedAt: now })
+    const project = temporary.homeProjects.get('document:' + id)
+    if (project) temporary.homeProjects.set(project.key, { ...project, lastWorkedAt: now })
   })
 }
 
 export async function updateTags(id: string, tags: string[]) {
   const cleaned = [...new Set(tags.map((tag) => tag.trim()).filter(Boolean))]
   await access(async (db) => {
-    const tx = db.transaction('documents', 'readwrite')
-    const item = await tx.store.get(id)
+    const tx = db.transaction(['documents', 'homeProjects'], 'readwrite')
+    const item = await tx.objectStore('documents').get(id)
     if (item) {
       item.tags = cleaned
-      await tx.store.put(item)
+      await tx.objectStore('documents').put(item)
     }
+    const project = await tx.objectStore('homeProjects').get('document:' + id)
+    if (project) await tx.objectStore('homeProjects').put({ ...project, tags: cleaned })
     await tx.done
   }, () => {
     const item = temporary.documents.get(id)
     if (item) temporary.documents.set(id, { ...item, tags: cleaned })
+    const project = temporary.homeProjects.get('document:' + id)
+    if (project) temporary.homeProjects.set(project.key, { ...project, tags: cleaned })
   })
 }
 
 export async function renameDocument(id: string, name: string) {
-  const baseName = name.trim().replace(/\.pdf$/i, '').trim()
-  if (!baseName) throw new Error('PDF 이름을 입력하세요.')
-  const fileName = baseName + '.pdf'
+  const requestedName = name.trim()
+  if (!requestedName) throw new Error('이름을 입력하세요.')
+  const fileNameFor = (item: DocumentRecord) => {
+    if (item.kind === 'photos') return requestedName
+    const baseName = requestedName.replace(/\.pdf$/i, '').trim()
+    if (!baseName) throw new Error('PDF 이름을 입력하세요.')
+    return baseName + '.pdf'
+  }
   return access(async (db) => {
-    const tx = db.transaction('documents', 'readwrite')
-    const item = await tx.store.get(id)
+    const tx = db.transaction(['documents', 'homeProjects'], 'readwrite')
+    const item = await tx.objectStore('documents').get(id)
     if (!item) throw new Error('PDF를 찾을 수 없습니다.')
-    const renamed = { ...item, fileName }
-    await tx.store.put(renamed)
+    const renamed = { ...item, fileName: fileNameFor(item) }
+    await tx.objectStore('documents').put(renamed)
+    const project = await tx.objectStore('homeProjects').get('document:' + id)
+    if (project) await tx.objectStore('homeProjects').put({ ...project, title: renamed.fileName.replace(/\.pdf$/i, ''), fileName: renamed.fileName })
     await tx.done
     return renamed
   }, () => {
     const item = temporary.documents.get(id)
     if (!item) throw new Error('PDF를 찾을 수 없습니다.')
-    const renamed = { ...item, fileName }
+    const renamed = { ...item, fileName: fileNameFor(item) }
     temporary.documents.set(id, renamed)
+    const project = temporary.homeProjects.get('document:' + id)
+    if (project) temporary.homeProjects.set(project.key, { ...project, title: renamed.fileName.replace(/\.pdf$/i, ''), fileName: renamed.fileName })
     return renamed
   })
 }
@@ -376,15 +586,21 @@ export async function renameDocument(id: string, name: string) {
 export async function duplicateDocument(id: string) {
   const original = await getDocument(id)
   if (!original) throw new Error('문서를 찾을 수 없습니다.')
-  const copy: DocumentRecord = {
-    ...original,
-    id: crypto.randomUUID(),
-    fileName: '복사본 - ' + original.fileName,
-    createdAt: Date.now(),
-    lastOpenedAt: null,
-    tags: [],
+  let copy: DocumentRecord
+  if (original.kind === 'photos') {
+    const sourcePhotos = await getPhotoPages(id)
+    copy = await createPhotoFolder('복사본 - ' + original.fileName, sourcePhotos.map(({ blob, width, height, addedAt, sourceName }) => ({ blob, width, height, addedAt, sourceName })), original.cover)
+  } else {
+    copy = {
+      ...original,
+      id: crypto.randomUUID(),
+      fileName: '복사본 - ' + original.fileName,
+      createdAt: Date.now(),
+      lastOpenedAt: null,
+      tags: [],
+    }
+    await addDocument(copy)
   }
-  await addDocument(copy)
   const reports = await getKnittingReports(id)
   for (const report of reports) {
     const title = '복사본 - ' + report.title
@@ -395,10 +611,17 @@ export async function duplicateDocument(id: string) {
 
 export async function deleteDocument(id: string) {
   await access(async (db) => {
-    const tx = db.transaction(['documents', 'pages', 'viewers', 'pageWork', 'knittingReports', 'knittingReportEntries', 'pageRecognition'], 'readwrite')
+    const tx = db.transaction(['documents', 'pages', 'viewers', 'pageWork', 'knittingReports', 'knittingReportEntries', 'pageRecognition', 'photoPages', 'homeProjects', 'homeReports'], 'readwrite')
     await tx.objectStore('documents').delete(id)
     await tx.objectStore('viewers').delete(id)
     await tx.objectStore('knittingReports').delete(id)
+    await tx.objectStore('homeProjects').delete('document:' + id)
+    const photoCursor = await tx.objectStore('photoPages').index('by-document').openCursor(IDBKeyRange.only(id))
+    let currentPhoto = photoCursor
+    while (currentPhoto) {
+      await currentPhoto.delete()
+      currentPhoto = await currentPhoto.continue()
+    }
     let recognitionCursor = await tx.objectStore('pageRecognition').index('by-document').openCursor(IDBKeyRange.only(id))
     while (recognitionCursor) {
       await recognitionCursor.delete()
@@ -408,6 +631,11 @@ export async function deleteDocument(id: string) {
     while (reportCursor) {
       await reportCursor.delete()
       reportCursor = await reportCursor.continue()
+    }
+    let homeReportCursor = await tx.objectStore('homeReports').index('by-document').openCursor(IDBKeyRange.only(id))
+    while (homeReportCursor) {
+      await homeReportCursor.delete()
+      homeReportCursor = await homeReportCursor.continue()
     }
     let cursor = await tx.objectStore('pages').index('by-document').openCursor(IDBKeyRange.only(id))
     while (cursor) {
@@ -422,8 +650,11 @@ export async function deleteDocument(id: string) {
     await tx.done
   }, () => {
     temporary.documents.delete(id)
+    temporary.homeProjects.delete('document:' + id)
+    for (const [key, photo] of temporary.photoPages) if (photo.documentId === id) temporary.photoPages.delete(key)
     temporary.viewers.delete(id)
     for (const [key, report] of temporary.knittingReports) if (report.documentId === id) temporary.knittingReports.delete(key)
+    for (const [key, report] of temporary.homeReports) if (report.documentId === id) temporary.homeReports.delete(key)
     for (const [key, page] of temporary.pages) if (page.documentId === id) temporary.pages.delete(key)
     for (const [key, work] of temporary.pageWork) if (work.documentId === id) temporary.pageWork.delete(key)
     for (const [key, recognition] of temporary.pageRecognition) if (recognition.documentId === id) temporary.pageRecognition.delete(key)
@@ -493,7 +724,16 @@ export async function setPageFlag(id: string, pageNumber: number, flag: 'hidden'
 
 export async function getPageWork(id: string, pageNumber: number): Promise<PageWorkRecord> {
   const saved = await access((db) => db.get('pageWork', [id, pageNumber]), () => temporary.pageWork.get(pageKey(id, pageNumber)))
-  const work = normalizePageWork(saved ?? { documentId: id, pageNumber, horizontalPosition: 0.5, verticalPosition: 0.5, annotations: [] })
+  const work = normalizePageWork(saved ?? {
+    documentId: id,
+    pageNumber,
+    horizontalPosition: 0.5,
+    verticalPosition: 0.5,
+    annotations: [],
+    horizontalGuides: [{ id: crypto.randomUUID(), position: 0.5, role: 'primary', xStartRatio: 0.15, xEndRatio: 0.85 }],
+    verticalGuides: [],
+    progressMigration: 'complete',
+  })
   if (saved && (!saved.horizontalGuides || !saved.verticalGuides || Object.hasOwn(saved, 'rectangles'))) await savePageWork(work)
   return work
 }
@@ -605,10 +845,12 @@ export async function readWorkspaceData(): Promise<WorkspaceData> {
     pageWork: [...temporary.pageWork.values()].map(normalizePageWork),
     charts: [...temporary.charts.values()],
     knittingReports: [...temporary.knittingReports.values()],
+    photoPages: [...temporary.photoPages.values()],
+    homeProjects: [...temporary.homeProjects.values()],
   }
   return access((activeDb) => Promise.all([
-    activeDb.getAll('documents'), activeDb.getAll('pages'), activeDb.getAll('viewers'), activeDb.getAll('preferences'), activeDb.getAll('pageWork'), activeDb.getAll('charts'), activeDb.getAll('knittingReportEntries'),
-  ]).then(([documents, pages, viewers, preferences, pageWork, charts, knittingReports]) => ({ documents, pages, viewers: viewers.map(stripLegacyTechniqueSlots), preferences, pageWork: pageWork.map(normalizePageWork), charts, knittingReports })), () => ({
+    activeDb.getAll('documents'), activeDb.getAll('pages'), activeDb.getAll('viewers'), activeDb.getAll('preferences'), activeDb.getAll('pageWork'), activeDb.getAll('charts'), activeDb.getAll('knittingReportEntries'), activeDb.getAll('photoPages'), activeDb.getAll('homeProjects'),
+  ]).then(([documents, pages, viewers, preferences, pageWork, charts, knittingReports, photoPages, homeProjects]) => ({ documents, pages, viewers: viewers.map(stripLegacyTechniqueSlots), preferences, pageWork: pageWork.map(normalizePageWork), charts, knittingReports, photoPages, homeProjects })), () => ({
     documents: [...temporary.documents.values()],
     pages: [...temporary.pages.values()],
     viewers: [...temporary.viewers.values()].map(stripLegacyTechniqueSlots),
@@ -616,6 +858,8 @@ export async function readWorkspaceData(): Promise<WorkspaceData> {
     pageWork: [...temporary.pageWork.values()].map(normalizePageWork),
     charts: [...temporary.charts.values()],
     knittingReports: [...temporary.knittingReports.values()],
+    photoPages: [...temporary.photoPages.values()],
+    homeProjects: [...temporary.homeProjects.values()],
   }))
 }
 
@@ -631,6 +875,7 @@ export async function importWorkspaceData(incoming: WorkspaceData) {
     idMap.set(document.id, id)
   }
   const documents = incoming.documents.map((item) => ({ ...item, id: idMap.get(item.id)! }))
+  const photoPages = (incoming.photoPages ?? []).map((item) => ({ ...item, documentId: idMap.get(item.documentId)! }))
   const pages = incoming.pages.map((item) => ({ ...item, documentId: idMap.get(item.documentId)! }))
   const viewers = incoming.viewers.map((item) => ({ ...stripLegacyTechniqueSlots(item), documentId: idMap.get(item.documentId)! }))
   const pageWork = (incoming.pageWork ?? []).map((item) => normalizePageWork({ ...item, documentId: idMap.get(item.documentId)! }))
@@ -640,13 +885,27 @@ export async function importWorkspaceData(incoming: WorkspaceData) {
     usedChartIds.add(id)
     return { ...item, id }
   })
+  const savedProjectByKey = new Map((incoming.homeProjects ?? []).map((item) => [item.key, item]))
+  const homeProjects = [
+    ...documents.map((item, index) => {
+      const originalId = incoming.documents[index].id
+      const saved = savedProjectByKey.get('document:' + originalId)
+      return saved ? { ...saved, key: 'document:' + item.id, entityId: item.id, cover: item.cover, fileName: item.fileName } : documentProject(item)
+    }),
+    ...charts.map((item, index) => {
+      const originalId = incoming.charts[index].id
+      const saved = savedProjectByKey.get('chart:' + originalId)
+      return saved ? { ...saved, key: 'chart:' + item.id, entityId: item.id } : chartProject(item)
+    }),
+  ]
   const usedReportIds = new Set(current.knittingReports.map((report) => report.id))
   const knittingReports = (incoming.knittingReports ?? []).map((item) => {
     let id = item.id
     if (usedReportIds.has(id)) id = crypto.randomUUID()
     usedReportIds.add(id)
-    return { ...item, id, documentId: idMap.get(item.documentId)! }
+    return { ...item, id, documentId: idMap.get(item.documentId)!, status: item.status ?? 'draft', completedAt: item.completedAt ?? null }
   })
+  const homeReports = knittingReports.map((item) => ({ id: item.id, documentId: item.documentId, title: item.title, createdAt: item.createdAt, updatedAt: item.updatedAt, status: item.status ?? 'draft' as const, completedAt: item.completedAt ?? null }))
   const db = await database()
   if (!db) {
     documents.forEach((item) => temporary.documents.set(item.id, item))
@@ -654,18 +913,24 @@ export async function importWorkspaceData(incoming: WorkspaceData) {
     viewers.forEach((item) => temporary.viewers.set(item.documentId, item))
     pageWork.forEach((item) => temporary.pageWork.set(pageKey(item.documentId, item.pageNumber), item))
     charts.forEach((item) => temporary.charts.set(item.id, item))
+    homeProjects.forEach((item) => temporary.homeProjects.set(item.key, item))
     knittingReports.forEach((item) => temporary.knittingReports.set(item.id, item))
+    homeReports.forEach((item) => temporary.homeReports.set(item.id, item))
+    photoPages.forEach((item) => temporary.photoPages.set(pageKey(item.documentId, item.pageNumber), item))
     incoming.preferences.forEach((item) => temporary.preferences.set(item.key, item))
     return documents.length + charts.length
   }
   return access(async (activeDb) => {
-    const tx = activeDb.transaction(['documents', 'pages', 'viewers', 'preferences', 'pageWork', 'charts', 'knittingReportEntries'], 'readwrite')
+    const tx = activeDb.transaction(['documents', 'pages', 'viewers', 'preferences', 'pageWork', 'charts', 'knittingReportEntries', 'photoPages', 'homeProjects', 'homeReports'], 'readwrite')
     for (const item of documents) await tx.objectStore('documents').put(item)
     for (const item of pages) await tx.objectStore('pages').put(item)
     for (const item of viewers) await tx.objectStore('viewers').put(item)
     for (const item of pageWork) await tx.objectStore('pageWork').put(item)
     for (const item of charts) await tx.objectStore('charts').put(item)
+    for (const item of homeProjects) await tx.objectStore('homeProjects').put(item)
     for (const item of knittingReports) await tx.objectStore('knittingReportEntries').put(item)
+    for (const item of homeReports) await tx.objectStore('homeReports').put(item)
+    for (const item of photoPages) await tx.objectStore('photoPages').put(item)
     for (const item of incoming.preferences) await tx.objectStore('preferences').put(item)
     await tx.done
     return documents.length + charts.length
@@ -675,7 +940,10 @@ export async function importWorkspaceData(incoming: WorkspaceData) {
     viewers.forEach((item) => temporary.viewers.set(item.documentId, item))
     pageWork.forEach((item) => temporary.pageWork.set(pageKey(item.documentId, item.pageNumber), item))
     charts.forEach((item) => temporary.charts.set(item.id, item))
+    homeProjects.forEach((item) => temporary.homeProjects.set(item.key, item))
     knittingReports.forEach((item) => temporary.knittingReports.set(item.id, item))
+    homeReports.forEach((item) => temporary.homeReports.set(item.id, item))
+    photoPages.forEach((item) => temporary.photoPages.set(pageKey(item.documentId, item.pageNumber), item))
     incoming.preferences.forEach((item) => temporary.preferences.set(item.key, item))
     return documents.length + charts.length
   })

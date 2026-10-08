@@ -1,9 +1,11 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, type MouseEvent as ReactMouseEvent, type PointerEvent as ReactPointerEvent, type RefObject } from 'react'
 import type { PDFDocumentProxy, PDFPageProxy, RenderTask } from 'pdfjs-dist'
-import { Minus, Plus, Trash2 } from 'lucide-react'
+import { Trash2 } from 'lucide-react'
 import BrandLoading from './BrandLoading'
+import { ProgressLineOverlay } from './ProgressLineOverlay'
 import type { AnnotationRecord, AnnotationStyle, AnnotationTool, ColorworkCell, ColorworkCreateRequest, ColorworkGrid, CounterSnapshot, PageRotation, PageWorkRecord, PaneId, PaneSnapshot, ProgressGuide, ProgressSettings } from './types'
 import { createColorworkGrid, resizeColorworkGridDisplay } from './colorwork'
+import { appendInkPoint, createInkAnnotation, createInkId, type ActiveInkStroke, type InkPoint } from './inkStroke'
 import { textNoteBoxAt, textNoteCounterRotation } from './textNote'
 import type { PdfQrLink } from './qr'
 import { rotatedPageSize } from './pageGeometry'
@@ -354,28 +356,6 @@ function guidesFor(work: PageWorkRecord, axis: 'horizontal' | 'vertical'): Progr
   }]
 }
 
-function counterRowAtGuidePosition(guide: ProgressGuide, position: number, rotation: PageRotation, counter?: CounterSnapshot) {
-  const region = guide.chartRegion
-  if (!region) return null
-  const rowCount = Math.max(1, region.lastRow - region.firstRow + 1)
-  const display = region.rowLayout ? { y: region.rowLayout.top, height: region.rowLayout.height } : pageRectToDisplayRect(region, rotation)
-  let closestIndex = 0
-  let closestDistance = Number.POSITIVE_INFINITY
-  for (let index = 0; index < rowCount; index++) {
-    const fraction = rowCount < 2 ? 0 : index / (rowCount - 1)
-    const candidate = region.rowPositions?.length === rowCount
-      ? region.rowPositions[index]
-      : display.y + display.height * (region.direction === 'bottom-to-top' ? 1 - fraction : fraction)
-    const distance = Math.abs(candidate - position)
-    if (distance < closestDistance) { closestDistance = distance; closestIndex = index }
-  }
-  const baseRow = region.startCounterRow + closestIndex
-  if (!region.repeat) return baseRow
-  const currentRow = counter?.kind === 'simple' ? counter.value : counter?.currentRow ?? region.startCounterRow
-  const cycle = Math.round((currentRow - baseRow) / rowCount)
-  return Math.max(1, baseRow + cycle * rowCount)
-}
-
 function textBox(annotation: AnnotationRecord, pageHeight: number) {
   const legacy = annotation.boxWidth === undefined || annotation.boxHeight === undefined
   const width = annotation.boxWidth ?? 0.3
@@ -393,7 +373,7 @@ function withTextBox(annotation: AnnotationRecord, pageHeight: number): Annotati
   return { ...annotation, points: [{ x: box.x, y: box.y }], boxWidth: box.width, boxHeight: box.height }
 }
 
-export function PdfPage({ pdf, page, paneId, pane, splitView, rotation, active, tool, lineSettings, counters, annotationStyle, work, workReady, colorworkBrushColor, colorworkBrushOpacity, colorworkEraser, createColorworkRequest, pageLinks, qrLinks, onPageRendered, onActivate, onWorkChange, onZoom, onCenter, onCounterGuideMove, onColorworkRequestHandled, onTextToolConsumed }: {
+export function PdfPage({ pdf, page, paneId, pane, splitView, rotation, active, tool, lineSettings, counters, annotationStyle, work, workReady, progressMigrationPending, colorworkBrushColor, colorworkBrushOpacity, colorworkEraser, createColorworkRequest, pageLinks, qrLinks, onPageRendered, onActivate, onWorkChange, onZoom, onCenter, onColorworkRequestHandled, onTextToolConsumed }: {
   pdf: PDFDocumentProxy
   page: number
   paneId: PaneId
@@ -407,6 +387,7 @@ export function PdfPage({ pdf, page, paneId, pane, splitView, rotation, active, 
   annotationStyle: AnnotationStyle
   work: PageWorkRecord
   workReady: boolean
+  progressMigrationPending: boolean
   colorworkBrushColor: string
   colorworkBrushOpacity: number
   colorworkEraser: boolean
@@ -418,7 +399,6 @@ export function PdfPage({ pdf, page, paneId, pane, splitView, rotation, active, 
   onWorkChange: (work: PageWorkRecord, immediate: boolean, recordHistory?: boolean, historyBefore?: PageWorkRecord, cellChanges?: { index: number; before: ColorworkCell | null; after: ColorworkCell | null }[]) => void
   onZoom: (zoom: number, focus?: ZoomFocus) => void
   onCenter: (x: number, y: number) => void
-  onCounterGuideMove: (counterId: string, row: number) => void
   onColorworkRequestHandled: (id: string) => void
   onTextToolConsumed: () => void
 }) {
@@ -453,22 +433,26 @@ export function PdfPage({ pdf, page, paneId, pane, splitView, rotation, active, 
   const [displayedRaster, setDisplayedRaster] = useState<{ pdf: PDFDocumentProxy; page: number; zoom: number; rotation: PageRotation } | null>(null)
   const [readyKey, setReadyKey] = useState('')
   const [renderError, setRenderError] = useState<{ key: string; message: string } | null>(null)
-  const [linePositionPreview, setLinePositionPreview] = useState<{ id: string; position: number } | null>(null)
-  const [focusDragging, setFocusDragging] = useState(false)
+  const focusDragging = false
   const [focusFallback, setFocusFallback] = useState(false)
   const [focusCanvasUnavailable, setFocusCanvasUnavailable] = useState(false)
   const focusSlowRenderCount = useRef(0)
   const [retry, setRetry] = useState(0)
   const pinchZoom = useRef<number | null>(null)
   const [draft, setDraft] = useState<Point[]>([])
+  const [pendingStrokePreviews, setPendingStrokePreviews] = useState<Array<{ documentId: string; pageNumber: number; annotation: AnnotationRecord }>>([])
+  const [strokeError, setStrokeError] = useState(false)
   const pointers = useRef(new Map<number, { x: number; y: number }>())
   const gesture = useRef<
     | { kind: 'pan'; pointerId: number; x: number; y: number; scrollLeft: number; scrollTop: number }
     | { kind: 'pinch'; firstId: number; secondId: number; distance: number; zoom: number; centerX: number; centerY: number }
     | null
   >(null)
-  const drawPointer = useRef<number | null>(null)
-  const lineDrag = useRef<{ axis: 'horizontal' | 'vertical'; id: string; pointerId: number } | null>(null)
+  const strokeRef = useRef<ActiveInkStroke | null>(null)
+  const strokePreviewFrameRef = useRef<number | null>(null)
+  const strokeListenersRef = useRef<{ svg: SVGSVGElement; move: (event: PointerEvent) => void; up: (event: PointerEvent) => void; cancel: (event: PointerEvent) => void; lost: (event: PointerEvent) => void } | null>(null)
+  const failedStrokeRef = useRef<{ work: PageWorkRecord; before: PageWorkRecord; annotation: AnnotationRecord } | null>(null)
+  const finishInkStrokeRef = useRef<(pointerId: number, finalPoint?: InkPoint) => void>(() => undefined)
   const erasedIds = useRef(new Set<string>())
   const actionStartWork = useRef(work)
   const textDrag = useRef<{ id: string; pointerId: number; kind: 'move' | 'resize'; start: Point; original: { x: number; y: number; width: number; height: number }; before: PageWorkRecord } | null>(null)
@@ -476,6 +460,8 @@ export function PdfPage({ pdf, page, paneId, pane, splitView, rotation, active, 
   const textStyleEditBefore = useRef<{ id: string; before: PageWorkRecord } | null>(null)
   const suppressTextBlur = useRef(new Set<string>())
   const currentWorkRef = useRef(work)
+  const onWorkChangeRef = useRef(onWorkChange)
+  onWorkChangeRef.current = onWorkChange
   const [selectedNoteId, setSelectedNoteId] = useState<string | null>(null)
   const [editingNoteId, setEditingNoteId] = useState<string | null>(null)
   const [textDraft, setTextDraft] = useState<{ id: string; value: string } | null>(null)
@@ -856,6 +842,13 @@ export function PdfPage({ pdf, page, paneId, pane, splitView, rotation, active, 
     currentWorkRef.current = work
   }, [work])
 
+  useLayoutEffect(() => {
+    setPendingStrokePreviews((current) => {
+      const remaining = current.filter((item) => item.documentId !== work.documentId || item.pageNumber !== work.pageNumber || !work.annotations.some((annotation) => annotation.id === item.annotation.id))
+      return remaining.length === current.length ? current : remaining
+    })
+  }, [work])
+
   useEffect(() => {
     onCenterRef.current = onCenter
   }, [onCenter])
@@ -949,6 +942,144 @@ export function PdfPage({ pdf, page, paneId, pane, splitView, rotation, active, 
     } else gesture.current = null
   }
 
+  function removeStrokeListeners() {
+    const listeners = strokeListenersRef.current
+    if (!listeners) return
+    window.removeEventListener('pointermove', listeners.move)
+    window.removeEventListener('pointerup', listeners.up)
+    window.removeEventListener('pointercancel', listeners.cancel)
+    listeners.svg.removeEventListener('lostpointercapture', listeners.lost)
+    strokeListenersRef.current = null
+  }
+
+  function scheduleStrokePreview(stroke: ActiveInkStroke) {
+    if (strokePreviewFrameRef.current !== null) return
+    strokePreviewFrameRef.current = requestAnimationFrame(() => {
+      strokePreviewFrameRef.current = null
+      if (strokeRef.current?.id === stroke.id) setDraft(stroke.points)
+    })
+  }
+
+  function saveCompletedStroke(stroke: ActiveInkStroke, annotation: AnnotationRecord) {
+    const latest = currentWorkRef.current
+    const samePage = latest.documentId === stroke.documentId && latest.pageNumber === stroke.pageNumber
+    const base = samePage ? latest : stroke.before
+    if (base.annotations.some((item) => item.id === annotation.id)) {
+      failedStrokeRef.current = null
+      setStrokeError(false)
+      return true
+    }
+    const next = { ...base, annotations: [...base.annotations, annotation] }
+    try {
+      onWorkChangeRef.current(next, true, true, stroke.before)
+      currentWorkRef.current = next
+      setPendingStrokePreviews((current) => [...current.filter((item) => item.annotation.id !== annotation.id), { documentId: stroke.documentId, pageNumber: stroke.pageNumber, annotation }].slice(-32))
+      failedStrokeRef.current = null
+      setStrokeError(false)
+      return true
+    } catch {
+      failedStrokeRef.current = { work: next, before: stroke.before, annotation }
+      setDraft(annotation.points)
+      setStrokeError(true)
+      return false
+    }
+  }
+
+  function finishInkStroke(pointerId: number, finalPoint?: InkPoint) {
+    const stroke = strokeRef.current
+    if (!stroke || stroke.pointerId !== pointerId) return
+    strokeRef.current = null
+    const captureElement = strokeListenersRef.current?.svg
+    removeStrokeListeners()
+    try {
+      if (captureElement?.hasPointerCapture(pointerId)) captureElement.releasePointerCapture(pointerId)
+    } catch { /* Capture may already be released by the browser. */ }
+    if (strokePreviewFrameRef.current !== null) {
+      cancelAnimationFrame(strokePreviewFrameRef.current)
+      strokePreviewFrameRef.current = null
+    }
+    const annotation = createInkAnnotation(stroke, finalPoint, stroke.pageWidth, stroke.pageHeight)
+    if (saveCompletedStroke(stroke, annotation)) setDraft([])
+  }
+
+  finishInkStrokeRef.current = finishInkStroke
+
+  function retryStrokeSave() {
+    const failed = failedStrokeRef.current
+    if (!failed) return
+    try {
+      const latest = currentWorkRef.current
+      const samePage = latest.documentId === failed.work.documentId && latest.pageNumber === failed.work.pageNumber
+      const base = samePage ? latest : failed.work
+      const alreadySaved = samePage && latest.annotations.some((item) => item.id === failed.annotation.id)
+      if (!alreadySaved) {
+        const next = base.annotations.some((item) => item.id === failed.annotation.id)
+          ? base
+          : { ...base, annotations: [...base.annotations, failed.annotation] }
+        onWorkChangeRef.current(next, true, true, samePage ? latest : failed.before)
+        if (samePage) currentWorkRef.current = next
+        setPendingStrokePreviews((current) => [...current.filter((item) => item.annotation.id !== failed.annotation.id), { documentId: failed.work.documentId, pageNumber: failed.work.pageNumber, annotation: failed.annotation }].slice(-32))
+      }
+      failedStrokeRef.current = null
+      setStrokeError(false)
+      setDraft([])
+    } catch {
+      setStrokeError(true)
+    }
+  }
+
+  function beginInkStroke(event: ReactPointerEvent<SVGSVGElement>, point: Point) {
+    if (strokeRef.current || failedStrokeRef.current || (tool !== 'pen' && tool !== 'line' && tool !== 'highlight')) return
+    const svg = event.currentTarget
+    try { svg.setPointerCapture(event.pointerId) } catch { /* Window listeners still finish the stroke if capture is unavailable. */ }
+    const base = currentWorkRef.current.documentId === work.documentId && currentWorkRef.current.pageNumber === page
+      ? currentWorkRef.current
+      : work
+    const stroke: ActiveInkStroke = {
+      id: createInkId(), pointerId: event.pointerId, documentId: work.documentId, pageNumber: page,
+      rotation, tool, style: { ...annotationStyle }, before: base,
+      pageWidth: displayedSize?.css.width ?? 1, pageHeight: displayedSize?.css.height ?? 1,
+      points: [point],
+    }
+    strokeRef.current = stroke
+    actionStartWork.current = base
+    setDraft(stroke.points)
+    setStrokeError(false)
+    const pointFromNativeEvent = (nativeEvent: PointerEvent) => {
+      return pointFromEvent(nativeEvent, svg, stroke.rotation)
+    }
+    const isThisStroke = (nativeEvent: PointerEvent) => nativeEvent.pointerId === stroke.pointerId && strokeRef.current?.id === stroke.id
+    const move = (nativeEvent: PointerEvent) => {
+      const target = nativeEvent.target
+      if (!isThisStroke(nativeEvent) || (target instanceof Node && svg.contains(target))) return
+      const nextPoint = pointFromNativeEvent(nativeEvent)
+      if (!nextPoint) return
+      stroke.points = appendInkPoint(stroke.points, nextPoint, stroke.pageWidth, stroke.pageHeight)
+      scheduleStrokePreview(stroke)
+    }
+    const up = (nativeEvent: PointerEvent) => {
+      if (!isThisStroke(nativeEvent)) return
+      const finalPoint = nativeEvent.type === 'pointerup' ? pointFromNativeEvent(nativeEvent) : undefined
+      finishInkStroke(stroke.pointerId, finalPoint)
+    }
+    const cancel = (nativeEvent: PointerEvent) => {
+      if (isThisStroke(nativeEvent)) finishInkStroke(stroke.pointerId)
+    }
+    const lost = (nativeEvent: PointerEvent) => {
+      if (isThisStroke(nativeEvent)) finishInkStroke(stroke.pointerId)
+    }
+    strokeListenersRef.current = { svg, move, up, cancel, lost }
+    window.addEventListener('pointermove', move)
+    window.addEventListener('pointerup', up)
+    window.addEventListener('pointercancel', cancel)
+    svg.addEventListener('lostpointercapture', lost)
+  }
+
+  useLayoutEffect(() => () => {
+    const stroke = strokeRef.current
+    if (stroke) finishInkStrokeRef.current(stroke.pointerId)
+  }, [pdf, page, rotation, work.documentId])
+
   function doubleTap(event: React.MouseEvent<HTMLDivElement>) {
     if (tool !== 'pan') return
     const area = scrollRef.current
@@ -966,34 +1097,6 @@ export function PdfPage({ pdf, page, paneId, pane, splitView, rotation, active, 
       onCenter(0.5, 0.5)
       onZoom(1)
     }
-  }
-
-  function updateGuide(axis: 'horizontal' | 'vertical', id: string, value: number, immediate: boolean) {
-    const position = Math.min(1, Math.max(0, value))
-    const key = axis === 'horizontal' ? 'horizontalGuides' : 'verticalGuides'
-    const legacyKey = axis === 'horizontal' ? 'horizontalPosition' : 'verticalPosition'
-    onWorkChange({
-      ...work,
-      [key]: guidesFor(work, axis).map((guide) => guide.id === id ? { ...guide, position } : guide),
-      [legacyKey]: position,
-    }, immediate, immediate, actionStartWork.current)
-  }
-
-  function addGuide(axis: 'horizontal' | 'vertical') {
-    const guides = guidesFor(work, axis)
-    if (guides.length >= 10) return
-    const guide = { id: crypto.randomUUID(), position: 0.5 }
-    const key = axis === 'horizontal' ? 'horizontalGuides' : 'verticalGuides'
-    onActivate()
-    onWorkChange({ ...work, [key]: [...guides, guide] }, true, true, work)
-  }
-
-  function removeGuide(axis: 'horizontal' | 'vertical') {
-    const guides = guidesFor(work, axis)
-    if (!guides.length) return
-    const key = axis === 'horizontal' ? 'horizontalGuides' : 'verticalGuides'
-    onActivate()
-    onWorkChange({ ...work, [key]: guides.slice(0, -1) }, true, true, work)
   }
 
   function addText(point: Point) {
@@ -1407,6 +1510,10 @@ export function PdfPage({ pdf, page, paneId, pane, splitView, rotation, active, 
       setTextPreviewPoint(null)
       return
     }
+    if (strokeRef.current && strokeRef.current.pointerId !== event.pointerId) {
+      event.stopPropagation()
+      return
+    }
     onActivate()
     event.stopPropagation()
     const point = pointFromEvent(event, event.currentTarget, rotation)
@@ -1418,8 +1525,8 @@ export function PdfPage({ pdf, page, paneId, pane, splitView, rotation, active, 
     setSelectedNoteId(null)
     setEditingNoteId(null)
     setTextPreviewPoint(null)
-    event.currentTarget.setPointerCapture(event.pointerId)
     if (tool === 'eraser') {
+      try { event.currentTarget.setPointerCapture(event.pointerId) } catch { /* Erasing remains usable when capture is unavailable. */ }
       actionStartWork.current = work
       erasedIds.current = new Set(work.annotations.filter((annotation) => {
         const points = annotation.points.length === 1 ? [...annotation.points, ...annotation.points] : annotation.points
@@ -1427,13 +1534,17 @@ export function PdfPage({ pdf, page, paneId, pane, splitView, rotation, active, 
       }).map((annotation) => annotation.id))
       return
     }
-    actionStartWork.current = work
-    drawPointer.current = event.pointerId
-    setDraft([point])
+    beginInkStroke(event, point)
   }
 
   function handleSvgPointerMove(event: ReactPointerEvent<SVGSVGElement>) {
     const point = pointFromEvent(event, event.currentTarget, rotation)
+    const stroke = strokeRef.current
+    if (stroke?.pointerId === event.pointerId) {
+      stroke.points = appendInkPoint(stroke.points, point, stroke.pageWidth, stroke.pageHeight)
+      scheduleStrokePreview(stroke)
+      return
+    }
     if (tool === 'text' && event.pointerType === 'mouse') setTextPreviewPoint(point)
     else setTextPreviewPoint(null)
     if (tool === 'eraser') {
@@ -1447,94 +1558,36 @@ export function PdfPage({ pdf, page, paneId, pane, splitView, rotation, active, 
       found.forEach((annotation) => erasedIds.current.add(annotation.id))
       return
     }
-    if (drawPointer.current !== event.pointerId) return
-    setDraft((current) => {
-      const last = current.at(-1)
-      if (last && distanceToSegment(point, last, last, displayedSize?.css.width ?? 1, displayedSize?.css.height ?? 1) < 1.5) return current
-      return tool === 'line' ? [current[0], point] : [...current, point]
-    })
   }
 
   function handleSvgPointerUp(event: ReactPointerEvent<SVGSVGElement>) {
     event.stopPropagation()
+    finishSvgPointer(event, false)
+  }
+
+  function handleSvgPointerCancel(event: ReactPointerEvent<SVGSVGElement>) {
+    event.stopPropagation()
+    finishSvgPointer(event, true)
+  }
+
+  function finishSvgPointer(event: ReactPointerEvent<SVGSVGElement>, cancelled: boolean) {
+    const stroke = strokeRef.current
+    if (stroke?.pointerId === event.pointerId) {
+      const finalPoint = cancelled ? undefined : pointFromEvent(event, event.currentTarget, stroke.rotation)
+      finishInkStroke(event.pointerId, finalPoint)
+      return
+    }
     if (tool === 'eraser') {
-      if (erasedIds.current.size) onWorkChange({ ...work, annotations: work.annotations.filter((annotation) => !erasedIds.current.has(annotation.id)) }, true, true, actionStartWork.current)
+      if (!cancelled && erasedIds.current.size) onWorkChange({ ...work, annotations: work.annotations.filter((annotation) => !erasedIds.current.has(annotation.id)) }, true, true, actionStartWork.current)
       erasedIds.current.clear()
       return
     }
-    if (drawPointer.current !== event.pointerId) return
-    drawPointer.current = null
-    const points = draft
-    setDraft([])
-    if (!points.length) return
-    const annotation: AnnotationRecord = {
-      id: crypto.randomUUID(),
-      type: tool === 'pen' || tool === 'line' || tool === 'highlight' ? tool : 'pen',
-      points: tool === 'line' ? [points[0], points.at(-1)!] : points,
-      style: { ...annotationStyle },
-    }
-    onWorkChange({ ...work, annotations: [...work.annotations, annotation] }, true, true, actionStartWork.current)
-  }
-
-  function handleGuidePointerDown(event: ReactPointerEvent<SVGSVGElement>) {
-    const target = event.target as SVGElement
-    const axis = target.dataset.progress as 'horizontal' | 'vertical' | undefined
-    const id = target.dataset.guideId
-    if (!axis || !id || tool === 'text') return
-    event.preventDefault()
-    event.stopPropagation()
-    setSelectedNoteId(null)
-    setEditingNoteId(null)
-    onActivate()
-    event.currentTarget.setPointerCapture(event.pointerId)
-    lineDrag.current = { axis, id, pointerId: event.pointerId }
-    actionStartWork.current = work
-    setFocusDragging(true)
-  }
-
-  function handleGuidePointerMove(event: ReactPointerEvent<SVGSVGElement>) {
-    const drag = lineDrag.current
-    if (!drag || drag.pointerId !== event.pointerId) return
-    const point = pointFromEvent(event, event.currentTarget, 0)
-    const position = drag.axis === 'horizontal' ? point.y : point.x
-    const guide = guidesFor(currentWorkRef.current, drag.axis).find((item) => item.id === drag.id)
-    if (guide?.linkedCounterId && drag.axis === 'horizontal') setLinePositionPreview({ id: drag.id, position })
-    else updateGuide(drag.axis, drag.id, position, false)
-  }
-
-  function handleGuidePointerUp(event: ReactPointerEvent<SVGSVGElement>) {
-    const drag = lineDrag.current
-    if (!drag || drag.pointerId !== event.pointerId) return
-    if (event.type !== 'pointerup') {
-      lineDrag.current = null
-      setLinePositionPreview(null)
-      setFocusDragging(false)
-      return
-    }
-    event.preventDefault()
-    event.stopPropagation()
-    const point = pointFromEvent(event, event.currentTarget, 0)
-    const position = drag.axis === 'horizontal' ? point.y : point.x
-    const guide = guidesFor(currentWorkRef.current, drag.axis).find((item) => item.id === drag.id)
-    if (guide?.linkedCounterId && drag.axis === 'horizontal' && guide.chartRegion) {
-      const nextRow = counterRowAtGuidePosition(guide, position, rotation, counters.find((counter) => counter.id === guide.linkedCounterId))
-      setLinePositionPreview(null)
-      setFocusDragging(false)
-      if (nextRow !== null && window.confirm((guide.name ?? '연결된 카운터') + '를 ' + nextRow + '단으로 이동할까요?')) onCounterGuideMove(guide.linkedCounterId, nextRow)
-    } else {
-      updateGuide(drag.axis, drag.id, position, true)
-      setFocusDragging(false)
-    }
-    lineDrag.current = null
   }
 
   const pageSize = displayedSize?.page
   const cssSize = displayedSize?.css
   const rotatedCssSize = cssSize ? rotatedPageSize(cssSize, rotation) : null
   const guidePageSize = pageSize ? rotatedPageSize(pageSize, rotation) : null
-  const guideControlSize = 44 / Math.max(zoomPreviewScale, 0.0001)
-  const horizontalGuideHitStroke = rotatedCssSize && guidePageSize ? 44 * guidePageSize.height / (rotatedCssSize.height * Math.max(zoomPreviewScale, 0.0001)) : 24
-  const verticalGuideHitStroke = rotatedCssSize && guidePageSize ? 44 * guidePageSize.width / (rotatedCssSize.width * Math.max(zoomPreviewScale, 0.0001)) : 24
   const guideLayerStyle = cssSize && rotatedCssSize ? {
     left: (cssSize.width - rotatedCssSize.width) / 2,
     top: (cssSize.height - rotatedCssSize.height) / 2,
@@ -1553,16 +1606,17 @@ export function PdfPage({ pdf, page, paneId, pane, splitView, rotation, active, 
   const horizontalGuides = guidesFor(work, 'horizontal')
   const verticalGuides = guidesFor(work, 'vertical')
   const displayGuide = (guide: ProgressGuide) => {
-    if (linePositionPreview?.id === guide.id) return { ...guide, position: linePositionPreview.position }
-    if (!guide.linkedCounterId) return guide
+    const screenPosition = guide.rotationPositions?.[String(rotation) as '0' | '90' | '180' | '270']
+    const oriented = screenPosition ? { ...guide, ...screenPosition } : guide
+    if (!guide.linkedCounterId) return oriented
     const counter = counters.find((item) => item.id === guide.linkedCounterId)
-    if (!counter) return guide
+    if (!counter) return oriented
     const row = counter.kind === 'simple' ? counter.value : counter.currentRow ?? 1
-    return { ...guide, position: guidePositionForRotation(guide, row, rotation) }
+    return { ...oriented, position: guidePositionForRotation(guide, row, rotation) }
   }
   const visibleHorizontalGuides = horizontalGuides.map(displayGuide)
   const visibleVerticalGuides = verticalGuides.map(displayGuide)
-  const focusGuides = visibleHorizontalGuides.filter((guide) => guide.focus?.enabled)
+  const focusGuides = visibleHorizontalGuides.filter((guide) => !guide.role && guide.focus?.enabled)
   const focusSignature = JSON.stringify(focusGuides.map((guide) => [guide.id, guide.position, guide.focus, guide.chartRegion]))
   const focusBandRects = focusGuides.map((guide) => {
     const focus = guide.focus!
@@ -1603,9 +1657,16 @@ export function PdfPage({ pdf, page, paneId, pane, splitView, rotation, active, 
     const bottom = Math.max(...fallbackRegions.map((region) => region.y + region.height))
     return 'inset(' + top * 100 + '% ' + (1 - right) * 100 + '% ' + (1 - bottom) * 100 + '% ' + left * 100 + '%)'
   })()
-  const currentDraft: AnnotationRecord | null = draft.length ? {
-    id: 'draft', type: tool === 'line' || tool === 'highlight' || tool === 'pen' ? tool : 'pen', points: draft, style: annotationStyle,
+  const activeDraft = strokeRef.current?.documentId === work.documentId && strokeRef.current.pageNumber === page ? strokeRef.current : null
+  const failedDraft = failedStrokeRef.current?.work.documentId === work.documentId && failedStrokeRef.current.work.pageNumber === page ? failedStrokeRef.current.annotation : null
+  const draftType = activeDraft?.tool ?? (failedDraft?.type === 'pen' || failedDraft?.type === 'line' || failedDraft?.type === 'highlight' ? failedDraft.type : 'pen')
+  const currentDraft: AnnotationRecord | null = draft.length && (activeDraft || failedDraft) ? {
+    id: 'draft',
+    type: draftType,
+    points: draft,
+    style: activeDraft?.style ?? failedDraft?.style ?? annotationStyle,
   } : null
+  const visiblePendingStrokePreviews = pendingStrokePreviews.filter((item) => item.documentId === work.documentId && item.pageNumber === page)
 
   useEffect(() => {
     const overlay = focusCanvasRef.current
@@ -1681,6 +1742,7 @@ export function PdfPage({ pdf, page, paneId, pane, splitView, rotation, active, 
   return (
     <div className={'pdf-pane ' + (active ? 'is-active' : '')} onPointerDown={onActivate}>
       <div className="pane-label">{active ? '현재 작업 영역' : '보조 영역'}</div>
+      {strokeError && <div className="ink-save-error" role="alert"><span>필기를 반영하지 못했습니다.</span><button type="button" onClick={retryStrokeSave}>다시 시도</button></div>}
       <div className="pdf-scroll-area" ref={scrollRef} onScroll={recordCenter} onPointerDown={pointerDown} onPointerMove={pointerMove} onPointerUp={pointerEnd} onPointerCancel={pointerEnd} onDoubleClick={doubleTap}>
         <div className="pdf-page-wrap" style={pageWrapStyle}>
           <div ref={rotationLayerRef} className="pdf-rotation-content" style={cssSize ? { width: cssSize.width, height: cssSize.height, transform: 'rotate(' + rotation + 'deg) scale(' + zoomPreviewScale + ')' } : undefined}>
@@ -1697,12 +1759,13 @@ export function PdfPage({ pdf, page, paneId, pane, splitView, rotation, active, 
               onPointerMove={handleSvgPointerMove}
               onPointerLeave={() => setTextPreviewPoint(null)}
               onPointerUp={handleSvgPointerUp}
-              onPointerCancel={handleSvgPointerUp}
+              onPointerCancel={handleSvgPointerCancel}
             >
               {tool !== 'pan' && <rect x="0" y="0" width={pageSize.width} height={pageSize.height} fill="transparent" pointerEvents="all" />}
               {work.annotations.filter((annotation) => annotation.type !== 'text').map((annotation) =>
                 <path key={annotation.id} d={annotationPath(annotation, pageSize.width, pageSize.height)} fill="none" stroke={annotation.style.color} strokeWidth={annotation.style.thickness} strokeOpacity={annotation.style.opacity} strokeLinecap="round" strokeLinejoin="round" style={{ mixBlendMode: annotation.type === 'highlight' ? 'multiply' : 'normal', pointerEvents: tool === 'text' ? 'auto' : 'none' }} />,
               )}
+              {visiblePendingStrokePreviews.map(({ annotation }) => <path key={'pending-' + annotation.id} d={annotationPath(annotation, pageSize.width, pageSize.height)} fill="none" stroke={annotation.style.color} strokeWidth={annotation.style.thickness} strokeOpacity={annotation.style.opacity} strokeLinecap="round" strokeLinejoin="round" style={{ mixBlendMode: annotation.type === 'highlight' ? 'multiply' : 'normal', pointerEvents: 'none' }} />)}
               {currentDraft && <path d={annotationPath(currentDraft, pageSize.width, pageSize.height)} fill="none" stroke={currentDraft.style.color} strokeWidth={currentDraft.style.thickness} strokeOpacity={currentDraft.style.opacity} strokeLinecap="round" strokeLinejoin="round" style={{ mixBlendMode: currentDraft.type === 'highlight' ? 'multiply' : 'normal', pointerEvents: 'none' }} />}
             </svg>
             <div className="annotation-layer" ref={annotationLayerRef} style={{ width: cssSize.width, height: cssSize.height }}>
@@ -1915,40 +1978,30 @@ export function PdfPage({ pdf, page, paneId, pane, splitView, rotation, active, 
               />
               <button type="button" className="colorwork-resize-both" aria-label="컬러워크 비율 유지하며 크기 조절" title="드래그해 비율을 유지하며 크기 조절" onPointerDown={(event) => beginColorworkTransform(event, 'resize')} onPointerMove={moveColorworkTransform} onPointerUp={finishColorworkTransform} onPointerCancel={finishColorworkTransform} onLostPointerCapture={finishColorworkTransform} />
             </div>}
-            {guidePageSize && <div className="pdf-guide-layer" style={guideLayerStyle}>
-              <svg
-                className="pdf-guide-svg"
-                viewBox={'0 0 ' + guidePageSize.width + ' ' + guidePageSize.height}
-                preserveAspectRatio="none"
-                onPointerDown={handleGuidePointerDown}
-                onPointerMove={handleGuidePointerMove}
-                onPointerUp={handleGuidePointerUp}
-                onPointerCancel={handleGuidePointerUp}
-                onLostPointerCapture={handleGuidePointerUp}
-                aria-label="진행선"
-              >
-                {lineSettings.horizontal.visible && visibleHorizontalGuides.map((guide) => {
-                  const position = linePositionPreview?.id === guide.id ? linePositionPreview.position : guide.position
+            {guidePageSize && rotatedCssSize && lineSettings.horizontal.visible && <div className="pdf-guide-layer" style={guideLayerStyle}>
+              {progressMigrationPending ? <svg className="pdf-guide-svg" viewBox={'0 0 ' + guidePageSize.width + ' ' + guidePageSize.height} preserveAspectRatio="none" aria-label="기존 진행선">
+                {visibleHorizontalGuides.map((guide) => {
                   const color = counters.find((counter) => counter.id === guide.linkedCounterId)?.color ?? guide.color ?? lineSettings.horizontal.color
-                  return <g key={guide.id}>
-                    <line x1="0" x2={guidePageSize.width} y1={position * guidePageSize.height} y2={position * guidePageSize.height} stroke={color} strokeWidth={lineSettings.horizontal.thickness} strokeOpacity={lineSettings.horizontal.opacity} pointerEvents="none" />
-                    {guide.name && <text x="4" y={Math.max(12, position * guidePageSize.height - 4)} fill={color} fontSize={Math.max(10, guidePageSize.width / 100)} pointerEvents="none">{guide.name}</text>}
-                    <line data-progress="horizontal" data-guide-id={guide.id} x1="0" x2={guidePageSize.width} y1={position * guidePageSize.height} y2={position * guidePageSize.height} stroke="transparent" strokeWidth={horizontalGuideHitStroke} pointerEvents={tool === 'text' ? 'none' : 'stroke'} />
-                  </g>
+                  return <g key={guide.id}><line x1="0" x2={guidePageSize.width} y1={guide.position * guidePageSize.height} y2={guide.position * guidePageSize.height} stroke={color} strokeWidth={lineSettings.horizontal.thickness} strokeOpacity={lineSettings.horizontal.opacity} pointerEvents="none" />{guide.name && <text x="4" y={Math.max(12, guide.position * guidePageSize.height - 4)} fill={color} fontSize={Math.max(10, guidePageSize.width / 100)} pointerEvents="none">{guide.name}</text>}</g>
                 })}
-                {lineSettings.vertical.visible && visibleVerticalGuides.map((guide) => {
-                  const color = counters.find((counter) => counter.id === guide.linkedCounterId)?.color ?? guide.color ?? lineSettings.vertical.color
-                  return <g key={guide.id}>
-                    <line x1={guide.position * guidePageSize.width} x2={guide.position * guidePageSize.width} y1="0" y2={guidePageSize.height} stroke={color} strokeWidth={lineSettings.vertical.thickness} strokeOpacity={lineSettings.vertical.opacity} pointerEvents="none" />
-                    {guide.name && <text x={guide.position * guidePageSize.width + 4} y="14" fill={color} fontSize={Math.max(10, guidePageSize.width / 100)} pointerEvents="none">{guide.name}</text>}
-                    <line data-progress="vertical" data-guide-id={guide.id} x1={guide.position * guidePageSize.width} x2={guide.position * guidePageSize.width} y1="0" y2={guidePageSize.height} stroke="transparent" strokeWidth={verticalGuideHitStroke} pointerEvents={tool === 'text' ? 'none' : 'stroke'} />
-                  </g>
-                })}
-              </svg>
-              <button type="button" className="guide-remove-button guide-remove-horizontal" style={{ width: guideControlSize, height: guideControlSize }} aria-label="마지막 가로선 삭제" title={horizontalGuides.length ? '마지막 가로선 삭제' : '삭제할 가로선 없음'} disabled={!horizontalGuides.length} onPointerDown={(event) => event.stopPropagation()} onClick={() => removeGuide('horizontal')}><Minus size={15} /></button>
-              <button type="button" className="guide-remove-button guide-remove-vertical" style={{ width: guideControlSize, height: guideControlSize }} aria-label="마지막 세로선 삭제" title={verticalGuides.length ? '마지막 세로선 삭제' : '삭제할 세로선 없음'} disabled={!verticalGuides.length} onPointerDown={(event) => event.stopPropagation()} onClick={() => removeGuide('vertical')}><Minus size={15} /></button>
-              <button type="button" className="guide-add-button guide-add-vertical" style={{ width: guideControlSize, height: guideControlSize }} aria-label="세로선 추가" title={verticalGuides.length >= 10 ? '세로선 최대 10개' : '세로선 추가'} disabled={verticalGuides.length >= 10} onPointerDown={(event) => event.stopPropagation()} onClick={() => addGuide('vertical')}><Plus size={15} /></button>
-              <button type="button" className="guide-add-button guide-add-horizontal" style={{ width: guideControlSize, height: guideControlSize }} aria-label="가로선 추가" title={horizontalGuides.length >= 10 ? '가로선 최대 10개' : '가로선 추가'} disabled={horizontalGuides.length >= 10} onPointerDown={(event) => event.stopPropagation()} onClick={() => addGuide('horizontal')}><Plus size={15} /></button>
+                {lineSettings.vertical.visible && visibleVerticalGuides.map((guide) => <line key={guide.id} x1={guide.position * guidePageSize.width} x2={guide.position * guidePageSize.width} y1="0" y2={guidePageSize.height} stroke={guide.color ?? lineSettings.vertical.color} strokeWidth={lineSettings.vertical.thickness} strokeOpacity={lineSettings.vertical.opacity} pointerEvents="none" />)}
+              </svg> : <ProgressLineOverlay
+                key={work.documentId + ':' + page + ':' + paneId}
+                width={guidePageSize.width}
+                height={guidePageSize.height}
+                cssWidth={rotatedCssSize.width}
+                cssHeight={rotatedCssSize.height}
+                work={work}
+                counters={counters}
+                rotation={rotation}
+                active={active}
+                disabled={tool === 'text'}
+                defaultColor={lineSettings.horizontal.color}
+                defaultOpacity={lineSettings.horizontal.opacity}
+                defaultThickness={lineSettings.horizontal.thickness}
+                onActivate={onActivate}
+                onWorkChange={onWorkChange}
+              />}
             </div>}
             </>}
           </div>

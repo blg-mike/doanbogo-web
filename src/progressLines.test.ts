@@ -1,0 +1,46 @@
+import { describe, expect, it } from 'vitest'
+import { guideRowPosition, migrateProgressGuides, progressGuideCandidates } from './progressLines'
+import type { PageWorkRecord } from './types'
+
+function legacyWork(): PageWorkRecord {
+  return {
+    documentId: 'doc', pageNumber: 2, horizontalPosition: 0.4, verticalPosition: 0.7, annotations: [],
+    horizontalGuides: [{ id: 'h1', position: 0.4, linkedCounterId: 'counter' }, { id: 'h2', position: 0.6 }],
+    verticalGuides: [{ id: 'v1', position: 0.7 }], progressMigration: 'pending',
+  }
+}
+
+describe('progress line migration', () => {
+  it('offers old horizontal and vertical guides as migration choices', () => {
+    expect(progressGuideCandidates(legacyWork()).map(({ axis, guide }) => axis + ':' + guide.id)).toEqual(['horizontal:h1', 'horizontal:h2', 'vertical:v1'])
+  })
+
+  it('keeps one primary and up to two references while archiving every old guide', () => {
+    const work = legacyWork()
+    const migrated = migrateProgressGuides(work, 'vertical:v1', ['horizontal:h1', 'horizontal:h2', 'horizontal:h2'])
+    expect(migrated.horizontalGuides).toEqual([
+      expect.objectContaining({ id: 'v1', role: 'primary', position: 0.7, xStartRatio: 0.15, xEndRatio: 0.85 }),
+      expect.objectContaining({ id: 'h1', role: 'reference', linkedCounterId: undefined }),
+      expect.objectContaining({ id: 'h2', role: 'reference' }),
+    ])
+    expect(migrated.verticalGuides).toEqual([])
+    expect(migrated.progressMigration).toBe('complete')
+    expect(migrated.legacyProgressGuides).toEqual({ horizontalGuides: work.horizontalGuides, verticalGuides: work.verticalGuides })
+  })
+
+  it('rejects an unknown primary and clamps automatic row positions to the page', () => {
+    expect(() => migrateProgressGuides(legacyWork(), 'missing', [])).toThrow('주 진행선')
+    const work = migrateProgressGuides(legacyWork(), 'horizontal:h1', [])
+    const guide = { ...work.horizontalGuides![0], rowSpacing: 0.08, rowSpacingStartRow: 4, rowSpacingDirection: 'down' as const }
+    expect(guideRowPosition(guide, 5)).toBeCloseTo(0.48)
+    expect(guideRowPosition(guide, 30)).toBe(1)
+  })
+
+  it('starts a new line when there are no legacy guides to migrate', () => {
+    const work: PageWorkRecord = { documentId: 'doc', pageNumber: 1, horizontalPosition: 0.37, verticalPosition: 0.5, annotations: [], horizontalGuides: [], verticalGuides: [], progressMigration: 'pending' }
+    const migrated = migrateProgressGuides(work, '', [])
+    expect(migrated.horizontalGuides).toEqual([expect.objectContaining({ role: 'primary', position: 0.37, xStartRatio: 0.15, xEndRatio: 0.85 })])
+    expect(migrated.progressMigration).toBe('complete')
+    expect(migrated.legacyProgressGuides).toEqual({ horizontalGuides: [], verticalGuides: [] })
+  })
+})

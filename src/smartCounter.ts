@@ -1,4 +1,5 @@
 import type { CounterHistoryEntry, CounterKind, CounterSnapshot, CounterTaskKind, CounterTaskOccurrence, CounterTaskRule, CounterTaskStatus, ProgressGuide } from './types'
+import { guideRowPosition } from './progressLines'
 
 export const COUNTER_COUNT = 5
 export const MAX_COUNTER_ROW = 9999
@@ -386,7 +387,7 @@ export function maxCountersForType(counters: CounterSnapshot[], kind: CounterKin
 
 export function guidePositionForRow(guide: ProgressGuide, row: number) {
   const region = guide.chartRegion
-  if (!region) return guide.position
+  if (!region) return guideRowPosition(guide, row)
   const rowCount = Math.max(1, region.lastRow - region.firstRow + 1)
   let index = row - region.startCounterRow
   if (region.repeat) index = ((index % rowCount) + rowCount) % rowCount
@@ -399,5 +400,21 @@ export function guidePositionForRow(guide: ProgressGuide, row: number) {
 
 export function progressGuideForCounter(guide: ProgressGuide, counter: CounterSnapshot): ProgressGuide {
   const row = counter.kind === 'simple' ? counter.value : counter.currentRow ?? 1
-  return { ...guide, name: counter.name, color: counter.color, position: guidePositionForRow(guide, row) }
+  const position = guidePositionForRow(guide, row)
+  const rotationPositions = guide.rotationPositions ? { ...guide.rotationPositions } : undefined
+  if (rotationPositions) {
+    for (const key of Object.keys(rotationPositions) as ('0' | '90' | '180' | '270')[]) {
+      const entry = rotationPositions[key]
+      if (entry) {
+        const oriented = { ...guide, ...entry }
+        rotationPositions[key] = { ...entry, position: entry.rowSpacingStartRow !== undefined ? guideRowPosition(oriented, row) : guidePositionForRow(oriented, row) }
+      }
+    }
+  }
+  const moved = position !== guide.position || Object.keys(rotationPositions ?? {}).some((key) => {
+    const before = guide.rotationPositions?.[key as '0' | '90' | '180' | '270']
+    const after = rotationPositions?.[key as '0' | '90' | '180' | '270']
+    return before?.position !== after?.position
+  })
+  return { ...guide, name: guide.role ? guide.name ?? counter.name : counter.name, color: guide.role ? guide.color ?? counter.color : counter.color, position, ...(rotationPositions ? { rotationPositions } : {}), ...(moved ? { markerProgress: undefined } : {}) }
 }
