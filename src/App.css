@@ -397,7 +397,7 @@
 .pdf-guide-svg { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; pointer-events: none; touch-action: none; }
 .pdf-guide-svg text { font-family: inherit; font-weight: 650; paint-order: stroke; stroke: rgba(255,255,255,.82); stroke-width: 3px; }
 .pdf-guide-layer .guide-add-button, .pdf-guide-layer .guide-remove-button { pointer-events: auto; }
-.progress-line-overlay { position: absolute; inset: 0; pointer-events: none; }
+.progress-line-overlay { position: absolute; inset: 0; pointer-events: none; -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
 .progress-line-overlay > svg { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; pointer-events: none; touch-action: none; }
 .progress-line-overlay button, .progress-line-overlay input, .progress-line-overlay select { pointer-events: auto; }
 .progress-line-menu-trigger { position: absolute; z-index: 5; width: 44px; height: 44px; display: grid; place-items: center; padding: 0; transform: translate(-50%,-50%); border: 1px solid #e2e7ef; border-radius: 50%; color: #172033; background: rgba(255,255,255,.97); box-shadow: 0 2px 9px rgba(27,35,51,.17); font-size: 20px; line-height: 1; cursor: pointer; }
