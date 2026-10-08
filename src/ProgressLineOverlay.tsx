@@ -561,7 +561,7 @@ export function ProgressLineOverlay({ width, height, cssWidth, cssHeight, work, 
               }}>카운터 연결 해제</button>}
             </div> : <button type="button" role="menuitem" onClick={() => { setConnectingGuideId(guide.id); setConnectingCounterId(guide.linkedCounterId ?? counters[0]?.id ?? '') }}>카운터와 연결</button>}
             {guide.linkedCounterId && <button type="button" role="menuitem" onClick={() => startCalibration(menuGuide, menuGuide.linkedCounterId)}>단 간격 다시 맞추기</button>}
-            {guide.linkedCounterId && <button type="button" role="menuitem" onClick={() => updateFocus(menuGuide, !(menuGuide.focus?.enabled ?? false))}>{menuGuide.focus?.enabled ? '집중 보기 끄기' : '집중 보기 켜기'}</button>}
+            <button type="button" role="menuitem" onClick={() => updateFocus(menuGuide, !(menuGuide.focus?.enabled ?? false))}>{menuGuide.focus?.enabled ? '집중 보기 끄기' : '집중 보기 켜기'}</button>
             {menuGuide.focus?.enabled && <label className="progress-focus-strength">집중 강도<select value={menuGuide.focus.strength} onChange={(event) => updateFocus(menuGuide, true, event.currentTarget.value as 'low' | 'medium' | 'high')}><option value="low">약하게</option><option value="medium">보통</option><option value="high">강하게</option></select></label>}
           </>}
           <button type="button" role="menuitem" onClick={() => setStyleGuideId(menuGuideId)}>표시 스타일</button>
