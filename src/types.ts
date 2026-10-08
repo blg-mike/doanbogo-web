@@ -33,6 +33,7 @@ export interface ProgressGuide {
   xEndRatio?: number
   markerProgress?: number
   opacity?: number
+  thickness?: number
   rotationPositions?: Partial<Record<'0' | '90' | '180' | '270', ProgressGuideScreenPosition>>
   rowSpacing?: number
   rowSpacingStartRow?: number

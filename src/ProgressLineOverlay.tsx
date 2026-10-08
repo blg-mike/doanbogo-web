@@ -16,6 +16,7 @@ type Drag = {
   startX: number
   startY: number
   moved: boolean
+  longPressOpened: boolean
   axis: 'x' | 'y' | null
   base: ProgressGuide
   work: PageWorkRecord
@@ -41,6 +42,14 @@ function clamp(value: number, low: number, high: number) {
 
 function counterRow(counter: CounterSnapshot | undefined) {
   return counter ? counter.kind === 'simple' ? counter.value : counter.currentRow ?? 1 : 1
+}
+
+function guideThickness(guide: ProgressGuide, defaultThickness: number) {
+  return guide.thickness ?? (guide.role === 'reference' ? defaultThickness * 0.5 : Math.max(2, defaultThickness))
+}
+
+function rangeValue(field: 'opacity' | 'thickness', value: number) {
+  return field === 'opacity' ? Math.round(value * 100) / 100 : Math.round(value)
 }
 
 function guideForDisplay(guide: ProgressGuide, rotation: PageRotation): ProgressGuide {
@@ -115,6 +124,7 @@ export function ProgressLineOverlay({ width, height, cssWidth, cssHeight, work, 
 }) {
   const svgId = useId().replace(/:/g, '')
   const dragRef = useRef<Drag | null>(null)
+  const longPressTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const [previewGuide, setPreviewGuide] = useState<ProgressGuide | null>(null)
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [menuGuideId, setMenuGuideId] = useState<string | null>(null)
@@ -124,8 +134,9 @@ export function ProgressLineOverlay({ width, height, cssWidth, cssHeight, work, 
   const [calibration, setCalibration] = useState<Calibration | null>(null)
   const [deletedGuide, setDeletedGuide] = useState<ProgressGuide | null>(null)
   const [notice, setNotice] = useState('')
-  const [opacityDraft, setOpacityDraft] = useState<{ id: string; value: number } | null>(null)
-  const opacityBeforeRef = useRef<{ work: PageWorkRecord; guideId: string; value: number } | null>(null)
+  const [styleDraft, setStyleDraft] = useState<{ id: string; field: 'opacity' | 'thickness'; value: number } | null>(null)
+  const styleBeforeRef = useRef<{ work: PageWorkRecord; guideId: string; field: 'opacity' | 'thickness'; value: number } | null>(null)
+  const styleRangeChangedRef = useRef(false)
   const guides = work.horizontalGuides ?? []
   const primary = guides.find((guide) => guide.role === 'primary')
   const references = guides.filter((guide) => guide.role === 'reference').slice(0, 2)
@@ -137,9 +148,13 @@ export function ProgressLineOverlay({ width, height, cssWidth, cssHeight, work, 
   const displayedGuides = sourceGuides.map((guide) => {
     const preview = previewGuide?.id === guide.id ? previewGuide : guide
     const displayed = guideForDisplay(preview, rotation)
-    return opacityDraft?.id === guide.id ? { ...displayed, opacity: opacityDraft.value } : displayed
+    return styleDraft?.id === guide.id ? { ...displayed, [styleDraft.field]: styleDraft.value } : displayed
   })
   const currentCalibrationCounter = calibration ? counters.find((counter) => counter.id === calibration.counterId) : undefined
+
+  useEffect(() => () => {
+    if (longPressTimerRef.current) clearTimeout(longPressTimerRef.current)
+  }, [])
 
   useEffect(() => {
     if (!calibration) return
@@ -168,6 +183,8 @@ export function ProgressLineOverlay({ width, height, cssWidth, cssHeight, work, 
     if (!active) onActivate()
     event.preventDefault()
     event.stopPropagation()
+    if (longPressTimerRef.current) clearTimeout(longPressTimerRef.current)
+    longPressTimerRef.current = null
     const original = work.horizontalGuides?.find((item) => item.id === guide.id)
     if (!original) return
     const pos = point(event, event.currentTarget)
@@ -185,6 +202,7 @@ export function ProgressLineOverlay({ width, height, cssWidth, cssHeight, work, 
       startX: pos.x,
       startY: pos.y,
       moved: false,
+      longPressOpened: false,
       axis: null,
       base: guide,
       work: workingWork,
@@ -193,7 +211,18 @@ export function ProgressLineOverlay({ width, height, cssWidth, cssHeight, work, 
     }
     setSelectedId(guide.id)
     setMenuGuideId(null)
+    setStyleGuideId(null)
     setConnectingGuideId(null)
+    if (action === 'body' && !calibration) {
+      const pointerId = event.pointerId
+      longPressTimerRef.current = setTimeout(() => {
+        const currentDrag = dragRef.current
+        if (!currentDrag || currentDrag.pointerId !== pointerId || currentDrag.moved) return
+        currentDrag.longPressOpened = true
+        setMenuGuideId(guide.id)
+        setStyleGuideId(guide.id)
+      }, 500)
+    }
   }
 
   function dragChanges(drag: Drag, x: number, y: number): Partial<ProgressGuide> | null {
@@ -218,12 +247,15 @@ export function ProgressLineOverlay({ width, height, cssWidth, cssHeight, work, 
     if (!drag || drag.pointerId !== event.pointerId) return
     event.preventDefault()
     event.stopPropagation()
+    if (drag.longPressOpened) return
     const pos = point(event, event.currentTarget)
     const rect = event.currentTarget.getBoundingClientRect()
     const dx = (pos.x - drag.startX) * rect.width
     const dy = (pos.y - drag.startY) * rect.height
     if (!drag.moved && Math.hypot(dx, dy) >= 8) {
       drag.moved = true
+      if (longPressTimerRef.current) clearTimeout(longPressTimerRef.current)
+      longPressTimerRef.current = null
       drag.axis = drag.action === 'body' ? Math.abs(dx) > Math.abs(dy) ? 'x' : 'y' : 'x'
     }
     if (!drag.moved) return
@@ -236,10 +268,16 @@ export function ProgressLineOverlay({ width, height, cssWidth, cssHeight, work, 
   function finish(event: ReactPointerEvent<SVGSVGElement>, cancelled = false) {
     const drag = dragRef.current
     if (!drag || drag.pointerId !== event.pointerId) return
+    if (longPressTimerRef.current) clearTimeout(longPressTimerRef.current)
+    longPressTimerRef.current = null
     event.preventDefault()
     event.stopPropagation()
     if (cancelled) {
       setPreviewGuide(drag.previousPreview)
+      if (drag.longPressOpened) {
+        setMenuGuideId(null)
+        setStyleGuideId(null)
+      }
       dragRef.current = null
       return
     }
@@ -293,6 +331,7 @@ export function ProgressLineOverlay({ width, height, cssWidth, cssHeight, work, 
       chartRegion: undefined,
       markerProgress: undefined,
       opacity: Math.min(primary.opacity ?? defaultOpacity, 0.45),
+      thickness: primary.thickness === undefined ? undefined : Math.max(1, Math.round(primary.thickness * 0.5)),
       rowSpacing: undefined,
       rowSpacingStartRow: undefined,
       rowSpacingDirection: undefined,
@@ -405,34 +444,74 @@ export function ProgressLineOverlay({ width, height, cssWidth, cssHeight, work, 
     updateGuide(guide.id, { focus: { enabled, strength, range: guide.focus?.range ?? 0, scope: guide.focus?.scope ?? (guide.chartRegion ? 'region' : 'page'), rowSpacing: guide.focus?.rowSpacing ?? guide.rowSpacing ?? 0.03 } })
   }
 
-  function beginOpacity(event: ReactPointerEvent<HTMLInputElement>, guide: ProgressGuide) {
+  function beginStyleRange(event: ReactPointerEvent<HTMLInputElement>, guide: ProgressGuide, field: 'opacity' | 'thickness') {
     event.stopPropagation()
-    opacityBeforeRef.current = { work, guideId: guide.id, value: guide.opacity ?? defaultOpacity }
+    const fallback = field === 'opacity' ? defaultOpacity : guideThickness(guide, defaultThickness)
+    styleBeforeRef.current = { work, guideId: guide.id, field, value: rangeValue(field, guide[field] ?? fallback) }
+    styleRangeChangedRef.current = false
   }
 
-  function changeOpacity(guide: ProgressGuide, value: number) {
-    const before = opacityBeforeRef.current
-    if (!before || before.guideId !== guide.id) return
-    setOpacityDraft({ id: guide.id, value })
+  function changeStyleRange(guide: ProgressGuide, field: 'opacity' | 'thickness', value: number) {
+    const before = styleBeforeRef.current
+    if (!before || before.guideId !== guide.id || before.field !== field) return
+    styleRangeChangedRef.current = true
+    setStyleDraft({ id: guide.id, field, value })
   }
 
-  function finishOpacity(event: ReactPointerEvent<HTMLInputElement>, guide: ProgressGuide) {
+  function finishStyleRange(event: ReactPointerEvent<HTMLInputElement>, guide: ProgressGuide, field: 'opacity' | 'thickness') {
     event.stopPropagation()
-    const before = opacityBeforeRef.current
-    if (!before || before.guideId !== guide.id) return
-    const value = Number(event.currentTarget.value) / 100
-    opacityBeforeRef.current = null
-    setOpacityDraft(null)
-    if (value === before.value) return
+    const before = styleBeforeRef.current
+    if (!before || before.guideId !== guide.id || before.field !== field) return
+    const inputValue = Number(event.currentTarget.value)
+    const value = field === 'opacity' ? inputValue / 100 : inputValue
+    const changed = styleRangeChangedRef.current
+    styleBeforeRef.current = null
+    styleRangeChangedRef.current = false
+    setStyleDraft(null)
+    if (!changed || value === before.value) return
     const shown = guideForDisplay(guide, rotation)
-    const next = updateGuideWork(before.work, guide.id, { opacity: value }, rotation, counters, shown)
+    const next = updateGuideWork(before.work, guide.id, { [field]: value }, rotation, counters, shown)
     onWorkChange(next, true, true, before.work)
   }
 
-  function cancelOpacity(event: ReactPointerEvent<HTMLInputElement>) {
+  function cancelStyleRange(event: ReactPointerEvent<HTMLInputElement>) {
     event.stopPropagation()
-    opacityBeforeRef.current = null
-    setOpacityDraft(null)
+    styleBeforeRef.current = null
+    styleRangeChangedRef.current = false
+    setStyleDraft(null)
+  }
+
+  function renderStyleRange(guide: ProgressGuide, field: 'opacity' | 'thickness', label: string) {
+    const fallback = field === 'opacity' ? defaultOpacity : guideThickness(guide, defaultThickness)
+    const value = styleDraft?.id === guide.id && styleDraft.field === field
+      ? styleDraft.value
+      : guide[field] ?? fallback
+    const inputValue = field === 'opacity' ? Math.round(value * 100) : Math.round(value)
+    return <label>{label}<input
+      type="range"
+      min={field === 'opacity' ? 30 : 1}
+      max={field === 'opacity' ? 100 : 12}
+      step="1"
+      aria-label={field === 'opacity' ? '진행선 투명도' : '진행선 두께'}
+      value={inputValue}
+      onPointerDown={(event) => beginStyleRange(event, guide, field)}
+      onChange={(event) => {
+        const nextValue = Number(event.currentTarget.value)
+        changeStyleRange(guide, field, field === 'opacity' ? nextValue / 100 : nextValue)
+      }}
+      onPointerUp={(event) => finishStyleRange(event, guide, field)}
+      onPointerCancel={cancelStyleRange}
+      onLostPointerCapture={(event) => finishStyleRange(event, guide, field)}
+      onFocus={(event) => { if (!styleBeforeRef.current) beginStyleRange(event as unknown as ReactPointerEvent<HTMLInputElement>, guide, field) }}
+      onBlur={(event) => finishStyleRange(event as unknown as ReactPointerEvent<HTMLInputElement>, guide, field)}
+      onKeyDown={() => {
+        if (!styleBeforeRef.current) {
+          styleBeforeRef.current = { work, guideId: guide.id, field, value: rangeValue(field, guide[field] ?? fallback) }
+          styleRangeChangedRef.current = false
+        }
+      }}
+      onKeyUp={(event) => finishStyleRange(event as unknown as ReactPointerEvent<HTMLInputElement>, guide, field)}
+    /></label>
   }
 
   const focusGuides = active ? displayedGuides.filter((guide) => guide.focus?.enabled) : []
@@ -491,7 +570,9 @@ export function ProgressLineOverlay({ width, height, cssWidth, cssHeight, work, 
         const color = guide.color ?? defaultColor
         const selected = selectedId === guide.id
         const markerX = guide.markerProgress === undefined ? null : (start + (end - start) * guide.markerProgress) * width
-        const stroke = guide.role === 'reference' ? Math.max(1, defaultThickness * sx * 0.5) : Math.max(2, defaultThickness * sx)
+        const stroke = guide.thickness === undefined
+          ? guide.role === 'reference' ? Math.max(1, defaultThickness * sx * 0.5) : Math.max(2, defaultThickness * sx)
+          : Math.max(0.5, guide.thickness * sx)
         return <g key={guide.id}>
           <line x1={x1} x2={x2} y1={y} y2={y} stroke={color} strokeWidth={stroke} strokeOpacity={guide.opacity ?? (guide.role === 'reference' ? Math.min(defaultOpacity, 0.45) : defaultOpacity)} strokeLinecap="round" pointerEvents="none" />
           <line data-guide-id={guide.id} data-progress-action="body" x1={x1} x2={x2} y1={y} y2={y} stroke="transparent" strokeWidth={Math.max(stroke, 44 * sy)} pointerEvents={disabled ? 'none' : 'stroke'} />
@@ -518,7 +599,7 @@ export function ProgressLineOverlay({ width, height, cssWidth, cssHeight, work, 
       aria-label={guide.role === 'primary' ? '진행선 옵션' : '참고선 옵션'}
       title={guide.role === 'primary' ? '진행선 옵션' : '참고선 옵션'}
       onPointerDown={(event) => { event.preventDefault(); event.stopPropagation(); if (!active) onActivate() }}
-      onClick={() => { setSelectedId(guide.id); setConnectingGuideId(null); setMenuGuideId(menuGuideId === guide.id ? null : guide.id) }}
+      onClick={() => { setSelectedId(guide.id); setConnectingGuideId(null); setStyleGuideId(null); setMenuGuideId(menuGuideId === guide.id ? null : guide.id) }}
     >⋯</button>)}
     {menuGuideId && displayedGuides.find((guide) => guide.id === menuGuideId) && (() => {
       const guide = displayedGuides.find((item) => item.id === menuGuideId)!
@@ -530,21 +611,9 @@ export function ProgressLineOverlay({ width, height, cssWidth, cssHeight, work, 
         {styleGuideId === menuGuideId ? <>
           <strong>표시 스타일</strong>
           <div className="progress-color-presets">{presets.map((preset) => <button key={preset.color} type="button" aria-label={preset.name} title={preset.name} style={{ background: preset.color }} onClick={() => updateGuide(menuGuideId, { color: preset.color })} />)}</div>
-          <label>투명도 <input
-            type="range" min="30" max="100"
-            aria-label="진행선 투명도"
-            value={Math.round((opacityDraft?.id === menuGuideId ? opacityDraft.value : guide.opacity ?? defaultOpacity) * 100)}
-            onPointerDown={(event) => beginOpacity(event, menuGuide)}
-            onChange={(event) => changeOpacity(menuGuide, Number(event.currentTarget.value) / 100)}
-            onPointerUp={(event) => finishOpacity(event, menuGuide)}
-            onPointerCancel={cancelOpacity}
-            onLostPointerCapture={(event) => finishOpacity(event, menuGuide)}
-            onFocus={(event) => { if (!opacityBeforeRef.current) beginOpacity(event as unknown as ReactPointerEvent<HTMLInputElement>, menuGuide) }}
-            onBlur={(event) => finishOpacity(event as unknown as ReactPointerEvent<HTMLInputElement>, menuGuide)}
-            onKeyDown={() => { if (!opacityBeforeRef.current) opacityBeforeRef.current = { work, guideId: menuGuide.id, value: menuGuide.opacity ?? defaultOpacity } }}
-            onKeyUp={(event) => finishOpacity(event as unknown as ReactPointerEvent<HTMLInputElement>, menuGuide)}
-          /></label>
-          <button type="button" role="menuitem" onClick={() => setStyleGuideId(null)}>뒤로</button>
+          {renderStyleRange(menuGuide, 'thickness', '두께')}
+          {renderStyleRange(menuGuide, 'opacity', '투명도')}
+          <button type="button" role="menuitem" onClick={() => { setStyleGuideId(null); setMenuGuideId(null) }}>닫기</button>
         </> : <>
           {guide.role === 'primary' && <>
             <button type="button" role="menuitem" onClick={() => addMarker(menuGuide)}>{guide.markerProgress === undefined ? '마커 표시' : '마커 지우기'}</button>
@@ -564,7 +633,6 @@ export function ProgressLineOverlay({ width, height, cssWidth, cssHeight, work, 
             <button type="button" role="menuitem" onClick={() => updateFocus(menuGuide, !(menuGuide.focus?.enabled ?? false))}>{menuGuide.focus?.enabled ? '집중 보기 끄기' : '집중 보기 켜기'}</button>
             {menuGuide.focus?.enabled && <label className="progress-focus-strength">집중 강도<select value={menuGuide.focus.strength} onChange={(event) => updateFocus(menuGuide, true, event.currentTarget.value as 'low' | 'medium' | 'high')}><option value="low">약하게</option><option value="medium">보통</option><option value="high">강하게</option></select></label>}
           </>}
-          <button type="button" role="menuitem" onClick={() => setStyleGuideId(menuGuideId)}>표시 스타일</button>
           {guide.role === 'primary' && <button type="button" role="menuitem" disabled={references.length >= 2} onClick={addReference}>참고선 추가{references.length ? ' · ' + references.length + '/2' : ''}</button>}
           <button type="button" role="menuitem" className="progress-delete-action" onClick={() => removeGuide(menuGuide)}>삭제</button>
         </>}

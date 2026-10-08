@@ -71,6 +71,7 @@ function isGuideArray(value: unknown) {
     (guide.xStartRatio === undefined || guide.xEndRatio === undefined || (guide.xStartRatio as number) < (guide.xEndRatio as number)) &&
     (guide.markerProgress === undefined || Number.isFinite(guide.markerProgress) && (guide.markerProgress as number) >= 0 && (guide.markerProgress as number) <= 1) &&
     (guide.opacity === undefined || Number.isFinite(guide.opacity) && (guide.opacity as number) >= 0.3 && (guide.opacity as number) <= 1) &&
+    (guide.thickness === undefined || Number.isFinite(guide.thickness) && (guide.thickness as number) >= 1 && (guide.thickness as number) <= 12) &&
     (guide.rowSpacing === undefined || Number.isFinite(guide.rowSpacing) && (guide.rowSpacing as number) > 0 && (guide.rowSpacing as number) <= 1) &&
     (guide.rowSpacingStartRow === undefined || Number.isSafeInteger(guide.rowSpacingStartRow) && (guide.rowSpacingStartRow as number) >= 1 && (guide.rowSpacingStartRow as number) <= 9999) &&
     (guide.rowSpacingDirection === undefined || guide.rowSpacingDirection === 'up' || guide.rowSpacingDirection === 'down') &&

@@ -98,7 +98,7 @@ describe('portable workspace backup', () => {
     await addDocument({ id, fileName: 'progress.pdf', size: pdf.size, pageCount: 1, createdAt: Date.now(), lastOpenedAt: null, tags: [], pdf, cover: null })
     const work = await getPageWork(id, 1)
     const primary = {
-      id: 'primary', role: 'primary' as const, position: 0.42, xStartRatio: 0.18, xEndRatio: 0.82, markerProgress: 0.6, opacity: 0.8,
+      id: 'primary', role: 'primary' as const, position: 0.42, xStartRatio: 0.18, xEndRatio: 0.82, markerProgress: 0.6, opacity: 0.8, thickness: 7,
       rotationPositions: { '90': { position: 0.55, xStartRatio: 0.2, xEndRatio: 0.8, rowSpacing: 0.04, rowSpacingStartRow: 42, rowSpacingDirection: 'down' as const } },
     }
     await savePageWork({
@@ -109,7 +109,7 @@ describe('portable workspace backup', () => {
     const restored = await readWorkspaceBackup(new File([backup], 'progress.doanbogo'))
     expect(restored.pageWork[0]).toMatchObject({
       progressMigration: 'complete',
-      horizontalGuides: [{ id: 'primary', role: 'primary', xStartRatio: 0.18, xEndRatio: 0.82, markerProgress: 0.6, rotationPositions: { '90': { position: 0.55, rowSpacing: 0.04 } } }],
+      horizontalGuides: [{ id: 'primary', role: 'primary', xStartRatio: 0.18, xEndRatio: 0.82, markerProgress: 0.6, thickness: 7, rotationPositions: { '90': { position: 0.55, rowSpacing: 0.04 } } }],
       verticalGuides: [],
       legacyProgressGuides: { horizontalGuides: [{ id: 'old-h' }], verticalGuides: [{ id: 'old-v' }] },
     })
@@ -461,20 +461,24 @@ describe('portable workspace backup', () => {
     expect(restored.pageWork[0]).not.toHaveProperty('rectangles')
   })
 
-  it('rejects backup data with more than ten guides in one direction', async () => {
+  it('rejects invalid progress guide data', async () => {
     const pdf = new TextEncoder().encode('%PDF-1.7 too-many-guides')
-    const manifest = {
-      format: 'doanbogo', version: 3, exportedAt: Date.now(),
-      documents: [{ id: 'too-many-guides', fileName: 'guides.pdf', size: pdf.byteLength, pageCount: 1, createdAt: 1, lastOpenedAt: null, tags: [], pdfPath: 'documents/000000.pdf', coverPath: null }],
-      pages: [], viewers: [], preferences: [],
-      pageWork: [{
-        documentId: 'too-many-guides', pageNumber: 1, horizontalPosition: 0.5, verticalPosition: 0.5,
-        horizontalGuides: Array.from({ length: 11 }, (_, index) => ({ id: 'h-' + index, position: 0.5 })),
-        verticalGuides: [], annotations: [],
-      }],
+    for (const horizontalGuides of [
+      Array.from({ length: 11 }, (_, index) => ({ id: 'h-' + index, position: 0.5 })),
+      [{ id: 'h-1', position: 0.5, thickness: 13 }],
+    ]) {
+      const manifest = {
+        format: 'doanbogo', version: 3, exportedAt: Date.now(),
+        documents: [{ id: 'invalid-guides', fileName: 'guides.pdf', size: pdf.byteLength, pageCount: 1, createdAt: 1, lastOpenedAt: null, tags: [], pdfPath: 'documents/000000.pdf', coverPath: null }],
+        pages: [], viewers: [], preferences: [],
+        pageWork: [{
+          documentId: 'invalid-guides', pageNumber: 1, horizontalPosition: 0.5, verticalPosition: 0.5,
+          horizontalGuides, verticalGuides: [], annotations: [],
+        }],
+      }
+      const backup = new File([zipSync({ 'manifest.json': strToU8(JSON.stringify(manifest)), 'documents/000000.pdf': pdf })], 'invalid.doanbogo')
+      await expect(readWorkspaceBackup(backup)).rejects.toThrow('올바르지 않은 진행선·필기 정보')
     }
-    const backup = new File([zipSync({ 'manifest.json': strToU8(JSON.stringify(manifest)), 'documents/000000.pdf': pdf })], 'invalid.doanbogo')
-    await expect(readWorkspaceBackup(backup)).rejects.toThrow('올바르지 않은 진행선·필기 정보')
   })
 
 })
