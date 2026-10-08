@@ -406,8 +406,6 @@ export function PdfPage({ pdf, page, paneId, pane, splitView, rotation, active, 
   const scrollRef = useRef<HTMLDivElement>(null)
   const rotationLayerRef = useRef<HTMLDivElement>(null)
   const canvasRef = useRef<HTMLCanvasElement>(null)
-  const focusCanvasRef = useRef<HTMLCanvasElement>(null)
-  const focusCanvasKey = useRef<object>({})
   const annotationLayerRef = useRef<HTMLDivElement>(null)
   const textInputRef = useRef<HTMLTextAreaElement>(null)
   const textStyleToolbarRef = useRef<HTMLDivElement>(null)
@@ -433,10 +431,6 @@ export function PdfPage({ pdf, page, paneId, pane, splitView, rotation, active, 
   const [displayedRaster, setDisplayedRaster] = useState<{ pdf: PDFDocumentProxy; page: number; zoom: number; rotation: PageRotation } | null>(null)
   const [readyKey, setReadyKey] = useState('')
   const [renderError, setRenderError] = useState<{ key: string; message: string } | null>(null)
-  const focusDragging = false
-  const [focusFallback, setFocusFallback] = useState(false)
-  const [focusCanvasUnavailable, setFocusCanvasUnavailable] = useState(false)
-  const focusSlowRenderCount = useRef(0)
   const [retry, setRetry] = useState(0)
   const pinchZoom = useRef<number | null>(null)
   const [draft, setDraft] = useState<Point[]>([])
@@ -585,7 +579,6 @@ export function PdfPage({ pdf, page, paneId, pane, splitView, rotation, active, 
 
   useEffect(() => () => {
     if (canvasRef.current) clearCanvas(canvasRef.current)
-    if (focusCanvasRef.current) clearCanvas(focusCanvasRef.current)
     if (colorworkCanvasRef.current) clearCanvas(colorworkCanvasRef.current)
     viewerCanvasMemory.release(displayCanvasKey.current)
     viewerCanvasMemory.release(stagingCanvasKey.current)
@@ -1616,8 +1609,7 @@ export function PdfPage({ pdf, page, paneId, pane, splitView, rotation, active, 
   }
   const visibleHorizontalGuides = horizontalGuides.map(displayGuide)
   const visibleVerticalGuides = verticalGuides.map(displayGuide)
-  const focusGuides = visibleHorizontalGuides.filter((guide) => !guide.role && guide.focus?.enabled)
-  const focusSignature = JSON.stringify(focusGuides.map((guide) => [guide.id, guide.position, guide.focus, guide.chartRegion]))
+  const focusGuides = active ? visibleHorizontalGuides.filter((guide) => !guide.role && guide.focus?.enabled) : []
   const focusBandRects = focusGuides.map((guide) => {
     const focus = guide.focus!
     const region = guide.chartRegion
@@ -1657,6 +1649,7 @@ export function PdfPage({ pdf, page, paneId, pane, splitView, rotation, active, 
     const bottom = Math.max(...fallbackRegions.map((region) => region.y + region.height))
     return 'inset(' + top * 100 + '% ' + (1 - right) * 100 + '% ' + (1 - bottom) * 100 + '% ' + left * 100 + '%)'
   })()
+  const focusDimOpacity = focusGuides.some((guide) => guide.focus?.strength === 'high') ? 0.32 : focusGuides.some((guide) => guide.focus?.strength === 'low') ? 0.15 : 0.22
   const activeDraft = strokeRef.current?.documentId === work.documentId && strokeRef.current.pageNumber === page ? strokeRef.current : null
   const failedDraft = failedStrokeRef.current?.work.documentId === work.documentId && failedStrokeRef.current.work.pageNumber === page ? failedStrokeRef.current.annotation : null
   const draftType = activeDraft?.tool ?? (failedDraft?.type === 'pen' || failedDraft?.type === 'line' || failedDraft?.type === 'highlight' ? failedDraft.type : 'pen')
@@ -1668,77 +1661,6 @@ export function PdfPage({ pdf, page, paneId, pane, splitView, rotation, active, 
   } : null
   const visiblePendingStrokePreviews = pendingStrokePreviews.filter((item) => item.documentId === work.documentId && item.pageNumber === page)
 
-  useEffect(() => {
-    const overlay = focusCanvasRef.current
-    const source = canvasRef.current
-    if (!overlay || !source || !focusGuides.length || !source.width || !source.height || readyKey !== renderKey) {
-      if (overlay) { overlay.width = 0; overlay.height = 0 }
-      viewerCanvasMemory.release(focusCanvasKey.current)
-      setFocusCanvasUnavailable(false)
-      return
-    }
-    const timer = window.setTimeout(() => {
-      const startedAt = performance.now()
-      try {
-        const availablePixels = Math.min(500_000, Math.floor(viewerCanvasMemory.availableBytes(focusCanvasKey.current) / 4))
-        if (availablePixels < 10_000) throw new Error('focus canvas budget exhausted')
-        const scale = Math.min(1, Math.sqrt(availablePixels / (source.width * source.height)))
-        const width = Math.max(1, Math.floor(source.width * scale))
-        const height = Math.max(1, Math.floor(source.height * scale))
-        if (!viewerCanvasMemory.reserve(focusCanvasKey.current, width * height * 4)) throw new Error('focus canvas budget exhausted')
-        overlay.width = width
-        overlay.height = height
-        setFocusCanvasUnavailable(false)
-        const context = overlay.getContext('2d')
-        if (!context) throw new Error('focus canvas unavailable')
-        context.clearRect(0, 0, width, height)
-        const dimOnly = focusDragging || focusFallback
-        if (dimOnly) {
-          context.fillStyle = 'rgba(19, 31, 49, .22)'
-          context.fillRect(0, 0, width, height)
-        } else {
-          const strength = Math.max(...focusGuides.map((guide) => guide.focus?.strength === 'high' ? 4 : guide.focus?.strength === 'medium' ? 2.5 : 1.25))
-          const cssScale = width / Math.max(1, displayedSize?.css.width ?? width)
-          context.filter = 'blur(' + Math.max(1, strength * cssScale) + 'px)'
-          context.drawImage(source, 0, 0, width, height)
-          context.filter = 'none'
-        }
-        if (!focusGuides.some((guide) => guide.focus?.scope === 'page')) {
-          const regions = focusGuides.map((guide) => guide.chartRegion).filter((region): region is NonNullable<ProgressGuide['chartRegion']> => Boolean(region))
-          if (regions.length) {
-            context.globalCompositeOperation = 'destination-in'
-            context.fillStyle = '#fff'
-            context.beginPath()
-            regions.forEach((region) => {
-              context.rect(region.x * width, region.y * height, region.width * width, region.height * height)
-            })
-            context.fill()
-            context.globalCompositeOperation = 'source-over'
-          }
-        }
-        context.globalCompositeOperation = 'destination-out'
-        focusBandRects.forEach((rect) => {
-          context.fillRect(rect.x * width, rect.y * height, rect.width * width, rect.height * height)
-        })
-        context.globalCompositeOperation = 'source-over'
-        if (!focusDragging && !focusFallback) {
-          focusSlowRenderCount.current = performance.now() - startedAt > 100 ? focusSlowRenderCount.current + 1 : 0
-          if (focusSlowRenderCount.current >= 2) setFocusFallback(true)
-        }
-      } catch {
-        overlay.width = 0
-        overlay.height = 0
-        viewerCanvasMemory.release(focusCanvasKey.current)
-        setFocusFallback(true)
-        setFocusCanvasUnavailable(true)
-      }
-    }, focusDragging ? 0 : 200)
-    return () => window.clearTimeout(timer)
-    // oxlint-disable-next-line react-hooks/exhaustive-deps -- focusSignature serializes the guide values used by this canvas effect.
-  }, [focusSignature, focusDragging, focusFallback, readyKey, renderKey, rotation, displayedSize?.css.width])
-
-  useEffect(() => () => viewerCanvasMemory.release(focusCanvasKey.current), [])
-
   return (
     <div className={'pdf-pane ' + (active ? 'is-active' : '')} onPointerDown={onActivate}>
       <div className="pane-label">{active ? '현재 작업 영역' : '보조 영역'}</div>
@@ -1748,8 +1670,7 @@ export function PdfPage({ pdf, page, paneId, pane, splitView, rotation, active, 
           <div ref={rotationLayerRef} className="pdf-rotation-content" style={cssSize ? { width: cssSize.width, height: cssSize.height, transform: 'rotate(' + rotation + 'deg) scale(' + zoomPreviewScale + ')' } : undefined}>
           <div className="pdf-image-layer" style={cssSize ? { width: cssSize.width, height: cssSize.height } : undefined}>
             <canvas ref={canvasRef} aria-label={'PDF ' + page + '페이지'} />
-            <canvas ref={focusCanvasRef} className="pdf-focus-overlay" aria-hidden="true" />
-            {focusCanvasUnavailable && focusGuides.length > 0 && <div className="pdf-focus-dim-fallback" aria-hidden="true" style={{ maskImage: 'linear-gradient(to ' + (focusAxis === 'x' ? 'right' : 'bottom') + ', ' + fallbackMaskStops.join(', ') + ')', WebkitMaskImage: 'linear-gradient(to ' + (focusAxis === 'x' ? 'right' : 'bottom') + ', ' + fallbackMaskStops.join(', ') + ')', clipPath: fallbackClipPath }} />}
+            {focusGuides.length > 0 && <div className="pdf-focus-dim-fallback" aria-hidden="true" style={{ background: 'rgba(19,31,49,' + focusDimOpacity + ')', maskImage: 'linear-gradient(to ' + (focusAxis === 'x' ? 'right' : 'bottom') + ', ' + fallbackMaskStops.join(', ') + ')', WebkitMaskImage: 'linear-gradient(to ' + (focusAxis === 'x' ? 'right' : 'bottom') + ', ' + fallbackMaskStops.join(', ') + ')', clipPath: fallbackClipPath }} />}
             {pageSize && cssSize && <>
             <svg
                 className={'pdf-svg-overlay ' + (tool === 'pan' ? 'pan-mode' : tool === 'text' ? 'text-mode' : 'draw-mode')}
@@ -1995,7 +1916,7 @@ export function PdfPage({ pdf, page, paneId, pane, splitView, rotation, active, 
                 counters={counters}
                 rotation={rotation}
                 active={active}
-                disabled={tool === 'text'}
+                disabled={tool === 'text' || !workReady}
                 defaultColor={lineSettings.horizontal.color}
                 defaultOpacity={lineSettings.horizontal.opacity}
                 defaultThickness={lineSettings.horizontal.thickness}

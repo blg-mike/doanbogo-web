@@ -32,20 +32,24 @@ export function focusRowSpacing(region: ProgressChartRegion | undefined, fallbac
 export function guidePositionForRotation(guide: ProgressGuide, row: number, rotation: PageRotation) {
   const screenPosition = guide.rotationPositions?.[String(rotation) as '0' | '90' | '180' | '270']
   const orientedGuide = screenPosition ? { ...guide, ...screenPosition } : guide
-  if (screenPosition?.rowSpacingStartRow !== undefined) return guideRowPosition(orientedGuide, row)
+  const effectiveRow = row - (orientedGuide.counterRowOffset ?? 0)
   const region = orientedGuide.chartRegion
-  if (!region) return guideRowPosition(orientedGuide, row)
+  if (screenPosition?.rowSpacingStartRow !== undefined || !region) return guideRowPosition(orientedGuide, effectiveRow)
   const rowCount = Math.max(1, region.lastRow - region.firstRow + 1)
-  let index = row - region.startCounterRow
+  let index = effectiveRow - region.startCounterRow
   if (region.repeat) index = ((index % rowCount) + rowCount) % rowCount
   else index = Math.max(0, Math.min(rowCount - 1, index))
-  if (region.rowPositions?.length === rowCount) return region.rowPositions[index]
-  const display = region.rowLayout
-    ? { y: region.rowLayout.top, height: region.rowLayout.height }
-    : pageRectToDisplayRect(region, rotation)
-  const fraction = rowCount < 2 ? 0 : index / (rowCount - 1)
-  const direction = region.direction === 'bottom-to-top' ? 1 - fraction : fraction
-  return display.y + display.height * direction
+  const position = region.rowPositions?.length === rowCount
+    ? region.rowPositions[index]
+    : (() => {
+        const display = region.rowLayout
+          ? { y: region.rowLayout.top, height: region.rowLayout.height }
+          : pageRectToDisplayRect(region, rotation)
+        const fraction = rowCount < 2 ? 0 : index / (rowCount - 1)
+        const direction = region.direction === 'bottom-to-top' ? 1 - fraction : fraction
+        return display.y + display.height * direction
+      })()
+  return Math.min(1, Math.max(0, position + (orientedGuide.positionOffset ?? 0)))
 }
 
 export function formatFocusSpacingPercent(value: number) {

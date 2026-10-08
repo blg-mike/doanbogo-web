@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { advanceLinkedCounters, counterAlertState, counterSideForRow, createCounter, createDefaultCounters, findCounterRewindCheckpoint, guidePositionForRow, isCounterSnapshots, isCurrentCounterSnapshots, isLegacyCounterSnapshots, maxCountersForType, nextPatternAlertRow, normalizeCounterSnapshots, patternRowAfterCompletion, progressGuideForCounter, restoreCounterGroup, setCounterGroupRow, shouldPlayCounterTaskSound, taskSchedule } from './smartCounter'
+import { advanceLinkedCounters, counterAlertState, counterSideForRow, createCounter, createDefaultCounters, findCounterRewindCheckpoint, guidePositionForRow, isCounterSnapshots, isCurrentCounterSnapshots, isLegacyCounterSnapshots, maxCountersForType, nextPatternAlertRow, normalizeCounterSnapshots, patternRowAfterCompletion, progressGuideForCounter, reanchorProgressGuideForCounter, restoreCounterGroup, setCounterGroupRow, shouldPlayCounterTaskSound, taskSchedule } from './smartCounter'
 
 describe('counter model', () => {
   it('starts with no counters and enforces each type limit in the model', () => {
@@ -68,6 +68,39 @@ describe('counter model', () => {
     const counter = { ...createCounter('simple', '몸판'), id: 'base', value: 6, color: '#123456' }
     const guide = { id: 'guide', position: 0.5, linkedCounterId: counter.id, chartRegion: { x: 0, y: 0.2, width: 1, height: 0.6, firstRow: 1, lastRow: 6, startCounterRow: 1, repeat: false, direction: 'top-to-bottom' as const } }
     expect(progressGuideForCounter(guide, counter)).toMatchObject({ name: '몸판', color: '#123456', position: 0.8 })
+  })
+
+  it('moves calibrated guides by one spacing and rebases after every counter step', () => {
+    const guide = { id: 'guide', role: 'primary' as const, position: 0.4, linkedCounterId: 'base', rowSpacing: 0.05, rowSpacingStartRow: 42, rowSpacingDirection: 'down' as const, markerProgress: 0.6 }
+    const first = progressGuideForCounter(guide, { ...createCounter('simple'), id: 'base', value: 43 }, 42)
+    const second = progressGuideForCounter(first, { ...createCounter('simple'), id: 'base', value: 44 }, 43)
+    const third = progressGuideForCounter(second, { ...createCounter('simple'), id: 'base', value: 45 }, 44)
+    expect([first.position, second.position, third.position]).toEqual([0.45, 0.5, 0.55])
+    expect([first.rowSpacingStartRow, second.rowSpacingStartRow, third.rowSpacingStartRow]).toEqual([43, 44, 45])
+    expect(first.markerProgress).toBeUndefined()
+  })
+
+  it('keeps the line in place after a direct counter correction and moves one spacing next', () => {
+    const guide = { id: 'guide', role: 'primary' as const, position: 0.4, linkedCounterId: 'base', rowSpacing: 0.05, rowSpacingStartRow: 42, rowSpacingDirection: 'down' as const, markerProgress: 0.6 }
+    const corrected = reanchorProgressGuideForCounter(guide, 42, 68)
+    const next = progressGuideForCounter(corrected, { ...createCounter('simple'), id: 'base', value: 69 }, 68)
+    expect(corrected).toMatchObject({ position: 0.4, rowSpacingStartRow: 68, markerProgress: 0.6 })
+    expect(next.position).toBeCloseTo(0.45)
+  })
+
+  it('preserves chart-region position across direct count correction while retaining repeat mapping', () => {
+    const guide = { id: 'guide', linkedCounterId: 'base', position: 0.2, chartRegion: { x: 0, y: 0.2, width: 1, height: 0.6, firstRow: 1, lastRow: 4, startCounterRow: 40, repeat: true, direction: 'top-to-bottom' as const } }
+    const before = guidePositionForRow(guide, 42)
+    const corrected = reanchorProgressGuideForCounter(guide, 42, 68)
+    expect(guidePositionForRow(corrected, 68)).toBeCloseTo(before)
+    expect(guidePositionForRow(corrected, 69)).toBeCloseTo(guidePositionForRow(guide, 43))
+  })
+
+  it('clears the marker when the counter row changes even if the line is clamped', () => {
+    const guide = { id: 'guide', role: 'primary' as const, position: 0.99, linkedCounterId: 'base', rowSpacing: 0.05, rowSpacingStartRow: 4, rowSpacingDirection: 'down' as const, markerProgress: 0.6 }
+    const moved = progressGuideForCounter(guide, { ...createCounter('simple'), id: 'base', value: 5 }, 4)
+    expect(moved.position).toBe(1)
+    expect(moved.markerProgress).toBeUndefined()
   })
 
   it('plays one task sound only for the matching completed row entry', () => {

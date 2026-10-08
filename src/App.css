@@ -389,7 +389,6 @@
 .pdf-pane { flex: 1 1 0; }
 .pdf-image-layer { position: relative; flex: 0 0 auto; background: #fff; box-shadow: 0 4px 18px rgba(27,35,51,.15); }
 .pdf-image-layer canvas { width: 100%; height: 100%; box-shadow: none; }
-.pdf-image-layer .pdf-focus-overlay { position: absolute; z-index: 1; inset: 0; width: 100%; height: 100%; opacity: 1; background: transparent; pointer-events: none; }
 .pdf-svg-overlay { position: absolute; z-index: 2; inset: 0; width: 100%; height: 100%; overflow: visible; touch-action: none; }
 .pdf-svg-overlay.draw-mode { cursor: crosshair; }
 .pdf-svg-overlay.text-mode { cursor: text; }
@@ -402,9 +401,7 @@
 .progress-line-overlay > svg { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; pointer-events: none; touch-action: none; }
 .progress-line-overlay button, .progress-line-overlay input, .progress-line-overlay select { pointer-events: auto; }
 .progress-line-menu-trigger { position: absolute; z-index: 5; width: 44px; height: 44px; display: grid; place-items: center; padding: 0; transform: translate(-50%,-50%); border: 1px solid #e2e7ef; border-radius: 50%; color: #172033; background: rgba(255,255,255,.97); box-shadow: 0 2px 9px rgba(27,35,51,.17); font-size: 20px; line-height: 1; cursor: pointer; }
-.progress-adjust-controls { position: absolute; z-index: 6; left: 8px; display: flex; gap: 6px; }
-.progress-adjust-controls button { min-width: 44px; min-height: 44px; padding: 0 12px; border: 1px solid #e2e7ef; border-radius: 24px; color: #253148; background: rgba(255,255,255,.97); box-shadow: 0 2px 8px rgba(27,35,51,.14); font: inherit; font-size: 13px; cursor: pointer; }
-.progress-line-menu { position: absolute; z-index: 7; width: min(220px, calc(100% - 12px)); display: grid; gap: 3px; padding: 8px; border: 1px solid #e6eaf1; border-radius: 14px; color: #1f2a3c; background: rgba(255,255,255,.98); box-shadow: 0 8px 28px rgba(27,35,51,.2); pointer-events: auto; }
+.progress-line-menu { position: absolute; z-index: 7; width: min(220px, calc(100% - 12px)); max-height: calc(100% - 12px); display: grid; gap: 3px; overflow: auto; padding: 8px; border: 1px solid #e6eaf1; border-radius: 14px; color: #1f2a3c; background: rgba(255,255,255,.98); box-shadow: 0 8px 28px rgba(27,35,51,.2); pointer-events: auto; }
 .progress-line-menu > button, .progress-line-menu > label { min-height: 40px; display: flex; align-items: center; gap: 8px; padding: 4px 9px; border: 0; border-radius: 8px; color: inherit; background: transparent; font: inherit; font-size: 12px; text-align: left; cursor: pointer; }
 .progress-line-menu > button:hover:not(:disabled) { background: #f1f4fa; }
 .progress-line-menu > button:disabled { opacity: .45; cursor: not-allowed; }
@@ -413,22 +410,19 @@
 .progress-color-presets { display: flex; gap: 8px; padding: 7px; }
 .progress-color-presets button { width: 26px; height: 26px; border: 2px solid white; border-radius: 50%; box-shadow: 0 0 0 1px #ccd4e0; cursor: pointer; }
 .progress-line-menu > label:has(input[type="range"]) { display: grid; grid-template-columns: auto 1fr; }
-.progress-focus-toggle input { accent-color: #7655ed; }
 .progress-line-menu > label select { min-height: 34px; margin-left: auto; border: 1px solid #dfe5ed; border-radius: 7px; color: #3b4960; background: #fff; }
-.progress-spacing-prompt, .progress-line-notice { position: absolute; z-index: 8; left: 50%; bottom: 14px; display: flex; align-items: center; gap: 10px; max-width: calc(100% - 24px); min-height: 44px; padding: 6px 10px 6px 14px; transform: translateX(-50%); border: 1px solid #e3e8f1; border-radius: 24px; color: #26334a; background: rgba(255,255,255,.98); box-shadow: 0 3px 14px rgba(27,35,51,.17); font-size: 12px; pointer-events: auto; }
-.progress-spacing-prompt button, .progress-line-notice button { min-height: 34px; padding: 0 9px; border: 0; border-radius: 18px; color: #6248d7; background: #f0edff; font: inherit; cursor: pointer; }
+.progress-line-notice, .progress-calibration-prompt { position: absolute; z-index: 8; left: 50%; bottom: 14px; display: flex; align-items: center; gap: 8px; max-width: calc(100% - 24px); min-height: 44px; padding: 6px 10px 6px 14px; transform: translateX(-50%); border: 1px solid #e3e8f1; border-radius: 22px; color: #26334a; background: rgba(255,255,255,.98); box-shadow: 0 3px 14px rgba(27,35,51,.17); font-size: 12px; pointer-events: auto; }
+.progress-calibration-prompt { flex-wrap: wrap; justify-content: center; width: max-content; }
+.progress-calibration-prompt > span { flex: 1 1 100%; text-align: center; }
+.progress-calibration-prompt button, .progress-line-notice button { min-height: 34px; padding: 0 9px; border: 0; border-radius: 18px; color: #6248d7; background: #f0edff; font: inherit; cursor: pointer; }
+.progress-calibration-prompt .progress-calibration-cancel { color: #647087; background: #f0f2f6; }
+.progress-connect-options { display: grid; gap: 4px; padding: 3px 6px 6px; }
+.progress-connect-options select { min-width: 0; min-height: 36px; padding: 0 7px; border: 1px solid #dfe5ed; border-radius: 7px; color: #3b4960; background: #fff; font: inherit; font-size: 11px; }
+.progress-connect-options button { min-height: 36px; padding: 4px 8px; border: 0; border-radius: 8px; color: inherit; background: #f5f3ff; font: inherit; font-size: 11px; text-align: left; cursor: pointer; }
+.progress-connect-options button:disabled { opacity: .45; cursor: not-allowed; }
+.progress-focus-strength { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 4px 9px; color: #526078; font-size: 11px; }
 .progress-start-button { position: absolute; top: 50%; left: 50%; min-height: 44px; padding: 0 16px; transform: translate(-50%,-50%); border: 0; border-radius: 22px; color: #fff; background: #7655ed; box-shadow: 0 3px 12px rgba(70,54,154,.26); font: inherit; cursor: pointer; pointer-events: auto; }
-.progress-migration-modal { width: min(100%, 520px); }
-.progress-migration-modal > p { margin: 0 0 14px; color: #657188; font-size: 13px; line-height: 1.6; }
-.progress-migration-primary { display: grid; gap: 6px; color: #344259; font-size: 13px; }
-.progress-migration-primary select { min-height: 42px; padding: 0 10px; border: 1px solid #dfe5ed; border-radius: 8px; color: #344259; background: #fff; font: inherit; }
-.progress-migration-references { display: grid; gap: 8px; margin: 16px 0; padding: 10px 12px; border: 1px solid #e5eaf1; border-radius: 9px; }
-.progress-migration-references legend { padding: 0 4px; color: #344259; font-size: 12px; }
-.progress-migration-references label { display: flex; align-items: center; gap: 8px; color: #56647a; font-size: 12px; }
-.progress-migration-references input { accent-color: #7655ed; }
-.progress-migration-note { margin-top: 10px !important; padding: 9px 11px; border-radius: 8px; color: #66549f !important; background: #f5f2ff; }
-.progress-migration-reminder { position: absolute; z-index: 20; top: 72px; left: 50%; display: flex; align-items: center; gap: 10px; max-width: calc(100% - 24px); min-height: 44px; padding: 5px 8px 5px 14px; transform: translateX(-50%); border: 1px solid #e3e8f1; border-radius: 24px; color: #344259; background: rgba(255,255,255,.97); box-shadow: 0 3px 14px rgba(27,35,51,.14); font-size: 12px; }
-.progress-migration-reminder button { min-height: 34px; padding: 0 12px; border: 0; border-radius: 18px; color: #fff; background: #7655ed; font: inherit; cursor: pointer; }
+.progress-start-button:disabled { opacity: .5; cursor: not-allowed; }
 .pdf-scroll-area:has(.draw-mode) { cursor: crosshair; }
 .pdf-scroll-area:has(.draw-mode):active { cursor: crosshair; }
 .guide-add-button, .guide-remove-button { position: absolute; z-index: 4; width: 28px; height: 28px; display: grid; place-items: center; padding: 0; border: 1px solid #d7e0ec; border-radius: 50%; color: #50617a; background: rgba(255,255,255,.96); box-shadow: 0 2px 8px rgba(27,35,51,.14); cursor: pointer; }
@@ -546,23 +540,6 @@
 .colorwork-settings-error { margin: 12px 20px 0; color: #b13f4b; font-size: 11px; }
 .colorwork-settings-actions { display: flex; justify-content: flex-end; gap: 8px; padding: 0 20px; margin-top: 16px; }
 .viewer-navigation .text-control { padding: 0 7px; }
-.progress-settings-modal { width: min(100%, 560px); }
-.progress-settings-list { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; padding: 16px; }
-.progress-setting { min-width: 0; display: grid; gap: 12px; padding: 13px; border: 1px solid #e7ebf1; border-radius: 11px; }
-.progress-setting legend { padding: 0 4px; color: #4f5d73; font-size: 12px; font-weight: 650; }
-.progress-setting legend label, .progress-setting > label { display: flex; align-items: center; gap: 7px; }
-.progress-setting > label { justify-content: space-between; color: #66738a; font-size: 10px; }
-.progress-setting input[type="range"] { width: 100%; accent-color: var(--blue); }
-.progress-setting input[type="color"] { width: 30px; height: 25px; margin-left: auto; padding: 2px; border: 1px solid #dfe5ed; border-radius: 6px; background: #fff; }
-.progress-setting > label:has(input[type="range"]) { display: grid; grid-template-columns: auto 1fr; }
-.progress-setting > label:has(input[type="range"]) span { justify-self: end; }
-.guide-position-list { display: grid; gap: 5px; }
-.guide-position-list > strong { display: flex; justify-content: space-between; color: #66738a; font-size: 10px; font-weight: 600; }
-.guide-position-list > strong span { color: #98a2b2; font-weight: 400; }
-.guide-position-list > div { display: grid; grid-template-columns: 18px 1fr 28px; align-items: center; gap: 5px; color: #8792a4; font-size: 10px; }
-.guide-position-list input[type="range"] { width: 100%; accent-color: var(--blue); }
-.guide-position-list .icon-button { width: 27px; height: 27px; }
-.guide-add-setting { min-height: 32px; font-size: 10px; }
 
 @media (max-width: 1000px) {
   .viewer-controlbar { flex-direction: column; align-items: stretch; gap: 2px; }
@@ -584,11 +561,10 @@
   .viewer-page-control-button { width: 44px; height: 44px; }
   .viewer-tools .viewer-tool, .viewer-navigation .viewer-tool { min-height: 32px; padding: 0 5px; }
   .viewer-navigation { gap: 1px; }
-  .progress-settings-list { grid-template-columns: 1fr; }
 }
 @media (max-width: 430px) {
   .viewer-tools .tool-toggle { min-width: 33px; padding: 0 5px; }
-  .viewer-tools .tool-toggle span, .viewer-tools .viewer-tool[aria-label="진행선 설정"] span { display: none; }
+.viewer-tools .tool-toggle span, .viewer-tools .progress-toggle-tool span { display: none; }
   .annotation-style-controls { gap: 5px; padding: 0 4px; }
   .annotation-style-controls label span { display: none; }
   .annotation-style-controls input[type="range"] { width: 38px; }
@@ -1028,25 +1004,6 @@
 .guide-focus-settings summary { cursor: pointer; font-weight: 600; }
 .guide-focus-settings > label { display: flex; align-items: center; gap: 5px; margin-top: 7px; }
 .guide-focus-fields { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 7px; margin-top: 7px; }
-.guide-focus-fields label, .progress-connection-settings > label, .guide-connection-wizard > label { display: grid; gap: 4px; color: #758198; font-size: 9px; }
-.guide-focus-fields select, .guide-focus-fields input, .progress-connection-settings select, .guide-connection-wizard select, .guide-connection-wizard input[type="number"], .guide-connection-wizard input:not([type]) { min-width: 0; min-height: 32px; padding: 0 7px; border: 1px solid #dfe5ed; border-radius: 6px; color: #44546c; background: #fff; font: inherit; }
-.progress-connection-settings { display: grid; gap: 8px; padding: 12px; border: 1px solid #e0e7f0; border-radius: 10px; background: #f9fbfe; }
-.progress-connection-settings { grid-column: 1 / -1; }
-.progress-connection-settings h3 { display: flex; align-items: center; gap: 6px; margin: 0; color: #38567f; font-size: 12px; }
-.progress-connection-settings > p { margin: 0; color: #7d899a; font-size: 10px; line-height: 1.45; }
-.progress-connection-settings .guide-connect-start { min-height: 36px; justify-content: center; }
-.guide-connection-wizard { display: grid; gap: 8px; padding: 10px; border: 1px solid #d9e5f4; border-radius: 8px; background: #fff; }
-.guide-connection-wizard > strong { color: #355783; font-size: 10px; }
-.guide-connection-wizard > p, .guide-wizard-hint { margin: 0; color: #78869b; font-size: 9px; line-height: 1.5; }
-.guide-connection-wizard > label:has(input[type="checkbox"]) { display: flex; align-items: center; gap: 5px; }
-.guide-region-grid { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 7px; }
-.guide-region-grid label { display: grid; gap: 4px; color: #758198; font-size: 9px; }
-.guide-linked-name { grid-column: 2 / -1; padding: 0 4px 5px; font-size: 9px; font-weight: 650; }
-.guide-counter-move { grid-column: 2 / -1; display: flex; flex-wrap: wrap; align-items: end; gap: 5px; padding: 0 3px 5px; }
-.guide-counter-move label { display: grid; gap: 3px; color: #758198; font-size: 9px; }
-.guide-counter-move input { width: 78px; height: 30px; padding: 0 6px; border: 1px solid #dfe5ed; border-radius: 6px; }
-.guide-counter-move .secondary-button, .guide-counter-move .text-button { min-height: 30px; padding: 0 8px; font-size: 9px; }
-
 .photo-import-form { gap: 12px; }
 .photo-import-actions { display: flex; flex-wrap: wrap; gap: 8px; }
 .photo-import-actions .secondary-button { min-height: 38px; padding: 0 11px; font-size: 12px; }

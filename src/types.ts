@@ -19,6 +19,7 @@ export interface ProgressGuideScreenPosition {
   position: number
   xStartRatio: number
   xEndRatio: number
+  positionOffset?: number
   rowSpacing?: number
   rowSpacingStartRow?: number
   rowSpacingDirection?: 'up' | 'down'
@@ -36,6 +37,8 @@ export interface ProgressGuide {
   rowSpacing?: number
   rowSpacingStartRow?: number
   rowSpacingDirection?: 'up' | 'down'
+  counterRowOffset?: number
+  positionOffset?: number
   name?: string
   color?: string
   linkedCounterId?: string

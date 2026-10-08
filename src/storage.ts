@@ -730,7 +730,7 @@ export async function getPageWork(id: string, pageNumber: number): Promise<PageW
     horizontalPosition: 0.5,
     verticalPosition: 0.5,
     annotations: [],
-    horizontalGuides: [{ id: crypto.randomUUID(), position: 0.5, role: 'primary', xStartRatio: 0.15, xEndRatio: 0.85 }],
+    horizontalGuides: [],
     verticalGuides: [],
     progressMigration: 'complete',
   })

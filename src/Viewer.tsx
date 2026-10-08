@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState, type FormEvent as ReactFormEvent, type MouseEvent as ReactMouseEvent, type PointerEvent as ReactPointerEvent, type UIEvent as ReactUIEvent } from 'react'
 import type { PDFDocumentProxy } from 'pdfjs-dist'
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
-import { ArrowLeft, Bookmark, Check, ChevronDown, ChevronUp, Columns2, Eraser, Eye, EyeOff, Grid3X3, Hash, Highlighter, Link2, Maximize2, Minus, MousePointer2, Pencil, Plus, Redo2, RotateCw, SlidersHorizontal, Type, Undo2, X } from 'lucide-react'
+import { ArrowLeft, Bookmark, Check, ChevronDown, ChevronUp, Columns2, Eraser, Eye, EyeOff, Grid3X3, Hash, Highlighter, Maximize2, Minus, MousePointer2, Pencil, Plus, Redo2, RotateCw, Type, Undo2, X } from 'lucide-react'
 import BrandLoading from './BrandLoading'
 import yyLogo from './assets/yy-logo.png'
 import { cancelThumbnailRenders, PdfPage, PdfThumbnail, setThumbnailRenderingPaused, waitForThumbnailQueueIdle } from './PdfPage'
@@ -10,9 +10,9 @@ import { pdfPageRenderQueue } from './pdfPageRenderQueue'
 import { openPdf, pdfErrorMessage } from './pdf'
 import { openPhotoDocument } from './photoDocument'
 import KnittingReport from './KnittingReport'
-import type { AnnotationSettings, AnnotationStyle, AnnotationTool, ColorworkCreateRequest, ColorworkSettings, CounterHistoryEntry, CounterSnapshot, DocumentRecord, PageRecord, PageRotation, PageWorkRecord, PaneId, PaneSnapshot, ProgressChartRegion, ProgressGuide, ProgressSettings, ViewerSnapshot } from './types'
+import type { AnnotationSettings, AnnotationStyle, AnnotationTool, ColorworkCreateRequest, ColorworkSettings, CounterHistoryEntry, CounterSnapshot, DocumentRecord, PageRecord, PageRotation, PageWorkRecord, PaneId, PaneSnapshot, ProgressGuide, ProgressSettings, ViewerSnapshot } from './types'
 import { defaultColorworkSettings, getColorworkDimensions, resizeColorworkGrid } from './colorwork'
-import { MAX_COUNTER_HISTORY, MAX_COUNTER_ROW, advanceLinkedCounters, counterAlertState, findCounterRewindCheckpoint, guidePositionForRow, normalizeCounterSnapshots, progressGuideForCounter, restoreCounterGroup, setCounterGroupRow } from './smartCounter'
+import { MAX_COUNTER_HISTORY, MAX_COUNTER_ROW, advanceLinkedCounters, counterAlertState, findCounterRewindCheckpoint, normalizeCounterSnapshots, progressGuideForCounter, reanchorProgressGuideForCounter, restoreCounterGroup, setCounterGroupRow } from './smartCounter'
 import CounterPanel from './CounterPanel'
 import type { PdfQrLink } from './qr'
 import { withRecentPdfLinks } from './pdfRecognitionState'
@@ -20,7 +20,7 @@ import { applyColorworkCellChanges, type ColorworkCellChange } from './colorwork
 import { PageWorkPersistence } from './pageWorkPersistence'
 import { enqueuePdfRecognition, pausePdfRecognitionForReport, releasePdfRecognitionViewer, resumePdfRecognitionFromReport, subscribePdfRecognition, updatePdfRecognitionPageVisibility } from './pdfRecognition'
 import { getViewerResourcePolicy } from './pdfRenderResources'
-import { displayRectToPageRect, guidePositionForRotation, pageRectToDisplayRect } from './focusGeometry'
+import { guidePositionForRotation } from './focusGeometry'
 import { canHidePageSelection, compactPageThumbnails, completePageList, nextVisiblePageAfterHide, visiblePageRange } from './pageManagement'
 import { migrateProgressGuides, progressGuideCandidates } from './progressLines'
 
@@ -44,6 +44,7 @@ type ThumbnailTouchGesture = {
   timer: number
   edgeTimer?: number
 }
+type CounterGuideAction = { kind: 'advance' | 'correct'; pageNumber: number; guideId: string }
 
 function createCounterSession(documentId: string) { return { documentId, visible: false } }
 
@@ -114,152 +115,9 @@ function rememberRecentPage<T>(cache: Map<number, T>, pageNumber: number, value:
 function blankWork(documentId: string, pageNumber: number): PageWorkRecord {
   return {
     documentId, pageNumber, horizontalPosition: 0.5, verticalPosition: 0.5, annotations: [], progressMigration: 'complete',
-    horizontalGuides: [{ id: 'primary-default', position: 0.5, role: 'primary', xStartRatio: 0.15, xEndRatio: 0.85 }],
+    horizontalGuides: [],
     verticalGuides: [],
   }
-}
-
-function ProgressMigrationDialog({ work, counters, onMigrate, onDismiss }: {
-  work: PageWorkRecord
-  counters: CounterSnapshot[]
-  onMigrate: (work: PageWorkRecord) => void
-  onDismiss: () => void
-}) {
-  const candidates = progressGuideCandidates(work)
-  const initialPrimary = candidates.find(({ axis, guide }) => axis === 'horizontal' && guide.linkedCounterId) ?? candidates.find(({ axis }) => axis === 'horizontal') ?? candidates[0]
-  const keyOf = (axis: string, id: string) => axis + ':' + id
-  const [primaryKey, setPrimaryKey] = useState(initialPrimary ? keyOf(initialPrimary.axis, initialPrimary.guide.id) : '')
-  const [referenceKeys, setReferenceKeys] = useState<string[]>([])
-  const selectedPrimary = candidates.find(({ axis, guide }) => keyOf(axis, guide.id) === primaryKey)
-
-  function toggleReference(key: string) {
-    setReferenceKeys((current) => current.includes(key) ? current.filter((item) => item !== key) : current.length < 2 ? [...current, key] : current)
-  }
-
-  return <div className="modal-backdrop" role="presentation"><section className="modal-card progress-migration-modal" role="dialog" aria-modal="true" aria-label="진행선 방식 선택">
-    <div className="modal-heading"><div><p className="eyebrow">PROGRESS LINE UPDATE</p><h2>진행선 방식을 선택해 주세요</h2></div></div>
-    <p>이 페이지의 기존 선 중 하나를 주 진행선으로 고르고, 필요하면 참고선을 최대 2개까지 선택할 수 있습니다. 선택하지 않은 기존 선과 설정은 복구용으로 보관합니다.</p>
-    {candidates.length ? <label className="progress-migration-primary">주 진행선<select value={primaryKey} onChange={(event) => setPrimaryKey(event.currentTarget.value)}>{candidates.map(({ axis, guide }) => {
-      const key = keyOf(axis, guide.id)
-      const linkedName = counters.find((counter) => counter.id === guide.linkedCounterId)?.name
-      return <option key={key} value={key}>{axis === 'horizontal' ? '가로선' : '세로선'} · {linkedName ?? guide.name ?? Math.round(guide.position * 100) + '%'}</option>
-    })}</select></label> : <p className="progress-migration-note">기존 선이 없어 현재 위치에 새 주 진행선을 만듭니다.</p>}
-    {candidates.length > 1 && <fieldset className="progress-migration-references"><legend>참고선 · 최대 2개</legend>{candidates.map(({ axis, guide }) => {
-      const key = keyOf(axis, guide.id)
-      const primary = key === primaryKey
-      return <label key={key}><input type="checkbox" checked={referenceKeys.includes(key)} disabled={primary || (!referenceKeys.includes(key) && referenceKeys.length >= 2)} onChange={() => toggleReference(key)} />{axis === 'horizontal' ? '가로선' : '세로선'} · {guide.name ?? Math.round(guide.position * 100) + '%'}</label>
-    })}</fieldset>}
-    {selectedPrimary?.axis === 'vertical' && <p className="progress-migration-note">선택한 세로선의 위치 비율을 새 가로 진행선에 적용합니다. 전환 후 선 위치와 길이를 조정할 수 있습니다.</p>}
-    <div className="modal-actions"><button type="button" className="secondary-button" onClick={onDismiss}>나중에</button><button type="button" className="primary-button" disabled={candidates.length > 0 && !primaryKey} onClick={() => onMigrate(migrateProgressGuides(work, primaryKey, referenceKeys))}>{candidates.length ? '선택한 방식으로 전환' : '새 진행선으로 시작'}</button></div>
-  </section></div>
-}
-
-function ProgressSettingsDialog({ settings, work, counters, rotation, autoPanGuideId, onAutoPanChange, onCounterGuideMove, onSettingsChange, onWorkChange, onClose }: {
-  settings: ProgressSettings
-  work: PageWorkRecord
-  counters: CounterSnapshot[]
-  rotation: PageRotation
-  autoPanGuideId: string | null
-  onAutoPanChange: (id: string | null) => void
-  onCounterGuideMove: (counterId: string, row: number) => void
-  onSettingsChange: (settings: ProgressSettings) => void
-  onWorkChange: (work: PageWorkRecord, before: PageWorkRecord, immediate?: boolean, recordHistory?: boolean) => void
-  onClose: () => void
-}) {
-  const [counterRowDrafts, setCounterRowDrafts] = useState<Record<string, string>>({})
-  const [connection, setConnection] = useState<{ guideId: string; counterId: string; region: ProgressChartRegion; positions: string; step: 1 | 2 | 3 } | null>(null)
-
-  function update(axis: 'horizontal' | 'vertical', change: Partial<ProgressSettings['horizontal']>) {
-    onSettingsChange({ ...settings, [axis]: { ...settings[axis], ...change } })
-  }
-
-  function guides(axis: 'horizontal' | 'vertical') {
-    return axis === 'horizontal' ? (work.horizontalGuides ?? []).filter((guide) => guide.role === 'primary') : []
-  }
-
-  function updateGuide(axis: 'horizontal' | 'vertical', id: string, change: Partial<ProgressGuide>) {
-    const key = axis === 'horizontal' ? 'horizontalGuides' : 'verticalGuides'
-    onWorkChange({ ...work, [key]: guides(axis).map((guide) => guide.id === id ? { ...guide, ...change } : guide) }, work)
-  }
-
-  function moveLinkedGuide(guide: ProgressGuide) {
-    if (!guide.linkedCounterId) return
-    const counter = counters.find((item) => item.id === guide.linkedCounterId)
-    const row = Number(counterRowDrafts[guide.id] ?? (counter?.kind === 'simple' ? counter.value : counter?.currentRow ?? 1))
-    if (!Number.isSafeInteger(row) || row < 1 || row > MAX_COUNTER_ROW) return
-    if (window.confirm((counter?.name ?? '카운터') + '의 현재 단을 ' + row + '단으로 이동할까요?')) onCounterGuideMove(guide.linkedCounterId, row)
-  }
-
-  function disconnectGuide(guide: ProgressGuide) {
-    updateGuide('horizontal', guide.id, { linkedCounterId: undefined, chartRegion: undefined, name: undefined, color: undefined, focus: guide.focus ? { ...guide.focus, scope: 'page' } : undefined })
-    if (autoPanGuideId === guide.id) onAutoPanChange(null)
-  }
-
-  function openConnection(guide?: ProgressGuide) {
-    const existing = guide ?? guides('horizontal')[0]
-    if (!existing) return
-    const storedRegion = existing.chartRegion
-    const region = storedRegion
-      ? { ...storedRegion, ...pageRectToDisplayRect(storedRegion, rotation) }
-      : { x: 0.1, y: 0.1, width: 0.8, height: 0.8, firstRow: 1, lastRow: 20, startCounterRow: 1, repeat: true, direction: 'top-to-bottom' as const }
-    setConnection({ guideId: existing.id, counterId: existing.linkedCounterId ?? counters[0]?.id ?? '', region, positions: region.rowPositions?.map((value) => String(Math.round(value * 100))).join(', ') ?? '', step: 1 })
-  }
-
-  function saveConnection() {
-    if (!connection) return
-    const guide = guides('horizontal').find((item) => item.id === connection.guideId)
-    const counter = counters.find((item) => item.id === connection.counterId)
-    if (!guide || !counter) return
-    const rowCount = connection.region.lastRow - connection.region.firstRow + 1
-    const positionEntries = connection.positions.split(',').map((value) => value.trim())
-    const rowPositions = positionEntries.length === rowCount && positionEntries.every((value) => value !== '' && Number.isFinite(Number(value)) && Number(value) >= 0 && Number(value) <= 100)
-      ? positionEntries.map((value) => Number(value) / 100)
-      : []
-    const displayedRegion = { ...connection.region, ...(rowPositions.length ? { rowPositions } : { rowPositions: undefined }) }
-    const pageRegion = { ...displayedRegion, ...displayRectToPageRect(displayedRegion, rotation), rowLayout: { top: connection.region.y, height: connection.region.height } }
-    const rotationPositions = Object.fromEntries(Object.entries(guide.rotationPositions ?? {}).map(([key, position]) => {
-      const screenPosition = { ...position }
-      delete screenPosition.rowSpacing
-      delete screenPosition.rowSpacingStartRow
-      delete screenPosition.rowSpacingDirection
-      return [key, screenPosition]
-    })) as ProgressGuide['rotationPositions']
-    const linkedGuide = { ...guide, rowSpacing: undefined, rowSpacingStartRow: undefined, rowSpacingDirection: undefined, rotationPositions, linkedCounterId: counter.id, name: counter.name, color: counter.color, chartRegion: pageRegion, markerProgress: undefined }
-    const currentRow = counter.kind === 'simple' ? counter.value : counter.currentRow ?? 1
-    const position = guidePositionForRow({ ...linkedGuide, chartRegion: displayedRegion }, currentRow)
-    const horizontalGuides = guides('horizontal').map((item) => item.id === guide.id ? { ...linkedGuide, position } : item)
-    onWorkChange({ ...work, horizontalGuides, horizontalPosition: position }, work)
-    setConnection(null)
-  }
-
-  const connectionGuide = connection ? guides('horizontal').find((guide) => guide.id === connection.guideId) : undefined
-  const connectionCounter = connection ? counters.find((counter) => counter.id === connection.counterId) : undefined
-  const connectionPosition = connection && connectionGuide && connectionCounter ? guidePositionForRow({ ...connectionGuide, chartRegion: connection.region }, connectionCounter.kind === 'simple' ? connectionCounter.value : connectionCounter.currentRow ?? 1) : undefined
-  const linkedGuides = guides('horizontal').filter((guide) => guide.linkedCounterId)
-
-  return (
-    <div className="modal-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) onClose() }}>
-      <section className="modal-card progress-settings-modal" role="dialog" aria-modal="true" aria-label="진행선 설정">
-        <div className="modal-heading"><div><p className="eyebrow">PROGRESS LINE</p><h2>진행선 설정</h2></div><button className="icon-button" aria-label="닫기" onClick={onClose}><X size={20} /></button></div>
-        <div className="progress-settings-list">
-          <fieldset className="progress-setting">
-            <legend>진행선 표시</legend>
-            <label><input type="checkbox" checked={settings.horizontal.visible} onChange={(event) => update('horizontal', { visible: event.currentTarget.checked })} />진행선 표시</label>
-            <p>선 길이와 위치, 마커, 표시 스타일은 도안 위 진행선 메뉴에서 조정합니다.</p>
-          </fieldset>
-          <section className="progress-connection-settings"><h3><Link2 size={16} />카운터에 연결</h3><p>단수와 차트 줄을 연결하면 진행선이 이동합니다.</p><label>자동 화면 이동 기준<select value={autoPanGuideId ?? ''} onChange={(event) => onAutoPanChange(event.currentTarget.value || null)}><option value="">사용 안 함</option>{linkedGuides.map((guide) => <option key={guide.id} value={guide.id}>{guide.name ?? counters.find((counter) => counter.id === guide.linkedCounterId)?.name ?? '연결 진행선'}</option>)}</select></label>
-            {linkedGuides.length > 0 && <div className="guide-position-list"><strong>연결된 진행선</strong>{linkedGuides.map((guide) => {
-              const counter = counters.find((item) => item.id === guide.linkedCounterId)
-              const row = counter?.kind === 'simple' ? counter.value : counter?.currentRow ?? 1
-              return <div key={guide.id} className="guide-counter-move"><span>{guide.name ?? counter?.name ?? '연결 진행선'}</span><label>단 이동<input aria-label={(guide.name ?? '연결 진행선') + ' 이동할 단'} type="number" min="1" max={MAX_COUNTER_ROW} value={counterRowDrafts[guide.id] ?? String(row)} onChange={(event) => setCounterRowDrafts((current) => ({ ...current, [guide.id]: event.currentTarget.value }))} /></label><button type="button" className="secondary-button" onClick={() => moveLinkedGuide(guide)}>단 이동 확인</button><button type="button" className="text-button" onClick={() => disconnectGuide(guide)}>연결 해제</button></div>
-            })}</div>}
-            <button type="button" className="secondary-button guide-connect-start" disabled={!guides('horizontal').length || !counters.length} onClick={() => openConnection()}><Link2 size={15} />3단계 연결 설정</button>
-            {connection && <div className="guide-connection-wizard"><strong>{connection.step}/3 · {connection.step === 1 ? '카운터와 가로선 선택' : connection.step === 2 ? '차트 영역 지정' : '현재 줄 확인'}</strong>{connection.step === 1 && <><label>연결할 가로선<select value={connection.guideId} onChange={(event) => setConnection((current) => current ? { ...current, guideId: event.currentTarget.value } : current)}>{guides('horizontal').map((guide, index) => <option key={guide.id} value={guide.id}>{guide.name ?? '가로선 ' + (index + 1)}</option>)}</select></label><label>카운터<select value={connection.counterId} onChange={(event) => setConnection((current) => current ? { ...current, counterId: event.currentTarget.value } : current)}>{counters.map((counter) => <option key={counter.id} value={counter.id}>{counter.name} · 현재 {counter.kind === 'simple' ? counter.value : counter.currentRow ?? 1}단</option>)}</select></label><button type="button" className="primary-button" disabled={!connection.counterId} onClick={() => setConnection((current) => current ? { ...current, step: 2 } : current)}>다음</button></>}{connection.step === 2 && <><div className="guide-region-grid">{([['x', '왼쪽'], ['y', '위쪽'], ['width', '너비'], ['height', '높이']] as const).map(([key, label]) => <label key={key}>{label} (%)<input type="number" min="0" max="100" step="1" value={Math.round(connection.region[key] * 100)} onChange={(event) => setConnection((current) => current ? { ...current, region: { ...current.region, [key]: Number(event.currentTarget.value) / 100 } } : current)} /></label>)}</div><div className="guide-region-grid"><label>첫 차트 단<input type="number" min="1" max={MAX_COUNTER_ROW} value={connection.region.firstRow} onChange={(event) => setConnection((current) => current ? { ...current, region: { ...current.region, firstRow: Number(event.currentTarget.value) } } : current)} /></label><label>마지막 차트 단<input type="number" min={connection.region.firstRow} max={MAX_COUNTER_ROW} value={connection.region.lastRow} onChange={(event) => setConnection((current) => current ? { ...current, region: { ...current.region, lastRow: Number(event.currentTarget.value) } } : current)} /></label><label>연결 시작 단<input type="number" min="1" max={MAX_COUNTER_ROW} value={connection.region.startCounterRow} onChange={(event) => setConnection((current) => current ? { ...current, region: { ...current.region, startCounterRow: Number(event.currentTarget.value) } } : current)} /></label></div><label><input type="checkbox" checked={connection.region.repeat} onChange={(event) => setConnection((current) => current ? { ...current, region: { ...current.region, repeat: event.currentTarget.checked } } : current)} />마지막 단 뒤 첫 줄로 반복</label><label>진행 방향<select value={connection.region.direction} onChange={(event) => setConnection((current) => current ? { ...current, region: { ...current.region, direction: event.currentTarget.value as ProgressChartRegion['direction'] } } : current)}><option value="top-to-bottom">위에서 아래로</option><option value="bottom-to-top">아래에서 위로</option></select></label><label>불규칙한 줄 위치 보정(페이지 위 기준 %, 쉼표 구분)<input value={connection.positions} onChange={(event) => setConnection((current) => current ? { ...current, positions: event.currentTarget.value } : current)} placeholder="예: 12, 18, 23, 31" /></label><p className="guide-wizard-hint">줄 수와 위치 개수가 다르면 균등 간격을 사용합니다.</p><div className="modal-actions"><button type="button" className="secondary-button" onClick={() => setConnection((current) => current ? { ...current, step: 1 } : current)}>이전</button><button type="button" className="primary-button" disabled={!Number.isFinite(connection.region.x) || !Number.isFinite(connection.region.y) || !Number.isFinite(connection.region.width) || !Number.isFinite(connection.region.height) || connection.region.x < 0 || connection.region.y < 0 || connection.region.width <= 0 || connection.region.height <= 0 || connection.region.x + connection.region.width > 1 || connection.region.y + connection.region.height > 1 || !Number.isSafeInteger(connection.region.firstRow) || !Number.isSafeInteger(connection.region.lastRow) || !Number.isSafeInteger(connection.region.startCounterRow) || connection.region.firstRow < 1 || connection.region.lastRow < connection.region.firstRow || connection.region.lastRow > MAX_COUNTER_ROW || connection.region.startCounterRow < 1 || connection.region.startCounterRow > MAX_COUNTER_ROW} onClick={() => setConnection((current) => current ? { ...current, step: 3 } : current)}>다음</button></div></>}{connection.step === 3 && <><p>{connectionCounter?.name} · 현재 {connectionCounter?.kind === 'simple' ? connectionCounter.value : connectionCounter?.currentRow ?? 1}단</p><p>예상 진행선 위치: {connectionPosition === undefined ? '확인할 수 없음' : Math.round(connectionPosition * 100) + '%'} · {connection.region.direction === 'top-to-bottom' ? '위에서 아래' : '아래에서 위'} 방향</p><p>연결하면 카운터의 이름과 색을 따릅니다. 위치 보정은 카운터 숫자를 바꾸지 않습니다.</p><div className="modal-actions"><button type="button" className="secondary-button" onClick={() => setConnection((current) => current ? { ...current, step: 2 } : current)}>이전</button><button type="button" className="primary-button" onClick={saveConnection}>연결 완료</button></div></>}</div>}
-          </section>
-        </div>
-      </section>
-    </div>
-  )
 }
 
 function ColorworkSettingsDialog({ initial, onClose, onApply }: {
@@ -381,8 +239,6 @@ export default function Viewer() {
   const [colorworkBrushColor, setColorworkBrushColor] = useState('#F1C40F')
   const [colorworkBrushOpacity, setColorworkBrushOpacity] = useState(0.25)
   const [colorworkEraser, setColorworkEraser] = useState(false)
-  const [progressDialog, setProgressDialog] = useState(false)
-  const [progressMigrationDismissed, setProgressMigrationDismissed] = useState<string | null>(null)
   const [pdfLinksByPage, setPdfLinksByPage] = useState<Record<number, PdfQrLink[]>>({})
   const pdfLinkPagesRef = useRef(new Map<number, true>())
   const recognitionLoadPendingRef = useRef(new Set<string>())
@@ -766,12 +622,10 @@ export default function Viewer() {
   const selectedThumbnailSet = new Set(selectedThumbnailPages)
   const hideSelectionWouldRemoveLastPage = selectedThumbnailPages.length > 0 && !canHidePageSelection(pdf?.numPages ?? 0, hiddenNumbers, selectedThumbnailSet)
   const progressSettings = snapshot?.progressSettings ?? defaultProgressSettings
-  const progressMigrationKey = id + ':' + activePage
   const annotationSettings = snapshot?.annotationSettings ?? defaultAnnotationSettings
   const activeAnnotationStyle = tool === 'pen' || tool === 'line' || tool === 'highlight' || tool === 'text' ? annotationSettings[tool] : null
   const activeHistory = histories[activePage] ?? { actions: [], cursor: 0, byteCosts: [] }
   const activeWork = pageWorks[activePage] ?? blankWork(id, activePage)
-  const progressMigrationPending = activeWork.progressMigration === 'pending'
   const activeZoom = snapshot ? snapshot[snapshot.activePane].zoom : 1
   const activeRotation = snapshot ? snapshot[snapshot.activePane].rotations?.[activePage] ?? activeWork.rotation ?? 0 : 0
   const activeColorworkGrid = activeWork.colorworkGrid ?? null
@@ -909,7 +763,7 @@ export default function Viewer() {
     mutateSnapshot((current) => ({ ...current, [paneId]: change(current[paneId]) }), immediate)
   }
 
-  function commitCounterTransaction(nextCounters: CounterSnapshot[], label: string, actualRow = 0, restoreGuides?: CounterHistoryEntry['guides'], saveHistory = true, autoPanY?: number, baseCounterId?: string, snapshotChanges?: Partial<ViewerSnapshot>) {
+  function commitCounterTransaction(nextCounters: CounterSnapshot[], label: string, actualRow = 0, restoreGuides?: CounterHistoryEntry['guides'], saveHistory = true, autoPanY?: number, baseCounterId?: string, snapshotChanges?: Partial<ViewerSnapshot>, guideAction?: CounterGuideAction) {
     const operation = counterActionQueueRef.current.then(async () => {
       const current = snapshotRef.current
       if (!current) return
@@ -922,6 +776,7 @@ export default function Viewer() {
         await pageWorkPersistence.flushAll()
         const works = await getPageWorks(id)
         const counterById = new Map(nextCounters.map((counter) => [counter.id, counter]))
+        const previousCounterById = new Map(normalizeCounterSnapshots(current.counters).map((counter) => [counter.id, counter]))
         const restoreByPage = new Map((restoreGuides ?? []).map((item) => [item.pageNumber, item]))
         const beforeGuides: CounterHistoryEntry['guides'] = []
         const updatedWorks: PageWorkRecord[] = []
@@ -936,7 +791,7 @@ export default function Viewer() {
             nextHorizontal = horizontalGuides.map((guide) => savedById.has(guide.id) ? { ...guide, ...savedById.get(guide.id) } : guide)
             nextVertical = verticalGuides.map((guide) => savedById.has(guide.id) ? { ...guide, ...savedById.get(guide.id) } : guide)
           } else {
-            const updateGuides = (guides: ProgressGuide[]) => guides.map((guide) => {
+          const updateGuides = (guides: ProgressGuide[], pageNumber: number) => guides.map((guide) => {
               if (guide.linkedCounterId && !counterById.has(guide.linkedCounterId)) {
                 return {
                   ...guide,
@@ -948,12 +803,19 @@ export default function Viewer() {
                 }
               }
               const counter = guide.linkedCounterId ? counterById.get(guide.linkedCounterId) : undefined
-              if (!counter) return guide
-              const updated = progressGuideForCounter(guide, counter)
-              return updated.position === guide.position && updated.name === guide.name && updated.color === guide.color ? guide : updated
+              if (!counter || !guideAction || guideAction.pageNumber !== pageNumber || guideAction.guideId !== guide.id || guide.role !== 'primary') return guide
+              const previousCounter = previousCounterById.get(counter.id)
+              const rowOf = (item: CounterSnapshot | undefined) => item ? item.kind === 'simple' ? item.value : item.currentRow ?? 1 : 1
+              const updated = guideAction.kind === 'advance'
+                ? progressGuideForCounter(guide, counter, rowOf(previousCounter))
+                : reanchorProgressGuideForCounter(guide, rowOf(previousCounter), rowOf(counter))
+              const changed = updated.position !== guide.position || updated.name !== guide.name || updated.color !== guide.color ||
+                updated.markerProgress !== guide.markerProgress || updated.rowSpacingStartRow !== guide.rowSpacingStartRow ||
+                updated.counterRowOffset !== guide.counterRowOffset || JSON.stringify(updated.rotationPositions) !== JSON.stringify(guide.rotationPositions)
+              return changed ? updated : guide
             })
-            nextHorizontal = updateGuides(horizontalGuides)
-            nextVertical = updateGuides(verticalGuides)
+            nextHorizontal = updateGuides(horizontalGuides, work.pageNumber)
+            nextVertical = updateGuides(verticalGuides, work.pageNumber)
           }
           const changed = nextHorizontal.some((guide, index) => guide !== horizontalGuides[index]) || nextVertical.some((guide, index) => guide !== verticalGuides[index])
           if (!changed) continue
@@ -1013,11 +875,67 @@ export default function Viewer() {
       pushSnapshot({ ...current, counterPanelCollapsed: label.slice(6) === 'true' }, true)
       return
     }
-    commitCounterTransaction(nextCounters, label)
+    commitCounterTransaction(nextCounters, label, 0, undefined, true, undefined, undefined, undefined, counterGuideCorrection(current, nextCounters))
+  }
+
+  function counterGuideCorrection(current: ViewerSnapshot, nextCounters: CounterSnapshot[]): CounterGuideAction | undefined {
+    const rowOf = (counter: CounterSnapshot) => counter.kind === 'simple' ? counter.value : counter.currentRow ?? 1
+    const previous = new Map(normalizeCounterSnapshots(current.counters).map((counter) => [counter.id, counter]))
+    const changedIds = new Set(nextCounters.flatMap((counter) => {
+      const before = previous.get(counter.id)
+      return before && rowOf(before) !== rowOf(counter) ? [counter.id] : []
+    }))
+    if (!changedIds.size) return undefined
+    const pageNumber = current[current.activePane].page
+    const guide = (workRef.current[pageNumber]?.horizontalGuides ?? []).find((item) => item.role === 'primary' && item.linkedCounterId && changedIds.has(item.linkedCounterId))
+    return guide ? { kind: 'correct', pageNumber, guideId: guide.id } : undefined
+  }
+
+  function toggleProgressLines() {
+    const current = snapshotRef.current
+    if (!current) return
+    const pageNumber = current[current.activePane].page
+    const before = workRef.current[pageNumber]
+    if (!before) return
+    const settings = current.progressSettings ?? defaultProgressSettings
+    const primary = before.horizontalGuides?.find((guide) => guide.role === 'primary')
+    if (primary) {
+      mutateSnapshot((snapshot) => ({ ...snapshot, progressSettings: { ...settings, horizontal: { ...settings.horizontal, visible: !settings.horizontal.visible } } }), true)
+      return
+    }
+
+    const visibleRect = (() => {
+      const overlay = document.querySelector<SVGSVGElement>('.pdf-pane.is-active .progress-line-overlay > svg')
+      const scrollArea = overlay?.closest('.pdf-scroll-area')
+      if (!overlay || !scrollArea) return null
+      const pageRect = overlay.getBoundingClientRect()
+      const scrollRect = scrollArea.getBoundingClientRect()
+      const left = Math.max(pageRect.left, scrollRect.left)
+      const right = Math.min(pageRect.right, scrollRect.right)
+      const top = Math.max(pageRect.top, scrollRect.top)
+      const bottom = Math.min(pageRect.bottom, scrollRect.bottom)
+      if (right <= left || bottom <= top) return null
+      return { x: ((left + right) / 2 - pageRect.left) / Math.max(1, pageRect.width), y: ((top + bottom) / 2 - pageRect.top) / Math.max(1, pageRect.height) }
+    })()
+    const lineWidth = 0.65
+    const lineStart = clamp((visibleRect?.x ?? 0.5) - lineWidth / 2, 0, 1 - lineWidth)
+    let next: PageWorkRecord
+    if (before.progressMigration === 'pending') {
+      const candidates = progressGuideCandidates(before)
+      const preferred = candidates.find(({ axis, guide }) => axis === 'horizontal' && guide.linkedCounterId) ?? candidates.find(({ axis }) => axis === 'horizontal') ?? candidates[0]
+      next = migrateProgressGuides(before, preferred ? preferred.axis + ':' + preferred.guide.id : '', [])
+    } else {
+      const guide: ProgressGuide = { id: crypto.randomUUID(), position: clamp(visibleRect?.y ?? 0.5, 0, 1), role: 'primary', xStartRatio: lineStart, xEndRatio: lineStart + lineWidth }
+      next = { ...before, progressMigration: 'complete', horizontalGuides: [...(before.horizontalGuides ?? []), guide] }
+    }
+    setPageWork(next, true, true, before)
+    if (!settings.horizontal.visible) mutateSnapshot((snapshot) => ({ ...snapshot, progressSettings: { ...settings, horizontal: { ...settings.horizontal, visible: true } } }), true)
   }
 
   function saveCounterSettings(nextCounters: CounterSnapshot[], changes: Partial<ViewerSnapshot>, label: string) {
-    commitCounterTransaction(nextCounters, label, 0, undefined, false, undefined, undefined, changes)
+    const current = snapshotRef.current
+    if (!current) return
+    commitCounterTransaction(nextCounters, label, 0, undefined, false, undefined, undefined, changes, counterGuideCorrection(current, nextCounters))
   }
 
   function updateCounterSnapshot(changes: Partial<ViewerSnapshot>) {
@@ -1043,37 +961,9 @@ export default function Viewer() {
     const linkedCounter = linkedGuide ? nextCounters.find((counter) => counter.id === linkedGuide.linkedCounterId) : undefined
     const linkedRow = linkedCounter?.kind === 'simple' ? linkedCounter.value : linkedCounter?.currentRow ?? 1
     const autoPanY = linkedGuide && linkedCounter ? guidePositionForRotation(linkedGuide, linkedRow, activeRotation) : undefined
+    const primaryGuide = (activeWork?.horizontalGuides ?? []).find((guide) => guide.role === 'primary' && guide.linkedCounterId === base.id)
     const label = base.name + ' · ' + base.value + (completingGoal ? '단 목표 완료' : '단 완료')
-    commitCounterTransaction(nextCounters, label, base.value, undefined, true, autoPanY, base.id)
-  }
-
-  function moveCounterFromGuide(counterId: string, row: number) {
-    const current = snapshotRef.current
-    if (!current) return
-    const currentCounters = normalizeCounterSnapshots(current.counters)
-    const counter = currentCounters.find((item) => item.id === counterId)
-    if (!counter) return
-    let next: CounterSnapshot[]
-    if (counter.linkedToId) {
-      next = setCounterGroupRow(currentCounters, counter.linkedToId, row)
-    } else if (counter.kind === 'simple' && counter.unit === 'row') {
-      next = setCounterGroupRow(currentCounters, counter.id, row)
-    } else if (counter.kind === 'pattern') {
-      const start = counter.startRow ?? 1
-      const length = counter.repeatLength ?? 1
-      const patternRow = row < start ? 1 : ((row - start) % length) + 1
-      next = currentCounters.map((item) => item.id === counter.id ? { ...item, currentRow: row, patternRow, value: patternRow } : item)
-    } else if (counter.kind === 'task') {
-      const taskRecords = (counter.taskRecords ?? []).filter((item) => item.row < row)
-      const completedCount = taskRecords.filter((item) => item.status === 'done').length
-      const first = counter.firstTaskRow ?? 1
-      const interval = counter.interval ?? 1
-      const nextTaskRow = first + Math.max(0, Math.ceil((row - first) / interval)) * interval
-      next = currentCounters.map((item) => item.id === counter.id ? { ...item, currentRow: row, taskRecords, completedCount, value: completedCount, nextTaskRow } : item)
-    } else {
-      next = currentCounters.map((item) => item.id === counter.id ? { ...item, value: row } : item)
-    }
-    commitCounterTransaction(next, counter.name + ' 진행선을 ' + row + '단으로 이동', row)
+    commitCounterTransaction(nextCounters, label, base.value, undefined, true, autoPanY, base.id, undefined, primaryGuide ? { kind: 'advance', pageNumber: activePage, guideId: primaryGuide.id } : undefined)
   }
 
   function setCounterValue(counterId: string, value: number) {
@@ -1089,7 +979,7 @@ export default function Viewer() {
         : counter.kind === 'pattern' ? { ...counter, currentRow: Math.max(1, bounded) }
         : { ...counter, value: bounded, completedCount: bounded })
     const edited = next.find((counter) => counter.id === counterId)
-    commitCounterTransaction(next, (edited?.name ?? '카운터') + ' 숫자 보정', edited?.kind === 'simple' ? edited.value : edited?.currentRow ?? 0)
+    commitCounterTransaction(next, (edited?.name ?? '카운터') + ' 숫자 보정', edited?.kind === 'simple' ? edited.value : edited?.currentRow ?? 0, undefined, true, undefined, undefined, undefined, counterGuideCorrection(current, next))
   }
 
   function undoCounterAction() {
@@ -1749,7 +1639,7 @@ export default function Viewer() {
             </div>}
             {!activeColorworkGrid?.visible && <>
               <span className="control-separator" />
-              <button className="viewer-tool" aria-label="진행선 설정" title="진행선 설정" disabled={!pageWorks[activePage] || progressMigrationPending} onClick={() => setProgressDialog(true)}><SlidersHorizontal size={17} /><span>진행선</span></button>
+              <button className="viewer-tool progress-toggle-tool" aria-label={!activeWork.horizontalGuides?.some((guide) => guide.role === 'primary') ? '진행선 시작' : progressSettings.horizontal.visible ? '진행선 숨기기' : '진행선 표시'} title={!activeWork.horizontalGuides?.some((guide) => guide.role === 'primary') ? '진행선 시작' : progressSettings.horizontal.visible ? '진행선 숨기기' : '진행선 표시'} disabled={!pageWorks[activePage]} onClick={toggleProgressLines}>{progressSettings.horizontal.visible ? <Eye size={17} /> : <EyeOff size={17} />}<span>진행선</span></button>
             </>}
             <span className="control-separator" />
             <button className="viewer-tool compact-tool" aria-label="실행 취소" title="실행 취소" disabled={!canUndo} onClick={() => undoRedo('undo')}><Undo2 size={17} /></button>
@@ -1773,27 +1663,7 @@ export default function Viewer() {
           </div>
         </section>}
       </section>
-      {progressMigrationPending && progressMigrationDismissed !== progressMigrationKey && <ProgressMigrationDialog
-        key={progressMigrationKey}
-        work={activeWork}
-        counters={counters}
-        onMigrate={(next) => { setPageWork(next, true, true, activeWork); setProgressMigrationDismissed(progressMigrationKey) }}
-        onDismiss={() => setProgressMigrationDismissed(progressMigrationKey)}
-      />}
-      {progressMigrationPending && progressMigrationDismissed === progressMigrationKey && <div className="progress-migration-reminder" role="status"><span>기존 진행선은 읽기 전용입니다.</span><button type="button" onClick={() => setProgressMigrationDismissed(null)}>새 방식으로 전환</button></div>}
       {renameDialog && <div className="modal-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) setRenameDialog(false) }}><section className="modal-card" role="dialog" aria-modal="true" aria-label="이름 변경"><div className="modal-heading"><h2>{documentKind === 'photos' ? '사진 폴더 이름 변경' : 'PDF 이름 변경'}</h2><button className="icon-button" aria-label="닫기" onClick={() => setRenameDialog(false)}><X size={20} /></button></div><form className="modal-form" onSubmit={(event) => void saveDocumentName(event)}><label htmlFor="viewer-pdf-name">{documentKind === 'photos' ? '폴더 이름' : 'PDF 이름'}</label><input id="viewer-pdf-name" autoFocus required maxLength={120} value={renameDraft} onChange={(event) => setRenameDraft(event.currentTarget.value)} />{renameError && <p className="rename-error" role="alert">{renameError}</p>}<div className="modal-actions"><button type="button" className="secondary-button" onClick={() => setRenameDialog(false)}>취소</button><button className="primary-button" type="submit"><Check size={17} />저장</button></div></form></section></div>}
-      {progressDialog && <ProgressSettingsDialog
-        settings={progressSettings}
-        work={activeWork}
-        counters={counters}
-        rotation={activeRotation}
-        autoPanGuideId={snapshot.counterGuideAutoPanId ?? null}
-        onAutoPanChange={(guideId) => mutateSnapshot((current) => ({ ...current, counterGuideAutoPanId: guideId }), true)}
-        onCounterGuideMove={moveCounterFromGuide}
-        onSettingsChange={(next) => mutateSnapshot((current) => ({ ...current, progressSettings: next }), true)}
-        onWorkChange={(next, before, immediate = true, recordHistory = true) => setPageWork(next, immediate, recordHistory, before)}
-        onClose={() => setProgressDialog(false)}
-      />}
       {colorworkDialog && <ColorworkSettingsDialog
         key={snapshot.activePane + ':' + activePage}
         initial={activeColorworkGrid ?? defaultColorworkSettings}

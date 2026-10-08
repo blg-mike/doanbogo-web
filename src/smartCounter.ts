@@ -386,19 +386,20 @@ export function maxCountersForType(counters: CounterSnapshot[], kind: CounterKin
 }
 
 export function guidePositionForRow(guide: ProgressGuide, row: number) {
+  const effectiveRow = row - (guide.counterRowOffset ?? 0)
   const region = guide.chartRegion
-  if (!region) return guideRowPosition(guide, row)
+  if (!region) return guideRowPosition(guide, effectiveRow)
   const rowCount = Math.max(1, region.lastRow - region.firstRow + 1)
-  let index = row - region.startCounterRow
+  let index = effectiveRow - region.startCounterRow
   if (region.repeat) index = ((index % rowCount) + rowCount) % rowCount
   else index = Math.max(0, Math.min(rowCount - 1, index))
-  if (region.rowPositions?.length === rowCount) return region.rowPositions[index]
+  if (region.rowPositions?.length === rowCount) return Math.min(1, Math.max(0, region.rowPositions[index] + (guide.positionOffset ?? 0)))
   const fraction = rowCount < 2 ? 0 : index / (rowCount - 1)
   const direction = region.direction === 'bottom-to-top' ? 1 - fraction : fraction
-  return region.y + region.height * direction
+  return Math.min(1, Math.max(0, region.y + region.height * direction + (guide.positionOffset ?? 0)))
 }
 
-export function progressGuideForCounter(guide: ProgressGuide, counter: CounterSnapshot): ProgressGuide {
+export function progressGuideForCounter(guide: ProgressGuide, counter: CounterSnapshot, previousRow?: number): ProgressGuide {
   const row = counter.kind === 'simple' ? counter.value : counter.currentRow ?? 1
   const position = guidePositionForRow(guide, row)
   const rotationPositions = guide.rotationPositions ? { ...guide.rotationPositions } : undefined
@@ -407,14 +408,33 @@ export function progressGuideForCounter(guide: ProgressGuide, counter: CounterSn
       const entry = rotationPositions[key]
       if (entry) {
         const oriented = { ...guide, ...entry }
-        rotationPositions[key] = { ...entry, position: entry.rowSpacingStartRow !== undefined ? guideRowPosition(oriented, row) : guidePositionForRow(oriented, row) }
+        const position = guidePositionForRow(oriented, row)
+        rotationPositions[key] = { ...entry, position, ...(entry.rowSpacingStartRow === undefined ? {} : { rowSpacingStartRow: row - (guide.counterRowOffset ?? 0) }) }
       }
     }
   }
-  const moved = position !== guide.position || Object.keys(rotationPositions ?? {}).some((key) => {
-    const before = guide.rotationPositions?.[key as '0' | '90' | '180' | '270']
-    const after = rotationPositions?.[key as '0' | '90' | '180' | '270']
-    return before?.position !== after?.position
-  })
-  return { ...guide, name: guide.role ? guide.name ?? counter.name : counter.name, color: guide.role ? guide.color ?? counter.color : counter.color, position, ...(rotationPositions ? { rotationPositions } : {}), ...(moved ? { markerProgress: undefined } : {}) }
+  const counterMoved = previousRow !== undefined ? previousRow !== row : position !== guide.position
+  return {
+    ...guide,
+    name: guide.role ? guide.name ?? counter.name : counter.name,
+    color: guide.role ? guide.color ?? counter.color : counter.color,
+    position,
+    ...(guide.rowSpacingStartRow === undefined ? {} : { rowSpacingStartRow: row - (guide.counterRowOffset ?? 0) }),
+    ...(rotationPositions ? { rotationPositions } : {}),
+    ...(counterMoved ? { markerProgress: undefined } : {}),
+  }
+}
+
+export function reanchorProgressGuideForCounter(guide: ProgressGuide, previousRow: number, nextRow: number): ProgressGuide {
+  if (previousRow === nextRow) return guide
+  if (guide.chartRegion) return { ...guide, counterRowOffset: (guide.counterRowOffset ?? 0) + nextRow - previousRow }
+  const effectiveRow = nextRow - (guide.counterRowOffset ?? 0)
+  const rotationPositions = guide.rotationPositions
+    ? Object.fromEntries(Object.entries(guide.rotationPositions).map(([rotation, entry]) => [rotation, entry?.rowSpacingStartRow === undefined ? entry : { ...entry, rowSpacingStartRow: effectiveRow }])) as ProgressGuide['rotationPositions']
+    : undefined
+  return {
+    ...guide,
+    ...(guide.rowSpacingStartRow === undefined ? {} : { rowSpacingStartRow: effectiveRow }),
+    ...(rotationPositions ? { rotationPositions } : {}),
+  }
 }

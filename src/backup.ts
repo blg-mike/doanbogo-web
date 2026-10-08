@@ -74,6 +74,8 @@ function isGuideArray(value: unknown) {
     (guide.rowSpacing === undefined || Number.isFinite(guide.rowSpacing) && (guide.rowSpacing as number) > 0 && (guide.rowSpacing as number) <= 1) &&
     (guide.rowSpacingStartRow === undefined || Number.isSafeInteger(guide.rowSpacingStartRow) && (guide.rowSpacingStartRow as number) >= 1 && (guide.rowSpacingStartRow as number) <= 9999) &&
     (guide.rowSpacingDirection === undefined || guide.rowSpacingDirection === 'up' || guide.rowSpacingDirection === 'down') &&
+    (guide.counterRowOffset === undefined || Number.isSafeInteger(guide.counterRowOffset) && Math.abs(guide.counterRowOffset as number) <= 9999) &&
+    (guide.positionOffset === undefined || Number.isFinite(guide.positionOffset) && Math.abs(guide.positionOffset as number) <= 1) &&
     (guide.rotationPositions === undefined || isObject(guide.rotationPositions) && Object.entries(guide.rotationPositions).every(([rotation, value]) => {
       if (!['0', '90', '180', '270'].includes(rotation) || !isObject(value)) return false
       return Number.isFinite(value.position) && Number(value.position) >= 0 && Number(value.position) <= 1 &&
@@ -81,6 +83,7 @@ function isGuideArray(value: unknown) {
         Number.isFinite(value.xEndRatio) && Number(value.xEndRatio) > 0 && Number(value.xEndRatio) <= 1 && Number(value.xStartRatio) < Number(value.xEndRatio) &&
         (value.rowSpacing === undefined || Number.isFinite(value.rowSpacing) && Number(value.rowSpacing) > 0 && Number(value.rowSpacing) <= 1) &&
         (value.rowSpacingStartRow === undefined || Number.isSafeInteger(value.rowSpacingStartRow) && Number(value.rowSpacingStartRow) >= 1 && Number(value.rowSpacingStartRow) <= 9999) &&
+        (value.positionOffset === undefined || Number.isFinite(value.positionOffset) && Math.abs(Number(value.positionOffset)) <= 1) &&
         (value.rowSpacingDirection === undefined || value.rowSpacingDirection === 'up' || value.rowSpacingDirection === 'down')
     })) &&
     (guide.name === undefined || typeof guide.name === 'string' && guide.name.length <= 100) &&

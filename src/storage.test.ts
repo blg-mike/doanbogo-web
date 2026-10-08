@@ -19,6 +19,12 @@ function makeDocument(id: string, fileName: string, createdAt: number, tags: str
 }
 
 describe('local document storage', () => {
+  it('starts new page work without creating a progress line', async () => {
+    const work = await getPageWork(crypto.randomUUID(), 1)
+
+    expect(work).toMatchObject({ progressMigration: 'complete', horizontalGuides: [], verticalGuides: [] })
+  })
+
   it('marks legacy progress guides for user-directed migration', () => {
     const work = normalizePageWork({
       documentId: 'legacy-doc', pageNumber: 1, horizontalPosition: 0.4, verticalPosition: 0.7, annotations: [],

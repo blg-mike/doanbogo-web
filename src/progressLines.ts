@@ -45,7 +45,8 @@ export function migrateProgressGuides(work: PageWorkRecord, primaryKey: string, 
 }
 
 export function guideRowPosition(guide: ProgressGuide, row: number) {
-  if (guide.rowSpacing === undefined || guide.rowSpacingStartRow === undefined || !guide.rowSpacingDirection) return guide.position
-  const distance = (row - guide.rowSpacingStartRow) * guide.rowSpacing * (guide.rowSpacingDirection === 'down' ? 1 : -1)
-  return Math.min(1, Math.max(0, guide.position + distance))
+  const mapped = guide.rowSpacing === undefined || guide.rowSpacingStartRow === undefined || !guide.rowSpacingDirection
+    ? guide.position
+    : guide.position + (row - guide.rowSpacingStartRow) * guide.rowSpacing * (guide.rowSpacingDirection === 'down' ? 1 : -1)
+  return Math.min(1, Math.max(0, mapped + (guide.positionOffset ?? 0)))
 }
