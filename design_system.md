@@ -263,22 +263,24 @@ Rules:
 
 # 7. Annotation Colors
 
-Annotation colors are functional tools and may use a small controlled preset.
-
-Recommended preset only:
+Annotation colors are functional tools and use this approved ten-color preset. Apply it to pen, highlighter, text, and region highlight controls.
 
 ```text
-Dark Ink      #2C2B27
-Warm Red      #C85E4B
-Muted Blue    #557A95
-Muted Green   #5C8167
-Soft Purple   #7A6A94
-Gray          #7D7A76
+Red           #E5494D
+Orange        #F28C44
+Yellow        #F4C84B
+Green         #43A979
+Mint          #45BDB1
+Blue          #438EE9
+Purple        #9469D5
+Pink          #E77CAA
+Gray          #848A96
+Black         #292C33
 ```
 
-Do not add an unrestricted color picker by default.
+Show colors in two rows of five in this order. Do not add custom colors or an extra current-color swatch. Existing saved annotation colors remain unchanged until the user chooses a preset.
 
-Highlighter preset should use lower-opacity versions of controlled colors.
+Use black as the new pen and text default, and yellow as the new highlighter and region-highlight default. Progress-line, counter, and brand colors remain separate.
 
 ---
 

@@ -1,15 +1,16 @@
 import { t, type LocaleKey } from './locales'
 import { FUNCTIONAL_COLOR_PRESETS } from './designTokens'
 
-export function ColorPresetButtons({ value, onChange, label, className, presets = FUNCTIONAL_COLOR_PRESETS }: {
+export function ColorPresetButtons({ value, onChange, label, className, presets = FUNCTIONAL_COLOR_PRESETS, includeCurrentColor = true }: {
   value: string
   onChange: (color: string) => void
   label: string
   className: string
   presets?: readonly { name: string; color: string }[]
+  includeCurrentColor?: boolean
 }) {
   const isKnownColor = presets.some((preset) => preset.color.toLowerCase() === value.toLowerCase())
-  const options = isKnownColor ? presets : [{ name: '현재 색상', color: value }, ...presets]
+  const options = isKnownColor || !includeCurrentColor ? presets : [{ name: '현재 색상', color: value }, ...presets]
   return <div className={className} role="group" aria-label={label}>
     {options.map((preset) => <button
       key={preset.color}

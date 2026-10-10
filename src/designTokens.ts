@@ -32,6 +32,19 @@ export const FUNCTIONAL_COLOR_PRESETS = [
   { name: '회색', color: '#7D7A76' },
 ] as const
 
+export const ANNOTATION_COLOR_PRESETS = [
+  { name: '레드', color: '#E5494D' },
+  { name: '오렌지', color: '#F28C44' },
+  { name: '옐로우', color: '#F4C84B' },
+  { name: '그린', color: '#43A979' },
+  { name: '민트', color: '#45BDB1' },
+  { name: '블루', color: '#438EE9' },
+  { name: '퍼플', color: '#9469D5' },
+  { name: '핑크', color: '#E77CAA' },
+  { name: '그레이', color: '#848A96' },
+  { name: '블랙', color: '#292C33' },
+] as const
+
 export const PROGRESS_LINE_COLOR_PRESETS = [
   { name: '진행선 코랄', color: DESIGN_SYSTEM_COLORS.progress },
   ...FUNCTIONAL_COLOR_PRESETS.slice(1),

@@ -27,7 +27,8 @@ import { guidePositionForRotation } from './focusGeometry'
 import { compactPageThumbnails, completePageList, createThumbnailGroupId, movePagesToThumbnailGroup, removePagesFromThumbnailGroups, reorderThumbnailGroups, thumbnailPagesForDrag, visiblePageRange, type PageThumbnailItem } from './pageManagement'
 import { createDefaultPrimaryProgressGuide, migrateProgressGuides, prepareProgressGuidesForDirectInteraction, progressGuideCandidates } from './progressLines'
 import { ColorPresetButtons } from './ColorPresetButtons'
-import { DESIGN_SYSTEM_COLORS, FUNCTIONAL_COLOR_PRESETS } from './designTokens'
+import { ANNOTATION_COLOR_PRESETS, DESIGN_SYSTEM_COLORS, FUNCTIONAL_COLOR_PRESETS } from './designTokens'
+import { addedLimitedAnnotations, applyLimitedAnnotationAdditions, exceededAnnotationLimit, isAnnotationLimitReached, PAGE_ANNOTATION_LIMITS, type LimitedAnnotationKind } from './annotationLimits'
 import { useDismissiblePopover } from './useDismissiblePopover'
 import { getRequiredPageWorkPages, loadPageWorkWithTimeout, PageWorkLoadTimeoutError } from './pageWorkLoading'
 
@@ -70,10 +71,16 @@ const defaultProgressSettings: ProgressSettings = {
 }
 
 const defaultAnnotationSettings: AnnotationSettings = {
-  pen: { color: FUNCTIONAL_COLOR_PRESETS[0].color, thickness: 2, opacity: 1, fontSize: 16 },
+  pen: { color: ANNOTATION_COLOR_PRESETS[9].color, thickness: 2, opacity: 1, fontSize: 16 },
   line: { color: FUNCTIONAL_COLOR_PRESETS[0].color, thickness: 2, opacity: 1, fontSize: 16 },
-  highlight: { color: DESIGN_SYSTEM_COLORS.warning, thickness: 16, opacity: 0.3, fontSize: 16 },
-  text: { color: DESIGN_SYSTEM_COLORS.text, thickness: 2, opacity: 1, fontSize: 18 },
+  highlight: { color: ANNOTATION_COLOR_PRESETS[2].color, thickness: 16, opacity: 0.3, fontSize: 16 },
+  text: { color: ANNOTATION_COLOR_PRESETS[9].color, thickness: 2, opacity: 1, fontSize: 18 },
+}
+const annotationToolLabelKeys: Record<LimitedAnnotationKind, '펜' | '형광펜' | '텍스트' | '구간 강조'> = {
+  pen: '펜',
+  highlight: '형광펜',
+  text: '텍스트',
+  'region-highlight': '구간 강조',
 }
 const viewerSaveErrorMessage = '뷰어 위치를 저장하지 못했습니다. 저장 공간을 확인하고 다시 시도해 주세요.'
 const pageWorkSaveErrorMessage = '페이지 작업을 저장하지 못했습니다. 저장 공간을 확인하고 다시 시도해 주세요.'
@@ -225,6 +232,11 @@ export default function Viewer() {
   const [pdfOpenCycle, setPdfOpenCycle] = useState(0)
   const [suspended, setSuspended] = useState(false)
   const [suspendError, setSuspendError] = useState('')
+  const [annotationLimitNotice, setAnnotationLimitNotice] = useState('')
+  const annotationLimitNoticeTimerRef = useRef<number | undefined>(undefined)
+  useEffect(() => () => {
+    if (annotationLimitNoticeTimerRef.current !== undefined) window.clearTimeout(annotationLimitNoticeTimerRef.current)
+  }, [])
   const pageWorksFrameRef = useRef<number | undefined>(undefined)
   const [pageWorkPersistence] = useState(() => new PageWorkPersistence(savePageWork, 300, () => {
     setSuspendError(pageWorkSaveErrorMessage)
@@ -1345,13 +1357,49 @@ export default function Viewer() {
     })
   }
 
-  function setPageWork(work: PageWorkRecord, immediate: boolean, recordHistory = false, historyBefore?: PageWorkRecord, cellChanges?: ColorworkCellChange[]) {
+  function notifyAnnotationLimit(kind: LimitedAnnotationKind) {
+    setAnnotationLimitNotice(t('페이지당 {tool} 최대 {count}개까지 추가할 수 있습니다.', {
+      tool: t(annotationToolLabelKeys[kind]),
+      count: formatNumber(PAGE_ANNOTATION_LIMITS[kind]),
+    }))
+    if (annotationLimitNoticeTimerRef.current !== undefined) window.clearTimeout(annotationLimitNoticeTimerRef.current)
+    annotationLimitNoticeTimerRef.current = window.setTimeout(() => {
+      annotationLimitNoticeTimerRef.current = undefined
+      setAnnotationLimitNotice('')
+    }, 3500)
+  }
+
+  function canCreateLimitedAnnotation(pageNumber: number, kind: LimitedAnnotationKind) {
+    const current = workRef.current[pageNumber]
+    if (!current || !isAnnotationLimitReached(current, kind)) return Boolean(current)
+    notifyAnnotationLimit(kind)
+    return false
+  }
+
+  function setPageWork(work: PageWorkRecord, immediate: boolean, recordHistory = false, historyBefore?: PageWorkRecord, cellChanges?: ColorworkCellChange[]): boolean {
     const current = workRef.current[work.pageNumber]
-    if (!current) return
+    if (!current) return false
+    const additions = addedLimitedAnnotations(current, work)
+    const hasLimitedChanges = additions.addedAnnotations.length > 0 || additions.updatedTextAnnotations.length > 0 || additions.addedRegions.length > 0
+    const nextWork = hasLimitedChanges ? applyLimitedAnnotationAdditions(current, additions) : work
+    const exceededKind = exceededAnnotationLimit(nextWork, additions.kinds)
+    if (exceededKind) {
+      notifyAnnotationLimit(exceededKind)
+      return false
+    }
+    const newlyCreatedTextIds = additions.updatedTextAnnotations
+      .filter((annotation) => !historyBefore?.annotations.some((before) => before.id === annotation.id))
+      .map((annotation) => annotation.id)
+    let before = historyBefore ?? current
+    if (additions.addedAnnotations.some((annotation) => annotation.type === 'pen' || annotation.type === 'highlight') || additions.addedRegions.length) {
+      before = current
+    } else if (newlyCreatedTextIds.length) {
+      const createdTextIds = new Set(newlyCreatedTextIds)
+      before = { ...current, annotations: current.annotations.filter((annotation) => !createdTextIds.has(annotation.id)) }
+    }
     touchPageWork(work.pageNumber)
     if (recordHistory) {
-      const before = historyBefore ?? current
-      const action: WorkAction = cellChanges?.length ? { cellChanges } : { before, after: work }
+      const action: WorkAction = cellChanges?.length ? { cellChanges } : { before, after: nextWork }
       const state = historyRef.current.get(work.pageNumber) ?? { actions: [], cursor: 0, byteCosts: [] }
       const actions = state.actions.slice(0, state.cursor)
       const byteCosts = state.byteCosts.slice(0, state.cursor)
@@ -1364,12 +1412,13 @@ export default function Viewer() {
       }
       updateHistory(work.pageNumber, { actions, cursor: actions.length, byteCosts })
     }
-    workRef.current = { ...workRef.current, [work.pageNumber]: work }
+    workRef.current = { ...workRef.current, [work.pageNumber]: nextWork }
     schedulePageWorksRender()
-    void pageWorkPersistence.schedule(work, immediate).catch((error: unknown) => {
+    void pageWorkPersistence.schedule(nextWork, immediate).catch((error: unknown) => {
       console.warn('[PDF] Page work could not be saved.', error)
       setSuspendError(pageWorkSaveErrorMessage)
     })
+    return true
   }
 
   function undoRedo(direction: 'undo' | 'redo') {
@@ -1844,6 +1893,7 @@ export default function Viewer() {
       annotationStyle={style}
       work={work}
       workReady={Boolean(pageWorks[pane.page])}
+      canCreateLimitedAnnotation={(kind) => canCreateLimitedAnnotation(pane.page, kind)}
       pageWorkLoadError={loadState?.status === 'error' ? loadState.message : undefined}
       onRetryPageWork={() => { void ensurePageWork(pane.page) }}
       createColorworkRequest={colorworkRequest?.paneId === paneId && colorworkRequest.pageNumber === pane.page ? colorworkRequest : null}
@@ -2218,6 +2268,7 @@ export default function Viewer() {
     {timerElement}
     <main ref={viewerShellRef} className={'viewer-shell' + (reportMode ? ' report-mode' : '') + (thumbnailCollapsed ? ' thumbnail-collapsed' : '') + (selectedThumbnailPages.length > 0 || thumbnailGroupError ? ' thumbnail-feedback-visible' : '') + (counterPanelVisible && !reportMode ? ' counter-panel-visible' : '')}>
       {suspendError && <div className="viewer-save-warning" role="alert"><span>{translateMessage(suspendError)}</span><button type="button" aria-label={t("저장 알림 닫기")} onClick={() => setSuspendError('')}><X size={14} /></button></div>}
+      {annotationLimitNotice && <div className="viewer-limit-notice" role="status" aria-live="polite">{annotationLimitNotice}</div>}
       {showZoomHint && !reportMode && <aside className="viewer-zoom-hint" role="status"><span>{t("마우스 휠로 확대 · 이동 도구에서 드래그로 이동")}</span><button type="button" aria-label={t("확대·이동 안내 닫기")} onClick={() => setShowZoomHint(false)}><X size={15} /></button></aside>}
       <header className="viewer-header">
         <div className="viewer-brand"><img src={yyLogo} alt={t("도안보고 로고")} /><small>{t("YY공동제작")}</small></div>
@@ -2359,9 +2410,9 @@ export default function Viewer() {
           <div className="viewer-controlbar-main">
             <div className="viewer-tools" role="group" aria-label={t('필기 도구')}>
               <button type="button" className={'viewer-tool tool-toggle ' + (tool === 'pan' ? 'active' : '')} aria-label={t('이동 도구')} title={t('이동')} aria-pressed={tool === 'pan'} onClick={() => setTool('pan')}><MousePointer2 size={17} /><span>{t('이동')}</span></button>
-              <button type="button" className={'viewer-tool tool-toggle ' + (tool === 'pen' ? 'active' : '')} aria-label={t('펜')} title={t('펜')} aria-pressed={tool === 'pen'} onClick={() => setTool('pen')}><Pencil size={17} /><span>{t('펜')}</span></button>
+              <button type="button" className={'viewer-tool tool-toggle ' + (tool === 'pen' ? 'active' : '')} aria-label={t('펜')} title={t('펜')} aria-pressed={tool === 'pen'} onClick={() => { setTool('pen'); setMiniBarSettingsOpen(true) }}><Pencil size={17} /><span>{t('펜')}</span></button>
               <button type="button" className={'viewer-tool tool-toggle ' + (tool === 'line' ? 'active' : '')} aria-label={t('직선')} title={t('직선')} aria-pressed={tool === 'line'} onClick={() => setTool('line')}><Minus size={17} /><span>{t('직선')}</span></button>
-              <button type="button" className={'viewer-tool tool-toggle ' + (tool === 'highlight' ? 'active' : '')} aria-label={t('형광펜')} title={t('형광펜')} aria-pressed={tool === 'highlight'} onClick={() => setTool('highlight')}><Highlighter size={17} /><span>{t('형광펜')}</span></button>
+              <button type="button" className={'viewer-tool tool-toggle ' + (tool === 'highlight' ? 'active' : '')} aria-label={t('형광펜')} title={t('형광펜')} aria-pressed={tool === 'highlight'} onClick={() => { setTool('highlight'); setMiniBarSettingsOpen(true) }}><Highlighter size={17} /><span>{t('형광펜')}</span></button>
               <button type="button" className={'viewer-tool tool-toggle ' + (tool === 'eraser' ? 'active' : '')} aria-label={t('지우개')} title={t('지우개')} aria-pressed={tool === 'eraser'} onClick={() => setTool('eraser')}><Eraser size={17} /><span>{t('지우개')}</span></button>
               <button type="button" className={'viewer-tool tool-toggle ' + (tool === 'text' ? 'active' : '')} aria-label={t('텍스트')} title={t('텍스트')} aria-pressed={tool === 'text'} onClick={() => setTool('text')}><Type size={17} /><span>{t('텍스트')}</span></button>
               <button type="button" className={'viewer-tool tool-toggle region-highlight-tool ' + (tool === 'region-highlight' ? 'active' : '')} aria-label={t('구간 강조')} title={t('구간 강조')} aria-pressed={tool === 'region-highlight'} onClick={() => { setMiniBarSettingsOpen(false); setTool('region-highlight') }}><Square size={17} /><span>{t('구간 강조')}</span></button>
@@ -2382,7 +2433,7 @@ export default function Viewer() {
           {miniBarSettingsOpen && <div className="viewer-mini-settings-panel" ref={miniBarSettingsPanelRef} role="group" aria-label={t('도구 설정')}>
             {activeAnnotationStyle && <section className="viewer-mini-settings-section">
               <strong>{t('필기 스타일')}</strong>
-              <ColorPresetButtons label={t('필기 색상')} className="annotation-color-presets" value={activeAnnotationStyle.color} onChange={(color) => changeAnnotationStyle(tool as 'pen' | 'line' | 'highlight' | 'text', { color })} />
+              <ColorPresetButtons label={t('필기 색상')} className="annotation-color-presets" presets={tool === 'line' ? FUNCTIONAL_COLOR_PRESETS : ANNOTATION_COLOR_PRESETS} includeCurrentColor={tool === 'line'} value={activeAnnotationStyle.color} onChange={(color) => changeAnnotationStyle(tool as 'pen' | 'line' | 'highlight' | 'text', { color })} />
               {tool !== 'text' && <label><span>{t('굵기')}</span><input aria-label={t('필기 굵기')} type="range" min="1" max="24" value={activeAnnotationStyle.thickness} onChange={(event) => changeAnnotationStyle(tool as 'pen' | 'line' | 'highlight', { thickness: Number(event.currentTarget.value) })} /></label>}
               {tool !== 'text' && <label><span>{t('투명도')}</span><input aria-label={t('필기 투명도')} type="range" min="10" max="100" value={Math.round(activeAnnotationStyle.opacity * 100)} onChange={(event) => changeAnnotationStyle(tool as 'pen' | 'line' | 'highlight', { opacity: Number(event.currentTarget.value) / 100 })} /></label>}
               {tool === 'text' && <label><span>{t('글자 크기')}</span><input aria-label={t('글자 크기')} type="range" min="10" max="48" value={activeAnnotationStyle.fontSize} onChange={(event) => changeAnnotationStyle('text', { fontSize: Number(event.currentTarget.value) })} /></label>}

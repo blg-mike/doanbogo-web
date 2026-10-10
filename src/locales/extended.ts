@@ -310,3 +310,18 @@ Object.assign(extendedTranslations.de, thumbnailLabelAndExitTranslations.de)
 Object.assign(extendedTranslations.da, thumbnailLabelAndExitTranslations.da)
 Object.assign(extendedTranslations.nb, thumbnailLabelAndExitTranslations.nb)
 Object.assign(extendedTranslations.fi, thumbnailLabelAndExitTranslations.fi)
+
+const annotationPaletteTranslations = {
+  en: { '레드': 'Red', '오렌지': 'Orange', '옐로우': 'Yellow', '그린': 'Green', '민트': 'Mint', '블루': 'Blue', '퍼플': 'Purple', '핑크': 'Pink', '그레이': 'Gray', '블랙': 'Black', '페이지당 {tool} 최대 {count}개까지 추가할 수 있습니다.': 'This page supports up to {count} {tool} objects.' },
+  ja: { '레드': 'レッド', '오렌지': 'オレンジ', '옐로우': 'イエロー', '그린': 'グリーン', '민트': 'ミント', '블루': 'ブルー', '퍼플': 'パープル', '핑크': 'ピンク', '그레이': 'グレー', '블랙': 'ブラック', '페이지당 {tool} 최대 {count}개까지 추가할 수 있습니다.': 'このページには{tool}を最大{count}個追加できます。' },
+  de: { '레드': 'Rot', '오렌지': 'Orange', '옐로우': 'Gelb', '그린': 'Grün', '민트': 'Mint', '블루': 'Blau', '퍼플': 'Violett', '핑크': 'Pink', '그레이': 'Grau', '블랙': 'Schwarz', '페이지당 {tool} 최대 {count}개까지 추가할 수 있습니다.': 'Auf dieser Seite sind höchstens {count} Objekte für {tool} möglich.' },
+  da: { '레드': 'Rød', '오렌지': 'Orange', '옐로우': 'Gul', '그린': 'Grøn', '민트': 'Mint', '블루': 'Blå', '퍼플': 'Lilla', '핑크': 'Pink', '그레이': 'Grå', '블랙': 'Sort', '페이지당 {tool} 최대 {count}개까지 추가할 수 있습니다.': 'Denne side kan have op til {count} objekter for {tool}.' },
+  nb: { '레드': 'Rød', '오렌지': 'Oransje', '옐로우': 'Gul', '그린': 'Grønn', '민트': 'Mint', '블루': 'Blå', '퍼플': 'Lilla', '핑크': 'Rosa', '그레이': 'Grå', '블랙': 'Svart', '페이지당 {tool} 최대 {count}개까지 추가할 수 있습니다.': 'Denne siden kan ha opptil {count} objekter for {tool}.' },
+  fi: { '레드': 'Punainen', '오렌지': 'Oranssi', '옐로우': 'Keltainen', '그린': 'Vihreä', '민트': 'Minttu', '블루': 'Sininen', '퍼플': 'Violetti', '핑크': 'Vaaleanpunainen', '그레이': 'Harmaa', '블랙': 'Musta', '페이지당 {tool} 최대 {count}개까지 추가할 수 있습니다.': 'Tällä sivulla voi olla enintään {count} {tool}-kohdetta.' },
+}
+Object.assign(extendedTranslations.en, annotationPaletteTranslations.en)
+Object.assign(extendedTranslations.ja, annotationPaletteTranslations.ja)
+Object.assign(extendedTranslations.de, annotationPaletteTranslations.de)
+Object.assign(extendedTranslations.da, annotationPaletteTranslations.da)
+Object.assign(extendedTranslations.nb, annotationPaletteTranslations.nb)
+Object.assign(extendedTranslations.fi, annotationPaletteTranslations.fi)

@@ -5,6 +5,7 @@ import type { PDFDocumentProxy, PDFPageProxy, RenderTask } from 'pdfjs-dist'
 import { Trash2 } from 'lucide-react'
 import BrandLoading from './BrandLoading'
 import { ColorPresetButtons } from './ColorPresetButtons'
+import { ANNOTATION_COLOR_PRESETS } from './designTokens'
 import { ProgressLineOverlay } from './ProgressLineOverlay'
 import type { AnnotationRecord, AnnotationStyle, AnnotationTool, ColorworkCell, ColorworkCreateRequest, ColorworkGrid, CounterSnapshot, PageRotation, PageWorkRecord, PaneId, PaneSnapshot, ProgressGuide, ProgressSettings, RegionHighlight } from './types'
 import { createColorworkGrid, resizeColorworkGridDisplay } from './colorwork'
@@ -16,6 +17,7 @@ import { displayRectToPageRect, focusBandHeightRatio, focusDimOpacity, focusRowS
 import { clientPointForPagePosition, classifyWheelInput, isEditableTarget, pagePositionAtClientPoint, scrollOffsetForZoomFocus, wheelActionForBurst, wheelZoom, type WheelInput, type ZoomFocus } from './viewerInteraction'
 import { acquireThumbnailCache, getViewerResourcePolicy, pdfRasterScale, releaseCanvasWhenSettled, viewerCanvasMemory } from './pdfRenderResources'
 import { pdfPageRenderQueue } from './pdfPageRenderQueue'
+import type { LimitedAnnotationKind } from './annotationLimits'
 
 type Point = { x: number; y: number }
 type Size = { width: number; height: number }
@@ -412,7 +414,7 @@ function withTextBox(annotation: AnnotationRecord, pageHeight: number): Annotati
   return { ...annotation, points: [{ x: box.x, y: box.y }], boxWidth: box.width, boxHeight: box.height }
 }
 
-export function PdfPage({ pdf, page, paneId, pane, splitView, rotation, active, tool, lineSettings, counters, annotationStyle, work, workReady, pageWorkLoadError, onRetryPageWork, colorworkBrushColor, colorworkBrushOpacity, colorworkEraser, createColorworkRequest, pageLinks, qrLinks, onPageRendered, onActivate, onWorkChange, onZoom, onCenter, onColorworkRequestHandled, onTextToolConsumed, onRegionHighlightToolConsumed }: {
+export function PdfPage({ pdf, page, paneId, pane, splitView, rotation, active, tool, lineSettings, counters, annotationStyle, work, workReady, canCreateLimitedAnnotation, pageWorkLoadError, onRetryPageWork, colorworkBrushColor, colorworkBrushOpacity, colorworkEraser, createColorworkRequest, pageLinks, qrLinks, onPageRendered, onActivate, onWorkChange, onZoom, onCenter, onColorworkRequestHandled, onTextToolConsumed, onRegionHighlightToolConsumed }: {
   pdf: PDFDocumentProxy
   page: number
   paneId: PaneId
@@ -426,6 +428,7 @@ export function PdfPage({ pdf, page, paneId, pane, splitView, rotation, active, 
   annotationStyle: AnnotationStyle
   work: PageWorkRecord
   workReady: boolean
+  canCreateLimitedAnnotation: (kind: LimitedAnnotationKind) => boolean
   pageWorkLoadError?: string
   onRetryPageWork?: () => void
   colorworkBrushColor: string
@@ -436,7 +439,7 @@ export function PdfPage({ pdf, page, paneId, pane, splitView, rotation, active, 
   qrLinks: PdfQrLink[] | undefined
   onPageRendered: (pageNumber: number, canvas: HTMLCanvasElement) => void
   onActivate: () => void
-  onWorkChange: (work: PageWorkRecord, immediate: boolean, recordHistory?: boolean, historyBefore?: PageWorkRecord, cellChanges?: { index: number; before: ColorworkCell | null; after: ColorworkCell | null }[]) => void
+  onWorkChange: (work: PageWorkRecord, immediate: boolean, recordHistory?: boolean, historyBefore?: PageWorkRecord, cellChanges?: { index: number; before: ColorworkCell | null; after: ColorworkCell | null }[]) => boolean
   onZoom: (zoom: number, focus?: ZoomFocus) => void
   onCenter: (x: number, y: number) => void
   onColorworkRequestHandled: (id: string) => void
@@ -997,7 +1000,7 @@ export function PdfPage({ pdf, page, paneId, pane, splitView, rotation, active, 
   }, [active, selectedNoteId, displayedSize, rotation, work])
 
   function beginRegionHighlight(event: ReactPointerEvent<SVGSVGElement>, point: Point) {
-    if (!workReady || !displayedSize || (event.pointerType === 'mouse' && event.button !== 0)) return
+    if (!workReady || !displayedSize || (event.pointerType === 'mouse' && event.button !== 0) || !canCreateLimitedAnnotation('region-highlight')) return
     event.preventDefault()
     event.stopPropagation()
     onActivate()
@@ -1115,8 +1118,8 @@ export function PdfPage({ pdf, page, paneId, pane, splitView, rotation, active, 
     if (visualWidth < 8 || visualHeight < 8) return
     const region: RegionHighlight = { id: crypto.randomUUID(), ...box, color: annotationStyle.color, opacity: 0.3 }
     const next = { ...drawing.before, regionHighlights: [...(drawing.before.regionHighlights ?? []), region] }
+    if (onWorkChangeRef.current(next, true, true, drawing.before) === false) return
     currentWorkRef.current = next
-    onWorkChangeRef.current(next, true, true, drawing.before)
     updateSelectedRegionId(region.id)
     setRegionPopoverOpen(true)
     onRegionHighlightToolConsumed()
@@ -1262,7 +1265,11 @@ export function PdfPage({ pdf, page, paneId, pane, splitView, rotation, active, 
     }
     const next = { ...base, annotations: [...base.annotations, annotation] }
     try {
-      onWorkChangeRef.current(next, true, true, stroke.before)
+      if (onWorkChangeRef.current(next, true, true, stroke.before) === false) {
+        failedStrokeRef.current = null
+        setStrokeError(false)
+        return true
+      }
       currentWorkRef.current = next
       setPendingStrokePreviews((current) => [...current.filter((item) => item.annotation.id !== annotation.id), { documentId: stroke.documentId, pageNumber: stroke.pageNumber, annotation }].slice(-32))
       failedStrokeRef.current = null
@@ -1321,6 +1328,7 @@ export function PdfPage({ pdf, page, paneId, pane, splitView, rotation, active, 
 
   function beginInkStroke(event: ReactPointerEvent<SVGSVGElement>, point: Point) {
     if (strokeRef.current || failedStrokeRef.current || (tool !== 'pen' && tool !== 'line' && tool !== 'highlight')) return
+    if ((tool === 'pen' || tool === 'highlight') && !canCreateLimitedAnnotation(tool)) return
     const svg = event.currentTarget
     try { svg.setPointerCapture(event.pointerId) } catch { /* Window listeners still finish the stroke if capture is unavailable. */ }
     const base = currentWorkRef.current.documentId === work.documentId && currentWorkRef.current.pageNumber === page
@@ -1392,6 +1400,7 @@ export function PdfPage({ pdf, page, paneId, pane, splitView, rotation, active, 
 
   function addText(point: Point) {
     if (editingNoteId !== null) finishTextEdit(editingNoteId)
+    if (!canCreateLimitedAnnotation('text')) return
     const before = currentWorkRef.current
     const box = textNoteBoxAt(point)
     const id = crypto.randomUUID()
@@ -1400,12 +1409,13 @@ export function PdfPage({ pdf, page, paneId, pane, splitView, rotation, active, 
       points: [{ x: box.x, y: box.y }],
       boxWidth: box.width, boxHeight: box.height, style: { ...annotationStyle },
     }
+    if (onWorkChange({ ...before, annotations: [...before.annotations, note] }, false, false, before) === false) return
+    currentWorkRef.current = { ...before, annotations: [...before.annotations, note] }
     textEditBefore.current.set(id, before)
     setTextDraft({ id, value: '' })
     setSelectedNoteId(id)
     setEditingNoteId(id)
     setTextPreviewPoint(null)
-    onWorkChange({ ...before, annotations: [...before.annotations, note] }, false, false, before)
     onTextToolConsumed()
   }
 
@@ -1646,7 +1656,6 @@ export function PdfPage({ pdf, page, paneId, pane, splitView, rotation, active, 
 
   function updateText(id: string, value: string) {
     const text = value.slice(0, 500)
-    setTextDraft({ id, value: text })
     const current = currentWorkRef.current
     const before = textEditBefore.current.get(id) ?? current
     textEditBefore.current.set(id, before)
@@ -1656,8 +1665,9 @@ export function PdfPage({ pdf, page, paneId, pane, splitView, rotation, active, 
         ? { ...withTextBox(annotation, displayedSize?.page.height ?? 1), text }
         : annotation),
     }
+    if (onWorkChange(next, false, false, before) === false) return
     currentWorkRef.current = next
-    onWorkChange(next, false, false, before)
+    setTextDraft({ id, value: text })
   }
 
   function finishTextEdit(id: string) {
@@ -1674,8 +1684,8 @@ export function PdfPage({ pdf, page, paneId, pane, splitView, rotation, active, 
       ? current.annotations.map((item) => item.id === id ? withTextBox(item, displayedSize?.page.height ?? 1) : item)
       : current.annotations.filter((item) => item.id !== id)
     const next = { ...current, annotations }
+    if (onWorkChange(next, true, true, before ?? current) === false) return
     currentWorkRef.current = next
-    onWorkChange(next, true, true, before ?? current)
     textEditBefore.current.delete(id)
     setTextDraft((draft) => draft?.id === id ? null : draft)
     setEditingNoteId((active) => active === id ? null : active)
@@ -2260,10 +2270,17 @@ export function PdfPage({ pdf, page, paneId, pane, splitView, rotation, active, 
                       onChange={(event) => changeTextStyle(annotation.id, { fontSize: Number(event.currentTarget.value) }, true)}
                     />
                   </label>
-                  <label className="text-style-color" title={t("글자 색상")}>
+                  <div className="text-style-color" title={t("글자 색상")}>
                     <span>{t("색상")}</span>
-                    <input aria-label={t("텍스트 색상")} type="color" value={annotation.style.color} onChange={(event) => changeTextStyle(annotation.id, { color: event.currentTarget.value })} />
-                  </label>
+                    <ColorPresetButtons
+                      label={t("텍스트 색상")}
+                      className="annotation-color-presets text-style-color-presets"
+                      presets={ANNOTATION_COLOR_PRESETS}
+                      includeCurrentColor={false}
+                      value={annotation.style.color}
+                      onChange={(color) => changeTextStyle(annotation.id, { color })}
+                    />
+                  </div>
                   <label className="text-style-opacity" title={t("글자 투명도")}>
                     <span>{t("투명도 ")}{Math.round(annotation.style.opacity * 100)}%</span>
                     <input
@@ -2403,6 +2420,8 @@ export function PdfPage({ pdf, page, paneId, pane, splitView, rotation, active, 
         <ColorPresetButtons
           label={t('구간 강조 색상')}
           className="annotation-color-presets region-highlight-color-presets"
+          presets={ANNOTATION_COLOR_PRESETS}
+          includeCurrentColor={false}
           value={selectedRegion.color}
           onChange={(color) => {
             finishRegionOpacityChange()
