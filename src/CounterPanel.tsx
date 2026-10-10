@@ -2,6 +2,8 @@ import { useEffect, useRef, useState, type FormEvent, type PointerEvent as React
 import { Bell, Check, ChevronDown, ChevronRight, ChevronUp, Pin, PinOff, Plus, RotateCcw, Settings, Settings2, Trash2, Vibrate, Volume2, X } from 'lucide-react'
 import type { CounterKind, CounterSnapshot, CounterTaskKind, CounterUnit, ViewerSnapshot } from './types'
 import { MAX_COUNTER_ROW, MAX_COUNTERS_PER_TYPE, counterAlertState, createCounter, counterSideForRow, counterTaskProgress, findCounterRewindCheckpoint, maxCountersForType, nextPatternAlertRow, patternRowAfterCompletion, taskSchedule } from './smartCounter'
+import { ColorPresetButtons } from './ColorPresetButtons'
+import { useDismissiblePopover } from './useDismissiblePopover'
 
 const kinds: CounterKind[] = ['simple', 'pattern', 'task']
 const kindLabels: Record<CounterKind, string> = { simple: '자유 카운터', pattern: '무늬 카운터', task: '줄임·늘림 카운터' }
@@ -82,7 +84,7 @@ function CounterEditor({ counter, counters, onClose, onSave }: {
       <div className="modal-heading"><div><p className="eyebrow">COUNTER SETTINGS</p><h2>{kindLabels[counter.kind]} 설정</h2></div><button type="button" className="icon-button" aria-label="닫기" onClick={onClose}><X size={20} /></button></div>
       <div className="counter-settings-body">
         <label className="counter-settings-field">이름<input required maxLength={100} value={draft.name} onChange={(event) => set('name', event.currentTarget.value)} /></label>
-        <label className="counter-settings-field">표시 색상<input aria-label="카운터 색상" type="color" value={draft.color} onChange={(event) => set('color', event.currentTarget.value)} /></label>
+        <label className="counter-settings-field">표시 색상<ColorPresetButtons label="카운터 색상" className="counter-color-presets" value={draft.color} onChange={(color) => set('color', color)} /></label>
         {draft.kind === 'simple' && <>
           <label className="counter-settings-field">현재 숫자<input type="number" min="0" max={MAX_COUNTER_ROW} value={draft.value} onChange={(event) => set('value', Number(event.currentTarget.value))} /></label>
           <label className="counter-settings-field">단위<select value={draft.unit ?? 'row'} onChange={(event) => set('unit', event.currentTarget.value as CounterUnit)}><option value="row">단</option><option value="stitch">코</option><option value="round">회</option></select></label>
@@ -282,6 +284,8 @@ export default function CounterPanel({
   onClose: () => void
 }) {
   const panelRef = useRef<HTMLElement>(null)
+  const addButtonRef = useRef<HTMLButtonElement>(null)
+  const addOptionsRef = useRef<HTMLDivElement>(null)
   const dragRef = useRef<{ pointerId: number; x: number; y: number; left: number; top: number; mobile: boolean } | null>(null)
   const creationRequested = useRef(false)
   const [position, setPosition] = useState<{ left: number; top: number } | null>(null)
@@ -291,6 +295,7 @@ export default function CounterPanel({
   const [addMenuOpen, setAddMenuOpen] = useState(false)
   const [rewindOpen, setRewindOpen] = useState(false)
   const [rewindRow, setRewindRow] = useState('')
+  useDismissiblePopover(addMenuOpen, addOptionsRef, addButtonRef, () => setAddMenuOpen(false))
   const baseCounters = counters.filter((counter) => counter.kind === 'simple' && counter.unit === 'row' && !counter.linkedToId)
   const activeBase = baseCounters.find((counter) => counter.id === snapshot.counterMainId) ?? baseCounters[0]
   const activeBaseId = activeBase?.id
@@ -457,7 +462,7 @@ export default function CounterPanel({
               {counter.kind === 'simple' && <div className="counter-aux-stepper"><button type="button" aria-label={counter.name + ' 감소'} disabled={counter.value <= 0 || Boolean(counter.linkedToId)} onClick={() => modifyAuxiliary(counter, -1)}>−</button><strong>{counter.value}<small>{unitLabels[counter.unit ?? 'row']}</small></strong><button type="button" aria-label={counter.name + ' 증가'} disabled={Boolean(counter.linkedToId)} onClick={() => modifyAuxiliary(counter, 1)}>+</button></div>}
             </article>
           })}
-          <div className="counter-add-area"><button type="button" className="counter-add-button" aria-expanded={addMenuOpen} onClick={() => setAddMenuOpen((open) => !open)}><Plus size={17} />카운터 추가</button>{addMenuOpen && <div className="counter-add-options" role="group" aria-label="추가할 카운터 종류">{kinds.map((kind) => <button type="button" key={kind} disabled={maxCountersForType(counters, kind) >= MAX_COUNTERS_PER_TYPE} onClick={() => add(kind)}>{kindLabels[kind]}<span>{maxCountersForType(counters, kind)}/{MAX_COUNTERS_PER_TYPE}</span></button>)}</div>}</div>
+          <div className="counter-add-area"><button ref={addButtonRef} type="button" className="counter-add-button" aria-expanded={addMenuOpen} onClick={() => setAddMenuOpen((open) => !open)}><Plus size={17} />카운터 추가</button>{addMenuOpen && <div ref={addOptionsRef} className="counter-add-options" role="group" aria-label="추가할 카운터 종류">{kinds.map((kind) => <button type="button" key={kind} disabled={maxCountersForType(counters, kind) >= MAX_COUNTERS_PER_TYPE} onClick={() => add(kind)}>{kindLabels[kind]}<span>{maxCountersForType(counters, kind)}/{MAX_COUNTERS_PER_TYPE}</span></button>)}</div>}</div>
         </section>
       </>}
     </div>}

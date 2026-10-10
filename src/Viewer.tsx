@@ -23,6 +23,8 @@ import { getViewerResourcePolicy } from './pdfRenderResources'
 import { guidePositionForRotation } from './focusGeometry'
 import { canHidePageSelection, compactPageThumbnails, completePageList, nextVisiblePageAfterHide, visiblePageRange } from './pageManagement'
 import { migrateProgressGuides, prepareProgressGuidesForDirectInteraction, progressGuideCandidates } from './progressLines'
+import { ColorPresetButtons } from './ColorPresetButtons'
+import { DESIGN_SYSTEM_COLORS, FUNCTIONAL_COLOR_PRESETS } from './designTokens'
 
 type Size = { width: number; height: number }
 type WorkAction = { before?: PageWorkRecord; after?: PageWorkRecord; cellChanges?: ColorworkCellChange[] }
@@ -49,15 +51,15 @@ type CounterGuideAction = { kind: 'advance' | 'correct'; pageNumber: number; gui
 function createCounterSession(documentId: string) { return { documentId, visible: false } }
 
 const defaultProgressSettings: ProgressSettings = {
-  horizontal: { visible: true, color: '#ed3f8a', thickness: 4, opacity: 0.8 },
-  vertical: { visible: true, color: '#2673e8', thickness: 1, opacity: 1 },
+  horizontal: { visible: true, color: DESIGN_SYSTEM_COLORS.progress, thickness: 4, opacity: 0.8 },
+  vertical: { visible: true, color: DESIGN_SYSTEM_COLORS.secondary, thickness: 1, opacity: 1 },
 }
 
 const defaultAnnotationSettings: AnnotationSettings = {
-  pen: { color: '#2673e8', thickness: 2, opacity: 1, fontSize: 16 },
-  line: { color: '#2673e8', thickness: 2, opacity: 1, fontSize: 16 },
-  highlight: { color: '#f1c40f', thickness: 16, opacity: 0.3, fontSize: 16 },
-  text: { color: '#202d43', thickness: 2, opacity: 1, fontSize: 18 },
+  pen: { color: FUNCTIONAL_COLOR_PRESETS[0].color, thickness: 2, opacity: 1, fontSize: 16 },
+  line: { color: FUNCTIONAL_COLOR_PRESETS[0].color, thickness: 2, opacity: 1, fontSize: 16 },
+  highlight: { color: DESIGN_SYSTEM_COLORS.warning, thickness: 16, opacity: 0.3, fontSize: 16 },
+  text: { color: DESIGN_SYSTEM_COLORS.text, thickness: 2, opacity: 1, fontSize: 18 },
 }
 const viewerSaveErrorMessage = '뷰어 위치를 저장하지 못했습니다. 저장 공간을 확인하고 다시 시도해 주세요.'
 const pageWorkSaveErrorMessage = '페이지 작업을 저장하지 못했습니다. 저장 공간을 확인하고 다시 시도해 주세요.'
@@ -1638,7 +1640,7 @@ export default function Viewer() {
               </div>
             </>}
             {activeAnnotationStyle && <div className="annotation-style-controls" aria-label="필기 스타일">
-              <label title="색상"><input aria-label="필기 색상" type="color" value={activeAnnotationStyle.color} onChange={(event) => changeAnnotationStyle(tool as 'pen' | 'line' | 'highlight' | 'text', { color: event.currentTarget.value })} /></label>
+              <ColorPresetButtons label="필기 색상" className="annotation-color-presets" value={activeAnnotationStyle.color} onChange={(color) => changeAnnotationStyle(tool as 'pen' | 'line' | 'highlight' | 'text', { color })} />
               {tool !== 'text' && <label title="굵기"><span>굵기</span><input aria-label="필기 굵기" type="range" min="1" max="24" value={activeAnnotationStyle.thickness} onChange={(event) => changeAnnotationStyle(tool as 'pen' | 'line' | 'highlight', { thickness: Number(event.currentTarget.value) })} /></label>}
               {tool !== 'text' && <label title="투명도"><span>투명도</span><input aria-label="필기 투명도" type="range" min="10" max="100" value={Math.round(activeAnnotationStyle.opacity * 100)} onChange={(event) => changeAnnotationStyle(tool as 'pen' | 'line' | 'highlight', { opacity: Number(event.currentTarget.value) / 100 })} /></label>}
               {tool === 'text' && <label title="글자 크기"><span>글자</span><input aria-label="글자 크기" type="range" min="10" max="48" value={activeAnnotationStyle.fontSize} onChange={(event) => changeAnnotationStyle('text', { fontSize: Number(event.currentTarget.value) })} /></label>}

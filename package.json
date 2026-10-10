@@ -7,6 +7,7 @@
     "dev": "vite",
     "build": "tsc -b && vite build",
     "build:portable": "tsc -b && vite build --mode portable",
+    "check:design-system": "node scripts/check-design-system.mjs",
     "lint": "oxlint",
     "preview": "vite preview",
     "test": "vitest run",

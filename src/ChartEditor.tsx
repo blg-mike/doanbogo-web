@@ -4,6 +4,7 @@ import BrandLoading from './BrandLoading'
 import { ArrowLeft, Check, ChevronDown, Copy, Download, Eraser, FlipHorizontal2, FlipVertical2, Hand, Layers, Minus, MousePointer2, PaintBucket, Paintbrush, Plus, Redo2, RotateCcw, RotateCw, Save, Trash2, Undo2 } from 'lucide-react'
 import { crochetSymbols, exportChart } from './charts'
 import { getChart, markProjectWorked, saveChart } from './storage'
+import { DESIGN_SYSTEM_COLORS } from './designTokens'
 import type { ChartDocument, ChartLayer, CrochetSymbolId, CrochetSymbolObject } from './types'
 import './Chart.css'
 
@@ -211,9 +212,9 @@ export default function ChartEditor() {
       const top = margin + cellSelection.top * cell
       const selectedWidth = (cellSelection.right - cellSelection.left + 1) * cell
       const selectedHeight = (cellSelection.bottom - cellSelection.top + 1) * cell
-      ctx.fillStyle = 'rgba(38,115,232,.10)'
+      ctx.fillStyle = DESIGN_SYSTEM_COLORS.primarySoft
       ctx.fillRect(left, top, selectedWidth, selectedHeight)
-      ctx.strokeStyle = '#2673e8'
+      ctx.strokeStyle = DESIGN_SYSTEM_COLORS.primary
       ctx.lineWidth = 2
       ctx.strokeRect(left, top, selectedWidth, selectedHeight)
     }
@@ -588,9 +589,9 @@ export default function ChartEditor() {
               <defs><pattern id="chart-dot-grid" width="24" height="24" patternUnits="userSpaceOnUse"><circle cx="1" cy="1" r="1" fill="#e7ebf1" /></pattern></defs>
               <rect width="1000" height="800" fill="#fff" /><rect width="1000" height="800" fill="url(#chart-dot-grid)" />
               {[...chart.objects].filter((item) => chart.layers.some((layer) => layer.id === item.layerId && layer.visible)).sort((a, b) => chart.layers.findIndex((layer) => b.layerId === layer.id) - chart.layers.findIndex((layer) => a.layerId === layer.id)).map((item) => <g key={item.id} transform={`translate(${item.x} ${item.y}) rotate(${item.rotation}) scale(${item.scale})`} color={item.color} fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round" onPointerDown={(event) => startObjectDrag(event, item)}>
-                <g transform="translate(-20 -25)"><SymbolGlyph symbol={item.symbol} />{selectedObjects.includes(item.id) && <rect x="1" y="1" width="38" height="48" fill="none" stroke="#2673e8" strokeWidth="1.5" strokeDasharray="3 2" />}</g>
+                <g transform="translate(-20 -25)"><SymbolGlyph symbol={item.symbol} />{selectedObjects.includes(item.id) && <rect x="1" y="1" width="38" height="48" fill="none" stroke={DESIGN_SYSTEM_COLORS.primary} strokeWidth="1.5" strokeDasharray="3 2" />}</g>
               </g>)}
-              {freeformSelection && <rect x={freeformSelection.x} y={freeformSelection.y} width={freeformSelection.width} height={freeformSelection.height} fill="rgba(38,115,232,.08)" stroke="#2673e8" strokeDasharray="5 4" pointerEvents="none" />}
+              {freeformSelection && <rect x={freeformSelection.x} y={freeformSelection.y} width={freeformSelection.width} height={freeformSelection.height} fill={DESIGN_SYSTEM_COLORS.primarySoft} stroke={DESIGN_SYSTEM_COLORS.primary} strokeDasharray="5 4" pointerEvents="none" />}
             </svg>
           </div>
           <ZoomControls zoom={zoom} setZoom={setZoom} />

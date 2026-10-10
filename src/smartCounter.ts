@@ -1,5 +1,6 @@
 import type { CounterHistoryEntry, CounterKind, CounterSnapshot, CounterTaskKind, CounterTaskOccurrence, CounterTaskRule, CounterTaskStatus, ProgressGuide } from './types'
 import { guideRowPosition } from './progressLines'
+import { DEFAULT_COUNTER_COLORS } from './designTokens'
 
 export const COUNTER_COUNT = 5
 export const MAX_COUNTER_ROW = 9999
@@ -26,7 +27,7 @@ export function createDefaultCounters(): CounterSnapshot[] {
 
 export function createCounter(kind: CounterKind, name?: string): CounterSnapshot {
   const id = crypto.randomUUID()
-  const color = kind === 'simple' ? '#2673e8' : kind === 'pattern' ? '#8266c2' : '#df8545'
+  const color = DEFAULT_COUNTER_COLORS[kind]
   const common = { id, kind, name: name?.trim() || defaultName(kind), color, pinned: false, value: kind === 'task' ? 0 : 1 }
   if (kind === 'simple') return { ...common, unit: 'row', firstSide: 'rs', goalAlertEnabled: true }
   if (kind === 'pattern') return { ...common, currentRow: 1, patternRow: 1, repeatLength: 1, startRow: 1, instructions: [], patternAlertEnabled: true }
@@ -126,7 +127,7 @@ function migrateLegacyCounters(value: unknown): CounterSnapshot[] {
     const sourceId = 'legacy-counter-' + index
     const valueNumber = integer(entry.value, entry.mode === 'repeat' ? 1 : 0, entry.mode === 'repeat' ? 1 : 0)
     if (entry.mode === 'simple') {
-      result.push({ id: sourceId, kind: 'simple', name: '카운터 ' + (index + 1), color: '#2673e8', pinned: false, value: valueNumber, unit: 'row' })
+      result.push({ id: sourceId, kind: 'simple', name: '카운터 ' + (index + 1), color: DEFAULT_COUNTER_COLORS.simple, pinned: false, value: valueNumber, unit: 'row' })
       return
     }
     const oldRules = Array.isArray(entry.taskRules) ? entry.taskRules.filter(isLegacyTaskRule).slice(0, MAX_COUNTER_TASK_RULES) : []
@@ -136,9 +137,9 @@ function migrateLegacyCounters(value: unknown): CounterSnapshot[] {
     const startRow = integer(entry.startRow, 1, 1)
     const offset = Math.max(0, valueNumber - startRow)
     const baseId = sourceId + '-row'
-    result.push({ id: baseId, kind: 'simple', name: (typeof entry.repeatName === 'string' && entry.repeatName.trim() || '무늬') + ' 단', color: '#2673e8', pinned: false, value: valueNumber, unit: 'row' })
+    result.push({ id: baseId, kind: 'simple', name: (typeof entry.repeatName === 'string' && entry.repeatName.trim() || '무늬') + ' 단', color: DEFAULT_COUNTER_COLORS.simple, pinned: false, value: valueNumber, unit: 'row' })
     const pattern: CounterSnapshot = {
-      id: sourceId, kind: 'pattern', name: typeof entry.repeatName === 'string' && entry.repeatName.trim() ? entry.repeatName.trim().slice(0, 100) : '무늬', color: '#8266c2',
+      id: sourceId, kind: 'pattern', name: typeof entry.repeatName === 'string' && entry.repeatName.trim() ? entry.repeatName.trim().slice(0, 100) : '무늬', color: DEFAULT_COUNTER_COLORS.pattern,
       pinned: false, linkedToId: baseId, value: offset % repeatLength + 1, currentRow: valueNumber, patternRow: offset % repeatLength + 1,
       repeatLength, startRow, ...(Number.isSafeInteger(entry.repeatCount) && Number(entry.repeatCount) > 0 ? { repeatCount: Number(entry.repeatCount) } : {}), instructions: [],
     }
@@ -148,7 +149,7 @@ function migrateLegacyCounters(value: unknown): CounterSnapshot[] {
       const nextTaskRow = rule.interval + Math.max(0, Math.ceil((valueNumber - rule.interval) / rule.interval)) * rule.interval
       const taskId = sourceId + '-task-' + rule.id
       result.push({
-        id: taskId, kind: 'task', name: (rule.kind === 'decrease' ? '줄임' : '늘림') + ' ' + (result.filter((item) => item.kind === 'task' && item.taskKind === rule.kind).length + 1), color: '#df8545',
+        id: taskId, kind: 'task', name: (rule.kind === 'decrease' ? '줄임' : '늘림') + ' ' + (result.filter((item) => item.kind === 'task' && item.taskKind === rule.kind).length + 1), color: DEFAULT_COUNTER_COLORS.task,
         pinned: false, linkedToId: baseId, value: records.filter((item) => item.status === 'done').length,
         currentRow: valueNumber, taskKind: rule.kind, firstTaskRow: rule.interval, interval: rule.interval, total: rule.total,
         completedCount: records.filter((item) => item.status === 'done').length, nextTaskRow, taskRecords: records,
@@ -171,7 +172,7 @@ function normalizeNewCounter(value: unknown): CounterSnapshot | null {
   const id = typeof value.id === 'string' && value.id ? value.id.slice(0, 100) : crypto.randomUUID()
   const name = typeof value.name === 'string' && value.name.trim() ? value.name.trim().slice(0, 100) : defaultName(kind)
   const common: CounterSnapshot = {
-    id, kind, name, color: typeof value.color === 'string' && /^#[\da-f]{6}$/i.test(value.color) ? value.color : kind === 'simple' ? '#2673e8' : kind === 'pattern' ? '#8266c2' : '#df8545', pinned: value.pinned === true,
+    id, kind, name, color: typeof value.color === 'string' && /^#[\da-f]{6}$/i.test(value.color) ? value.color : DEFAULT_COUNTER_COLORS[kind], pinned: value.pinned === true,
     value: integer(value.value, kind === 'pattern' ? 1 : 0, 0),
     ...(typeof value.linkedToId === 'string' ? { linkedToId: value.linkedToId.slice(0, 100) } : {}),
     ...(value.legacyOverflow === true ? { legacyOverflow: true } : {}),

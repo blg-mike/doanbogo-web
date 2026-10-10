@@ -25,6 +25,8 @@ jobs:
           cache: npm
       - name: Install dependencies
         run: npm ci
+      - name: Check design system
+        run: npm run check:design-system
       - name: Check types
         run: npm run typecheck
       - name: Lint
