@@ -1,5 +1,5 @@
 import 'fake-indexeddb/auto'
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 
 function createLegacyDatabase() {
   return new Promise<IDBDatabase>((resolve, reject) => {
@@ -11,6 +11,8 @@ function createLegacyDatabase() {
       documents.createIndex('by-opened', 'lastOpenedAt')
       const pages = db.createObjectStore('pages', { keyPath: ['documentId', 'pageNumber'] })
       pages.createIndex('by-document', 'documentId')
+      pages.put({ documentId: 'migration-document', pageNumber: 2, hidden: true, hiddenGroupId: 'legacy-hidden', bookmarked: true })
+      pages.put({ documentId: 'migration-document', pageNumber: 3, hidden: false, hiddenGroupId: 'stale-group', bookmarked: false })
       const viewers = db.createObjectStore('viewers', { keyPath: 'documentId' })
       viewers.put({
         documentId: 'migration-document', split: false, activePane: 'primary',
@@ -38,16 +40,30 @@ function createLegacyDatabase() {
   })
 }
 
-describe('counter and page recognition database migration', () => {
-  it('normalizes v7 counters and keeps its recognition store in version 8', async () => {
+describe('legacy database migration', () => {
+  it('normalizes existing counters and clears legacy page visibility while preserving bookmarks', async () => {
     const legacy = await createLegacyDatabase()
     legacy.close()
-    const { getPageRecognition, getPreference, getViewer } = await import('./storage')
+    const { getPageRecognition, getPages, getPreference, getViewer } = await import('./storage')
 
     await expect(getPageRecognition('existing-document', 1)).resolves.toBeUndefined()
     await expect(getPreference('migration-test')).resolves.toBe('existing setting')
     const viewer = await getViewer('migration-document', 1)
     expect(viewer.counters).toHaveLength(5)
     expect(viewer.counters?.slice(0, 2)).toMatchObject([{ kind: 'simple', value: 7, unit: 'row' }, { kind: 'simple', value: 0 }])
+
+    const pages = await getPages('migration-document')
+    expect(pages).toEqual([
+      { documentId: 'migration-document', pageNumber: 2, hidden: false, bookmarked: true },
+      { documentId: 'migration-document', pageNumber: 3, hidden: false, bookmarked: false },
+    ])
+
+    const { setPagesHiddenState } = await import('./storage')
+    await setPagesHiddenState('migration-document', [2], true, 'new-hidden')
+    vi.resetModules()
+    const { getPages: getPagesAfterReload } = await import('./storage')
+    await expect(getPagesAfterReload('migration-document')).resolves.toContainEqual({
+      documentId: 'migration-document', pageNumber: 2, hidden: true, hiddenGroupId: 'new-hidden', bookmarked: true,
+    })
   })
 })

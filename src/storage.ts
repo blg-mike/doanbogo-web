@@ -16,6 +16,7 @@ interface DoanBogoDB extends DBSchema {
   }
   viewers: { key: string; value: ViewerSnapshot }
   preferences: { key: string; value: PreferenceRecord }
+  migrations: { key: string; value: { key: string; value: string } }
   pageWork: { key: [string, number]; value: PageWorkRecord; indexes: { 'by-document': string } }
   charts: { key: string; value: ChartDocument; indexes: { 'by-updated': number } }
   knittingReports: { key: string; value: KnittingReport }
@@ -60,6 +61,7 @@ const temporary = {
 }
 
 const pageKey = (id: string, page: number) => id + '\u0000' + page
+const hiddenPageResetMigrationKey = 'reset-hidden-pages-v11'
 
 function stripLegacyTechniqueSlots(viewer: ViewerSnapshot): ViewerSnapshot {
   const cleaned = { ...viewer } as ViewerSnapshot & { techniqueSlots?: unknown }
@@ -108,7 +110,7 @@ async function database(): Promise<Database | null> {
     try {
       let abandoned = false
       let timeoutId = 0
-      const opening = openDB<DoanBogoDB>('doanbogo-web', 10, {
+      const opening = openDB<DoanBogoDB>('doanbogo-web', 11, {
         async upgrade(db, oldVersion, _newVersion, transaction) {
           if (oldVersion < 1) {
             const documents = db.createObjectStore('documents', { keyPath: 'id' })
@@ -203,6 +205,7 @@ async function database(): Promise<Database | null> {
               }
             }
           }
+          if (oldVersion < 11) db.createObjectStore('migrations', { keyPath: 'key' })
         },
       }).then((db) => {
         if (abandoned) {
@@ -235,6 +238,25 @@ async function database(): Promise<Database | null> {
         await db.delete('preferences', '__doanbogo_storage_probe__')
       } catch (error) {
         if (!(error instanceof DOMException && error.name === 'QuotaExceededError')) throw error
+      }
+      const migration = db.transaction(['pages', 'migrations'], 'readwrite')
+      const migrationDone = migration.done
+      try {
+        const migrationStore = migration.objectStore('migrations')
+        if (!(await migrationStore.get(hiddenPageResetMigrationKey))) {
+          let cursor = await migration.objectStore('pages').openCursor()
+          while (cursor) {
+            const page = cursor.value as PageRecord
+            if (page.hidden || page.hiddenGroupId) await cursor.update(updatePageHiddenState(page, false))
+            cursor = await cursor.continue()
+          }
+          await migrationStore.put({ key: hiddenPageResetMigrationKey, value: 'complete' })
+        }
+        await migrationDone
+      } catch (error) {
+        try { migration.abort() } catch { /* The transaction may already have finished. */ }
+        await migrationDone.catch(() => {})
+        throw error
       }
       setStorageMode('persistent')
       return db
