@@ -1,10 +1,12 @@
 import { formatNumber, t, translateMessage } from './locales/index'
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, type DragEvent as ReactDragEvent, type MouseEvent as ReactMouseEvent, type PointerEvent as ReactPointerEvent, type RefObject } from 'react'
+import { createPortal } from 'react-dom'
 import type { PDFDocumentProxy, PDFPageProxy, RenderTask } from 'pdfjs-dist'
 import { Trash2 } from 'lucide-react'
 import BrandLoading from './BrandLoading'
+import { ColorPresetButtons } from './ColorPresetButtons'
 import { ProgressLineOverlay } from './ProgressLineOverlay'
-import type { AnnotationRecord, AnnotationStyle, AnnotationTool, ColorworkCell, ColorworkCreateRequest, ColorworkGrid, CounterSnapshot, PageRotation, PageWorkRecord, PaneId, PaneSnapshot, ProgressGuide, ProgressSettings } from './types'
+import type { AnnotationRecord, AnnotationStyle, AnnotationTool, ColorworkCell, ColorworkCreateRequest, ColorworkGrid, CounterSnapshot, PageRotation, PageWorkRecord, PaneId, PaneSnapshot, ProgressGuide, ProgressSettings, RegionHighlight } from './types'
 import { createColorworkGrid, resizeColorworkGridDisplay } from './colorwork'
 import { appendInkPoint, createInkAnnotation, createInkId, type ActiveInkStroke, type InkPoint } from './inkStroke'
 import { textNoteBoxAt, textNoteCounterRotation, textNoteGestureExceededThreshold } from './textNote'
@@ -34,6 +36,19 @@ type ColorworkStroke = {
   previous: { column: number; row: number } | null
   changed: boolean
 }
+type RegionResizeHandle = 'nw' | 'ne' | 'sw' | 'se'
+type RegionHighlightTransform = {
+  id: string
+  pointerId: number
+  kind: 'move' | RegionResizeHandle
+  start: Point
+  original: RegionHighlight
+  before: PageWorkRecord
+  changed: boolean
+}
+type RegionHighlightDrawing = { pointerId: number; start: Point; before: PageWorkRecord }
+type RegionPopoverPosition = { left: number; top: number }
+const EMPTY_REGION_HIGHLIGHTS: RegionHighlight[] = []
 
 interface ThumbnailJob {
   cancelled: boolean
@@ -343,6 +358,22 @@ function pointFromEvent(event: { clientX: number; clientY: number }, element: El
   return pagePositionAtClientPoint(rect, width, height, rotation, (scaleX + scaleY) / 2, event.clientX, event.clientY)
 }
 
+function boundedPagePoint(point: Point): Point {
+  return { x: Math.min(1, Math.max(0, point.x)), y: Math.min(1, Math.max(0, point.y)) }
+}
+
+function regionFromPoints(first: Point, second: Point) {
+  const start = boundedPagePoint(first)
+  const end = boundedPagePoint(second)
+  const x = Math.min(start.x, end.x)
+  const y = Math.min(start.y, end.y)
+  return { x, y, width: Math.abs(end.x - start.x), height: Math.abs(end.y - start.y) }
+}
+
+function sameRegionGeometry(first: RegionHighlight, second: RegionHighlight) {
+  return first.x === second.x && first.y === second.y && first.width === second.width && first.height === second.height
+}
+
 function distanceToSegment(point: Point, start: Point, end: Point, width: number, height: number) {
   const px = point.x * width
   const py = point.y * height
@@ -387,7 +418,7 @@ function withTextBox(annotation: AnnotationRecord, pageHeight: number): Annotati
   return { ...annotation, points: [{ x: box.x, y: box.y }], boxWidth: box.width, boxHeight: box.height }
 }
 
-export function PdfPage({ pdf, page, paneId, pane, splitView, rotation, active, tool, lineSettings, counters, annotationStyle, work, workReady, colorworkBrushColor, colorworkBrushOpacity, colorworkEraser, createColorworkRequest, pageLinks, qrLinks, onPageRendered, onActivate, onWorkChange, onZoom, onCenter, onColorworkRequestHandled, onTextToolConsumed }: {
+export function PdfPage({ pdf, page, paneId, pane, splitView, rotation, active, tool, lineSettings, counters, annotationStyle, work, workReady, colorworkBrushColor, colorworkBrushOpacity, colorworkEraser, createColorworkRequest, pageLinks, qrLinks, onPageRendered, onActivate, onWorkChange, onZoom, onCenter, onColorworkRequestHandled, onTextToolConsumed, onRegionHighlightToolConsumed }: {
   pdf: PDFDocumentProxy
   page: number
   paneId: PaneId
@@ -414,6 +445,7 @@ export function PdfPage({ pdf, page, paneId, pane, splitView, rotation, active, 
   onCenter: (x: number, y: number) => void
   onColorworkRequestHandled: (id: string) => void
   onTextToolConsumed: () => void
+  onRegionHighlightToolConsumed: () => void
 }) {
   const resourcePolicy = getViewerResourcePolicy()
   const scrollRef = useRef<HTMLDivElement>(null)
@@ -424,6 +456,8 @@ export function PdfPage({ pdf, page, paneId, pane, splitView, rotation, active, 
   const textStyleToolbarRef = useRef<HTMLDivElement>(null)
   const colorworkPanelRef = useRef<HTMLDivElement>(null)
   const colorworkCanvasRef = useRef<HTMLCanvasElement>(null)
+  const regionPopoverRef = useRef<HTMLDivElement>(null)
+  const regionNodesRef = useRef(new Map<string, SVGRectElement>())
   const renderQueueKey = useRef<object>({})
   const renderPriority = useRef(active ? 1 : 0)
   const displayCanvasKey = useRef<object>({})
@@ -431,6 +465,9 @@ export function PdfPage({ pdf, page, paneId, pane, splitView, rotation, active, 
   const handledColorworkRequest = useRef<string | null>(null)
   const colorworkTransform = useRef<ColorworkTransform | null>(null)
   const colorworkStroke = useRef<ColorworkStroke | null>(null)
+  const regionDrawing = useRef<RegionHighlightDrawing | null>(null)
+  const regionTransform = useRef<RegionHighlightTransform | null>(null)
+  const regionStyleEditBefore = useRef<{ id: string; before: PageWorkRecord } | null>(null)
   const centerRef = useRef({ x: pane.centerX, y: pane.centerY })
   const onCenterRef = useRef(onCenter)
   const zoomFocusRef = useRef<ZoomFocus | null>(null)
@@ -476,8 +513,20 @@ export function PdfPage({ pdf, page, paneId, pane, splitView, rotation, active, 
   const [textPreviewPoint, setTextPreviewPoint] = useState<Point | null>(null)
   const [textToolbarPosition, setTextToolbarPosition] = useState<Point | null>(null)
   const [fontSizeDraft, setFontSizeDraft] = useState<{ id: string; value: string } | null>(null)
+  const regionHighlights = work.regionHighlights ?? EMPTY_REGION_HIGHLIGHTS
+  const [regionPreview, setRegionPreview] = useState<RegionHighlight | null>(null)
+  const [selectedRegionId, setSelectedRegionId] = useState<string | null>(null)
+  const selectedRegionIdRef = useRef<string | null>(null)
+  const [regionPopoverOpen, setRegionPopoverOpen] = useState(false)
+  const [regionPopoverPosition, setRegionPopoverPosition] = useState<RegionPopoverPosition | null>(null)
+  function updateSelectedRegionId(id: string | null) {
+    selectedRegionIdRef.current = id
+    setSelectedRegionId(id)
+    setRegionPopoverPosition(null)
+  }
   const renderKey = [page, pane.zoom, rotation, size.width, size.height].join(':')
   const colorworkGrid = work.colorworkGrid?.visible ? work.colorworkGrid : null
+  const selectedRegion = regionHighlights.find((region) => region.id === selectedRegionId) ?? null
   const canPreviewZoom = displayedRaster?.pdf === pdf && displayedRaster.page === page && displayedRaster.rotation === rotation
   const zoomPreviewScale = canPreviewZoom ? pane.zoom / displayedRaster.zoom : 1
 
@@ -850,6 +899,78 @@ export function PdfPage({ pdf, page, paneId, pane, splitView, rotation, active, 
   }, [work])
 
   useLayoutEffect(() => {
+    if (!active || !regionPopoverOpen || !selectedRegionId) return
+    const updatePosition = () => {
+      const regionNode = regionNodesRef.current.get(selectedRegionId)
+      const panel = regionPopoverRef.current
+      if (!regionNode || !panel) return
+      const regionRect = regionNode.getBoundingClientRect()
+      const panelRect = panel.getBoundingClientRect()
+      const margin = 8
+      const width = panelRect.width
+      const height = panelRect.height
+      const viewportWidth = document.documentElement.clientWidth
+      const viewportHeight = document.documentElement.clientHeight
+      const fits = (left: number, top: number) => left >= margin && top >= margin && left + width <= viewportWidth - margin && top + height <= viewportHeight - margin
+      let left: number
+      let top: number
+      if (regionRect.width >= width + margin * 2 && regionRect.height >= height + margin * 2) {
+        left = regionRect.right - width - margin
+        top = regionRect.top + margin
+      } else {
+        const candidates = [
+          { left: regionRect.right + margin, top: regionRect.top },
+          { left: regionRect.left - width - margin, top: regionRect.top },
+          { left: regionRect.right + margin, top: regionRect.bottom - height },
+          { left: regionRect.left - width - margin, top: regionRect.bottom - height },
+          { left: regionRect.left, top: regionRect.bottom + margin },
+          { left: regionRect.left, top: regionRect.top - height - margin },
+        ]
+        const available = candidates.find((candidate) => fits(candidate.left, candidate.top)) ?? candidates[0]
+        left = available.left
+        top = available.top
+      }
+      left = Math.min(Math.max(margin, left), Math.max(margin, viewportWidth - width - margin))
+      top = Math.min(Math.max(margin, top), Math.max(margin, viewportHeight - height - margin))
+      setRegionPopoverPosition((current) => current?.left === left && current.top === top ? current : { left, top })
+    }
+    updatePosition()
+    window.addEventListener('resize', updatePosition)
+    document.addEventListener('scroll', updatePosition, true)
+    return () => {
+      window.removeEventListener('resize', updatePosition)
+      document.removeEventListener('scroll', updatePosition, true)
+    }
+  }, [active, displayedSize, pane.zoom, regionHighlights, regionPopoverOpen, rotation, selectedRegionId, size.height, size.width])
+
+  useEffect(() => {
+    if (!active || !regionPopoverOpen || !selectedRegionId) return
+    const close = () => {
+      setRegionPopoverOpen(false)
+      updateSelectedRegionId(null)
+    }
+    const onPointerDown = (event: PointerEvent) => {
+      const target = event.target
+      if (!(target instanceof Node) || regionPopoverRef.current?.contains(target)) return
+      if (target instanceof Element && target.closest('[data-region-highlight-id]')) return
+      close()
+    }
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== 'Escape') return
+      event.preventDefault()
+      const regionNode = regionNodesRef.current.get(selectedRegionId)
+      close()
+      regionNode?.focus()
+    }
+    document.addEventListener('pointerdown', onPointerDown, true)
+    document.addEventListener('keydown', onKeyDown)
+    return () => {
+      document.removeEventListener('pointerdown', onPointerDown, true)
+      document.removeEventListener('keydown', onKeyDown)
+    }
+  }, [active, regionPopoverOpen, selectedRegionId])
+
+  useLayoutEffect(() => {
     setPendingStrokePreviews((current) => {
       const remaining = current.filter((item) => item.documentId !== work.documentId || item.pageNumber !== work.pageNumber || !work.annotations.some((annotation) => annotation.id === item.annotation.id))
       return remaining.length === current.length ? current : remaining
@@ -878,6 +999,173 @@ export function PdfPage({ pdf, page, paneId, pane, splitView, rotation, active, 
     const localCenter = pointFromEvent({ clientX: layerRect.left + left + toolbarRect.width / 2, clientY: layerRect.top + top + toolbarRect.height / 2 }, layer, rotation)
     setTextToolbarPosition({ x: localCenter.x * layer.clientWidth - toolbar.offsetWidth / 2, y: localCenter.y * layer.clientHeight - toolbar.offsetHeight / 2 })
   }, [active, selectedNoteId, displayedSize, rotation, work])
+
+  function beginRegionHighlight(event: ReactPointerEvent<SVGSVGElement>, point: Point) {
+    if (!workReady || !displayedSize || (event.pointerType === 'mouse' && event.button !== 0)) return
+    event.preventDefault()
+    event.stopPropagation()
+    onActivate()
+    event.currentTarget.setPointerCapture(event.pointerId)
+    const before = currentWorkRef.current
+    regionDrawing.current = { pointerId: event.pointerId, start: boundedPagePoint(point), before }
+    setRegionPreview({ id: 'draft', ...regionFromPoints(point, point), color: annotationStyle.color, opacity: 0.3 })
+    updateSelectedRegionId(null)
+    setRegionPopoverOpen(false)
+    setSelectedNoteId(null)
+    setEditingNoteId(null)
+  }
+
+  function beginRegionTransform(event: ReactPointerEvent<SVGElement>, region: RegionHighlight, kind: 'move' | RegionResizeHandle) {
+    if (!displayedSize || !annotationLayerRef.current || (event.pointerType === 'mouse' && event.button !== 0)) return
+    event.preventDefault()
+    event.stopPropagation()
+    onActivate()
+    try { event.currentTarget.setPointerCapture(event.pointerId) } catch { /* Pointer events still bubble to the SVG when capture is unavailable. */ }
+    regionTransform.current = {
+      id: region.id,
+      pointerId: event.pointerId,
+      kind,
+      start: pointFromEvent(event, annotationLayerRef.current, rotation),
+      original: region,
+      before: currentWorkRef.current,
+      changed: false,
+    }
+  }
+
+  function handleRegionPointerDown(event: ReactPointerEvent<SVGElement>, region: RegionHighlight, kind: 'move' | RegionResizeHandle = 'move') {
+    event.stopPropagation()
+    if (tool !== 'pan') return
+    updateSelectedRegionId(region.id)
+    setRegionPopoverOpen(true)
+    setSelectedNoteId(null)
+    setEditingNoteId(null)
+    if (kind !== 'move' || selectedRegionId === region.id) beginRegionTransform(event, region, kind)
+    else {
+      event.preventDefault()
+      onActivate()
+      event.currentTarget.focus()
+    }
+  }
+
+  function moveRegionTransform(event: ReactPointerEvent<SVGSVGElement>) {
+    const transform = regionTransform.current
+    const layer = annotationLayerRef.current
+    if (!transform || transform.pointerId !== event.pointerId || !layer || !displayedSize) return
+    event.preventDefault()
+    event.stopPropagation()
+    const point = boundedPagePoint(pointFromEvent(event, layer, rotation))
+    const dx = point.x - transform.start.x
+    const dy = point.y - transform.start.y
+    const original = transform.original
+    const minWidth = Math.min(original.width, 8 / Math.max(displayedSize.css.width, 1))
+    const minHeight = Math.min(original.height, 8 / Math.max(displayedSize.css.height, 1))
+    let nextRegion: RegionHighlight
+    if (transform.kind === 'move') {
+      nextRegion = {
+        ...original,
+        x: Math.min(1 - original.width, Math.max(0, original.x + dx)),
+        y: Math.min(1 - original.height, Math.max(0, original.y + dy)),
+      }
+    } else {
+      let left = original.x
+      let top = original.y
+      let right = original.x + original.width
+      let bottom = original.y + original.height
+      if (transform.kind.includes('w')) left = Math.min(right - minWidth, Math.max(0, original.x + dx))
+      else right = Math.max(left + minWidth, Math.min(1, right + dx))
+      if (transform.kind.includes('n')) top = Math.min(bottom - minHeight, Math.max(0, original.y + dy))
+      else bottom = Math.max(top + minHeight, Math.min(1, bottom + dy))
+      nextRegion = { ...original, x: left, y: top, width: right - left, height: bottom - top }
+    }
+    transform.changed = !sameRegionGeometry(original, nextRegion)
+    if (!transform.changed) return
+    const current = currentWorkRef.current
+    const next = { ...current, regionHighlights: (current.regionHighlights ?? []).map((item) => item.id === transform.id ? nextRegion : item) }
+    currentWorkRef.current = next
+    onWorkChangeRef.current(next, false, false, transform.before)
+  }
+
+  function finishRegionTransform(pointerId: number, cancelled = false) {
+    const transform = regionTransform.current
+    if (!transform || transform.pointerId !== pointerId) return
+    regionTransform.current = null
+    const latest = currentWorkRef.current
+    if (cancelled) {
+      currentWorkRef.current = transform.before
+      onWorkChangeRef.current(transform.before, true, false)
+    } else if (transform.changed) {
+      onWorkChangeRef.current(latest, true, true, transform.before)
+    }
+  }
+
+  function updateRegionPreview(event: ReactPointerEvent<SVGSVGElement>) {
+    const drawing = regionDrawing.current
+    if (!drawing || drawing.pointerId !== event.pointerId) return
+    const point = boundedPagePoint(pointFromEvent(event, event.currentTarget, rotation))
+    setRegionPreview({ id: 'draft', ...regionFromPoints(drawing.start, point), color: annotationStyle.color, opacity: 0.3 })
+  }
+
+  function finishRegionHighlight(event: ReactPointerEvent<SVGSVGElement>, cancelled = false) {
+    const drawing = regionDrawing.current
+    if (!drawing || drawing.pointerId !== event.pointerId) return
+    regionDrawing.current = null
+    setRegionPreview(null)
+    if (cancelled || !displayedSize) return
+    const point = boundedPagePoint(pointFromEvent(event, event.currentTarget, rotation))
+    const box = regionFromPoints(drawing.start, point)
+    const isQuarterTurn = rotation === 90 || rotation === 270
+    const visualWidth = (isQuarterTurn ? box.height : box.width) * (isQuarterTurn ? displayedSize.css.height : displayedSize.css.width)
+    const visualHeight = (isQuarterTurn ? box.width : box.height) * (isQuarterTurn ? displayedSize.css.width : displayedSize.css.height)
+    if (visualWidth < 8 || visualHeight < 8) return
+    const region: RegionHighlight = { id: crypto.randomUUID(), ...box, color: annotationStyle.color, opacity: 0.3 }
+    const next = { ...drawing.before, regionHighlights: [...(drawing.before.regionHighlights ?? []), region] }
+    currentWorkRef.current = next
+    onWorkChangeRef.current(next, true, true, drawing.before)
+    updateSelectedRegionId(region.id)
+    setRegionPopoverOpen(true)
+    onRegionHighlightToolConsumed()
+  }
+
+  function beginRegionOpacityChange(id: string) {
+    if (regionStyleEditBefore.current?.id === id) return
+    finishRegionOpacityChange()
+    regionStyleEditBefore.current = { id, before: currentWorkRef.current }
+  }
+
+  function changeRegionStyle(id: string, change: Partial<Pick<RegionHighlight, 'color' | 'opacity'>>, grouped = false) {
+    if (grouped && regionStyleEditBefore.current?.id !== id) beginRegionOpacityChange(id)
+    const transaction = grouped ? regionStyleEditBefore.current : null
+    const before = transaction?.before ?? currentWorkRef.current
+    const existing = currentWorkRef.current.regionHighlights?.find((region) => region.id === id)
+    if (!existing || (change.color === undefined || change.color === existing.color) && (change.opacity === undefined || change.opacity === existing.opacity)) return
+    const next = {
+      ...currentWorkRef.current,
+      regionHighlights: (currentWorkRef.current.regionHighlights ?? []).map((region) => region.id === id ? { ...region, ...change } : region),
+    }
+    currentWorkRef.current = next
+    onWorkChangeRef.current(next, !transaction, !transaction, before)
+  }
+
+  function finishRegionOpacityChange() {
+    const transaction = regionStyleEditBefore.current
+    if (!transaction) return
+    regionStyleEditBefore.current = null
+    const beforeRegion = transaction.before.regionHighlights?.find((region) => region.id === transaction.id)
+    const currentRegion = currentWorkRef.current.regionHighlights?.find((region) => region.id === transaction.id)
+    if (beforeRegion && currentRegion && (beforeRegion.color !== currentRegion.color || beforeRegion.opacity !== currentRegion.opacity)) {
+      onWorkChangeRef.current(currentWorkRef.current, true, true, transaction.before)
+    }
+  }
+
+  function deleteRegionHighlight(id: string) {
+    finishRegionOpacityChange()
+    const before = currentWorkRef.current
+    const next = { ...before, regionHighlights: (before.regionHighlights ?? []).filter((region) => region.id !== id) }
+    currentWorkRef.current = next
+    onWorkChangeRef.current(next, true, true, before)
+    updateSelectedRegionId(null)
+    setRegionPopoverOpen(false)
+  }
 
   function pointerDown(event: ReactPointerEvent<HTMLDivElement>) {
     const target = event.target
@@ -1591,6 +1879,10 @@ export function PdfPage({ pdf, page, paneId, pane, splitView, rotation, active, 
     onActivate()
     event.stopPropagation()
     const point = pointFromEvent(event, event.currentTarget, rotation)
+    if (tool === 'region-highlight') {
+      beginRegionHighlight(event, point)
+      return
+    }
     if (tool === 'text') {
       if (event.pointerType === 'mouse') event.preventDefault()
       addText(point)
@@ -1612,6 +1904,14 @@ export function PdfPage({ pdf, page, paneId, pane, splitView, rotation, active, 
   }
 
   function handleSvgPointerMove(event: ReactPointerEvent<SVGSVGElement>) {
+    if (regionDrawing.current?.pointerId === event.pointerId) {
+      updateRegionPreview(event)
+      return
+    }
+    if (regionTransform.current?.pointerId === event.pointerId) {
+      moveRegionTransform(event)
+      return
+    }
     const point = pointFromEvent(event, event.currentTarget, rotation)
     const stroke = strokeRef.current
     if (stroke?.pointerId === event.pointerId) {
@@ -1645,6 +1945,14 @@ export function PdfPage({ pdf, page, paneId, pane, splitView, rotation, active, 
   }
 
   function finishSvgPointer(event: ReactPointerEvent<SVGSVGElement>, cancelled: boolean) {
+    if (regionDrawing.current?.pointerId === event.pointerId) {
+      finishRegionHighlight(event, cancelled)
+      return
+    }
+    if (regionTransform.current?.pointerId === event.pointerId) {
+      finishRegionTransform(event.pointerId, cancelled)
+      return
+    }
     const stroke = strokeRef.current
     if (stroke?.pointerId === event.pointerId) {
       const finalPoint = cancelled ? undefined : pointFromEvent(event, event.currentTarget, stroke.rotation)
@@ -1739,8 +2047,24 @@ export function PdfPage({ pdf, page, paneId, pane, splitView, rotation, active, 
     style: activeDraft?.style ?? failedDraft?.style ?? annotationStyle,
   } : null
   const visiblePendingStrokePreviews = pendingStrokePreviews.filter((item) => item.documentId === work.documentId && item.pageNumber === page)
+  const regionHandleRadius = pageSize && cssSize ? 22 * pageSize.width / Math.max(cssSize.width, 1) : 8
+  const selectedRegionHandles = active && tool === 'pan' && selectedRegion ? (() => {
+    const left = selectedRegion.x
+    const right = selectedRegion.x + selectedRegion.width
+    const top = selectedRegion.y
+    const bottom = selectedRegion.y + selectedRegion.height
+    const offsetX = pageSize && selectedRegion.width * pageSize.width < regionHandleRadius * 2 ? regionHandleRadius : 0
+    const offsetY = pageSize && selectedRegion.height * pageSize.height < regionHandleRadius * 2 ? regionHandleRadius : 0
+    return [
+      { handle: 'nw' as const, x: left, y: top, hitX: left - offsetX, hitY: top - offsetY },
+      { handle: 'ne' as const, x: right, y: top, hitX: right + offsetX, hitY: top - offsetY },
+      { handle: 'sw' as const, x: left, y: bottom, hitX: left - offsetX, hitY: bottom + offsetY },
+      { handle: 'se' as const, x: right, y: bottom, hitX: right + offsetX, hitY: bottom + offsetY },
+    ]
+  })() : []
 
   return (
+    <>
     <div className={'pdf-pane ' + (active ? 'is-active' : '')} onPointerDown={onActivate}>
       <div className="pane-label">{active ? t('현재 작업 영역') : t('보조 영역')}</div>
       {strokeError && <div className="ink-save-error" role="alert"><span>{t("필기를 반영하지 못했습니다.")}</span><button type="button" onClick={retryStrokeSave}>{t("다시 시도")}</button></div>}
@@ -1762,11 +2086,86 @@ export function PdfPage({ pdf, page, paneId, pane, splitView, rotation, active, 
               onPointerCancel={handleSvgPointerCancel}
             >
               {tool !== 'pan' && <rect x="0" y="0" width={pageSize.width} height={pageSize.height} fill="transparent" pointerEvents="all" />}
+              {regionHighlights.map((region) => {
+                return <rect
+                  key={'region-' + region.id}
+                  ref={(node) => { if (node) regionNodesRef.current.set(region.id, node); else regionNodesRef.current.delete(region.id) }}
+                  className="region-highlight-shape"
+                  data-region-highlight-id={region.id}
+                  role="button"
+                  aria-label={t('구간 강조 영역')}
+                  tabIndex={tool === 'pan' ? 0 : -1}
+                  aria-pressed={selectedRegionId === region.id}
+                  x={region.x * pageSize.width}
+                  y={region.y * pageSize.height}
+                  width={region.width * pageSize.width}
+                  height={region.height * pageSize.height}
+                  fill={region.color}
+                  fillOpacity={region.opacity}
+                  stroke="none"
+                  strokeWidth={0}
+                  style={{ mixBlendMode: 'multiply', pointerEvents: tool === 'pan' ? 'all' : 'none', touchAction: 'none', cursor: 'move' }}
+                  onPointerDown={(event) => handleRegionPointerDown(event, region)}
+                  onKeyDown={(event) => {
+                    if (tool !== 'pan' || (event.key !== 'Enter' && event.key !== ' ')) return
+                    event.preventDefault()
+                    updateSelectedRegionId(region.id)
+                    setRegionPopoverOpen(true)
+                    onActivate()
+                  }}
+                />
+              })}
+              {regionPreview && <rect
+                x={regionPreview.x * pageSize.width}
+                y={regionPreview.y * pageSize.height}
+                width={regionPreview.width * pageSize.width}
+                height={regionPreview.height * pageSize.height}
+                fill={regionPreview.color}
+                fillOpacity={regionPreview.opacity}
+                stroke={regionPreview.color}
+                strokeDasharray="6 4"
+                style={{ pointerEvents: 'none' }}
+              />}
               {work.annotations.filter((annotation) => annotation.type !== 'text').map((annotation) =>
                 <path key={annotation.id} d={annotationPath(annotation, pageSize.width, pageSize.height)} fill="none" stroke={annotation.style.color} strokeWidth={annotation.style.thickness} strokeOpacity={annotation.style.opacity} strokeLinecap="round" strokeLinejoin="round" style={{ mixBlendMode: annotation.type === 'highlight' ? 'multiply' : 'normal', pointerEvents: tool === 'text' ? 'auto' : 'none' }} />,
               )}
               {visiblePendingStrokePreviews.map(({ annotation }) => <path key={'pending-' + annotation.id} d={annotationPath(annotation, pageSize.width, pageSize.height)} fill="none" stroke={annotation.style.color} strokeWidth={annotation.style.thickness} strokeOpacity={annotation.style.opacity} strokeLinecap="round" strokeLinejoin="round" style={{ mixBlendMode: annotation.type === 'highlight' ? 'multiply' : 'normal', pointerEvents: 'none' }} />)}
               {currentDraft && <path d={annotationPath(currentDraft, pageSize.width, pageSize.height)} fill="none" stroke={currentDraft.style.color} strokeWidth={currentDraft.style.thickness} strokeOpacity={currentDraft.style.opacity} strokeLinecap="round" strokeLinejoin="round" style={{ mixBlendMode: currentDraft.type === 'highlight' ? 'multiply' : 'normal', pointerEvents: 'none' }} />}
+              {selectedRegion && active && tool === 'pan' && <rect
+                x={selectedRegion.x * pageSize.width}
+                y={selectedRegion.y * pageSize.height}
+                width={selectedRegion.width * pageSize.width}
+                height={selectedRegion.height * pageSize.height}
+                fill="transparent"
+                stroke="var(--color-primary)"
+                strokeWidth={cssSize ? pageSize.width / Math.max(cssSize.width, 1) * 1.5 : 1}
+                strokeDasharray={cssSize ? pageSize.width / Math.max(cssSize.width, 1) * 4 + ' ' + pageSize.width / Math.max(cssSize.width, 1) * 3 : undefined}
+                style={{ pointerEvents: 'none' }}
+              />}
+              {selectedRegionHandles.map(({ handle, hitX, hitY }) => <circle
+                key={handle}
+                className="region-highlight-handle-hit"
+                data-region-highlight-id={selectedRegion!.id}
+                data-region-highlight-handle={handle}
+                cx={hitX * pageSize.width}
+                cy={hitY * pageSize.height}
+                r={regionHandleRadius}
+                fill="transparent"
+                aria-label={t('구간 강조 영역') + ' · ' + t('크기 조절')}
+                style={{ pointerEvents: 'all', touchAction: 'none', cursor: handle + '-resize' }}
+                onPointerDown={(event) => handleRegionPointerDown(event, selectedRegion!, handle)}
+              ><title>{t('구간 강조 영역')} · {t('크기 조절')}</title></circle>)}
+              {selectedRegionHandles.map(({ handle, x, y }) => <circle
+                key={'marker-' + handle}
+                className="region-highlight-handle-marker"
+                cx={x * pageSize.width}
+                cy={y * pageSize.height}
+                r={Math.max(4, 4 * pageSize.width / Math.max(cssSize?.width ?? 1, 1))}
+                fill="var(--color-surface)"
+                stroke="var(--color-primary)"
+                strokeWidth={cssSize ? pageSize.width / Math.max(cssSize.width, 1) * 1.5 : 1.5}
+                style={{ pointerEvents: 'none' }}
+              />)}
             </svg>
             <div className="annotation-layer" ref={annotationLayerRef} style={{ width: cssSize.width, height: cssSize.height }}>
               {tool === 'text' && textPreviewPoint && (() => {
@@ -1976,7 +2375,7 @@ export function PdfPage({ pdf, page, paneId, pane, splitView, rotation, active, 
                 counters={counters}
                 rotation={rotation}
                 active={active}
-                disabled={tool === 'text' || !workReady}
+                disabled={tool === 'text' || tool === 'region-highlight' || !workReady}
                 defaultColor={lineSettings.horizontal.color}
                 defaultOpacity={lineSettings.horizontal.opacity}
                 defaultThickness={lineSettings.horizontal.thickness}
@@ -1992,5 +2391,49 @@ export function PdfPage({ pdf, page, paneId, pane, splitView, rotation, active, 
         {renderError?.key === renderKey && <div className="pane-error">{renderError.message}<button onClick={() => { setRenderError(null); setRetry((current) => current + 1) }}>{t("다시 시도")}</button></div>}
       </div>
     </div>
+    {active && regionPopoverOpen && selectedRegion && typeof document !== 'undefined' && createPortal(
+      <div
+        ref={regionPopoverRef}
+        className="region-highlight-popover"
+        role="group"
+        aria-label={t('구간 강조 설정')}
+        style={{ left: regionPopoverPosition?.left ?? -10000, top: regionPopoverPosition?.top ?? -10000, visibility: regionPopoverPosition ? 'visible' : 'hidden' }}
+        onPointerDown={(event) => event.stopPropagation()}
+        onClick={(event) => event.stopPropagation()}
+      >
+        <strong>{t('구간 강조 설정')}</strong>
+        <ColorPresetButtons
+          label={t('구간 강조 색상')}
+          className="annotation-color-presets region-highlight-color-presets"
+          value={selectedRegion.color}
+          onChange={(color) => {
+            finishRegionOpacityChange()
+            changeRegionStyle(selectedRegion.id, { color })
+          }}
+        />
+        <label className="region-highlight-opacity-label">
+          <span>{t('투명도')} {Math.round(selectedRegion.opacity * 100)}%</span>
+          <input
+            type="range"
+            min="10"
+            max="100"
+            step="1"
+            value={Math.round(selectedRegion.opacity * 100)}
+            aria-label={t('구간 강조 투명도')}
+            onPointerDown={() => beginRegionOpacityChange(selectedRegion.id)}
+            onPointerUp={() => finishRegionOpacityChange()}
+            onPointerCancel={() => finishRegionOpacityChange()}
+            onFocus={() => beginRegionOpacityChange(selectedRegion.id)}
+            onBlur={() => finishRegionOpacityChange()}
+            onKeyDown={() => beginRegionOpacityChange(selectedRegion.id)}
+            onKeyUp={() => finishRegionOpacityChange()}
+            onChange={(event) => changeRegionStyle(selectedRegion.id, { opacity: Number(event.currentTarget.value) / 100 }, true)}
+          />
+        </label>
+        <button type="button" className="region-highlight-delete" onClick={() => deleteRegionHighlight(selectedRegion.id)}><Trash2 size={16} />{t('삭제')}</button>
+      </div>,
+      document.body,
+    )}
+    </>
   )
 }

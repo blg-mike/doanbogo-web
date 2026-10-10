@@ -5,15 +5,19 @@ import { t } from './locales'
 import { addDocumentWorkTime } from './storage'
 import { formatWorkTime } from './workTime'
 
+export type DocumentTimerClock = { sessionId: string; elapsedNow: () => number }
+
 type Props = {
   documentId: string
   portalTarget: HTMLElement | null
   onTotalWorkTimeChange: (total: number) => void
   onUnsavedChange: (unsaved: boolean) => void
   onSavingChange: (saving: boolean) => void
+  onClockChange: (clock: DocumentTimerClock | null) => void
 }
 
-export default function DocumentWorkTimer({ documentId, portalTarget, onTotalWorkTimeChange, onUnsavedChange, onSavingChange }: Props) {
+export default function DocumentWorkTimer({ documentId, portalTarget, onTotalWorkTimeChange, onUnsavedChange, onSavingChange, onClockChange }: Props) {
+  const [sessionId] = useState(() => crypto.randomUUID())
   const elapsedBaseRef = useRef(0)
   const lastSavedElapsedRef = useRef(0)
   const startedAtRef = useRef<number | null>(null)
@@ -28,6 +32,11 @@ export default function DocumentWorkTimer({ documentId, portalTarget, onTotalWor
   const elapsedNow = useCallback(() => startedAtRef.current === null
     ? elapsedBaseRef.current
     : elapsedBaseRef.current + Math.max(0, Date.now() - startedAtRef.current), [])
+
+  useEffect(() => {
+    onClockChange({ sessionId, elapsedNow })
+    return () => onClockChange(null)
+  }, [elapsedNow, onClockChange, sessionId])
 
   useEffect(() => {
     activeRef.current = true
@@ -106,9 +115,9 @@ export default function DocumentWorkTimer({ documentId, portalTarget, onTotalWor
 
   if (!portalTarget) return null
   return createPortal(<div className="viewer-work-timer" aria-label={t('작업 타이머')}>
-    <span className="viewer-work-timer-elapsed" role="timer" aria-live="off">{formatWorkTime(elapsedMs)}</span>
     <button type="button" className="viewer-work-timer-toggle" aria-label={error ? t('저장 재시도') : running ? t('일시정지') : t('재생')} title={error ? t('저장 재시도') : running ? t('일시정지') : t('재생')} disabled={saving} onClick={() => void toggle()}>
       {running ? <Pause size={17} /> : <Play size={17} />}
     </button>
+    <span className="viewer-work-timer-elapsed" role="timer" aria-live="off">{formatWorkTime(elapsedMs)}</span>
   </div>, portalTarget)
 }

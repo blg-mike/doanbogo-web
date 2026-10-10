@@ -151,12 +151,12 @@ Object.assign(extendedTranslations.da, colorAndSymbolNames.da)
 Object.assign(extendedTranslations.nb, colorAndSymbolNames.nb)
 Object.assign(extendedTranslations.fi, colorAndSymbolNames.fi)
 const utilityLabels = {
-  en: { '실제': 'Actual', '도구 미니바 이동': 'Move tool mini bar', '드래그하여 도구 미니바 이동': 'Drag to move the tool mini bar', '뷰어 도구': 'Viewer tools', '도구 설정': 'Tool settings', '작업 타이머 이동': 'Move work timer', '드래그하여 작업 타이머 이동': 'Drag to move the work timer' },
-  ja: { '실제': '実際', '도구 미니바 이동': 'ツールミニバーを移動', '드래그하여 도구 미니바 이동': 'ドラッグしてツールミニバーを移動', '뷰어 도구': 'ビューアツール', '도구 설정': 'ツール設定', '작업 타이머 이동': '作業タイマーを移動', '드래그하여 작업 타이머 이동': 'ドラッグして作業タイマーを移動' },
-  de: { '실제': 'Tatsächlich', '도구 미니바 이동': 'Werkzeug-Mini-Leiste verschieben', '드래그하여 도구 미니바 이동': 'Ziehen, um die Werkzeug-Mini-Leiste zu verschieben', '뷰어 도구': 'Viewer-Werkzeuge', '도구 설정': 'Werkzeugeinstellungen', '작업 타이머 이동': 'Arbeitszeit verschieben', '드래그하여 작업 타이머 이동': 'Ziehen, um die Arbeitszeitanzeige zu verschieben' },
-  da: { '실제': 'Faktisk', '도구 미니바 이동': 'Flyt værktøjsmini-panelet', '드래그하여 도구 미니바 이동': 'Træk for at flytte værktøjsmini-panelet', '뷰어 도구': 'Visningsværktøjer', '도구 설정': 'Værktøjsindstillinger', '작업 타이머 이동': 'Flyt arbejdstimeren', '드래그하여 작업 타이머 이동': 'Træk for at flytte arbejdstimeren' },
-  nb: { '실제': 'Faktisk', '도구 미니바 이동': 'Flytt verktøyets minilinje', '드래그하여 도구 미니바 이동': 'Dra for å flytte verktøyets minilinje', '뷰어 도구': 'Visningsverktøy', '도구 설정': 'Verktøyinnstillinger', '작업 타이머 이동': 'Flytt arbeidstimeren', '드래그하여 작업 타이머 이동': 'Dra for å flytte arbeidstimeren' },
-  fi: { '실제': 'Todellinen', '도구 미니바 이동': 'Siirrä työkalupalkkia', '드래그하여 도구 미니바 이동': 'Siirrä työkalupalkkia vetämällä', '뷰어 도구': 'Katselutyökalut', '도구 설정': 'Työkalun asetukset', '작업 타이머 이동': 'Siirrä työajastinta', '드래그하여 작업 타이머 이동': 'Siirrä työajastinta vetämällä' },
+  en: { '실제': 'Actual', '뷰어 도구': 'Viewer tools', '도구 설정': 'Tool settings', '작업 타이머 이동': 'Move work timer' },
+  ja: { '실제': '実際', '뷰어 도구': 'ビューアツール', '도구 설정': 'ツール設定', '작업 타이머 이동': '作業タイマーを移動' },
+  de: { '실제': 'Tatsächlich', '뷰어 도구': 'Viewer-Werkzeuge', '도구 설정': 'Werkzeugeinstellungen', '작업 타이머 이동': 'Arbeitstimer verschieben' },
+  da: { '실제': 'Faktisk', '뷰어 도구': 'Visningsværktøjer', '도구 설정': 'Værktøjsindstillinger', '작업 타이머 이동': 'Flyt arbejdstimer' },
+  nb: { '실제': 'Faktisk', '뷰어 도구': 'Visningsverktøy', '도구 설정': 'Verktøyinnstillinger', '작업 타이머 이동': 'Flytt arbeidstimer' },
+  fi: { '실제': 'Todellinen', '뷰어 도구': 'Katselutyökalut', '도구 설정': 'Työkalun asetukset', '작업 타이머 이동': 'Siirrä työajastinta' },
 }
 Object.assign(extendedTranslations.en, utilityLabels.en)
 Object.assign(extendedTranslations.ja, utilityLabels.ja)
@@ -192,3 +192,93 @@ Object.assign(extendedTranslations.de, hiddenGroupDragTranslations.de)
 Object.assign(extendedTranslations.da, hiddenGroupDragTranslations.da)
 Object.assign(extendedTranslations.nb, hiddenGroupDragTranslations.nb)
 Object.assign(extendedTranslations.fi, hiddenGroupDragTranslations.fi)
+const regionHighlightTranslations = {
+  en: { '구간 강조': 'Area highlight', '구간 강조 설정': 'Area highlight settings', '구간 강조 색상': 'Highlight color', '구간 강조 투명도': 'Highlight opacity', '구간 강조 영역': 'Highlighted area' },
+  ja: { '구간 강조': '範囲ハイライト', '구간 강조 설정': '範囲ハイライト設定', '구간 강조 색상': 'ハイライトの色', '구간 강조 투명도': 'ハイライトの不透明度', '구간 강조 영역': 'ハイライト範囲' },
+  de: { '구간 강조': 'Bereich markieren', '구간 강조 설정': 'Einstellungen für Bereichsmarkierung', '구간 강조 색상': 'Markierungsfarbe', '구간 강조 투명도': 'Deckkraft der Markierung', '구간 강조 영역': 'Markierter Bereich' },
+  da: { '구간 강조': 'Områdehighlight', '구간 강조 설정': 'Indstillinger for områdehighlight', '구간 강조 색상': 'Highlightfarve', '구간 강조 투명도': 'Highlightgennemsigtighed', '구간 강조 영역': 'Markeret område' },
+  nb: { '구간 강조': 'Områdeutheving', '구간 강조 설정': 'Innstillinger for områdeutheving', '구간 강조 색상': 'Uthevingsfarge', '구간 강조 투명도': 'Gjennomsiktighet for utheving', '구간 강조 영역': 'Uthevet område' },
+  fi: { '구간 강조': 'Aluekorostus', '구간 강조 설정': 'Aluekorostuksen asetukset', '구간 강조 색상': 'Korostusväri', '구간 강조 투명도': 'Korostuksen peittävyys', '구간 강조 영역': 'Korostettu alue' },
+}
+Object.assign(extendedTranslations.en, regionHighlightTranslations.en)
+Object.assign(extendedTranslations.ja, regionHighlightTranslations.ja)
+Object.assign(extendedTranslations.de, regionHighlightTranslations.de)
+Object.assign(extendedTranslations.da, regionHighlightTranslations.da)
+Object.assign(extendedTranslations.nb, regionHighlightTranslations.nb)
+Object.assign(extendedTranslations.fi, regionHighlightTranslations.fi)
+
+const thumbnailGroupTranslations: Record<string, Record<string, string>> = {
+  en: {
+    '그룹 추가': 'Add group', '썸네일 그룹': 'Thumbnail groups', '그룹 이름': 'Group name', '그룹 이름 입력': 'Enter a group name',
+    '그룹 이름은 비워 둘 수 없습니다.': 'Group name cannot be empty.', '그룹을 저장하지 못했습니다. 저장 공간을 확인해 주세요.': 'Could not save the group. Check available storage.',
+    '그룹 설정': 'Group settings', '그룹 설정: {name}': 'Settings for group: {name}', '그룹 설정: {name}, 페이지 {count}개': 'Settings for group: {name}, {count} pages',
+    '그룹 {name}, 페이지 {count}개': 'Group {name}, {count} pages', '그룹 {name}의 페이지': 'Pages in {name}', '{count}개 페이지': '{count} pages', '그룹 해제': 'Ungroup',
+  },
+  ja: {
+    '그룹 추가': 'グループを追加', '썸네일 그룹': 'サムネイルグループ', '그룹 이름': 'グループ名', '그룹 이름 입력': 'グループ名を入力',
+    '그룹 이름은 비워 둘 수 없습니다.': 'グループ名を入力してください。', '그룹을 저장하지 못했습니다. 저장 공간을 확인해 주세요.': 'グループを保存できませんでした。空き容量を確認してください。',
+    '그룹 설정': 'グループ設定', '그룹 설정: {name}': 'グループ設定: {name}', '그룹 설정: {name}, 페이지 {count}개': 'グループ設定: {name}、{count}ページ',
+    '그룹 {name}, 페이지 {count}개': '{name}グループ、{count}ページ', '그룹 {name}의 페이지': '{name}のページ', '{count}개 페이지': '{count}ページ', '그룹 해제': 'グループ解除',
+  },
+  de: {
+    '그룹 추가': 'Gruppe hinzufügen', '썸네일 그룹': 'Thumbnail-Gruppen', '그룹 이름': 'Gruppenname', '그룹 이름 입력': 'Gruppennamen eingeben',
+    '그룹 이름은 비워 둘 수 없습니다.': 'Der Gruppenname darf nicht leer sein.', '그룹을 저장하지 못했습니다. 저장 공간을 확인해 주세요.': 'Gruppe konnte nicht gespeichert werden. Speicherplatz prüfen.',
+    '그룹 설정': 'Gruppeneinstellungen', '그룹 설정: {name}': 'Einstellungen für {name}', '그룹 설정: {name}, 페이지 {count}개': 'Einstellungen für {name}, {count} Seiten',
+    '그룹 {name}, 페이지 {count}개': 'Gruppe {name}, {count} Seiten', '그룹 {name}의 페이지': 'Seiten in {name}', '{count}개 페이지': '{count} Seiten', '그룹 해제': 'Gruppierung aufheben',
+  },
+  da: {
+    '그룹 추가': 'Tilføj gruppe', '썸네일 그룹': 'Miniaturegrupper', '그룹 이름': 'Gruppenavn', '그룹 이름 입력': 'Indtast gruppenavn',
+    '그룹 이름은 비워 둘 수 없습니다.': 'Gruppenavnet må ikke være tomt.', '그룹을 저장하지 못했습니다. 저장 공간을 확인해 주세요.': 'Gruppen kunne ikke gemmes. Kontrollér lagerpladsen.',
+    '그룹 설정': 'Gruppeindstillinger', '그룹 설정: {name}': 'Indstillinger for {name}', '그룹 설정: {name}, 페이지 {count}개': 'Indstillinger for {name}, {count} sider',
+    '그룹 {name}, 페이지 {count}개': 'Gruppen {name}, {count} sider', '그룹 {name}의 페이지': 'Sider i {name}', '{count}개 페이지': '{count} sider', '그룹 해제': 'Ophæv gruppering',
+  },
+  nb: {
+    '그룹 추가': 'Legg til gruppe', '썸네일 그룹': 'Miniatyrgrupper', '그룹 이름': 'Gruppenavn', '그룹 이름 입력': 'Skriv inn gruppenavn',
+    '그룹 이름은 비워 둘 수 없습니다.': 'Gruppenavnet kan ikke være tomt.', '그룹을 저장하지 못했습니다. 저장 공간을 확인해 주세요.': 'Kunne ikke lagre gruppen. Kontroller lagringsplassen.',
+    '그룹 설정': 'Gruppeinnstillinger', '그룹 설정: {name}': 'Innstillinger for {name}', '그룹 설정: {name}, 페이지 {count}개': 'Innstillinger for {name}, {count} sider',
+    '그룹 {name}, 페이지 {count}개': 'Gruppen {name}, {count} sider', '그룹 {name}의 페이지': 'Sider i {name}', '{count}개 페이지': '{count} sider', '그룹 해제': 'Opphev gruppering',
+  },
+  fi: {
+    '그룹 추가': 'Lisää ryhmä', '썸네일 그룹': 'Pikkukuvaryhmät', '그룹 이름': 'Ryhmän nimi', '그룹 이름 입력': 'Kirjoita ryhmän nimi',
+    '그룹 이름은 비워 둘 수 없습니다.': 'Ryhmän nimi ei voi olla tyhjä.', '그룹을 저장하지 못했습니다. 저장 공간을 확인해 주세요.': 'Ryhmän tallennus epäonnistui. Tarkista tallennustila.',
+    '그룹 설정': 'Ryhmän asetukset', '그룹 설정: {name}': 'Ryhmän {name} asetukset', '그룹 설정: {name}, 페이지 {count}개': 'Ryhmän {name} asetukset, {count} sivua',
+    '그룹 {name}, 페이지 {count}개': 'Ryhmä {name}, {count} sivua', '그룹 {name}의 페이지': 'Ryhmän {name} sivut', '{count}개 페이지': '{count} sivua', '그룹 해제': 'Poista ryhmittely',
+  },
+}
+Object.assign(extendedTranslations.en, thumbnailGroupTranslations.en)
+Object.assign(extendedTranslations.ja, thumbnailGroupTranslations.ja)
+Object.assign(extendedTranslations.de, thumbnailGroupTranslations.de)
+Object.assign(extendedTranslations.da, thumbnailGroupTranslations.da)
+Object.assign(extendedTranslations.nb, thumbnailGroupTranslations.nb)
+Object.assign(extendedTranslations.fi, thumbnailGroupTranslations.fi)
+
+Object.assign(extendedTranslations.en, {
+  '타임랩': 'Lap times', '타임랩 및 카운터': 'Counter and lap times', '타임랩 기록이 없습니다.': 'No lap records yet.', '더 보기': 'Show more',
+  '현재 단 입력': 'Edit current row', '단 번호 입력': 'Row number', '1에서 9999 사이의 정수를 입력하세요.': 'Enter a whole number from 1 to 9999.',
+  '+1단': '+1 row', '−1단': '−1 row', '일시정지를 누르지 않아 마지막 저장 이후 측정한 시간은 누적 작업시간에 저장되지 않습니다.': 'Time measured since the last save will not be added to total work time because the timer was not paused.',
+})
+Object.assign(extendedTranslations.ja, {
+  '타임랩': 'ラップタイム', '타임랩 및 카운터': 'カウンターとラップタイム', '타임랩 기록이 없습니다.': 'ラップ記録はありません。', '더 보기': 'さらに表示',
+  '현재 단 입력': '現在の段を編集', '단 번호 입력': '段番号', '1에서 9999 사이의 정수를 입력하세요.': '1〜9999の整数を入力してください。',
+  '+1단': '+1段', '−1단': '−1段', '일시정지를 누르지 않아 마지막 저장 이후 측정한 시간은 누적 작업시간에 저장되지 않습니다.': '一時停止していないため、前回保存後に計測した時間は累計作業時間に加算されません。',
+})
+Object.assign(extendedTranslations.de, {
+  '타임랩': 'Rundenzeiten', '타임랩 및 카운터': 'Reihenzähler und Rundenzeiten', '타임랩 기록이 없습니다.': 'Noch keine Rundenzeiten.', '더 보기': 'Mehr anzeigen',
+  '현재 단 입력': 'Aktuelle Reihe bearbeiten', '단 번호 입력': 'Reihennummer', '1에서 9999 사이의 정수를 입력하세요.': 'Geben Sie eine ganze Zahl von 1 bis 9999 ein.',
+  '+1단': '+1 Reihe', '−1단': '−1 Reihe', '일시정지를 누르지 않아 마지막 저장 이후 측정한 시간은 누적 작업시간에 저장되지 않습니다.': 'Die seit dem letzten Speichern gemessene Zeit wird nicht zur Gesamtarbeitszeit addiert, weil der Timer nicht pausiert wurde.',
+})
+Object.assign(extendedTranslations.da, {
+  '타임랩': 'Rundetider', '타임랩 및 카운터': 'Rundetæller og rundetider', '타임랩 기록이 없습니다.': 'Ingen rundetider endnu.', '더 보기': 'Vis flere',
+  '현재 단 입력': 'Rediger aktuel omgang', '단 번호 입력': 'Omgangsnummer', '1에서 9999 사이의 정수를 입력하세요.': 'Indtast et helt tal fra 1 til 9999.',
+  '+1단': '+1 omgang', '−1단': '−1 omgang', '일시정지를 누르지 않아 마지막 저장 이후 측정한 시간은 누적 작업시간에 저장되지 않습니다.': 'Tiden siden sidste lagring lægges ikke til den samlede arbejdstid, fordi timeren ikke blev sat på pause.',
+})
+Object.assign(extendedTranslations.nb, {
+  '타임랩': 'Rundetider', '타임랩 및 카운터': 'Radeteller og rundetider', '타임랩 기록이 없습니다.': 'Ingen rundetider ennå.', '더 보기': 'Vis flere',
+  '현재 단 입력': 'Rediger gjeldende omgang', '단 번호 입력': 'Omgangsnummer', '1에서 9999 사이의 정수를 입력하세요.': 'Skriv inn et heltall fra 1 til 9999.',
+  '+1단': '+1 omgang', '−1단': '−1 omgang', '일시정지를 누르지 않아 마지막 저장 이후 측정한 시간은 누적 작업시간에 저장되지 않습니다.': 'Tiden siden siste lagring legges ikke til samlet arbeidstid fordi tidtakeren ikke ble satt på pause.',
+})
+Object.assign(extendedTranslations.fi, {
+  '타임랩': 'Kierrosajat', '타임랩 및 카운터': 'Kerroslaskuri ja kierrosajat', '타임랩 기록이 없습니다.': 'Ei vielä kierrosaikoja.', '더 보기': 'Näytä lisää',
+  '현재 단 입력': 'Muokkaa nykyistä kerrosta', '단 번호 입력': 'Kerrosnumero', '1에서 9999 사이의 정수를 입력하세요.': 'Anna kokonaisluku väliltä 1–9999.',
+  '+1단': '+1 kerros', '−1단': '−1 kerros', '일시정지를 누르지 않아 마지막 저장 이후 측정한 시간은 누적 작업시간에 저장되지 않습니다.': 'Edellisen tallennuksen jälkeen mitattua aikaa ei lisätä kokonaistyöaikaan, koska ajastinta ei keskeytetty.',
+})

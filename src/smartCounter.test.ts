@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { advanceLinkedCounters, counterAlertState, counterSideForRow, createCounter, createDefaultCounters, findCounterRewindCheckpoint, guidePositionForRow, isCounterSnapshots, isCurrentCounterSnapshots, isLegacyCounterSnapshots, maxCountersForType, nextPatternAlertRow, normalizeCounterSnapshots, patternRowAfterCompletion, progressGuideForCounter, reanchorProgressGuideForCounter, restoreCounterGroup, setCounterGroupRow, shouldPlayCounterTaskSound, taskSchedule } from './smartCounter'
+import { advanceLinkedCounters, counterAlertState, counterSideForRow, createCounter, createDefaultCounters, findCounterRewindCheckpoint, guidePositionForRow, isCounterSnapshots, isCurrentCounterSnapshots, isLegacyCounterSnapshots, maxCountersForType, nextPatternAlertRow, normalizeCounterSnapshots, normalizeCounterTimeLaps, patternRowAfterCompletion, progressGuideForCounter, reanchorProgressGuideForCounter, restoreCounterGroup, setCounterGroupRow, shouldPlayCounterTaskSound, taskSchedule } from './smartCounter'
 
 describe('counter model', () => {
   it('starts with no counters and enforces each type limit in the model', () => {
@@ -9,6 +9,16 @@ describe('counter model', () => {
     expect(maxCountersForType(five, 'pattern')).toBe(5)
     expect(isCurrentCounterSnapshots(five)).toBe(true)
     expect(isCounterSnapshots(five)).toBe(true)
+  })
+
+  it('keeps only unique and valid saved counter time laps', () => {
+    const lap = { id: 'lap-1', counterId: 'main', sessionId: 'session-1', historyEntryId: 'history-1', elapsedMs: 120_000, durationMs: 60_000, rowDelta: 1 as const, recordedAt: 1 }
+    expect(normalizeCounterTimeLaps([
+      lap,
+      { ...lap, historyEntryId: 'duplicate' },
+      { ...lap, id: 'too-long', elapsedMs: 1, durationMs: 2 },
+      { ...lap, id: 'bad-direction', rowDelta: 0 },
+    ])).toEqual([lap])
   })
 
   it('migrates old repeat and task data without losing counts or work records', () => {

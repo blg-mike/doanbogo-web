@@ -1,7 +1,7 @@
 export type SortMode = 'recent' | 'name' | 'upload'
 export type ViewMode = 'cover' | 'list'
 export type PaneId = 'primary' | 'secondary'
-export type AnnotationTool = 'pan' | 'pen' | 'line' | 'highlight' | 'eraser' | 'text'
+export type AnnotationTool = 'pan' | 'pen' | 'line' | 'highlight' | 'region-highlight' | 'eraser' | 'text'
 
 export interface ProgressLineStyle {
   visible: boolean
@@ -125,6 +125,16 @@ export interface AnnotationRecord {
   style: AnnotationStyle
 }
 
+export interface RegionHighlight {
+  id: string
+  x: number
+  y: number
+  width: number
+  height: number
+  color: string
+  opacity: number
+}
+
 export interface PageWorkRecord {
   documentId: string
   pageNumber: number
@@ -136,6 +146,7 @@ export interface PageWorkRecord {
   progressMigration?: 'pending' | 'complete'
   legacyProgressGuides?: { horizontalGuides: ProgressGuide[]; verticalGuides: ProgressGuide[] }
   annotations: AnnotationRecord[]
+  regionHighlights?: RegionHighlight[]
   colorworkGrid?: ColorworkGrid
 }
 
@@ -203,6 +214,12 @@ export interface PageRecord {
   hidden: boolean
   hiddenGroupId?: string
   bookmarked: boolean
+}
+
+export interface ThumbnailGroup {
+  id: string
+  name: string
+  pageNumbers: number[]
 }
 
 export interface PaneSnapshot {
@@ -282,7 +299,19 @@ export interface CounterHistoryEntry {
   guides: { pageNumber: number; horizontalGuides: ProgressGuide[]; verticalGuides: ProgressGuide[] }[]
   actualRow: number
   baseCounterId?: string
+  timeLapId?: string
   savedAt: number
+}
+
+export interface CounterTimeLap {
+  id: string
+  counterId: string
+  sessionId: string
+  historyEntryId: string
+  elapsedMs: number
+  durationMs: number
+  rowDelta: -1 | 1
+  recordedAt: number
 }
 
 export interface ViewerSnapshot {
@@ -298,6 +327,7 @@ export interface ViewerSnapshot {
   annotationSettings?: AnnotationSettings
   counters?: CounterSnapshot[]
   counterHistory?: CounterHistoryEntry[]
+  counterTimeLaps?: CounterTimeLap[]
   collapsedCounterKinds?: Partial<Record<CounterKind, boolean>>
   counterSoundEnabled?: boolean
   counterPreviewEnabled?: boolean
@@ -306,6 +336,7 @@ export interface ViewerSnapshot {
   counterMainId?: string
   counterVibrationEnabled?: boolean
   counterAlertAcknowledged?: string
+  thumbnailGroups?: ThumbnailGroup[]
   updatedAt: number
 }
 

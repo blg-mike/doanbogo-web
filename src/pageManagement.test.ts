@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { PageRecord } from './types'
-import { canHidePageSelection, compactPageThumbnails, completePageList, nextVisiblePageAfterHide, normalizeHiddenPageGroups, updatePageHiddenState, visiblePageRange } from './pageManagement'
+import { canHidePageSelection, compactPageThumbnails, completePageList, movePagesToThumbnailGroup, nextVisiblePageAfterHide, normalizeHiddenPageGroups, normalizeThumbnailGroups, updatePageHiddenState, visiblePageRange } from './pageManagement'
 
 describe('page visibility and thumbnails', () => {
   it('shows every PDF page and supplies the default state for pages without records', () => {
@@ -47,6 +47,56 @@ describe('page visibility and thumbnails', () => {
       { type: 'page', pageNumber: 4 },
       { type: 'page', pageNumber: 6 },
       { type: 'page', pageNumber: 7 },
+    ])
+  })
+
+  it('keeps named thumbnail groups independent and expands their pages in page order', () => {
+    const records: PageRecord[] = [1, 2, 3, 4, 5].map((pageNumber) => ({
+      documentId: 'doc', pageNumber, hidden: pageNumber === 3, hiddenGroupId: pageNumber === 3 ? 'hide-3' : undefined, bookmarked: false,
+    }))
+    const groups = [
+      { id: 'body', name: '몸판', pageNumbers: [4, 2, 2] },
+      { id: 'sleeve', name: '소매', pageNumbers: [5] },
+      { id: 'empty', name: '비어 있음', pageNumbers: [] },
+    ]
+
+    expect(compactPageThumbnails(5, records, groups)).toEqual([
+      { type: 'page', pageNumber: 1 },
+      { type: 'label-group', groupId: 'body', name: '몸판', pageNumbers: [2, 4], expanded: false, children: [] },
+      { type: 'hidden-group', groupId: 'hide-3', firstPage: 3, pageNumbers: [3], expanded: false },
+      { type: 'label-group', groupId: 'sleeve', name: '소매', pageNumbers: [5], expanded: false, children: [] },
+      { type: 'label-group', groupId: 'empty', name: '비어 있음', pageNumbers: [], expanded: false, children: [] },
+    ])
+
+    expect(compactPageThumbnails(5, records, groups, 'body')).toEqual([
+      { type: 'page', pageNumber: 1 },
+      { type: 'label-group', groupId: 'body', name: '몸판', pageNumbers: [2, 4], expanded: true, children: [{ type: 'page', pageNumber: 2 }, { type: 'page', pageNumber: 4 }] },
+      { type: 'hidden-group', groupId: 'hide-3', firstPage: 3, pageNumbers: [3], expanded: false },
+      { type: 'label-group', groupId: 'sleeve', name: '소매', pageNumbers: [5], expanded: false, children: [] },
+      { type: 'label-group', groupId: 'empty', name: '비어 있음', pageNumbers: [], expanded: false, children: [] },
+    ])
+  })
+
+  it('moves selected pages between named groups without changing page records', () => {
+    const groups = [
+      { id: 'a', name: 'A', pageNumbers: [1, 3] },
+      { id: 'b', name: 'B', pageNumbers: [2] },
+    ]
+    const moved = movePagesToThumbnailGroup(groups, [2, 3], 'a')
+    expect(moved).toEqual([
+      { id: 'a', name: 'A', pageNumbers: [1, 2, 3] },
+      { id: 'b', name: 'B', pageNumbers: [] },
+    ])
+  })
+
+  it('normalizes duplicate group membership and rejects invalid page numbers', () => {
+    expect(normalizeThumbnailGroups([
+      { id: 'a', name: 'A', pageNumbers: [2, 1, 2, 9] },
+      { id: 'b', name: 'B', pageNumbers: [1, 3] },
+      { id: 'a', name: 'Duplicate ID', pageNumbers: [4] },
+    ], 4)).toEqual([
+      { id: 'a', name: 'A', pageNumbers: [1, 2] },
+      { id: 'b', name: 'B', pageNumbers: [3] },
     ])
   })
 

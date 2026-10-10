@@ -1,7 +1,7 @@
 import { openDB, type DBSchema, type IDBPDatabase } from 'idb'
 import type { ChartDocument, CounterHistoryEntry, DocumentRecord, HomeProject, KnittingReport, PageRecognitionRecord, PageRecord, PageWorkRecord, PhotoPageRecord, PaneSnapshot, PreferenceRecord, ProgressGuide, SortMode, ViewerSnapshot } from './types'
-import { MAX_COUNTER_HISTORY, normalizeCounterSnapshots } from './smartCounter'
-import { updatePageHiddenState } from './pageManagement'
+import { MAX_COUNTER_HISTORY, normalizeCounterSnapshots, normalizeCounterTimeLaps } from './smartCounter'
+import { normalizeThumbnailGroups, updatePageHiddenState } from './pageManagement'
 
 interface DoanBogoDB extends DBSchema {
   documents: {
@@ -66,7 +66,7 @@ function stripLegacyTechniqueSlots(viewer: ViewerSnapshot): ViewerSnapshot {
   delete cleaned.techniqueSlots
   const counterHistory = Array.isArray(cleaned.counterHistory) ? cleaned.counterHistory.slice(-MAX_COUNTER_HISTORY).filter((item): item is CounterHistoryEntry =>
     Boolean(item && typeof item === 'object' && Array.isArray(item.counters) && Array.isArray(item.guides))) : []
-  return { ...cleaned, counters: normalizeCounterSnapshots(cleaned.counters), counterHistory }
+  return { ...cleaned, counters: normalizeCounterSnapshots(cleaned.counters), counterHistory, counterTimeLaps: normalizeCounterTimeLaps(cleaned.counterTimeLaps) }
 }
 
 export function normalizePageWork(work: PageWorkRecord): PageWorkRecord {
@@ -79,6 +79,7 @@ export function normalizePageWork(work: PageWorkRecord): PageWorkRecord {
   )
   return {
     ...normalized,
+    regionHighlights: work.regionHighlights ?? [],
     rotation: [0, 90, 180, 270].includes(work.rotation ?? 0) ? (work.rotation ?? 0) : 0,
     horizontalGuides: work.horizontalGuides ?? [{ id: 'legacy-horizontal', position: work.horizontalPosition ?? 0.5 } satisfies ProgressGuide],
     verticalGuides: work.verticalGuides ?? [{ id: 'legacy-vertical', position: work.verticalPosition ?? 0.5 } satisfies ProgressGuide],
@@ -860,6 +861,7 @@ export async function getViewer(id: string, pageCount: number): Promise<ViewerSn
     const saved = stripLegacyTechniqueSlots(stored)
     return {
       ...saved,
+      thumbnailGroups: normalizeThumbnailGroups(saved.thumbnailGroups, pageCount),
       splitInitialized: saved.splitInitialized ?? saved.split,
       wideRatio: saved.wideRatio === 0.65 ? 0.5 : saved.wideRatio ?? 0.5,
       tallRatio: saved.tallRatio === 0.65 ? 0.5 : saved.tallRatio ?? 0.5,
@@ -875,6 +877,7 @@ export async function getViewer(id: string, pageCount: number): Promise<ViewerSn
     primary: { ...defaultPane },
     secondary: { ...defaultPane },
     counters: normalizeCounterSnapshots(undefined),
+    thumbnailGroups: [],
     wideRatio: 0.5,
     tallRatio: 0.5,
     updatedAt: Date.now(),

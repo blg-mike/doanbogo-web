@@ -1,4 +1,4 @@
-import type { CounterHistoryEntry, CounterKind, CounterSnapshot, CounterTaskKind, CounterTaskOccurrence, CounterTaskRule, CounterTaskStatus, ProgressGuide } from './types'
+import type { CounterHistoryEntry, CounterKind, CounterSnapshot, CounterTaskKind, CounterTaskOccurrence, CounterTaskRule, CounterTaskStatus, CounterTimeLap, ProgressGuide } from './types'
 import { guideRowPosition } from './progressLines'
 import { DEFAULT_COUNTER_COLORS } from './designTokens'
 
@@ -9,6 +9,22 @@ export const MAX_COUNTERS_PER_TYPE = 5
 export const MAX_COUNTERS = 80
 export const MAX_COUNTER_HISTORY = 200
 const MAX_COUNTER_TASK_OCCURRENCES = MAX_COUNTER_ROW * MAX_COUNTER_TASK_RULES
+
+export function normalizeCounterTimeLaps(value: unknown): CounterTimeLap[] {
+  if (!Array.isArray(value)) return []
+  const ids = new Set<string>()
+  return value.filter((item): item is CounterTimeLap => {
+    if (!item || typeof item !== 'object') return false
+    const lap = item as Partial<CounterTimeLap>
+    if (typeof lap.id !== 'string' || !lap.id || lap.id.length > 100 || ids.has(lap.id) || typeof lap.counterId !== 'string' || !lap.counterId || lap.counterId.length > 100 ||
+      typeof lap.sessionId !== 'string' || !lap.sessionId || lap.sessionId.length > 100 || typeof lap.historyEntryId !== 'string' || !lap.historyEntryId || lap.historyEntryId.length > 100 ||
+      !Number.isSafeInteger(lap.elapsedMs) || (lap.elapsedMs ?? -1) < 0 || !Number.isSafeInteger(lap.durationMs) || (lap.durationMs ?? -1) < 0 ||
+      (lap.durationMs ?? 0) > (lap.elapsedMs ?? 0) || (lap.rowDelta !== -1 && lap.rowDelta !== 1) ||
+      !Number.isSafeInteger(lap.recordedAt) || (lap.recordedAt ?? 0) < 0) return false
+    ids.add(lap.id)
+    return true
+  })
+}
 
 type LegacyCounter = {
   mode?: unknown

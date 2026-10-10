@@ -115,6 +115,30 @@ describe('portable workspace backup', () => {
     await deleteDocument(imported.id)
   })
 
+  it('round-trips named thumbnail groups in the optional v14 viewer field', async () => {
+    const id = crypto.randomUUID()
+    const pdf = new Blob(['%PDF-1.7 thumbnail groups'], { type: 'application/pdf' })
+    await addDocument({ id, fileName: 'groups.pdf', size: pdf.size, pageCount: 4, createdAt: Date.now(), lastOpenedAt: null, tags: [], pdf, cover: null })
+    const viewer = await getViewer(id, 4)
+    await saveViewer({ ...viewer, thumbnailGroups: [
+      { id: 'body', name: '몸판', pageNumbers: [1, 3] },
+      { id: 'empty', name: '빈 그룹', pageNumbers: [] },
+    ] })
+
+    expect((await getViewer(id, 4)).thumbnailGroups).toEqual([
+      { id: 'body', name: '몸판', pageNumbers: [1, 3] },
+      { id: 'empty', name: '빈 그룹', pageNumbers: [] },
+    ])
+    const backup = await createWorkspaceBackup()
+    const restored = await readWorkspaceBackup(new File([backup], 'groups.doanbogo'))
+    expect(restored.viewers.find((item) => item.documentId === id)?.thumbnailGroups).toEqual([
+      { id: 'body', name: '몸판', pageNumbers: [1, 3] },
+      { id: 'empty', name: '빈 그룹', pageNumbers: [] },
+    ])
+
+    await deleteDocument(id)
+  })
+
   it('round-trips migrated progress line state and preserved legacy guides', async () => {
     const id = crypto.randomUUID()
     const pdf = new Blob(['%PDF-1.7 progress-lines'], { type: 'application/pdf' })
@@ -258,7 +282,8 @@ describe('portable workspace backup', () => {
     await saveViewer({
       ...viewer,
       counters,
-      counterHistory: [{ id: 'history-1', label: '몸판 단 · 19단 완료', counters, guides: [], actualRow: 19, baseCounterId: rowCounter.id, savedAt: Date.now() }],
+      counterHistory: [{ id: 'history-1', label: '몸판 단 · 19단 완료', counters, guides: [], actualRow: 19, baseCounterId: rowCounter.id, timeLapId: 'lap-1', savedAt: Date.now() }],
+      counterTimeLaps: [{ id: 'lap-1', counterId: rowCounter.id, sessionId: 'session-1', historyEntryId: 'history-1', elapsedMs: 120000, durationMs: 120000, rowDelta: 1, recordedAt: Date.now() }],
       counterSoundEnabled: false,
       counterPreviewEnabled: true,
       counterVibrationEnabled: true,
@@ -286,6 +311,10 @@ describe('portable workspace backup', () => {
       verticalPosition: 0.72,
       horizontalGuides: [{ id: 'h-1', position: 0.32, thickness: 36, linkedCounterId: patternCounter.id, name: patternCounter.name, color: patternCounter.color, chartRegion: { x: 0.1, y: 0.2, width: 0.8, height: 0.6, firstRow: 1, lastRow: 12, startCounterRow: 5, repeat: true, direction: 'top-to-bottom' }, focus: { enabled: true, strength: 'low', range: 1, scope: 'region', rowSpacing: 0.05, dimOpacity: 0.58, bandHeightRatio: 0.12 } }, { id: 'h-2', position: 0.68 }],
       verticalGuides: [{ id: 'v-1', position: 0.72 }],
+      regionHighlights: [
+        { id: 'region-1', x: 0.15, y: 0.25, width: 0.32, height: 0.18, color: '#C85E4B', opacity: 0.3 },
+        { id: 'region-2', x: 0.2, y: 0.3, width: 0.2, height: 0.1, color: '#557A95', opacity: 0.6 },
+      ],
       colorworkGrid: {
         chartWidthCm: 2, chartHeightCm: 3, gaugeStitches: 18, gaugeRows: 24, columns: 4, rows: 7,
         x: 0.21, y: 0.33, displayWidth: 0.17, displayHeight: 0.09, visible: true,
@@ -337,6 +366,8 @@ describe('portable workspace backup', () => {
     ])
     expect(restoredViewer.counterHistory).toHaveLength(1)
     expect(restoredViewer.counterHistory?.[0].baseCounterId).toBe('body-row')
+    expect(restoredViewer.counterHistory?.[0].timeLapId).toBe('lap-1')
+    expect(restoredViewer.counterTimeLaps).toMatchObject([{ id: 'lap-1', counterId: 'body-row', sessionId: 'session-1', historyEntryId: 'history-1', elapsedMs: 120000, durationMs: 120000, rowDelta: 1 }])
     expect(restoredViewer.counterPreviewEnabled).toBe(true)
     expect(restoredViewer.counterVibrationEnabled).toBe(true)
     expect(restoredViewer.counterMainId).toBe('body-row')
@@ -346,6 +377,10 @@ describe('portable workspace backup', () => {
       pageNumber: 4,
       horizontalGuides: [{ id: 'h-1', position: 0.32, thickness: 36, linkedCounterId: 'body-pattern', focus: { enabled: true, strength: 'low', range: 1, scope: 'region', rowSpacing: 0.05, dimOpacity: 0.58, bandHeightRatio: 0.12 } }, { id: 'h-2', position: 0.68 }],
       verticalGuides: [{ id: 'v-1', position: 0.72 }],
+      regionHighlights: [
+        { id: 'region-1', x: 0.15, y: 0.25, width: 0.32, height: 0.18, color: '#C85E4B', opacity: 0.3 },
+        { id: 'region-2', x: 0.2, y: 0.3, width: 0.2, height: 0.1, color: '#557A95', opacity: 0.6 },
+      ],
       colorworkGrid: { chartWidthCm: 2, chartHeightCm: 3, columns: 4, rows: 7, visible: true },
       annotations: [{ id: 'ink-1', type: 'line' }, { id: 'note-1', text: '앞판\n무늬 반복', boxWidth: 0.42, boxHeight: 0.18 }],
     })
@@ -368,6 +403,10 @@ describe('portable workspace backup', () => {
     expect(await getPageWork(imported!.id, 4)).toMatchObject({
       horizontalGuides: [{ id: 'h-1', position: 0.32 }, { id: 'h-2', position: 0.68 }],
       verticalGuides: [{ id: 'v-1', position: 0.72 }],
+      regionHighlights: [
+        { id: 'region-1', x: 0.15, y: 0.25, width: 0.32, height: 0.18, color: '#C85E4B', opacity: 0.3 },
+        { id: 'region-2', x: 0.2, y: 0.3, width: 0.2, height: 0.1, color: '#557A95', opacity: 0.6 },
+      ],
       annotations: [{ id: 'ink-1' }, { id: 'note-1', boxWidth: 0.42, boxHeight: 0.18 }],
     })
     expect((await getPageWork(imported!.id, 4)).colorworkGrid?.cells[0]).toEqual({ color: '#f1c40f', opacity: 0.25 })
@@ -452,6 +491,7 @@ describe('portable workspace backup', () => {
     expect(restored.pageWork[0]).toMatchObject({
       horizontalGuides: [{ id: 'legacy-horizontal', position: 0.25 }],
       verticalGuides: [{ id: 'legacy-vertical', position: 0.75 }],
+      regionHighlights: [],
       annotations: [{ id: 'legacy-note', text: '기존 메모', points: [{ x: 0.2, y: 0.4 }] }],
     })
   })
@@ -490,6 +530,24 @@ describe('portable workspace backup', () => {
 
     expect(restored.pageWork[0].colorworkGrid).toBeUndefined()
     expect(restored.pageWork[0]).not.toHaveProperty('rectangles')
+  })
+
+  it('rejects region highlights outside the normalized page or opacity range', async () => {
+    const pdf = new TextEncoder().encode('%PDF-1.7 invalid-highlight')
+    const base = {
+      format: 'doanbogo', version: 14, exportedAt: Date.now(),
+      documents: [{ id: 'invalid-region', fileName: 'region.pdf', size: pdf.byteLength, pageCount: 1, createdAt: 1, lastOpenedAt: null, tags: [], pdfPath: 'documents/000000.pdf', coverPath: null }],
+      pages: [], viewers: [], preferences: [], charts: [], knittingReports: [], photoPages: [],
+      pageWork: [{ documentId: 'invalid-region', pageNumber: 1, horizontalPosition: 0.5, verticalPosition: 0.5, annotations: [], regionHighlights: [] as unknown[] }],
+    }
+    for (const region of [
+      { id: 'outside', x: 0.9, y: 0.2, width: 0.2, height: 0.3, color: '#C85E4B', opacity: 0.3 },
+      { id: 'opacity', x: 0.2, y: 0.2, width: 0.3, height: 0.3, color: '#C85E4B', opacity: 0.09 },
+    ]) {
+      base.pageWork[0].regionHighlights = [region]
+      const backup = new File([zipSync({ 'manifest.json': strToU8(JSON.stringify(base)), 'documents/000000.pdf': pdf })], 'invalid-region.doanbogo')
+      await expect(readWorkspaceBackup(backup)).rejects.toThrow('작업 파일에 올바르지 않은 진행선·필기 정보가 있습니다.')
+    }
   })
 
   it('rejects invalid progress guide data', async () => {

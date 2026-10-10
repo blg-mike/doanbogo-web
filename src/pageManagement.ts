@@ -1,8 +1,35 @@
-import type { PageRecord } from './types'
+import type { PageRecord, ThumbnailGroup } from './types'
 
 export type PageThumbnailItem =
   | { type: 'page'; pageNumber: number }
   | { type: 'hidden-group'; groupId: string; firstPage: number; pageNumbers: number[]; expanded: boolean }
+  | { type: 'label-group'; groupId: string; name: string; pageNumbers: number[]; expanded: boolean; children: PageThumbnailItem[] }
+
+export function createThumbnailGroupId(): string {
+  return globalThis.crypto?.randomUUID?.() ?? 'thumbnail-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2)
+}
+
+export function normalizeThumbnailGroups(groups: unknown, pageCount: number): ThumbnailGroup[] {
+  if (!Array.isArray(groups)) return []
+  const seenIds = new Set<string>()
+  const assignedPages = new Set<number>()
+  return groups.flatMap((candidate) => {
+    if (!candidate || typeof candidate !== 'object') return []
+    const group = candidate as Partial<ThumbnailGroup>
+    if (typeof group.id !== 'string' || !group.id || seenIds.has(group.id) || typeof group.name !== 'string' || group.name.length > 100 || !Array.isArray(group.pageNumbers)) return []
+    seenIds.add(group.id)
+    const pageNumbers = [...new Set(group.pageNumbers.filter((page): page is number => Number.isSafeInteger(page) && page > 0 && page <= pageCount && !assignedPages.has(page)))].sort((a, b) => a - b)
+    pageNumbers.forEach((page) => assignedPages.add(page))
+    return [{ id: group.id, name: group.name, pageNumbers }]
+  })
+}
+
+export function movePagesToThumbnailGroup(groups: ThumbnailGroup[], pageNumbers: number[], targetGroupId: string): ThumbnailGroup[] {
+  const selected = new Set(pageNumbers)
+  return groups.map((group) => group.id === targetGroupId
+    ? { ...group, pageNumbers: [...new Set([...group.pageNumbers.filter((page) => !selected.has(page)), ...selected])].sort((a, b) => a - b) }
+    : { ...group, pageNumbers: group.pageNumbers.filter((page) => !selected.has(page)) })
+}
 
 export function updatePageHiddenState(page: PageRecord, hidden: boolean, hiddenGroupId?: string): PageRecord {
   const next = { ...page, hidden }
@@ -37,43 +64,72 @@ export function normalizeHiddenPageGroups(records: PageRecord[], createGroupId: 
   return nextRecords
 }
 
-export function compactPageThumbnails(pageCount: number, records: PageRecord[]): PageThumbnailItem[] {
+export function compactPageThumbnails(pageCount: number, records: PageRecord[], groups: ThumbnailGroup[] = [], expandedGroupId: string | null = null): PageThumbnailItem[] {
   const normalizedRecords = normalizeHiddenPageGroups(records)
   const recordByPage = new Map(normalizedRecords.map((record) => [record.pageNumber, record]))
-  const groups = new Map<string, PageRecord[]>()
-  for (const record of normalizedRecords) {
-    if (!record.hiddenGroupId || record.pageNumber < 1 || record.pageNumber > pageCount) continue
-    const group = groups.get(record.hiddenGroupId) ?? []
-    group.push(record)
-    groups.set(record.hiddenGroupId, group)
-  }
 
-  const groupByFirstPage = new Map<number, PageThumbnailItem & { type: 'hidden-group' }>()
-  const groupedPages = new Set<number>()
-  for (const [groupId, groupRecords] of groups) {
-    const ordered = groupRecords.sort((a, b) => a.pageNumber - b.pageNumber)
-    const pageNumbers = ordered.map((record) => record.pageNumber)
-    pageNumbers.forEach((pageNumber) => groupedPages.add(pageNumber))
-    groupByFirstPage.set(pageNumbers[0], {
-      type: 'hidden-group',
-      groupId,
-      firstPage: pageNumbers[0],
-      pageNumbers,
-      expanded: ordered.some((record) => !record.hidden),
-    })
+  const membership = new Map<number, ThumbnailGroup>()
+  const validGroups = normalizeThumbnailGroups(groups, pageCount)
+  for (const group of validGroups) group.pageNumbers.forEach((page) => { if (!membership.has(page)) membership.set(page, group) })
+
+  function buildPageItems(pageNumbers: number[]): PageThumbnailItem[] {
+    const items: PageThumbnailItem[] = []
+    const emittedHiddenGroups = new Set<string>()
+    for (const pageNumber of [...new Set(pageNumbers)].sort((a, b) => a - b)) {
+      const record = recordByPage.get(pageNumber)
+      if (record?.hiddenGroupId) {
+        const groupId = record.hiddenGroupId
+        if (emittedHiddenGroups.has(groupId)) continue
+        emittedHiddenGroups.add(groupId)
+        const memberPages = pageNumbers.filter((page) => recordByPage.get(page)?.hiddenGroupId === groupId).sort((a, b) => a - b)
+        const expanded = memberPages.some((page) => !recordByPage.get(page)?.hidden)
+        items.push({ type: 'hidden-group', groupId, firstPage: memberPages[0] ?? pageNumber, pageNumbers: memberPages, expanded })
+      } else if (!record?.hidden) {
+        items.push({ type: 'page', pageNumber })
+      }
+    }
+    return items
   }
 
   const items: PageThumbnailItem[] = []
+  const groupByFirstPage = new Map<number, ThumbnailGroup>()
+  for (const group of validGroups) {
+    const firstPage = group.pageNumbers[0]
+    if (firstPage !== undefined) groupByFirstPage.set(firstPage, group)
+  }
+  const groupedPages = new Set(validGroups.flatMap((group) => group.pageNumbers))
+  const rootPages = Array.from({ length: pageCount }, (_, index) => index + 1).filter((pageNumber) => !groupedPages.has(pageNumber))
+  const rootHiddenGroupByFirst = new Map<number, PageThumbnailItem & { type: 'hidden-group' }>()
+  const rootHiddenMembers = new Set<number>()
+  for (const pageNumber of rootPages) {
+    const record = recordByPage.get(pageNumber)
+    if (!record?.hiddenGroupId) continue
+    const groupId = record.hiddenGroupId
+    if (rootHiddenMembers.has(pageNumber)) continue
+    const members = rootPages.filter((page) => recordByPage.get(page)?.hiddenGroupId === groupId).sort((a, b) => a - b)
+    members.forEach((page) => rootHiddenMembers.add(page))
+    rootHiddenGroupByFirst.set(members[0] ?? pageNumber, {
+      type: 'hidden-group', groupId, firstPage: members[0] ?? pageNumber, pageNumbers: members, expanded: members.some((page) => !recordByPage.get(page)?.hidden),
+    })
+  }
   for (let pageNumber = 1; pageNumber <= pageCount; pageNumber += 1) {
     const group = groupByFirstPage.get(pageNumber)
     if (group) {
-      items.push(group)
+      const expanded = expandedGroupId === group.id
+      items.push({ type: 'label-group', groupId: group.id, name: group.name, pageNumbers: group.pageNumbers, expanded, children: expanded ? buildPageItems(group.pageNumbers) : [] })
       continue
     }
     if (groupedPages.has(pageNumber)) continue
+    const hiddenGroup = rootHiddenGroupByFirst.get(pageNumber)
+    if (hiddenGroup) {
+      items.push(hiddenGroup)
+      continue
+    }
+    if (rootHiddenMembers.has(pageNumber)) continue
     const record = recordByPage.get(pageNumber)
     if (!record?.hidden) items.push({ type: 'page', pageNumber })
   }
+  for (const group of validGroups.filter((item) => !item.pageNumbers.length)) items.push({ type: 'label-group', groupId: group.id, name: group.name, pageNumbers: [], expanded: expandedGroupId === group.id, children: [] })
   return items
 }
 

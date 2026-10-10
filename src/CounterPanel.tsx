@@ -2,9 +2,10 @@ import { formatNumber, t, type LocaleKey } from './locales/index'
 import { useEffect, useRef, useState, type FormEvent, type PointerEvent as ReactPointerEvent, type Ref } from 'react'
 import { Bell, Check, ChevronDown, ChevronRight, ChevronUp, Pin, PinOff, Plus, RotateCcw, Settings, Settings2, Trash2, Vibrate, Volume2, X } from 'lucide-react'
 import type { CounterKind, CounterSnapshot, CounterTaskKind, CounterUnit, ViewerSnapshot } from './types'
-import { MAX_COUNTER_ROW, MAX_COUNTERS_PER_TYPE, counterAlertState, createCounter, counterSideForRow, counterTaskProgress, findCounterRewindCheckpoint, maxCountersForType, nextPatternAlertRow, patternRowAfterCompletion, taskSchedule } from './smartCounter'
+import { MAX_COUNTER_ROW, MAX_COUNTERS_PER_TYPE, counterAlertState, createCounter, counterTaskProgress, findCounterRewindCheckpoint, maxCountersForType, nextPatternAlertRow, patternRowAfterCompletion, taskSchedule } from './smartCounter'
 import { ColorPresetButtons } from './ColorPresetButtons'
 import { useDismissiblePopover } from './useDismissiblePopover'
+import { formatWorkTime } from './workTime'
 
 const kinds: CounterKind[] = ['simple', 'pattern', 'task']
 const kindLabels: Record<CounterKind, LocaleKey> = { simple: '자유 카운터', pattern: '무늬 카운터', task: '줄임·늘림 카운터' }
@@ -288,12 +289,11 @@ function CounterSettings({ snapshot, counters, onClose, onSave, dialogRef }: {
 }
 
 export default function CounterPanel({
-  snapshot, counters, onChange, onAdvance, onUndo, onRewind, onCounterValue, onSettingsSave, onSnapshotUpdate, onClose,
+  snapshot, counters, onChange, onUndo, onRewind, onCounterValue, onSettingsSave, onSnapshotUpdate, onClose,
 }: {
   snapshot: ViewerSnapshot
   counters: CounterSnapshot[]
   onChange: (counters: CounterSnapshot[], label: string) => void
-  onAdvance: (counterId: string) => void
   onUndo: () => void
   onRewind: (counterId: string, targetRow: number) => void
   onCounterValue: (counterId: string, value: number) => void
@@ -307,7 +307,6 @@ export default function CounterPanel({
   const settingsButtonRef = useRef<HTMLButtonElement>(null)
   const settingsDialogRef = useRef<HTMLFormElement>(null)
   const dragRef = useRef<{ pointerId: number; x: number; y: number; left: number; top: number; mobile: boolean } | null>(null)
-  const creationRequested = useRef(false)
   const [position, setPosition] = useState<{ left: number; top: number } | null>(null)
   const collapsed = snapshot.counterPanelCollapsed === true
   const [settingsOpen, setSettingsOpen] = useState(false)
@@ -315,15 +314,17 @@ export default function CounterPanel({
   const [addMenuOpen, setAddMenuOpen] = useState(false)
   const [rewindOpen, setRewindOpen] = useState(false)
   const [rewindRow, setRewindRow] = useState('')
+  const [lapDisplay, setLapDisplay] = useState({ counterId: '', count: 50 })
   useDismissiblePopover(addMenuOpen, addOptionsRef, addButtonRef, () => setAddMenuOpen(false))
   useDismissiblePopover(settingsOpen, settingsDialogRef, settingsButtonRef, () => setSettingsOpen(false))
   const baseCounters = counters.filter((counter) => counter.kind === 'simple' && counter.unit === 'row' && !counter.linkedToId)
   const activeBase = baseCounters.find((counter) => counter.id === snapshot.counterMainId) ?? baseCounters[0]
   const activeBaseId = activeBase?.id
+  const visibleLapCount = lapDisplay.counterId === activeBaseId ? lapDisplay.count : 50
   const related = activeBase ? counters.filter((counter) => counter.id === activeBase.id || counter.linkedToId === activeBase.id) : []
   const auxiliary = related.filter((counter) => counter.id !== activeBase?.id)
   const currentRow = activeBase?.value ?? 1
-  const side = activeBase ? counterSideForRow(activeBase, currentRow) : 'rs'
+  const mainTimeLaps = activeBase ? [...(snapshot.counterTimeLaps ?? [])].filter((lap) => lap.counterId === activeBase.id).reverse() : []
   const goalCompleted = activeBase?.goalCompleted === true
   const alertState = activeBase ? counterAlertState(counters, activeBase.id, snapshot.counterPreviewEnabled === true) : { key: '', messages: [] as string[] }
   const lastAlertKey = useRef(alertState.key)
@@ -340,16 +341,7 @@ export default function CounterPanel({
   }).sort((first, second) => first.row - second.row)
   const nextEventRow = nextEvents[0]?.row
   const visibleRewindRows = activeBase ? [...new Set((snapshot.counterHistory ?? []).filter((entry) => entry.actualRow < activeBase.value && findCounterRewindCheckpoint(snapshot.counterHistory ?? [], counters, activeBase.id, entry.actualRow)).map((entry) => entry.actualRow))].sort((first, second) => second - first) : []
-  const canStepBack = Boolean(activeBase && activeBase.value > 1 && findCounterRewindCheckpoint(snapshot.counterHistory ?? [], counters, activeBase.id, activeBase.value - 1))
   const activeEditor = counters.find((counter) => counter.id === editingId)
-
-  useEffect(() => {
-    if (!baseCounters.length && !creationRequested.current) {
-      creationRequested.current = true
-      const main = createCounter('simple', t('메인 카운터'))
-      onSettingsSave([main], { counterMainId: main.id }, '메인 카운터 추가')
-    }
-  }, [baseCounters.length, onSettingsSave])
 
   useEffect(() => {
     if (activeBaseId && snapshot.counterMainId !== activeBaseId) onSnapshotUpdate({ counterMainId: activeBaseId })
@@ -459,10 +451,10 @@ export default function CounterPanel({
       {activeBase && <>
         <section className="counter-main-card" aria-label={t("현재 단 카운터")}>
           <div className="counter-main-heading"><span>{t("현재 단")}</span><strong>{activeBase.name}</strong></div>
-          <div className="counter-main-value">
-            <button type="button" className="counter-main-minus" aria-label={t("이전 단으로 되돌리기")} title={canStepBack ? t('이전 단으로 되돌리기') : t('정확한 복원 이력이 없습니다')} disabled={!canStepBack} onClick={() => { if (activeBase.value > 1) onRewind(activeBase.id, activeBase.value - 1) }}>−1</button>
-            <div className="counter-main-number"><strong>{formatNumber(activeBase.value)}</strong><span>{t("단")}</span><small>{side.toUpperCase()}</small></div>
-            <button type="button" className="counter-main-plus" aria-label={t("현재 단 완료 후 다음 단으로 이동")} disabled={activeBase.goalCompleted === true || activeBase.value >= MAX_COUNTER_ROW && activeBase.goalRow !== activeBase.value} onClick={() => onAdvance(activeBase.id)}>+1</button>
+          <div className="counter-time-laps" aria-label={t('타임랩')}>
+            <header><strong>{t('타임랩')}</strong><span>{formatNumber(mainTimeLaps.length)}</span></header>
+            {mainTimeLaps.length ? <ol className="counter-time-lap-list">{mainTimeLaps.slice(0, visibleLapCount).map((lap) => <li key={lap.id}><time>{formatWorkTime(lap.durationMs)}</time><span>{lap.rowDelta > 0 ? t('+1단') : t('−1단')}</span></li>)}</ol> : <p>{t('타임랩 기록이 없습니다.')}</p>}
+            {mainTimeLaps.length > visibleLapCount && <button type="button" className="counter-time-lap-more" onClick={() => setLapDisplay((current) => ({ counterId: activeBaseId ?? '', count: (current.counterId === activeBaseId ? current.count : 50) + 50 }))}>{t('더 보기')}</button>}
           </div>
           {activeBase.goalRow && <div className="counter-goal-progress"><div><span>{activeBase.goalCompleted ? formatNumber(activeBase.goalRow) + t('단') + ' ' + t('완료') : formatNumber(currentRow) + ' / ' + formatNumber(activeBase.goalRow) + t('단')}</span><span>{t("마지막 ")}{activeBase.goalFinalSide?.toUpperCase() ?? 'RS'}</span></div><progress max={activeBase.goalRow} value={Math.min(currentRow, activeBase.goalRow)} /><small>{activeBase.goalCompleted ? t('목표를 완료했어요.') : t('목표 단 ') + formatNumber(activeBase.goalRow)}</small></div>}
         </section>

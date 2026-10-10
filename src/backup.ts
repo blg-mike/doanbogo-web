@@ -1,7 +1,7 @@
 import { strFromU8, strToU8, unzipSync, zipSync } from 'fflate'
-import type { AnnotationRecord, ChartDocument, ColorworkGrid, DocumentRecord, HomeProject, KnittingReport, PageRecord, PageWorkRecord, PhotoPageRecord, PreferenceRecord, ReportTimelinePhoto, ViewerSnapshot } from './types'
+import type { AnnotationRecord, ChartDocument, ColorworkGrid, CounterTimeLap, DocumentRecord, HomeProject, KnittingReport, PageRecord, PageWorkRecord, PhotoPageRecord, PreferenceRecord, RegionHighlight, ReportTimelinePhoto, ViewerSnapshot } from './types'
 import { normalizePageWork, readWorkspaceData, type WorkspaceData } from './storage'
-import { createDefaultCounters, isCurrentCounterSnapshots, isLegacyCounterSnapshots, normalizeCounterSnapshots, MAX_COUNTER_HISTORY } from './smartCounter'
+import { createDefaultCounters, isCurrentCounterSnapshots, isLegacyCounterSnapshots, normalizeCounterSnapshots, normalizeCounterTimeLaps, MAX_COUNTER_HISTORY } from './smartCounter'
 
 interface BackupDocument extends Omit<DocumentRecord, 'pdf' | 'cover'> {
   pdfPath: string | null
@@ -35,6 +35,22 @@ function isObject(value: unknown): value is Record<string, unknown> {
 
 function isStringArray(value: unknown): value is string[] {
   return Array.isArray(value) && value.every((item) => typeof item === 'string')
+}
+
+function isThumbnailGroups(value: unknown, pageCount: number) {
+  if (!Array.isArray(value)) return false
+  const ids = new Set<string>()
+  const pages = new Set<number>()
+  return value.every((group) => {
+    if (!isObject(group) || typeof group.id !== 'string' || !group.id || group.id.length > 128 || ids.has(group.id) ||
+      typeof group.name !== 'string' || group.name.length > 100 || !Array.isArray(group.pageNumbers)) return false
+    ids.add(group.id)
+    return group.pageNumbers.every((page) => {
+      if (!Number.isSafeInteger(page) || (page as number) < 1 || (page as number) > pageCount || pages.has(page as number)) return false
+      pages.add(page as number)
+      return true
+    })
+  })
 }
 
 function isPaneRotations(value: unknown, pageCount: number) {
@@ -109,8 +125,21 @@ function isCounterHistory(value: unknown) {
   return Array.isArray(value) && value.length <= MAX_COUNTER_HISTORY && value.every((entry) => isObject(entry) && typeof entry.id === 'string' && entry.id.length <= 100 &&
     typeof entry.label === 'string' && entry.label.length <= 200 && Number.isFinite(entry.savedAt) && Number.isSafeInteger(entry.actualRow) && Number(entry.actualRow) >= 0 &&
     (entry.baseCounterId === undefined || typeof entry.baseCounterId === 'string' && entry.baseCounterId.length <= 100) &&
+    (entry.timeLapId === undefined || typeof entry.timeLapId === 'string' && entry.timeLapId.length <= 100) &&
     isCurrentCounterSnapshots(entry.counters) && Array.isArray(entry.guides) && entry.guides.length <= 1000 && entry.guides.every((item) => isObject(item) && Number.isSafeInteger(item.pageNumber) &&
       Number(item.pageNumber) >= 1 && isGuideArray(item.horizontalGuides) && isGuideArray(item.verticalGuides)))
+}
+
+function isCounterTimeLaps(value: unknown): value is CounterTimeLap[] {
+  if (!Array.isArray(value)) return false
+  const ids = new Set<string>()
+  return value.every((entry) => isObject(entry) && typeof entry.id === 'string' && entry.id.length > 0 && entry.id.length <= 100 && !ids.has(entry.id) &&
+    typeof entry.counterId === 'string' && entry.counterId.length > 0 && entry.counterId.length <= 100 &&
+    typeof entry.sessionId === 'string' && entry.sessionId.length > 0 && entry.sessionId.length <= 100 &&
+    typeof entry.historyEntryId === 'string' && entry.historyEntryId.length > 0 && entry.historyEntryId.length <= 100 &&
+    Number.isSafeInteger(entry.elapsedMs) && (entry.elapsedMs as number) >= 0 && Number.isSafeInteger(entry.durationMs) && (entry.durationMs as number) >= 0 &&
+    (entry.durationMs as number) <= (entry.elapsedMs as number) && (entry.rowDelta === -1 || entry.rowDelta === 1) &&
+    Number.isSafeInteger(entry.recordedAt) && (entry.recordedAt as number) >= 0 && Boolean(ids.add(entry.id)))
 }
 
 function isLegacyRectangleArray(value: unknown) {
@@ -124,6 +153,24 @@ function isLegacyRectangleArray(value: unknown) {
     (rectangle.y as number) + (rectangle.height as number) <= 1.000001 &&
     typeof rectangle.color === 'string' && /^#[\da-f]{6}$/i.test(rectangle.color) &&
     Number.isFinite(rectangle.opacity) && (rectangle.opacity as number) >= 0 && (rectangle.opacity as number) <= 1)
+}
+
+function isRegionHighlightArray(value: unknown) {
+  if (!Array.isArray(value) || value.length > 1000) return false
+  const ids = new Set<string>()
+  return value.every((region) => {
+    if (!isObject(region) || typeof region.id !== 'string' || !region.id.length || region.id.length > 64 || ids.has(region.id) ||
+      !Number.isFinite(region.x) || (region.x as number) < 0 || (region.x as number) > 1 ||
+      !Number.isFinite(region.y) || (region.y as number) < 0 || (region.y as number) > 1 ||
+      !Number.isFinite(region.width) || (region.width as number) <= 0 || (region.width as number) > 1 ||
+      !Number.isFinite(region.height) || (region.height as number) <= 0 || (region.height as number) > 1 ||
+      (region.x as number) + (region.width as number) > 1.000001 ||
+      (region.y as number) + (region.height as number) > 1.000001 ||
+      typeof region.color !== 'string' || !/^#[\da-f]{6}$/i.test(region.color) ||
+      !Number.isFinite(region.opacity) || (region.opacity as number) < 0.1 || (region.opacity as number) > 1) return false
+    ids.add(region.id)
+    return true
+  })
 }
 
 function isColorworkGrid(value: unknown): value is ColorworkGrid {
@@ -407,6 +454,8 @@ export async function readWorkspaceBackup(file: File): Promise<WorkspaceData> {
       ((manifest.version as number) >= 10 && (!isCurrentCounterSnapshots(entry.counters) || entry.counterHistory !== undefined && !isCounterHistory(entry.counterHistory))) ||
       ((manifest.version as number) >= 10 && (entry.counterSoundEnabled !== undefined && typeof entry.counterSoundEnabled !== 'boolean' || entry.counterPreviewEnabled !== undefined && typeof entry.counterPreviewEnabled !== 'boolean' || entry.counterPanelCollapsed !== undefined && typeof entry.counterPanelCollapsed !== 'boolean' || entry.counterGuideAutoPanId !== undefined && entry.counterGuideAutoPanId !== null && typeof entry.counterGuideAutoPanId !== 'string' || entry.collapsedCounterKinds !== undefined && (!isObject(entry.collapsedCounterKinds) || Object.values(entry.collapsedCounterKinds).some((value) => typeof value !== 'boolean')))) ||
       ((manifest.version as number) >= 12 && (entry.counterMainId !== undefined && typeof entry.counterMainId !== 'string' || entry.counterVibrationEnabled !== undefined && typeof entry.counterVibrationEnabled !== 'boolean' || entry.counterAlertAcknowledged !== undefined && typeof entry.counterAlertAcknowledged !== 'string' || typeof entry.counterAlertAcknowledged === 'string' && entry.counterAlertAcknowledged.length > 500)) ||
+      (entry.counterTimeLaps !== undefined && !isCounterTimeLaps(entry.counterTimeLaps)) ||
+      (entry.thumbnailGroups !== undefined && !isThumbnailGroups(entry.thumbnailGroups, pageCounts.get(entry.documentId)!)) ||
       !Number.isFinite(entry.wideRatio) || !Number.isFinite(entry.tallRatio) || !Number.isFinite(entry.updatedAt) ||
       (entry.progressSettings !== undefined && !isProgressSettings(entry.progressSettings)) ||
       (entry.annotationSettings !== undefined && !isAnnotationSettings(entry.annotationSettings))) {
@@ -417,6 +466,7 @@ export async function readWorkspaceBackup(file: File): Promise<WorkspaceData> {
     if ((manifest.version as number) < 9) viewer.counters = createDefaultCounters()
     else if ((manifest.version as number) < 10) viewer.counters = normalizeCounterSnapshots(viewer.counters)
     viewer.counterHistory = Array.isArray(viewer.counterHistory) ? viewer.counterHistory.slice(-MAX_COUNTER_HISTORY) : []
+    viewer.counterTimeLaps = normalizeCounterTimeLaps(viewer.counterTimeLaps)
     return viewer as unknown as ViewerSnapshot
   })
 
@@ -440,6 +490,7 @@ export async function readWorkspaceBackup(file: File): Promise<WorkspaceData> {
       (entry.legacyProgressGuides !== undefined && (!isObject(entry.legacyProgressGuides) || !isGuideArray(entry.legacyProgressGuides.horizontalGuides) || !isGuideArray(entry.legacyProgressGuides.verticalGuides))) ||
       ((manifest.version as number) >= 5 && (manifest.version as number) <= 6 && !isLegacyRectangleArray(entry.rectangles)) ||
       ((entry.rectangles !== undefined) && (manifest.version as number) <= 6 && !isLegacyRectangleArray(entry.rectangles)) ||
+      (entry.regionHighlights !== undefined && !isRegionHighlightArray(entry.regionHighlights)) ||
       (entry.colorworkGrid !== undefined && !isColorworkGrid(entry.colorworkGrid)) ||
       !Array.isArray(entry.annotations)) {
       throw new Error('작업 파일에 올바르지 않은 진행선·필기 정보가 있습니다.')
@@ -464,7 +515,8 @@ export async function readWorkspaceBackup(file: File): Promise<WorkspaceData> {
       })
       return { ...annotation, points } as unknown as AnnotationRecord
     })
-    return normalizePageWork({ ...entry, annotations } as unknown as PageWorkRecord)
+    const regionHighlights = entry.regionHighlights as RegionHighlight[] | undefined
+    return normalizePageWork({ ...entry, annotations, regionHighlights } as unknown as PageWorkRecord)
   })
 
   const charts: ChartDocument[] = (Array.isArray(manifest.charts) ? manifest.charts : []).map((entry) => {
