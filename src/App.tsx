@@ -1,4 +1,4 @@
-import { Suspense, lazy } from 'react'
+import { Suspense, lazy, useEffect } from 'react'
 import { HashRouter, Navigate, Route, Routes, useParams } from 'react-router-dom'
 import BrandLoading from './BrandLoading'
 import PwaUpdatePrompt from './PwaUpdatePrompt'
@@ -20,11 +20,63 @@ function ViewerRoute() {
   return <Suspense fallback={<BrandLoading kind="pdf" requestId={'viewer-module:' + id} layout="screen" />}><Viewer key={id} /></Suspense>
 }
 
+function ScreenWakeLock() {
+  useEffect(() => {
+    let active = true
+    let requesting = false
+    let requestAgain = false
+    let sentinel: WakeLockSentinel | null = null
+
+    const requestLock = async () => {
+      if (!active || document.visibilityState !== 'visible' || !('wakeLock' in navigator) || (sentinel && !sentinel.released)) return
+      if (requesting) {
+        requestAgain = true
+        return
+      }
+      requesting = true
+      try {
+        const requested = await navigator.wakeLock.request('screen')
+        if (!active) {
+          await requested.release()
+          return
+        }
+        sentinel = requested
+        requested.addEventListener('release', () => {
+          if (sentinel === requested) sentinel = null
+        }, { once: true })
+      } catch {
+        // The browser or operating system may deny a screen wake lock.
+      } finally {
+        requesting = false
+        if (requestAgain) {
+          requestAgain = false
+          void requestLock()
+        }
+      }
+    }
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') void requestLock()
+    }
+
+    document.addEventListener('visibilitychange', handleVisibilityChange)
+    void requestLock()
+    return () => {
+      active = false
+      document.removeEventListener('visibilitychange', handleVisibilityChange)
+      if (sentinel && !sentinel.released) void sentinel.release()
+    }
+  }, [])
+
+  return null
+}
+
 export default function App() {
   const pwaEnabled = !import.meta.env.VITE_PORTABLE
 
   return (
     <HashRouter>
+      <ScreenWakeLock />
       <Routes>
         <Route path="/" element={<Suspense fallback={<BrandLoading kind="app" requestId="home-module" layout="screen" />}><Home /></Suspense>} />
         <Route path="/projects" element={<Suspense fallback={<BrandLoading kind="app" requestId="projects-module" layout="screen" />}><Workspace /></Suspense>} />

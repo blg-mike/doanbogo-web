@@ -815,6 +815,36 @@ export async function saveViewerAndPageWorks(snapshot: ViewerSnapshot, works: Pa
   })
 }
 
+export async function saveViewerAndPageVisibility(snapshot: ViewerSnapshot, pageNumbers: number[], hidden: boolean, hiddenGroupId?: string) {
+  const viewer = stripLegacyTechniqueSlots(snapshot)
+  const uniquePages = [...new Set(pageNumbers)]
+  if (hidden && !hiddenGroupId) throw new Error('숨김 그룹 정보가 필요합니다.')
+  await access(async (db) => {
+    const tx = db.transaction(['viewers', 'pages'], 'readwrite')
+    const done = tx.done
+    try {
+      await tx.objectStore('viewers').put({ ...viewer, updatedAt: Date.now() })
+      const pageStore = tx.objectStore('pages')
+      for (const pageNumber of uniquePages) {
+        const page = await pageStore.get([viewer.documentId, pageNumber]) ?? { documentId: viewer.documentId, pageNumber, hidden: false, bookmarked: false }
+        await pageStore.put(updatePageHiddenState(page, hidden, hiddenGroupId))
+      }
+      await done
+    } catch (error) {
+      try { tx.abort() } catch { /* The transaction may already have finished. */ }
+      await done.catch(() => {})
+      throw error
+    }
+  }, () => {
+    temporary.viewers.set(viewer.documentId, { ...viewer, updatedAt: Date.now() })
+    for (const pageNumber of uniquePages) {
+      const key = pageKey(viewer.documentId, pageNumber)
+      const page = temporary.pages.get(key) ?? { documentId: viewer.documentId, pageNumber, hidden: false, bookmarked: false }
+      temporary.pages.set(key, updatePageHiddenState(page, hidden, hiddenGroupId))
+    }
+  })
+}
+
 export async function setPagesFlag(id: string, pageNumbers: number[], flag: 'hidden' | 'bookmarked', value: boolean) {
   const uniquePages = [...new Set(pageNumbers)]
   await access(async (db) => {

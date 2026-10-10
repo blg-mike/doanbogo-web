@@ -694,6 +694,37 @@ document.addEventListener('keydown', (event) => {
 })
 document.getElementById('year').textContent = String(new Date().getFullYear())
 
+let screenWakeLock = null
+let screenWakeLockRequesting = false
+let screenWakeLockRequestAgain = false
+async function requestScreenWakeLock() {
+  if (document.visibilityState !== 'visible' || !('wakeLock' in navigator) || (screenWakeLock && !screenWakeLock.released)) return
+  if (screenWakeLockRequesting) {
+    screenWakeLockRequestAgain = true
+    return
+  }
+  screenWakeLockRequesting = true
+  try {
+    const sentinel = await navigator.wakeLock.request('screen')
+    screenWakeLock = sentinel
+    sentinel.addEventListener('release', () => {
+      if (screenWakeLock === sentinel) screenWakeLock = null
+    }, { once: true })
+  } catch {
+    // The browser or operating system may deny a screen wake lock.
+  } finally {
+    screenWakeLockRequesting = false
+    if (screenWakeLockRequestAgain) {
+      screenWakeLockRequestAgain = false
+      void requestScreenWakeLock()
+    }
+  }
+}
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'visible') void requestScreenWakeLock()
+})
+void requestScreenWakeLock()
+
 </script>
   </body>
 </html>

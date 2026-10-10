@@ -116,6 +116,20 @@ Object.assign(extendedTranslations.de, contentErrors.de)
 Object.assign(extendedTranslations.da, contentErrors.da)
 Object.assign(extendedTranslations.nb, contentErrors.nb)
 Object.assign(extendedTranslations.fi, contentErrors.fi)
+const pageWorkLoadErrors = {
+  en: { '페이지 작업 데이터를 불러오지 못했습니다. 다시 시도해 주세요.': 'Could not load this page’s saved work. Try again.', '페이지 작업 데이터를 불러오는 데 20초 이상 걸렸습니다. 다시 시도해 주세요.': 'Loading this page’s saved work took more than 20 seconds. Try again.' },
+  ja: { '페이지 작업 데이터를 불러오지 못했습니다. 다시 시도해 주세요.': 'このページの作業データを読み込めませんでした。もう一度お試しください。', '페이지 작업 데이터를 불러오는 데 20초 이상 걸렸습니다. 다시 시도해 주세요.': 'このページの作業データの読み込みに20秒以上かかりました。もう一度お試しください。' },
+  de: { '페이지 작업 데이터를 불러오지 못했습니다. 다시 시도해 주세요.': 'Die gespeicherten Seitendaten konnten nicht geladen werden. Bitte versuchen Sie es erneut.', '페이지 작업 데이터를 불러오는 데 20초 이상 걸렸습니다. 다시 시도해 주세요.': 'Das Laden der gespeicherten Seitendaten dauerte länger als 20 Sekunden. Bitte versuchen Sie es erneut.' },
+  da: { '페이지 작업 데이터를 불러오지 못했습니다. 다시 시도해 주세요.': 'Sidens gemte arbejde kunne ikke indlæses. Prøv igen.', '페이지 작업 데이터를 불러오는 데 20초 이상 걸렸습니다. 다시 시도해 주세요.': 'Det tog mere end 20 sekunder at indlæse sidens gemte arbejde. Prøv igen.' },
+  nb: { '페이지 작업 데이터를 불러오지 못했습니다. 다시 시도해 주세요.': 'Sidens lagrede arbeid kunne ikke lastes inn. Prøv igjen.', '페이지 작업 데이터를 불러오는 데 20초 이상 걸렸습니다. 다시 시도해 주세요.': 'Det tok mer enn 20 sekunder å laste inn sidens lagrede arbeid. Prøv igjen.' },
+  fi: { '페이지 작업 데이터를 불러오지 못했습니다. 다시 시도해 주세요.': 'Sivun tallennettua työtä ei voitu ladata. Yritä uudelleen.', '페이지 작업 데이터를 불러오는 데 20초 이상 걸렸습니다. 다시 시도해 주세요.': 'Sivun tallennetun työn lataaminen kesti yli 20 sekuntia. Yritä uudelleen.' },
+}
+Object.assign(extendedTranslations.en, pageWorkLoadErrors.en)
+Object.assign(extendedTranslations.ja, pageWorkLoadErrors.ja)
+Object.assign(extendedTranslations.de, pageWorkLoadErrors.de)
+Object.assign(extendedTranslations.da, pageWorkLoadErrors.da)
+Object.assign(extendedTranslations.nb, pageWorkLoadErrors.nb)
+Object.assign(extendedTranslations.fi, pageWorkLoadErrors.fi)
 const uiNamingTranslations = {
   en: { '제목 없음': 'Untitled', '레이어 {count}': 'Layer {count}', '색상 {count}': 'Color {count}', '실 색상 {count}': 'Yarn color {count}', '{count}개 선택': '{count} selected', '표시': 'Show', '진행 {count}': 'Progress {count}' },
   ja: { '제목 없음': '無題', '레이어 {count}': 'レイヤー {count}', '색상 {count}': '色 {count}', '실 색상 {count}': '糸の色 {count}', '{count}개 선택': '{count}件選択中', '표시': '表示', '진행 {count}': '作業 {count}' },
@@ -282,3 +296,17 @@ Object.assign(extendedTranslations.fi, {
   '현재 단 입력': 'Muokkaa nykyistä kerrosta', '단 번호 입력': 'Kerrosnumero', '1에서 9999 사이의 정수를 입력하세요.': 'Anna kokonaisluku väliltä 1–9999.',
   '+1단': '+1 kerros', '−1단': '−1 kerros', '일시정지를 누르지 않아 마지막 저장 이후 측정한 시간은 누적 작업시간에 저장되지 않습니다.': 'Edellisen tallennuksen jälkeen mitattua aikaa ei lisätä kokonaistyöaikaan, koska ajastinta ei keskeytetty.',
 })
+const thumbnailLabelAndExitTranslations = {
+  en: { '이름 바꾸기': 'Rename', '순서 바꾸기': 'Reorder', '라벨 해지하기': 'Remove label', '위로 이동': 'Move up', '아래로 이동': 'Move down', '라벨 순서': 'Label order', '저장하고 나가기': 'Save and exit', '저장하는 중…': 'Saving before exit…', '저장하지 못했습니다. 저장 공간을 확인한 뒤 다시 시도해 주세요.': 'Could not save. Check available storage and try again.' },
+  ja: { '이름 바꾸기': '名前を変更', '순서 바꾸기': '順序を変更', '라벨 해지하기': 'ラベルを解除', '위로 이동': '上へ移動', '아래로 이동': '下へ移動', '라벨 순서': 'ラベルの順序', '저장하고 나가기': '保存して終了', '저장하는 중…': '終了前に保存中…', '저장하지 못했습니다. 저장 공간을 확인한 뒤 다시 시도해 주세요.': '保存できませんでした。保存領域を確認して、もう一度お試しください。' },
+  de: { '이름 바꾸기': 'Umbenennen', '순서 바꾸기': 'Reihenfolge ändern', '라벨 해지하기': 'Label entfernen', '위로 이동': 'Nach oben', '아래로 이동': 'Nach unten', '라벨 순서': 'Labelreihenfolge', '저장하고 나가기': 'Speichern und beenden', '저장하는 중…': 'Speichern vor dem Beenden…', '저장하지 못했습니다. 저장 공간을 확인한 뒤 다시 시도해 주세요.': 'Speichern fehlgeschlagen. Prüfen Sie den verfügbaren Speicher und versuchen Sie es erneut.' },
+  da: { '이름 바꾸기': 'Omdøb', '순서 바꾸기': 'Skift rækkefølge', '라벨 해지하기': 'Fjern mærkat', '위로 이동': 'Flyt op', '아래로 이동': 'Flyt ned', '라벨 순서': 'Mærkatrækkefølge', '저장하고 나가기': 'Gem og afslut', '저장하는 중…': 'Gemmer før afslutning…', '저장하지 못했습니다. 저장 공간을 확인한 뒤 다시 시도해 주세요.': 'Kunne ikke gemme. Kontrollér lagerpladsen, og prøv igen.' },
+  nb: { '이름 바꾸기': 'Gi nytt navn', '순서 바꾸기': 'Endre rekkefølge', '라벨 해지하기': 'Fjern etikett', '위로 이동': 'Flytt opp', '아래로 이동': 'Flytt ned', '라벨 순서': 'Etikettrekkefølge', '저장하고 나가기': 'Lagre og avslutt', '저장하는 중…': 'Lagrer før avslutning…', '저장하지 못했습니다. 저장 공간을 확인한 뒤 다시 시도해 주세요.': 'Kunne ikke lagre. Kontroller lagringsplassen og prøv igjen.' },
+  fi: { '이름 바꾸기': 'Nimeä uudelleen', '순서 바꾸기': 'Muuta järjestystä', '라벨 해지하기': 'Poista tunniste', '위로 이동': 'Siirrä ylös', '아래로 이동': 'Siirrä alas', '라벨 순서': 'Tunnisteiden järjestys', '저장하고 나가기': 'Tallenna ja poistu', '저장하는 중…': 'Tallennetaan ennen poistumista…', '저장하지 못했습니다. 저장 공간을 확인한 뒤 다시 시도해 주세요.': 'Tallennus epäonnistui. Tarkista tallennustila ja yritä uudelleen.' },
+}
+Object.assign(extendedTranslations.en, thumbnailLabelAndExitTranslations.en)
+Object.assign(extendedTranslations.ja, thumbnailLabelAndExitTranslations.ja)
+Object.assign(extendedTranslations.de, thumbnailLabelAndExitTranslations.de)
+Object.assign(extendedTranslations.da, thumbnailLabelAndExitTranslations.da)
+Object.assign(extendedTranslations.nb, thumbnailLabelAndExitTranslations.nb)
+Object.assign(extendedTranslations.fi, thumbnailLabelAndExitTranslations.fi)

@@ -1,5 +1,5 @@
 import { formatNumber, t, translateMessage } from './locales/index'
-import { Fragment, useCallback, useEffect, useRef, useState, type DragEvent as ReactDragEvent, type FormEvent as ReactFormEvent, type MouseEvent as ReactMouseEvent, type PointerEvent as ReactPointerEvent, type ReactNode, type UIEvent as ReactUIEvent } from 'react'
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState, type DragEvent as ReactDragEvent, type FormEvent as ReactFormEvent, type MouseEvent as ReactMouseEvent, type PointerEvent as ReactPointerEvent, type ReactNode, type UIEvent as ReactUIEvent } from 'react'
 import type { PDFDocumentProxy } from 'pdfjs-dist'
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { ArrowLeft, Bookmark, Check, ChevronDown, ChevronLeft, ChevronRight, ChevronUp, Columns2, Eraser, Eye, EyeClosed, EyeOff, Files, Grid3X3, GripVertical, Highlighter, Maximize2, Minus, MousePointer2, Pencil, Plus, Redo2, RotateCwSquare, ScanLine, Settings2, Square, Tally5, Type, Undo2, X } from 'lucide-react'
@@ -7,7 +7,7 @@ import { createPortal } from 'react-dom'
 import BrandLoading from './BrandLoading'
 import yyLogo from './assets/yy-logo.png'
 import { cancelThumbnailRenders, PdfPage, PdfThumbnail, setThumbnailRenderingPaused, waitForThumbnailQueueIdle } from './PdfPage'
-import { getDocument, getPageRecognition, getPageWork, getPageWorks, getPages, getViewer, markOpened, renameDocument, savePageRecords, savePageWork, saveViewer, saveViewerAndPageWorks, setPageFlag, setPagesHiddenState } from './storage'
+import { getDocument, getPageRecognition, getPageWork, getPageWorks, getPages, getViewer, markOpened, renameDocument, savePageRecords, savePageWork, saveViewer, saveViewerAndPageVisibility, saveViewerAndPageWorks, setPageFlag, setPagesHiddenState } from './storage'
 import { pdfPageRenderQueue } from './pdfPageRenderQueue'
 import { openPdf, pdfErrorMessage } from './pdf'
 import { openPhotoDocument } from './photoDocument'
@@ -24,18 +24,22 @@ import { PageWorkPersistence } from './pageWorkPersistence'
 import { enqueuePdfRecognition, pausePdfRecognitionForReport, releasePdfRecognitionViewer, resumePdfRecognitionFromReport, subscribePdfRecognition, updatePdfRecognitionPageVisibility } from './pdfRecognition'
 import { getViewerResourcePolicy, setThumbnailPagesExcluded } from './pdfRenderResources'
 import { guidePositionForRotation } from './focusGeometry'
-import { canHidePageSelection, compactPageThumbnails, completePageList, createHiddenPageGroupId, createThumbnailGroupId, movePagesToThumbnailGroup, nextVisiblePageAfterHide, normalizeHiddenPageGroups, updatePageHiddenState, visiblePageRange, type PageThumbnailItem } from './pageManagement'
+import { canHidePageSelection, compactPageThumbnails, completePageList, createHiddenPageGroupId, createThumbnailGroupId, movePagesToThumbnailGroup, nextVisiblePageAfterHide, normalizeHiddenPageGroups, reorderThumbnailGroups, thumbnailPagesForDrag, updatePageHiddenState, visiblePageRange, type PageThumbnailItem } from './pageManagement'
 import { createDefaultPrimaryProgressGuide, migrateProgressGuides, prepareProgressGuidesForDirectInteraction, progressGuideCandidates } from './progressLines'
 import { ColorPresetButtons } from './ColorPresetButtons'
 import { DESIGN_SYSTEM_COLORS, FUNCTIONAL_COLOR_PRESETS } from './designTokens'
 import { useDismissiblePopover } from './useDismissiblePopover'
+import { getRequiredPageWorkPages, loadPageWorkWithTimeout, PageWorkLoadTimeoutError } from './pageWorkLoading'
 
 type Size = { width: number; height: number }
 type WorkAction = { before?: PageWorkRecord; after?: PageWorkRecord; cellChanges?: ColorworkCellChange[] }
 type PageHistory = { actions: WorkAction[]; cursor: number; byteCosts: number[] }
+type PageWorkLoadUiEntry = { requestId: number; status: 'loading' } | { requestId: number; status: 'error'; message: string }
+type PageWorkLoadRequest = { requestId: number; promise: Promise<PageWorkRecord | null> }
 const MAX_CACHED_PAGE_WORKS = getViewerResourcePolicy().cachedPageWorks
 const MAX_PAGE_HISTORY_ACTIONS = 30
 const MAX_PAGE_HISTORY_BYTES = getViewerResourcePolicy().tablet ? 8 * 1024 * 1024 : 32 * 1024 * 1024
+const EMPTY_THUMBNAIL_GROUPS: ThumbnailGroup[] = []
 type ThumbnailSelection = { pages: number[]; anchor: number; lastPage: number }
 type ThumbnailTouchGesture = {
   pointerId: number
@@ -51,7 +55,7 @@ type ThumbnailTouchGesture = {
   mode: 'pending' | 'scroll' | 'select' | 'drag'
   dropTarget?: { kind: 'hidden'; groupId: string | null; key: string } | { kind: 'label'; groupId: string; key: string }
   timer: number
-  edgeTimer?: number
+  frameId?: number
 }
 type CounterGuideAction = { kind: 'advance' | 'correct'; pageNumber: number; guideId: string }
 type CounterTimeLapAction = Omit<CounterTimeLap, 'historyEntryId'>
@@ -199,10 +203,13 @@ export default function Viewer() {
   const timerClockRef = useRef<DocumentTimerClock | null>(null)
   const lapBaselineRef = useRef<{ sessionId: string; elapsedMs: number } | null>(null)
   const fallbackTimerSessionIdRef = useRef('')
+  const thumbnailGroupSavePromiseRef = useRef<Promise<boolean> | null>(null)
+  const pageVisibilityPromiseRef = useRef<Promise<void> | null>(null)
   const thumbnailRailRef = useRef<HTMLDivElement>(null)
   const thumbnailGroupListRef = useRef<HTMLDivElement>(null)
   const thumbnailMouseDragRef = useRef<{ pointerId: number; startX: number; scrollLeft: number; dragging: boolean } | null>(null)
   const counterActionQueueRef = useRef<Promise<void>>(Promise.resolve())
+  const counterActionRetryRef = useRef<(() => Promise<boolean>) | null>(null)
   const counterActionLockRef = useRef(false)
   const snapshotRef = useRef<ViewerSnapshot | null>(null)
   const saveTimer = useRef<number | undefined>(undefined)
@@ -223,7 +230,8 @@ export default function Viewer() {
     setSuspendError(pageWorkSaveErrorMessage)
   }))
   const workRef = useRef<Record<number, PageWorkRecord>>({})
-  const pageWorkLoadRef = useRef(new Map<number, Promise<PageWorkRecord>>())
+  const pageWorkLoadRef = useRef(new Map<number, PageWorkLoadRequest>())
+  const pageWorkLoadRequestIdRef = useRef(0)
   const pageWorkOrderRef = useRef<number[]>([])
   const pageWorkCacheTrimRef = useRef<Promise<void> | null>(null)
   const workDocumentIdRef = useRef(id)
@@ -252,15 +260,43 @@ export default function Viewer() {
     timerClockRef.current = clock
     if (clock) lapBaselineRef.current = { sessionId: clock.sessionId, elapsedMs: 0 }
   }, [])
-  const requestViewerExit = useCallback(() => {
-    if (timerSaving) return
-    if (timerHasUnsaved) {
-      setExitPromptTarget('home')
-      setExitPromptOpen(true)
-      return
+  const [viewerExitSaving, setViewerExitSaving] = useState(false)
+  const [viewerExitError, setViewerExitError] = useState('')
+  const viewerExitInFlightRef = useRef(false)
+  const requestViewerExit = useCallback(async () => {
+    if (viewerExitInFlightRef.current) return
+    viewerExitInFlightRef.current = true
+    setViewerExitSaving(true)
+    setViewerExitError('')
+    try {
+      await timerClockRef.current?.pauseAndSave()
+      await counterActionQueueRef.current
+      const retryCounterAction = counterActionRetryRef.current
+      if (retryCounterAction && !await retryCounterAction()) {
+        setViewerExitError(t('카운터와 진행선을 저장하지 못했습니다. 저장 공간을 확인하고 다시 시도해 주세요.'))
+        setViewerExitSaving(false)
+        viewerExitInFlightRef.current = false
+        return
+      }
+      const pendingGroupSave = thumbnailGroupSavePromiseRef.current
+      if (pendingGroupSave && !await pendingGroupSave) throw new Error('그룹 저장에 실패했습니다.')
+      await pageVisibilityPromiseRef.current
+      if (saveTimer.current !== undefined) window.clearTimeout(saveTimer.current)
+      saveTimer.current = undefined
+      await pageWorkPersistence.flushAll()
+      const storedWorks = await getPageWorks(id)
+      const latestWorks = new Map(storedWorks.map((work) => [work.pageNumber, work]))
+      Object.values(workRef.current).forEach((work) => latestWorks.set(work.pageNumber, work))
+      const latestSnapshot = snapshotRef.current
+      if (latestSnapshot) await saveViewerAndPageWorks(latestSnapshot, [...latestWorks.values()])
+      navigate('/projects')
+    } catch (error) {
+      console.warn('[PDF] Viewer exit save failed.', error)
+      setViewerExitError(t('저장하지 못했습니다. 저장 공간을 확인한 뒤 다시 시도해 주세요.'))
+      setViewerExitSaving(false)
+      viewerExitInFlightRef.current = false
     }
-    navigate('/')
-  }, [navigate, timerHasUnsaved, timerSaving])
+  }, [id, navigate, pageWorkPersistence])
   const [renameDialog, setRenameDialog] = useState(false)
   const [renameDraft, setRenameDraft] = useState('')
   const [renameError, setRenameError] = useState('')
@@ -291,7 +327,9 @@ export default function Viewer() {
   const draggedThumbnailPageRef = useRef<number | null>(null)
   const draggedThumbnailPagesRef = useRef<number[]>([])
   const thumbnailGroupSavingRef = useRef(false)
-  const [thumbnailDropTarget, setThumbnailDropTarget] = useState<string | null>(null)
+  const [thumbnailDropTargetUi, setThumbnailDropTargetUi] = useState<{ documentId: string; target: string | null }>(() => ({ documentId: id, target: null }))
+  const thumbnailDropTarget = thumbnailDropTargetUi.documentId === id ? thumbnailDropTargetUi.target : null
+  const thumbnailDropTargetRef = useRef<string | null>(null)
   const [thumbnailGroupState, setThumbnailGroupState] = useState(() => ({ documentId: id, expandedGroupId: null as string | null }))
   if (thumbnailGroupState.documentId !== id) setThumbnailGroupState({ documentId: id, expandedGroupId: null })
   const expandedThumbnailGroupId = thumbnailGroupState.documentId === id ? thumbnailGroupState.expandedGroupId : null
@@ -299,13 +337,15 @@ export default function Viewer() {
   const [thumbnailGroupDraft, setThumbnailGroupDraft] = useState('')
   const [thumbnailGroupSaving, setThumbnailGroupSaving] = useState(false)
   const [thumbnailGroupError, setThumbnailGroupError] = useState('')
-  const [thumbnailGroupPopover, setThumbnailGroupPopover] = useState<{ documentId: string; groupId: string; left: number; top: number } | null>(null)
+  const [thumbnailGroupPopover, setThumbnailGroupPopover] = useState<{ documentId: string; groupId: string; left: number; top: number; mode: 'menu' | 'rename' | 'order' } | null>(null)
+  const [thumbnailGroupOrderDraft, setThumbnailGroupOrderDraft] = useState<string[]>([])
   const thumbnailGroupPopoverRef = useRef<HTMLFormElement>(null)
   const [thumbnailCollapsed, setThumbnailCollapsed] = useState(() => tabletResourcePolicy)
   const [miniBarState, setMiniBarState] = useState(() => ({ documentId: id, open: false }))
   if (miniBarState.documentId !== id) setMiniBarState({ documentId: id, open: false })
   const miniBarOpen = miniBarState.documentId === id && miniBarState.open
   const miniBarAccordionButtonRef = useRef<HTMLButtonElement>(null)
+  const miniBarControlsRef = useRef<HTMLDivElement>(null)
   const miniBarControlsId = 'viewer-tools-' + id.replace(/[^a-zA-Z0-9_-]/g, '-')
   const [miniBarSettingsState, setMiniBarSettingsState] = useState(() => ({ documentId: id, open: false }))
   if (miniBarSettingsState.documentId !== id) setMiniBarSettingsState({ documentId: id, open: false })
@@ -317,6 +357,23 @@ export default function Viewer() {
   const miniBarSettingsTriggerRef = useRef<HTMLButtonElement>(null)
   const thumbnailContentId = 'viewer-thumbnails-' + id.replace(/[^a-zA-Z0-9_-]/g, '-')
   const [pageWorks, setPageWorks] = useState<Record<number, PageWorkRecord>>({})
+  const [pageWorkLoadUi, setPageWorkLoadUi] = useState<{ documentId: string; pages: Record<number, PageWorkLoadUiEntry> }>(() => ({ documentId: id, pages: {} }))
+  const pageWorkLoadEntries = pageWorkLoadUi.documentId === id ? pageWorkLoadUi.pages : {}
+  const updatePageWorkLoadUi = useCallback((page: number, requestId: number, entry: PageWorkLoadUiEntry | null) => {
+    setPageWorkLoadUi((current) => {
+      if (current.documentId !== id && current.documentId === workDocumentIdRef.current) return current
+      const pages = { ...(current.documentId === id ? current.pages : {}) }
+      const existing = pages[page]
+      if (entry === null) {
+        if (existing?.requestId !== requestId) return current
+        delete pages[page]
+      } else {
+        if (existing && existing.requestId > requestId) return current
+        pages[page] = entry
+      }
+      return { documentId: id, pages }
+    })
+  }, [id])
   const [histories, setHistories] = useState<Record<number, PageHistory>>({})
   const [tool, setTool] = useState<AnnotationTool>('pan')
   const [colorworkRequest, setColorworkRequest] = useState<ColorworkCreateRequest | null>(null)
@@ -396,7 +453,7 @@ export default function Viewer() {
       const gesture = thumbnailTouchGestureRef.current
       if (!gesture) return
       window.clearTimeout(gesture.timer)
-      if (gesture.edgeTimer !== undefined) window.clearInterval(gesture.edgeTimer)
+      if (gesture.frameId !== undefined) window.cancelAnimationFrame(gesture.frameId)
       thumbnailTouchGestureRef.current = null
     }
   }, [id])
@@ -405,8 +462,16 @@ export default function Viewer() {
     setThumbnailUi((current) => {
       const sameDocument = current.documentId === id
       const selection = typeof next === 'function' ? next(sameDocument ? current.selection : null) : next
+      if (sameDocument && current.selection?.anchor === selection?.anchor && current.selection?.lastPage === selection?.lastPage &&
+        current.selection?.pages.length === selection?.pages.length && current.selection?.pages.every((page, index) => page === selection?.pages[index])) return current
       return { documentId: id, selection, error: sameDocument ? current.error : '' }
     })
+  }
+
+  function updateThumbnailDropTarget(nextTarget: string | null) {
+    if (thumbnailDropTargetRef.current === nextTarget) return
+    thumbnailDropTargetRef.current = nextTarget
+    setThumbnailDropTargetUi({ documentId: id, target: nextTarget })
   }
 
   function setPageVisibilityError(error: string) {
@@ -760,7 +825,7 @@ export default function Viewer() {
   const activeVisiblePageIndex = visiblePageNumbers.indexOf(activePage)
   const selectedThumbnailPages = thumbnailSelection?.pages ?? []
   const selectedThumbnailSet = new Set(selectedThumbnailPages)
-  const thumbnailGroups = snapshot?.thumbnailGroups ?? []
+  const thumbnailGroups = snapshot?.thumbnailGroups ?? EMPTY_THUMBNAIL_GROUPS
   const hideSelectionWouldRemoveLastPage = selectedThumbnailPages.length > 0 && !canHidePageSelection(pdf?.numPages ?? 0, hiddenNumbers, selectedThumbnailSet)
   const progressSettings = snapshot?.progressSettings ?? defaultProgressSettings
   const annotationSettings = snapshot?.annotationSettings ?? defaultAnnotationSettings
@@ -775,21 +840,14 @@ export default function Viewer() {
   const primaryPage = snapshot?.primary.page
   const secondaryPage = snapshot?.secondary.page
   const isSplit = snapshot?.split
+  const activePaneId = snapshot?.activePane
 
+  useDismissiblePopover(miniBarOpen && !miniBarSettingsOpen, miniBarControlsRef, miniBarAccordionButtonRef, () => {
+    setMiniBarState((current) => current.documentId === id ? { ...current, open: false } : current)
+    setMiniBarSettingsOpen(false)
+    if (miniBarControlsRef.current?.contains(document.activeElement)) miniBarAccordionButtonRef.current?.focus()
+  })
   useDismissiblePopover(miniBarSettingsOpen, miniBarSettingsPanelRef, miniBarSettingsTriggerRef, () => setMiniBarSettingsOpen(false))
-
-  useEffect(() => {
-    if (!miniBarOpen || miniBarSettingsOpen || thumbnailGroupPopover || thumbnailGroupDialog || colorworkDialog || renameDialog || exitPromptOpen) return
-    const closeMiniBar = (event: KeyboardEvent) => {
-      if (event.key !== 'Escape' || event.defaultPrevented) return
-      event.preventDefault()
-      setMiniBarState((current) => current.documentId === id ? { ...current, open: false } : current)
-      setMiniBarSettingsOpen(false)
-      miniBarAccordionButtonRef.current?.focus()
-    }
-    document.addEventListener('keydown', closeMiniBar)
-    return () => document.removeEventListener('keydown', closeMiniBar)
-  }, [id, miniBarOpen, miniBarSettingsOpen, thumbnailGroupPopover, thumbnailGroupDialog, colorworkDialog, renameDialog, exitPromptOpen, setMiniBarSettingsOpen])
 
   useEffect(() => {
     if (!thumbnailGroupPopover || thumbnailGroupPopover.documentId !== id) return
@@ -815,7 +873,7 @@ export default function Viewer() {
 
   useEffect(() => {
     draggedThumbnailPageRef.current = null
-    setThumbnailDropTarget(null)
+    thumbnailDropTargetRef.current = null
   }, [id])
 
   useEffect(() => {
@@ -896,23 +954,24 @@ export default function Viewer() {
       return existing
     }
     const pending = pageWorkLoadRef.current.get(page)
-    if (pending) {
-      const loaded = await pending
-      touchPageWork(page)
-      return loaded
-    }
-    let loadingWork: Promise<PageWorkRecord>
-    loadingWork = getPageWork(id, page).then((savedWork) => {
-      if (workDocumentIdRef.current !== id) return savedWork
+    if (pending) return pending.promise
+
+    const requestId = ++pageWorkLoadRequestIdRef.current
+    updatePageWorkLoadUi(page, requestId, { requestId, status: 'loading' })
+    let request: PageWorkLoadRequest
+    const loadingWork = loadPageWorkWithTimeout(() => getPageWork(id, page)).then((savedWork) => {
+      if (workDocumentIdRef.current !== id || pageWorkLoadRef.current.get(page) !== request) return null
       const current = workRef.current[page]
       if (current) {
         touchPageWork(page)
+        updatePageWorkLoadUi(page, requestId, null)
         return current
       }
       const loaded = prepareProgressGuidesForDirectInteraction(savedWork)
       workRef.current = { ...workRef.current, [page]: loaded }
       touchPageWork(page)
       setPageWorks(workRef.current)
+      updatePageWorkLoadUi(page, requestId, null)
       if (loaded !== savedWork) {
         void pageWorkPersistence.schedule(loaded, true).catch((error: unknown) => {
           console.warn('[PDF] Legacy progress guides could not be migrated.', error)
@@ -920,18 +979,27 @@ export default function Viewer() {
         })
       }
       return loaded
+    }).catch((error: unknown) => {
+      if (workDocumentIdRef.current === id && pageWorkLoadRef.current.get(page) === request) {
+        const message = error instanceof PageWorkLoadTimeoutError
+          ? t('페이지 작업 데이터를 불러오는 데 20초 이상 걸렸습니다. 다시 시도해 주세요.')
+          : t('페이지 작업 데이터를 불러오지 못했습니다. 다시 시도해 주세요.')
+        updatePageWorkLoadUi(page, requestId, { requestId, status: 'error', message })
+      }
+      return null
     }).finally(() => {
-      if (pageWorkLoadRef.current.get(page) === loadingWork) pageWorkLoadRef.current.delete(page)
+      if (pageWorkLoadRef.current.get(page) === request) pageWorkLoadRef.current.delete(page)
     })
-    pageWorkLoadRef.current.set(page, loadingWork)
+    request = { requestId, promise: loadingWork }
+    pageWorkLoadRef.current.set(page, request)
     return loadingWork
-  }, [id, pageWorkPersistence, touchPageWork])
+  }, [id, pageWorkPersistence, touchPageWork, updatePageWorkLoadUi])
 
   useEffect(() => {
-    if (primaryPage === undefined || !id || loadedId !== id) return
-    const needed = [...new Set(isSplit && secondaryPage !== undefined ? [primaryPage, secondaryPage] : [primaryPage])]
+    if (activePaneId === undefined || !id || loadedId !== id || primaryPage === undefined || secondaryPage === undefined) return
+    const needed = getRequiredPageWorkPages({ split: Boolean(isSplit), activePage, primaryPage, secondaryPage })
     void Promise.all(needed.map((page) => ensurePageWork(page)))
-  }, [id, loadedId, primaryPage, secondaryPage, isSplit, ensurePageWork])
+  }, [id, loadedId, activePaneId, activePage, primaryPage, secondaryPage, isSplit, ensurePageWork])
 
   function mutateSnapshot(change: (current: ViewerSnapshot) => ViewerSnapshot, immediate = false) {
     const current = snapshotRef.current
@@ -954,9 +1022,10 @@ export default function Viewer() {
   }
 
   function commitCounterTransaction(nextCounters: CounterSnapshot[], label: string, actualRow = 0, restoreGuides?: CounterHistoryEntry['guides'], saveHistory = true, autoPanY?: number, baseCounterId?: string, snapshotChanges?: Partial<ViewerSnapshot>, guideAction?: CounterGuideAction, lapAction?: CounterTimeLapAction) {
+    const retryAction = () => commitCounterTransaction(nextCounters, label, actualRow, restoreGuides, saveHistory, autoPanY, baseCounterId, snapshotChanges, guideAction, lapAction)
     const operation = counterActionQueueRef.current.then(async () => {
       const current = snapshotRef.current
-      if (!current) return
+      if (!current) return true
       const undoneHistory = !saveHistory && restoreGuides ? current.counterHistory?.at(-1) : undefined
       const undoneTimeLap = undoneHistory?.timeLapId ? current.counterTimeLaps?.find((lap) => lap.id === undoneHistory.timeLapId) : undefined
       if (saveTimer.current !== undefined) window.clearTimeout(saveTimer.current)
@@ -1049,16 +1118,18 @@ export default function Viewer() {
           lapBaselineRef.current = { sessionId: undoneTimeLap.sessionId, elapsedMs: previousLap?.elapsedMs ?? 0 }
         }
         setSuspendError((error) => error.startsWith('카운터') ? '' : error)
+        if (counterActionRetryRef.current === retryAction) counterActionRetryRef.current = null
+        return true
       } catch (error) {
         console.warn('[PDF] Counter state could not be saved.', error)
-        if (lapAction || undoneTimeLap) {
-          snapshotRef.current = current
-          setSnapshot(current)
-        }
+        snapshotRef.current = current
+        setSnapshot(current)
         setSuspendError('카운터와 진행선을 저장하지 못했습니다. 저장 공간을 확인하고 다시 시도해 주세요.')
+        return false
       }
     })
-    counterActionQueueRef.current = operation.catch(() => {})
+    counterActionRetryRef.current = retryAction
+    counterActionQueueRef.current = operation.then(() => undefined, () => undefined)
     return operation
   }
 
@@ -1359,34 +1430,30 @@ export default function Viewer() {
     const target = document.elementFromPoint(gesture.clientX, gesture.clientY)?.closest<HTMLElement>('.page-thumbnail[data-page-number]')
     const pageNumber = Number(target?.dataset.pageNumber)
     if (!Number.isInteger(pageNumber) || hiddenNumbers.has(pageNumber) || !pdf) return
-    const visiblePages = Array.from({ length: pdf.numPages }, (_, index) => index + 1).filter((page) => !hiddenNumbers.has(page))
-    const selectedPages = visiblePageRange(visiblePages, gesture.pageNumber, pageNumber)
+    const selectedPages = visiblePageRange(visiblePageNumbers, gesture.pageNumber, pageNumber)
     if (selectedPages.length) setThumbnailSelection({ pages: selectedPages, anchor: gesture.pageNumber, lastPage: pageNumber })
   }
 
   function findThumbnailTouchDropTarget(gesture: ThumbnailTouchGesture) {
     const target = document.elementFromPoint(gesture.clientX, gesture.clientY)
-    const labelGroup = target?.closest<HTMLElement>('[data-thumbnail-label-drop]')
-    if (labelGroup) {
-      const groupId = labelGroup.dataset.thumbnailLabelDrop ?? ''
-      const selected = gesture.pointerType === 'mouse'
-        ? gesture.draggedPages
-        : thumbnailSelection?.pages.includes(gesture.pageNumber) ? thumbnailSelection.pages : [gesture.pageNumber]
-      return canDropPagesIntoThumbnailGroup(selected, groupId) ? { kind: 'label' as const, groupId, key: 'label-group:' + groupId } : undefined
-    }
     const groupBadge = target?.closest<HTMLElement>('.hidden-thumbnail-run-button[data-group-id]')
     if (groupBadge) {
       const groupId = groupBadge.dataset.groupId ?? null
-      return canDropThumbnailIntoGroup(gesture.pageNumber, groupId) ? { kind: 'hidden' as const, groupId, key: 'group:' + groupId } : undefined
+      return canDropPagesIntoHiddenGroup(gesture.draggedPages, groupId) ? { kind: 'hidden' as const, groupId, key: 'group:' + groupId } : undefined
+    }
+    const labelGroup = target?.closest<HTMLElement>('[data-thumbnail-label-drop]')
+    if (labelGroup) {
+      const groupId = labelGroup.dataset.thumbnailLabelDrop ?? ''
+      return canDropPagesIntoThumbnailGroup(gesture.draggedPages, groupId) ? { kind: 'label' as const, groupId, key: 'label-group:' + groupId } : undefined
     }
     const pageTarget = target?.closest<HTMLElement>('.page-thumbnail[data-page-number]')
     const targetPage = Number(pageTarget?.dataset.pageNumber)
     if (Number.isInteger(targetPage)) {
       const groupId = pageRecords.get(targetPage)?.hiddenGroupId ?? null
-      if (!canDropThumbnailIntoGroup(gesture.pageNumber, groupId)) return undefined
+      if (!canDropPagesIntoHiddenGroup(gesture.draggedPages, groupId)) return undefined
       return { kind: 'hidden' as const, groupId, key: groupId ? 'group-page:' + groupId : 'outside-page:' + targetPage }
     }
-    if (target && thumbnailRailRef.current?.contains(target) && canDropThumbnailIntoGroup(gesture.pageNumber, null)) {
+    if (target && thumbnailRailRef.current?.contains(target) && canDropPagesOutsideGroups(gesture.draggedPages)) {
       return { kind: 'hidden' as const, groupId: null, key: 'outside-rail' }
     }
     return undefined
@@ -1424,7 +1491,7 @@ export default function Viewer() {
 
   function beginThumbnailTouch(pageNumber: number, event: ReactPointerEvent<HTMLButtonElement>) {
     if ((event.pointerType !== 'touch' && event.pointerType !== 'mouse') || event.button !== 0 || event.ctrlKey || event.shiftKey || hiddenNumbers.has(pageNumber) || pageVisibilitySaving || thumbnailGroupSaving || !thumbnailRailRef.current) return
-    const selectedPages = selectedThumbnailSet.has(pageNumber) ? [...selectedThumbnailPages] : [pageNumber]
+    const selectedPages = thumbnailPagesForDrag(selectedThumbnailPages, pageNumber)
     const gesture: ThumbnailTouchGesture = {
       pointerId: event.pointerId,
       pointerType: event.pointerType,
@@ -1456,81 +1523,65 @@ export default function Viewer() {
     gesture.clientY = event.clientY
     const deltaX = event.clientX - gesture.startX
     const deltaY = event.clientY - gesture.startY
-    const rail = thumbnailRailRef.current
     if (gesture.mode === 'pending' && Math.hypot(deltaX, deltaY) > 8) {
       window.clearTimeout(gesture.timer)
       gesture.mode = gesture.pointerType === 'mouse' || selectedThumbnailSet.has(gesture.pageNumber) ? 'drag' : 'scroll'
     }
+    if (gesture.mode === 'scroll' && Math.abs(deltaX) > Math.abs(deltaY)) event.preventDefault()
+    if (gesture.mode === 'drag' || gesture.mode === 'select') event.preventDefault()
+    if (gesture.frameId === undefined) gesture.frameId = window.requestAnimationFrame(() => processThumbnailTouchFrame(gesture))
+  }
+
+  function processThumbnailTouchFrame(gesture: ThumbnailTouchGesture) {
+    gesture.frameId = undefined
+    if (thumbnailTouchGestureRef.current !== gesture) return
+    const rail = thumbnailRailRef.current
+    if (!rail) return
     if (gesture.mode === 'scroll') {
-      if (rail && Math.abs(deltaX) > Math.abs(deltaY)) {
-        event.preventDefault()
-        rail.scrollLeft = gesture.startScrollLeft - deltaX
-      }
+      const deltaX = gesture.clientX - gesture.startX
+      const deltaY = gesture.clientY - gesture.startY
+      if (Math.abs(deltaX) > Math.abs(deltaY)) rail.scrollLeft = gesture.startScrollLeft - deltaX
       return
     }
-    if (gesture.mode === 'drag') event.preventDefault()
-    if ((gesture.mode !== 'select' && gesture.mode !== 'drag') || !rail) return
-    event.preventDefault()
-    const dropTarget = findThumbnailTouchDropTarget(gesture)
-    if (dropTarget) {
-      gesture.dropTarget = dropTarget
-      setThumbnailDropTarget(dropTarget.key)
-      if (dropTarget.kind === 'label') {
+    if (gesture.mode === 'select') updateThumbnailRange(gesture)
+    if (gesture.mode !== 'drag' && gesture.mode !== 'select') return
+    let edgeDirection = 0
+    if (gesture.mode === 'drag') {
+      gesture.dropTarget = findThumbnailTouchDropTarget(gesture)
+      updateThumbnailDropTarget(gesture.dropTarget?.key ?? null)
+      if (gesture.dropTarget?.kind === 'label') {
         const list = thumbnailGroupListRef.current
         const bounds = list?.getBoundingClientRect()
-        const direction = bounds ? gesture.clientX < bounds.left + 30 ? -1 : gesture.clientX > bounds.right - 30 ? 1 : 0 : 0
-        if (!direction) {
-          if (gesture.edgeTimer !== undefined) window.clearInterval(gesture.edgeTimer)
-          gesture.edgeTimer = undefined
-        } else if (gesture.edgeTimer === undefined && list) {
-          gesture.edgeTimer = window.setInterval(() => {
-            if (thumbnailTouchGestureRef.current !== gesture || (gesture.mode !== 'select' && gesture.mode !== 'drag')) return
-            const currentBounds = list.getBoundingClientRect()
-            const currentDirection = gesture.clientX < currentBounds.left + 30 ? -1 : gesture.clientX > currentBounds.right - 30 ? 1 : 0
-            if (currentDirection) list.scrollLeft += currentDirection * 14
-          }, 45)
-        }
+        edgeDirection = bounds ? gesture.clientX < bounds.left + 30 ? -1 : gesture.clientX > bounds.right - 30 ? 1 : 0 : 0
+        if (edgeDirection && list) list.scrollLeft += edgeDirection * 14
       }
-      return
     }
-    gesture.dropTarget = undefined
-    setThumbnailDropTarget(null)
-    if (gesture.mode === 'select') updateThumbnailRange(gesture)
-    const bounds = rail.getBoundingClientRect()
-    const direction = gesture.clientX < bounds.left + 36 ? -1 : gesture.clientX > bounds.right - 36 ? 1 : 0
-    if (!direction) {
-      if (gesture.edgeTimer !== undefined) window.clearInterval(gesture.edgeTimer)
-      gesture.edgeTimer = undefined
-    } else if (gesture.edgeTimer === undefined) {
-      gesture.edgeTimer = window.setInterval(() => {
-        if (thumbnailTouchGestureRef.current !== gesture || gesture.mode !== 'select') return
-        const edgeDirection = gesture.clientX < bounds.left + 36 ? -1 : gesture.clientX > bounds.right - 36 ? 1 : 0
-        if (!edgeDirection) return
-        rail.scrollLeft += edgeDirection * 16
-        updateThumbnailRange(gesture)
-      }, 45)
+    if (!edgeDirection) {
+      const bounds = rail.getBoundingClientRect()
+      edgeDirection = gesture.clientX < bounds.left + 36 ? -1 : gesture.clientX > bounds.right - 36 ? 1 : 0
+      if (edgeDirection) rail.scrollLeft += edgeDirection * 16
     }
+    if (gesture.mode === 'select' && edgeDirection) updateThumbnailRange(gesture)
+    if (edgeDirection) gesture.frameId = window.requestAnimationFrame(() => processThumbnailTouchFrame(gesture))
   }
 
   function finishThumbnailTouch(event: ReactPointerEvent<HTMLButtonElement>, canceled = false) {
     const gesture = thumbnailTouchGestureRef.current
     if (!gesture || gesture.pointerId !== event.pointerId) return
     window.clearTimeout(gesture.timer)
-    if (gesture.edgeTimer !== undefined) window.clearInterval(gesture.edgeTimer)
+    if (gesture.frameId !== undefined) window.cancelAnimationFrame(gesture.frameId)
+    if (!canceled && gesture.mode === 'drag') gesture.dropTarget = findThumbnailTouchDropTarget(gesture)
     thumbnailTouchGestureRef.current = null
     if (!canceled && gesture.mode !== 'pending') {
       suppressThumbnailClickRef.current = true
       window.setTimeout(() => { suppressThumbnailClickRef.current = false }, 0)
-      if (gesture.dropTarget?.kind === 'label') {
-        const selectedPages = gesture.pointerType === 'mouse'
-          ? gesture.draggedPages
-          : thumbnailSelection?.pages.includes(gesture.pageNumber) ? thumbnailSelection.pages : [gesture.pageNumber]
-        void movePagesToThumbnailGroupTarget(selectedPages, gesture.dropTarget.groupId)
-      } else if (gesture.dropTarget?.kind === 'hidden') {
-        void moveThumbnailToGroup(gesture.pageNumber, gesture.dropTarget.groupId)
+      if (gesture.mode === 'drag' && gesture.dropTarget?.kind === 'label') {
+        void movePagesToThumbnailGroupTarget(gesture.draggedPages, gesture.dropTarget.groupId)
+      } else if (gesture.mode === 'drag' && gesture.dropTarget?.kind === 'hidden') {
+        void moveThumbnailPagesToHiddenGroup(gesture.draggedPages, gesture.dropTarget.groupId)
       }
     }
-    setThumbnailDropTarget(null)
+    updateThumbnailDropTarget(null)
     if (gesture.button.hasPointerCapture(event.pointerId)) gesture.button.releasePointerCapture(event.pointerId)
   }
 
@@ -1544,7 +1595,7 @@ export default function Viewer() {
       const gesture = thumbnailTouchGestureRef.current
       if (gesture) {
         window.clearTimeout(gesture.timer)
-        if (gesture.edgeTimer !== undefined) window.clearInterval(gesture.edgeTimer)
+        if (gesture.frameId !== undefined) window.cancelAnimationFrame(gesture.frameId)
         thumbnailTouchGestureRef.current = null
         if (gesture.button.hasPointerCapture(gesture.pointerId)) gesture.button.releasePointerCapture(gesture.pointerId)
       }
@@ -1626,59 +1677,71 @@ export default function Viewer() {
     setPages(await getPages(id))
   }
 
-  async function applyPageVisibility(pageNumbers: number[], hidden: boolean, existingGroupId?: string) {
-    if (pageVisibilityActionRef.current) throw new Error('페이지 변경을 처리 중입니다.')
+  function applyPageVisibility(pageNumbers: number[], hidden: boolean, existingGroupId?: string, viewerSnapshot?: ViewerSnapshot) {
+    if (pageVisibilityActionRef.current) return Promise.reject(new Error('페이지 변경을 처리 중입니다.'))
     pageVisibilityActionRef.current = true
     setPageVisibilitySaving(true)
     setPageVisibilityError('')
-    try {
-      if (!pdf || !snapshotRef.current) throw new Error('PDF 페이지 상태를 불러오지 못했습니다.')
-      const requested = [...new Set(pageNumbers)]
-      if (requested.some((pageNumber) => !Number.isInteger(pageNumber) || pageNumber < 1 || pageNumber > pdf.numPages)) {
-        throw new Error('선택한 페이지를 확인하지 못했습니다.')
-      }
-      if (!requested.length) return
-
-      const requestedPages = new Set(requested)
-      const hiddenAfter = new Set(pages.filter((page) => page.hidden).map((page) => page.pageNumber))
-      for (const pageNumber of requested) {
-        if (hidden) hiddenAfter.add(pageNumber)
-        else hiddenAfter.delete(pageNumber)
-      }
-      if (pdf.numPages - hiddenAfter.size < 1) throw new Error('최소 한 페이지는 표시 상태로 남아야 합니다.')
-
-      const hiddenGroupId = hidden ? existingGroupId ?? createHiddenPageGroupId() : existingGroupId
-      const nextPages = completePageList(id, pdf.numPages, pages).map((page) => requestedPages.has(page.pageNumber)
-        ? updatePageHiddenState(page, hidden, hiddenGroupId)
-        : page)
-      await setPagesHiddenState(id, requested, hidden, hiddenGroupId)
-      setThumbnailPagesExcluded(pdf, requested, hidden)
-      updatePdfRecognitionPageVisibility(id, requested, hidden)
-      setPages(nextPages)
-      if (!hidden && pdf && recognitionRecordRef.current) enqueuePdfRecognition(recognitionRecordRef.current, pdf, true)
-      if (hidden) {
-        setThumbnailSelection((current) => {
-          if (!current) return null
-          const remaining = current.pages.filter((pageNumber) => !requestedPages.has(pageNumber))
-          if (!remaining.length) return null
-          return {
-            pages: remaining,
-            anchor: remaining.includes(current.anchor) ? current.anchor : remaining[0],
-            lastPage: remaining.includes(current.lastPage) ? current.lastPage : remaining.at(-1)!,
-          }
-        })
-        const actualHidden = new Set(nextPages.filter((page) => page.hidden).map((page) => page.pageNumber))
-        const relocatePane = (pane: PaneSnapshot) => {
-          if (!actualHidden.has(pane.page)) return pane
-          const nextPage = nextVisiblePageAfterHide(pane.page, pdf.numPages, actualHidden)
-          return nextPage === null ? pane : { ...pane, page: nextPage }
+    const operation = (async () => {
+      try {
+        if (!pdf || !snapshotRef.current) throw new Error('PDF 페이지 상태를 불러오지 못했습니다.')
+        const requested = [...new Set(pageNumbers)]
+        if (requested.some((pageNumber) => !Number.isInteger(pageNumber) || pageNumber < 1 || pageNumber > pdf.numPages)) {
+          throw new Error('선택한 페이지를 확인하지 못했습니다.')
         }
-        mutateSnapshot((current) => ({ ...current, primary: relocatePane(current.primary), secondary: relocatePane(current.secondary) }), true)
-      }
+        if (!requested.length) return
+
+        const requestedPages = new Set(requested)
+        const hiddenAfter = new Set(pages.filter((page) => page.hidden).map((page) => page.pageNumber))
+        for (const pageNumber of requested) {
+          if (hidden) hiddenAfter.add(pageNumber)
+          else hiddenAfter.delete(pageNumber)
+        }
+        if (pdf.numPages - hiddenAfter.size < 1) throw new Error('최소 한 페이지는 표시 상태로 남아야 합니다.')
+
+        const hiddenGroupId = hidden ? existingGroupId ?? createHiddenPageGroupId() : existingGroupId
+        const nextPages = completePageList(id, pdf.numPages, pages).map((page) => requestedPages.has(page.pageNumber)
+          ? updatePageHiddenState(page, hidden, hiddenGroupId)
+          : page)
+        if (viewerSnapshot) await saveViewerAndPageVisibility(viewerSnapshot, requested, hidden, hiddenGroupId)
+        else await setPagesHiddenState(id, requested, hidden, hiddenGroupId)
+        if (viewerSnapshot) {
+          snapshotRef.current = viewerSnapshot
+          setSnapshot(viewerSnapshot)
+        }
+        setThumbnailPagesExcluded(pdf, requested, hidden)
+        updatePdfRecognitionPageVisibility(id, requested, hidden)
+        setPages(nextPages)
+        if (!hidden && pdf && recognitionRecordRef.current) enqueuePdfRecognition(recognitionRecordRef.current, pdf, true)
+        if (hidden) {
+          setThumbnailSelection((current) => {
+            if (!current) return null
+            const remaining = current.pages.filter((pageNumber) => !requestedPages.has(pageNumber))
+            if (!remaining.length) return null
+            return {
+              pages: remaining,
+              anchor: remaining.includes(current.anchor) ? current.anchor : remaining[0],
+              lastPage: remaining.includes(current.lastPage) ? current.lastPage : remaining.at(-1)!,
+            }
+          })
+          const actualHidden = new Set(nextPages.filter((page) => page.hidden).map((page) => page.pageNumber))
+          const relocatePane = (pane: PaneSnapshot) => {
+            if (!actualHidden.has(pane.page)) return pane
+            const nextPage = nextVisiblePageAfterHide(pane.page, pdf.numPages, actualHidden)
+            return nextPage === null ? pane : { ...pane, page: nextPage }
+          }
+          mutateSnapshot((current) => ({ ...current, primary: relocatePane(current.primary), secondary: relocatePane(current.secondary) }), true)
+        }
     } finally {
       pageVisibilityActionRef.current = false
       setPageVisibilitySaving(false)
     }
+    })()
+    pageVisibilityPromiseRef.current = operation
+    void operation.finally(() => {
+      if (pageVisibilityPromiseRef.current === operation) pageVisibilityPromiseRef.current = null
+    }).catch(() => {})
+    return operation
   }
 
   function toggleSplit() {
@@ -1817,6 +1880,7 @@ export default function Viewer() {
 
   function renderPane(paneId: PaneId, pane: PaneSnapshot, active: boolean) {
     const work = pageWorks[pane.page] ?? blankWork(id, pane.page)
+    const loadState = pageWorkLoadEntries[pane.page]
     const rotation = pane.rotations?.[pane.page] ?? work.rotation ?? 0
     const style = tool === 'region-highlight' ? annotationSettings.highlight : tool === 'pen' || tool === 'line' || tool === 'highlight' || tool === 'text' ? annotationSettings[tool] : annotationSettings.pen
     return <PdfPage
@@ -1834,6 +1898,8 @@ export default function Viewer() {
       annotationStyle={style}
       work={work}
       workReady={Boolean(pageWorks[pane.page])}
+      pageWorkLoadError={loadState?.status === 'error' ? loadState.message : undefined}
+      onRetryPageWork={() => { void ensurePageWork(pane.page) }}
       createColorworkRequest={colorworkRequest?.paneId === paneId && colorworkRequest.pageNumber === pane.page ? colorworkRequest : null}
       colorworkBrushColor={colorworkBrushColor}
       colorworkBrushOpacity={colorworkBrushOpacity}
@@ -1852,17 +1918,35 @@ export default function Viewer() {
   }
 
   const displayedRatio = splitPreview ?? ratio
-  const pageRecords = pages.reduce((map, page) => map.set(page.pageNumber, page), new Map<number, PageRecord>())
+  const pageRecords = useMemo(() => new Map(pages.map((page) => [page.pageNumber, page])), [pages])
+  const thumbnailGroupByPage = useMemo(() => {
+    const memberships = new Map<number, string>()
+    thumbnailGroups.forEach((group) => group.pageNumbers.forEach((pageNumber) => memberships.set(pageNumber, group.id)))
+    return memberships
+  }, [thumbnailGroups])
+  const hiddenPageNumbersByGroup = useMemo(() => {
+    const byGroup = new Map<string, number[]>()
+    pages.forEach((page) => {
+      if (!page.hiddenGroupId) return
+      const pageNumbers = byGroup.get(page.hiddenGroupId) ?? []
+      pageNumbers.push(page.pageNumber)
+      byGroup.set(page.hiddenGroupId, pageNumbers)
+    })
+    return byGroup
+  }, [pages])
+  const thumbnailItems = useMemo(() => pdf ? compactPageThumbnails(pdf.numPages, pages, thumbnailGroups, expandedThumbnailGroupId) : [], [pdf, pages, thumbnailGroups, expandedThumbnailGroupId])
 
-  function canDropThumbnailIntoGroup(sourcePageNumber: number | null, targetGroupId: string | null) {
-    const source = sourcePageNumber === null ? undefined : pageRecords.get(sourcePageNumber)
-    const sourceGroupId = source?.hiddenGroupId ?? null
-    return Boolean(source && sourceGroupId !== targetGroupId && (sourceGroupId || targetGroupId))
+  function canDropPagesIntoHiddenGroup(pageNumbers: number[], targetGroupId: string | null) {
+    if (!targetGroupId) return canDropPagesOutsideGroups(pageNumbers)
+    return pageNumbers.some((pageNumber) => pageRecords.get(pageNumber)?.hiddenGroupId !== targetGroupId)
+  }
+
+  function canDropPagesOutsideGroups(pageNumbers: number[]) {
+    return pageNumbers.some((pageNumber) => Boolean(pageRecords.get(pageNumber)?.hiddenGroupId) || thumbnailGroupByPage.has(pageNumber))
   }
 
   function canDropPagesIntoThumbnailGroup(pageNumbers: number[], targetGroupId: string) {
-    const targetExists = thumbnailGroups.some((group) => group.id === targetGroupId)
-    return targetExists && pageNumbers.some((pageNumber) => thumbnailGroups.some((group) => group.id !== targetGroupId && group.pageNumbers.includes(pageNumber)) || !thumbnailGroups.some((group) => group.pageNumbers.includes(pageNumber)))
+    return thumbnailGroups.some((group) => group.id === targetGroupId) && pageNumbers.some((pageNumber) => thumbnailGroupByPage.get(pageNumber) !== targetGroupId)
   }
 
   async function saveThumbnailGroups(nextGroups: ThumbnailGroup[]) {
@@ -1877,22 +1961,30 @@ export default function Viewer() {
     const optimistic = { ...current, thumbnailGroups: nextGroups }
     snapshotRef.current = optimistic
     setSnapshot(optimistic)
+    const operation = (async () => {
+      try {
+        await saveViewer(optimistic)
+        setSuspendError((message) => message === viewerSaveErrorMessage ? '' : message)
+        return true
+      } catch (error) {
+        const latest = snapshotRef.current ?? optimistic
+        const rollback = { ...latest, thumbnailGroups: current.thumbnailGroups }
+        snapshotRef.current = rollback
+        setSnapshot(rollback)
+        try { await saveViewer(rollback) } catch { /* Keep the visible rollback and report the storage failure. */ }
+        console.warn('[PDF] Thumbnail groups could not be saved.', error)
+        setThumbnailGroupError(t('그룹을 저장하지 못했습니다. 저장 공간을 확인해 주세요.'))
+        return false
+      } finally {
+        thumbnailGroupSavingRef.current = false
+        setThumbnailGroupSaving(false)
+      }
+    })()
+    thumbnailGroupSavePromiseRef.current = operation
     try {
-      await saveViewer(optimistic)
-      setSuspendError((message) => message === viewerSaveErrorMessage ? '' : message)
-      return true
-    } catch (error) {
-      const latest = snapshotRef.current ?? optimistic
-      const rollback = { ...latest, thumbnailGroups: current.thumbnailGroups }
-      snapshotRef.current = rollback
-      setSnapshot(rollback)
-      try { await saveViewer(rollback) } catch { /* Keep the visible rollback and report the storage failure. */ }
-      console.warn('[PDF] Thumbnail groups could not be saved.', error)
-      setThumbnailGroupError(t('그룹을 저장하지 못했습니다. 저장 공간을 확인해 주세요.'))
-      return false
+      return await operation
     } finally {
-      thumbnailGroupSavingRef.current = false
-      setThumbnailGroupSaving(false)
+      if (thumbnailGroupSavePromiseRef.current === operation) thumbnailGroupSavePromiseRef.current = null
     }
   }
 
@@ -1925,6 +2017,25 @@ export default function Viewer() {
     return saved
   }
 
+  async function saveThumbnailGroupOrder() {
+    if (thumbnailGroupSaving) return
+    const groupsById = new Map(thumbnailGroups.map((group) => [group.id, group]))
+    const orderedGroups = thumbnailGroupOrderDraft.flatMap((groupId) => {
+      const group = groupsById.get(groupId)
+      return group ? [group] : []
+    })
+    thumbnailGroups.forEach((group) => { if (!thumbnailGroupOrderDraft.includes(group.id)) orderedGroups.push(group) })
+    if (await saveThumbnailGroups(orderedGroups)) setThumbnailGroupPopover(null)
+  }
+
+  function moveThumbnailGroupOrder(groupId: string, direction: -1 | 1) {
+    const draftGroups = thumbnailGroupOrderDraft.flatMap((itemId) => {
+      const group = thumbnailGroups.find((item) => item.id === itemId)
+      return group ? [group] : []
+    })
+    setThumbnailGroupOrderDraft(reorderThumbnailGroups(draftGroups, groupId, direction).map((group) => group.id))
+  }
+
   async function ungroupThumbnailGroup(groupId: string) {
     const nextGroups = thumbnailGroups.filter((group) => group.id !== groupId)
     if (await saveThumbnailGroups(nextGroups)) {
@@ -1950,7 +2061,6 @@ export default function Viewer() {
       }
       setThumbnailSelection(null)
       setThumbnailGroupError('')
-      setThumbnailGroupState((state) => ({ ...state, expandedGroupId: targetGroupId }))
     }
   }
 
@@ -1969,7 +2079,13 @@ export default function Viewer() {
     }
     const bounds = event.currentTarget.getBoundingClientRect()
     setThumbnailGroupDraft(group.name)
-    setThumbnailGroupPopover({ documentId: id, groupId, left: clamp(bounds.left, 8, Math.max(8, window.innerWidth - 280)), top: clamp(bounds.bottom + 6, 8, Math.max(8, window.innerHeight - 190)) })
+    setThumbnailGroupOrderDraft(thumbnailGroups.map((item) => item.id))
+    setThumbnailGroupPopover({ documentId: id, groupId, left: clamp(bounds.left, 8, Math.max(8, window.innerWidth - 280)), top: clamp(bounds.bottom + 6, 8, Math.max(8, window.innerHeight - 360)), mode: 'menu' })
+  }
+
+  function changeThumbnailGroupPopoverMode(mode: 'menu' | 'rename' | 'order') {
+    setThumbnailGroupError('')
+    setThumbnailGroupPopover((current) => current ? { ...current, mode } : current)
   }
 
   function toggleThumbnailLabelGroup(groupId: string) {
@@ -1995,25 +2111,25 @@ export default function Viewer() {
       return
     }
     draggedThumbnailPageRef.current = pageNumber
-    draggedThumbnailPagesRef.current = selectedThumbnailSet.has(pageNumber) ? [...selectedThumbnailPages] : [pageNumber]
+    draggedThumbnailPagesRef.current = thumbnailPagesForDrag(selectedThumbnailPages, pageNumber)
     event.dataTransfer.setData('application/x-doanbogo-page', String(pageNumber))
     event.dataTransfer.setData('application/x-doanbogo-pages', JSON.stringify(draggedThumbnailPagesRef.current))
     event.dataTransfer.setData('text/plain', String(pageNumber))
     event.dataTransfer.effectAllowed = 'move'
-    setThumbnailDropTarget(null)
+    updateThumbnailDropTarget(null)
   }
 
   function finishThumbnailDrag() {
     draggedThumbnailPageRef.current = null
     draggedThumbnailPagesRef.current = []
-    setThumbnailDropTarget(null)
+    updateThumbnailDropTarget(null)
   }
 
   function thumbnailDragOverLabelGroup(groupId: string, event: ReactDragEvent<HTMLButtonElement>) {
     if (!canDropPagesIntoThumbnailGroup(draggedThumbnailPagesRef.current, groupId)) return
     event.preventDefault()
     event.dataTransfer.dropEffect = 'move'
-    setThumbnailDropTarget('label-group:' + groupId)
+    updateThumbnailDropTarget('label-group:' + groupId)
     const list = thumbnailGroupListRef.current
     if (list) {
       const bounds = list.getBoundingClientRect()
@@ -2025,79 +2141,93 @@ export default function Viewer() {
   function dropThumbnailIntoLabelGroup(groupId: string, event: ReactDragEvent<HTMLButtonElement>) {
     event.preventDefault()
     event.stopPropagation()
-    setThumbnailDropTarget(null)
+    updateThumbnailDropTarget(null)
     void movePagesToThumbnailGroupTarget(draggedThumbnailPagesRef.current, groupId)
   }
 
   function thumbnailDragOverGroup(groupId: string, event: ReactDragEvent<HTMLButtonElement>) {
-    if (!canDropThumbnailIntoGroup(draggedThumbnailPageRef.current, groupId)) return
+    if (!canDropPagesIntoHiddenGroup(draggedThumbnailPagesRef.current, groupId)) return
     event.preventDefault()
     event.dataTransfer.dropEffect = 'move'
-    setThumbnailDropTarget('group:' + groupId)
+    updateThumbnailDropTarget('group:' + groupId)
   }
 
   function thumbnailDragOverPage(pageNumber: number, event: ReactDragEvent<HTMLButtonElement>) {
+    const labelGroupId = thumbnailGroupByPage.get(pageNumber)
+    if (labelGroupId) {
+      if (!canDropPagesIntoThumbnailGroup(draggedThumbnailPagesRef.current, labelGroupId)) return
+      event.preventDefault()
+      event.dataTransfer.dropEffect = 'move'
+      updateThumbnailDropTarget('label-group:' + labelGroupId)
+      return
+    }
     const targetGroupId = pageRecords.get(pageNumber)?.hiddenGroupId ?? null
-    if (!canDropThumbnailIntoGroup(draggedThumbnailPageRef.current, targetGroupId)) return
+    if (!canDropPagesIntoHiddenGroup(draggedThumbnailPagesRef.current, targetGroupId)) return
     event.preventDefault()
     event.dataTransfer.dropEffect = 'move'
-    setThumbnailDropTarget((targetGroupId ? 'group-page:' + targetGroupId : 'outside-page:' + pageNumber))
+    updateThumbnailDropTarget(targetGroupId ? 'group-page:' + targetGroupId : 'outside-page:' + pageNumber)
   }
 
   function thumbnailDragOverRail(event: ReactDragEvent<HTMLDivElement>) {
     if ((event.target as HTMLElement).closest('.page-thumbnail, .hidden-thumbnail-run-button, .thumbnail-hide-button, .report-thumbnail')) return
-    if (!canDropThumbnailIntoGroup(draggedThumbnailPageRef.current, null)) return
+    if (!canDropPagesOutsideGroups(draggedThumbnailPagesRef.current)) return
     event.preventDefault()
     event.dataTransfer.dropEffect = 'move'
-    setThumbnailDropTarget('outside-rail')
+    updateThumbnailDropTarget('outside-rail')
   }
 
-  async function moveThumbnailToGroup(pageNumber: number, targetGroupId: string | null) {
-    const source = pageNumber === null ? undefined : pageRecords.get(pageNumber)
-    if (pageNumber === null || !source || pageVisibilitySaving || !canDropThumbnailIntoGroup(pageNumber, targetGroupId)) return
+  async function moveThumbnailPagesToHiddenGroup(pageNumbers: number[], targetGroupId: string | null) {
+    const selectedPages = [...new Set(pageNumbers)].filter((pageNumber) => pageRecords.has(pageNumber))
+    const movablePages = targetGroupId
+      ? selectedPages.filter((pageNumber) => pageRecords.get(pageNumber)?.hiddenGroupId !== targetGroupId)
+      : selectedPages.filter((pageNumber) => Boolean(pageRecords.get(pageNumber)?.hiddenGroupId) || thumbnailGroupByPage.has(pageNumber))
+    if (!movablePages.length || pageVisibilitySaving || !canDropPagesIntoHiddenGroup(movablePages, targetGroupId)) return
     const targetGroupExpanded = Boolean(targetGroupId && pages.some((page) => page.hiddenGroupId === targetGroupId && !page.hidden))
+    const hidden = Boolean(targetGroupId) && !targetGroupExpanded
+    const selected = new Set(movablePages)
+    const nextGroups = targetGroupId ? thumbnailGroups : thumbnailGroups.map((group) => ({ ...group, pageNumbers: group.pageNumbers.filter((pageNumber) => !selected.has(pageNumber)) }))
+    const latestSnapshot = snapshotRef.current
+    if (!latestSnapshot) return
+    const nextSnapshot = nextGroups === thumbnailGroups ? undefined : { ...latestSnapshot, thumbnailGroups: nextGroups }
     suppressThumbnailClickRef.current = true
     window.setTimeout(() => { suppressThumbnailClickRef.current = false }, 0)
     try {
-      await applyPageVisibility([pageNumber], Boolean(targetGroupId) && !targetGroupExpanded, targetGroupId ?? undefined)
+      await applyPageVisibility(movablePages, hidden, targetGroupId ?? undefined, nextSnapshot)
       setThumbnailSelection(null)
     } catch (error) {
       setPageVisibilityError(error instanceof Error ? translateMessage(error.message) : t('숨김 그룹을 변경하지 못했습니다.'))
     }
   }
 
-  function moveDraggedThumbnail(targetGroupId: string | null) {
-    const pageNumber = draggedThumbnailPageRef.current
-    if (pageNumber !== null) void moveThumbnailToGroup(pageNumber, targetGroupId)
-  }
-
   function dropThumbnailIntoGroup(groupId: string, event: ReactDragEvent<HTMLButtonElement>) {
     event.preventDefault()
     event.stopPropagation()
-    setThumbnailDropTarget(null)
-    void moveDraggedThumbnail(groupId)
+    updateThumbnailDropTarget(null)
+    void moveThumbnailPagesToHiddenGroup(draggedThumbnailPagesRef.current, groupId)
   }
 
   function dropThumbnailOnPage(pageNumber: number, event: ReactDragEvent<HTMLButtonElement>) {
     event.preventDefault()
     event.stopPropagation()
-    setThumbnailDropTarget(null)
-    void moveDraggedThumbnail(pageRecords.get(pageNumber)?.hiddenGroupId ?? null)
+    updateThumbnailDropTarget(null)
+    const labelGroupId = thumbnailGroupByPage.get(pageNumber)
+    if (labelGroupId) void movePagesToThumbnailGroupTarget(draggedThumbnailPagesRef.current, labelGroupId)
+    else void moveThumbnailPagesToHiddenGroup(draggedThumbnailPagesRef.current, pageRecords.get(pageNumber)?.hiddenGroupId ?? null)
   }
 
   function dropThumbnailOutsideGroup(event: ReactDragEvent<HTMLDivElement>) {
     if ((event.target as HTMLElement).closest('.page-thumbnail, .hidden-thumbnail-run-button, .thumbnail-hide-button, .report-thumbnail')) return
     event.preventDefault()
     event.stopPropagation()
-    setThumbnailDropTarget(null)
-    void moveDraggedThumbnail(null)
+    updateThumbnailDropTarget(null)
+    void moveThumbnailPagesToHiddenGroup(draggedThumbnailPagesRef.current, null)
   }
 
-  function renderPageThumbnail(pageNumber: number, nested = false) {
+  function renderPageThumbnail(pageNumber: number, nested = false, labelGroupId?: string) {
     const state = pageRecords.get(pageNumber)
     const active = snapshot![snapshot!.activePane].page === pageNumber
     const selected = selectedThumbnailSet.has(pageNumber)
-    return <div className={'page-thumbnail-entry' + (nested ? ' thumbnail-group-child-entry' : '')} key={pageNumber}>
+    return <div className={'page-thumbnail-entry' + (nested ? ' thumbnail-group-child-entry' : '')} key={pageNumber} data-thumbnail-label-drop={labelGroupId}>
       <PdfThumbnail
         pdf={pdf!} pageNumber={pageNumber} active={active} hidden={false} bookmarked={Boolean(state?.bookmarked)} selected={selected} draggable={false}
         title={state?.hiddenGroupId ? t('그룹에서 꺼내려면 바깥 썸네일이나 빈 곳으로 드래그하세요.') : undefined}
@@ -2125,10 +2255,10 @@ export default function Viewer() {
     </div>
   }
 
-  function renderThumbnailItem(item: PageThumbnailItem, nested = false): ReactNode {
-    if (item.type === 'page') return renderPageThumbnail(item.pageNumber, nested)
+  function renderThumbnailItem(item: PageThumbnailItem, nested = false, labelGroupId?: string): ReactNode {
+    if (item.type === 'page') return renderPageThumbnail(item.pageNumber, nested, labelGroupId)
     if (item.type === 'hidden-group') {
-      const fullGroupPages = pages.filter((page) => page.hiddenGroupId === item.groupId).map((page) => page.pageNumber)
+      const fullGroupPages = hiddenPageNumbersByGroup.get(item.groupId) ?? []
       const togglePages = fullGroupPages.length ? fullGroupPages : item.pageNumbers
       return <Fragment key={'hidden-' + item.groupId + '-' + item.firstPage}>
         <div className="page-thumbnail-entry hidden-group-toggle-entry thumbnail-group-child-entry">
@@ -2145,7 +2275,7 @@ export default function Viewer() {
             onDrop={(event) => dropThumbnailIntoGroup(item.groupId, event)}
           ><span className="hidden-thumbnail-group-pill" aria-hidden="true"><span>•••</span>{item.expanded ? <ChevronUp size={11} /> : <ChevronDown size={11} />}</span></button>
         </div>
-        {item.expanded && item.pageNumbers.map((pageNumber) => renderPageThumbnail(pageNumber, true))}
+        {item.expanded && item.pageNumbers.map((pageNumber) => renderPageThumbnail(pageNumber, true, labelGroupId))}
       </Fragment>
     }
 
@@ -2155,6 +2285,8 @@ export default function Viewer() {
           type="button"
           className="thumbnail-label-group-name"
           data-thumbnail-group-settings={item.groupId}
+          aria-haspopup="dialog"
+          aria-expanded={thumbnailGroupPopover?.groupId === item.groupId}
           aria-label={t('그룹 설정: {name}', { name: item.name })}
           title={item.name}
           onClick={(event) => openThumbnailGroupPopover(item.groupId, event)}
@@ -2175,7 +2307,7 @@ export default function Viewer() {
         </button>
       </div>
       {item.expanded && <div className="thumbnail-group-children" role="group" aria-label={t('그룹 {name}의 페이지', { name: item.name })}>
-        {item.children.map((child) => renderThumbnailItem(child, true))}
+        {item.children.map((child) => renderThumbnailItem(child, true, item.groupId))}
       </div>}
     </Fragment>
   }
@@ -2191,7 +2323,12 @@ export default function Viewer() {
     }
     setSearchParams({ report: '1' })
   }
-  if (loadError?.id === id) return <>{timerElement}<main className="viewer-state"><div className="viewer-error-icon"><X size={22} /></div><h1>{documentKind === 'photos' ? t('사진 폴더를 열지 못했습니다') : t('PDF를 열지 못했습니다')}</h1><p>{loadError.message}</p><button className="primary-button" onClick={requestPdfResume}>{t("다시 시도")}</button><button className="secondary-button" disabled={timerSaving} onClick={requestViewerExit}>{t("도안 목록으로")}</button></main></>
+  if (loadError?.id === id) return <>
+    {timerElement}
+    <main className="viewer-state"><div className="viewer-error-icon"><X size={22} /></div><h1>{documentKind === 'photos' ? t('사진 폴더를 열지 못했습니다') : t('PDF를 열지 못했습니다')}</h1><p>{loadError.message}</p><button className="primary-button" onClick={requestPdfResume}>{t('다시 시도')}</button><button className="secondary-button" disabled={timerSaving || viewerExitSaving} onClick={() => void requestViewerExit()}>{t('저장하고 나가기')}</button></main>
+    {viewerExitSaving && <div className="modal-backdrop viewer-exit-modal" role="presentation"><section className="modal-card" role="alertdialog" aria-modal="true" aria-live="polite"><div className="modal-heading"><h2>{t('저장하는 중…')}</h2></div><p>{t('저장하고 나가기')}</p></section></div>}
+    {viewerExitError && <div className="modal-backdrop viewer-exit-modal" role="presentation"><section className="modal-card" role="alertdialog" aria-modal="true"><div className="modal-heading"><h2>{t('저장 오류')}</h2></div><p role="alert">{viewerExitError}</p><div className="modal-actions"><button type="button" className="secondary-button" onClick={() => setViewerExitError('')}>{t('계속 작업')}</button><button type="button" className="primary-button" onClick={() => void requestViewerExit()}>{t('다시 시도')}</button></div></section></div>}
+  </>
   if (suspended || loading || loadedId !== id) return <>{timerElement}<BrandLoading kind="pdf" requestId={'pdf:' + id + ':' + pdfOpenCycle} layout="screen" messageOverride={suspendError ? translateMessage(suspendError) : undefined} /></>
   if (!pdf || !snapshot) return timerElement
 
@@ -2203,7 +2340,7 @@ export default function Viewer() {
       {showZoomHint && !reportMode && <aside className="viewer-zoom-hint" role="status"><span>{t("마우스 휠로 확대 · 이동 도구에서 드래그로 이동")}</span><button type="button" aria-label={t("확대·이동 안내 닫기")} onClick={() => setShowZoomHint(false)}><X size={15} /></button></aside>}
       <header className="viewer-header">
         <div className="viewer-brand"><img src={yyLogo} alt={t("도안보고 로고")} /><small>{t("YY공동제작")}</small></div>
-        <button className="viewer-back" aria-label={t("도안 목록으로")} disabled={timerSaving} onClick={requestViewerExit}><ArrowLeft size={20} /><span>{t("내 도안")}</span></button>
+        <button className="viewer-back" aria-label={t('저장하고 나가기')} disabled={timerSaving || viewerExitSaving} onClick={() => void requestViewerExit()}><ArrowLeft size={20} /><span>{t('저장하고 나가기')}</span></button>
         <div className="viewer-title"><div className="viewer-title-name"><strong title={displayDocumentName}>{displayDocumentName}</strong><button type="button" className="viewer-title-edit" aria-label={t("이름 변경")} title={t("이름 변경")} onClick={() => { setRenameDraft(displayDocumentName); setRenameError(''); setRenameDialog(true) }}><Pencil size={14} /></button></div>{reportMode && <span>{t('뜨개보고서')}</span>}</div>
         <div className="viewer-header-actions">
           {!reportMode && <>
@@ -2239,7 +2376,8 @@ export default function Viewer() {
               data-thumbnail-group-settings={group.id}
               data-thumbnail-label-drop={group.id}
               aria-label={t('그룹 설정: {name}, 페이지 {count}개', { name: group.name, count: group.pageNumbers.length })}
-              aria-expanded={expandedThumbnailGroupId === group.id}
+              aria-haspopup="dialog"
+              aria-expanded={thumbnailGroupPopover?.groupId === group.id}
               title={group.name + ' · ' + t('{count}개 페이지', { count: group.pageNumbers.length })}
               disabled={thumbnailGroupSaving}
               onClick={(event) => openThumbnailGroupPopover(group.id, event)}
@@ -2248,7 +2386,7 @@ export default function Viewer() {
             ><span>{thumbnailGroupLabel(group.name)}</span><small>{group.pageNumbers.length}</small></button>)}
           </div>
         </div>
-        <div className={'page-thumbnail-strip' + (thumbnailDropTarget === 'outside-rail' ? ' drop-target-outside' : '')} aria-label={t("모든 페이지 썸네일")} ref={thumbnailRailRef} onScroll={handleThumbnailScroll} onDragOver={thumbnailDragOverRail} onDrop={dropThumbnailOutsideGroup} onDragLeave={(event) => { const nextTarget = event.relatedTarget; if (nextTarget instanceof Node && event.currentTarget.contains(nextTarget)) return; setThumbnailDropTarget(null) }}
+        <div className={'page-thumbnail-strip' + (thumbnailDropTarget === 'outside-rail' ? ' drop-target-outside' : '')} aria-label={t("모든 페이지 썸네일")} ref={thumbnailRailRef} onScroll={handleThumbnailScroll} onDragOver={thumbnailDragOverRail} onDrop={dropThumbnailOutsideGroup} onDragLeave={(event) => { const nextTarget = event.relatedTarget; if (nextTarget instanceof Node && event.currentTarget.contains(nextTarget)) return; updateThumbnailDropTarget(null) }}
           onClick={(event) => {
             if (!expandedThumbnailGroupId) return
             if ((event.target as HTMLElement).closest('.page-thumbnail, .hidden-thumbnail-run-button, .thumbnail-hide-button, .report-thumbnail, [data-thumbnail-label-drop], [data-thumbnail-group-settings]')) return
@@ -2270,7 +2408,7 @@ export default function Viewer() {
             event.stopPropagation()
           }}
         >
-          {compactPageThumbnails(pdf.numPages, pages, thumbnailGroups, expandedThumbnailGroupId).map((item) => renderThumbnailItem(item))}
+          {thumbnailItems.map((item) => renderThumbnailItem(item))}
           <button className={'report-thumbnail' + (reportMode ? ' active' : '')} aria-label={t("뜨개보고서 열기")} aria-current={reportMode ? 'page' : undefined} disabled={timerSaving} onClick={requestReportExit}>
             <span className="report-thumbnail-icon">+<i>7</i></span><strong>{t("뜨개보고서")}</strong><small>{t("보고서 보기")}</small>
           </button>
@@ -2333,7 +2471,11 @@ export default function Viewer() {
           <button ref={miniBarAccordionButtonRef} type="button" className="viewer-mini-accordion-button" aria-label={t('뷰어 도구')} title={t('뷰어 도구')} aria-expanded={miniBarOpen} aria-controls={miniBarControlsId} onClick={() => { const open = !miniBarOpen; setMiniBarState({ documentId: id, open }); if (!open) setMiniBarSettingsOpen(false) }}>
             <Grid3X3 size={17} /><span aria-hidden="true">{miniBarOpen ? <ChevronUp size={16} /> : <ChevronDown size={16} />}</span>
           </button>
-          <div id={miniBarControlsId} className="viewer-mini-scroll" hidden={!miniBarOpen}>
+          <div id={miniBarControlsId} ref={miniBarControlsRef} className="viewer-mini-scroll" hidden={!miniBarOpen} onClick={(event) => {
+            if (!(event.target instanceof Element) || !event.target.closest('button')) return
+            setMiniBarState((current) => current.documentId === id ? { ...current, open: false } : current)
+            miniBarAccordionButtonRef.current?.focus()
+          }}>
         <section className="viewer-controlbar" role="toolbar" aria-orientation="vertical" aria-label={t('뷰어 도구')}>
           <div className="viewer-controlbar-main">
             <div className="viewer-tools" role="group" aria-label={t('필기 도구')}>
@@ -2377,16 +2519,47 @@ export default function Viewer() {
       {thumbnailGroupPopover?.documentId === id && createPortal(<form
         ref={thumbnailGroupPopoverRef}
         className="thumbnail-group-settings-popover"
-        style={{ left: thumbnailGroupPopover.left + 'px', top: thumbnailGroupPopover.top + 'px' }}
+        style={{ left: thumbnailGroupPopover.left + 'px', top: thumbnailGroupPopover.top + 'px', maxHeight: 'calc(100vh - 16px)', overflowY: 'auto' }}
         role="dialog"
         aria-label={t('그룹 설정')}
-        onSubmit={(event) => { event.preventDefault(); void renameThumbnailGroup(thumbnailGroupPopover.groupId, thumbnailGroupDraft) }}
+        onSubmit={(event) => {
+          event.preventDefault()
+          if (thumbnailGroupPopover.mode === 'rename') void renameThumbnailGroup(thumbnailGroupPopover.groupId, thumbnailGroupDraft)
+          if (thumbnailGroupPopover.mode === 'order') void saveThumbnailGroupOrder()
+        }}
       >
-        <label>{t('그룹 이름')}<input autoFocus maxLength={100} value={thumbnailGroupDraft} onChange={(event) => setThumbnailGroupDraft(event.currentTarget.value)} /></label>
-        <div className="thumbnail-group-popover-actions">
-          <button type="button" className="thumbnail-group-ungroup" disabled={thumbnailGroupSaving} onClick={() => void ungroupThumbnailGroup(thumbnailGroupPopover.groupId)}>{t('그룹 해제')}</button>
-          <button type="submit" className="primary-button" disabled={thumbnailGroupSaving || !thumbnailGroupDraft.trim()}>{t('저장')}</button>
-        </div>
+        <strong>{thumbnailGroups.find((group) => group.id === thumbnailGroupPopover.groupId)?.name}</strong>
+        {thumbnailGroupPopover.mode === 'menu' && <div className="thumbnail-label-menu" role="group">
+          <button type="button" onClick={() => changeThumbnailGroupPopoverMode('rename')}>{t('이름 바꾸기')}</button>
+          <button type="button" onClick={() => changeThumbnailGroupPopoverMode('order')}>{t('순서 바꾸기')}</button>
+          <button type="button" className="thumbnail-group-ungroup" disabled={thumbnailGroupSaving} onClick={() => void ungroupThumbnailGroup(thumbnailGroupPopover.groupId)}>{t('라벨 해지하기')}</button>
+        </div>}
+        {thumbnailGroupPopover.mode === 'rename' && <>
+          <label>{t('그룹 이름')}<input autoFocus maxLength={100} value={thumbnailGroupDraft} onChange={(event) => setThumbnailGroupDraft(event.currentTarget.value)} /></label>
+          <div className="thumbnail-group-popover-actions">
+            <button type="button" className="secondary-button" disabled={thumbnailGroupSaving} onClick={() => changeThumbnailGroupPopoverMode('menu')}>{t('취소')}</button>
+            <button type="submit" className="primary-button" disabled={thumbnailGroupSaving || !thumbnailGroupDraft.trim()}>{t('저장')}</button>
+          </div>
+        </>}
+        {thumbnailGroupPopover.mode === 'order' && <>
+          <div className="thumbnail-label-order-list" role="list" aria-label={t('라벨 순서')}>
+            {thumbnailGroupOrderDraft.map((groupId, index) => {
+              const group = thumbnailGroups.find((item) => item.id === groupId)
+              if (!group) return null
+              return <div role="listitem" className="thumbnail-label-order-row" key={groupId}>
+                <span>{group.name}</span>
+                <div>
+                  <button type="button" className="icon-button" aria-label={t('위로 이동')} title={t('위로 이동')} disabled={thumbnailGroupSaving || index === 0} onClick={() => moveThumbnailGroupOrder(groupId, -1)}><ChevronUp size={17} /></button>
+                  <button type="button" className="icon-button" aria-label={t('아래로 이동')} title={t('아래로 이동')} disabled={thumbnailGroupSaving || index === thumbnailGroupOrderDraft.length - 1} onClick={() => moveThumbnailGroupOrder(groupId, 1)}><ChevronDown size={17} /></button>
+                </div>
+              </div>
+            })}
+          </div>
+          <div className="thumbnail-group-popover-actions">
+            <button type="button" className="secondary-button" disabled={thumbnailGroupSaving} onClick={() => changeThumbnailGroupPopoverMode('menu')}>{t('취소')}</button>
+            <button type="submit" className="primary-button" disabled={thumbnailGroupSaving}>{t('저장')}</button>
+          </div>
+        </>}
         {thumbnailGroupError && <span role="alert">{thumbnailGroupError}</span>}
       </form>, document.body)}
       {thumbnailGroupDialog && <div className="modal-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) setThumbnailGroupDialog(false) }}>
@@ -2401,6 +2574,8 @@ export default function Viewer() {
         </form>
       </div>}
       {exitPromptOpen && <div className="modal-backdrop" role="presentation"><section className="modal-card" role="alertdialog" aria-modal="true" aria-labelledby="timer-exit-title" aria-describedby="timer-exit-message"><div className="modal-heading"><h2 id="timer-exit-title">{t('저장되지 않은 작업시간')}</h2></div><p id="timer-exit-message" className="timer-exit-message">{t('일시정지를 누르지 않아 마지막 저장 이후 측정한 시간은 누적 작업시간에 저장되지 않습니다.')}</p><div className="modal-actions"><button type="button" className="secondary-button" onClick={() => setExitPromptOpen(false)}>{t('계속 작업')}</button><button type="button" className="primary-button" onClick={() => { setExitPromptOpen(false); if (exitPromptTarget === 'report') { setTimerHasUnsaved(false); setTimerSessionKey((key) => key + 1); setSearchParams({ report: '1' }) } else navigate('/') }}>{t('나가기')}</button></div></section></div>}
+      {viewerExitSaving && <div className="modal-backdrop viewer-exit-modal" role="presentation"><section className="modal-card" role="alertdialog" aria-modal="true" aria-live="polite"><div className="modal-heading"><h2>{t('저장하는 중…')}</h2></div><p>{t('저장하고 나가기')}</p></section></div>}
+      {viewerExitError && <div className="modal-backdrop viewer-exit-modal" role="presentation"><section className="modal-card" role="alertdialog" aria-modal="true" aria-labelledby="viewer-exit-error-title"><div className="modal-heading"><h2 id="viewer-exit-error-title">{t('저장 오류')}</h2></div><p role="alert">{viewerExitError}</p><div className="modal-actions"><button type="button" className="secondary-button" onClick={() => setViewerExitError('')}>{t('계속 작업')}</button><button type="button" className="primary-button" onClick={() => void requestViewerExit()}>{t('다시 시도')}</button></div></section></div>}
       {renameDialog && <div className="modal-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) setRenameDialog(false) }}><section className="modal-card" role="dialog" aria-modal="true" aria-label={t("이름 변경")}><div className="modal-heading"><h2>{documentKind === 'photos' ? t('사진 폴더 이름 변경') : t('PDF 이름 변경')}</h2><button className="icon-button" aria-label={t("닫기")} onClick={() => setRenameDialog(false)}><X size={20} /></button></div><form className="modal-form" onSubmit={(event) => void saveDocumentName(event)}><label htmlFor="viewer-pdf-name">{documentKind === 'photos' ? t('폴더 이름') : t('PDF 이름')}</label><input id="viewer-pdf-name" autoFocus required maxLength={120} value={renameDraft} onChange={(event) => setRenameDraft(event.currentTarget.value)} />{renameError && <p className="rename-error" role="alert">{renameError}</p>}<div className="modal-actions"><button type="button" className="secondary-button" onClick={() => setRenameDialog(false)}>{t("취소")}</button><button className="primary-button" type="submit"><Check size={17} />{t("저장")}</button></div></form></section></div>}
       {colorworkDialog && <ColorworkSettingsDialog
         key={snapshot.activePane + ':' + activePage}

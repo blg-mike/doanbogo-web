@@ -5,7 +5,7 @@ import { t } from './locales'
 import { addDocumentWorkTime } from './storage'
 import { formatWorkTime } from './workTime'
 
-export type DocumentTimerClock = { sessionId: string; elapsedNow: () => number }
+export type DocumentTimerClock = { sessionId: string; elapsedNow: () => number; pauseAndSave: () => Promise<void> }
 
 type Props = {
   documentId: string
@@ -23,6 +23,7 @@ export default function DocumentWorkTimer({ documentId, portalTarget, onTotalWor
   const startedAtRef = useRef<number | null>(null)
   const runningRef = useRef(false)
   const savingRef = useRef(false)
+  const savePromiseRef = useRef<Promise<boolean> | null>(null)
   const activeRef = useRef(true)
   const [elapsedMs, setElapsedMs] = useState(0)
   const [running, setRunning] = useState(false)
@@ -33,10 +34,66 @@ export default function DocumentWorkTimer({ documentId, portalTarget, onTotalWor
     ? elapsedBaseRef.current
     : elapsedBaseRef.current + Math.max(0, Date.now() - startedAtRef.current), [])
 
+  const saveElapsed = useCallback(async function saveElapsedInternal(elapsed: number): Promise<boolean> {
+    const pending = savePromiseRef.current
+    if (pending) {
+      if (!await pending) return false
+      return saveElapsedInternal(elapsed)
+    }
+    const delta = Math.max(0, elapsed - lastSavedElapsedRef.current)
+    if (delta === 0) {
+      onUnsavedChange(false)
+      setError(false)
+      return true
+    }
+    savingRef.current = true
+    setSaving(true)
+    onSavingChange(true)
+    setError(false)
+    const operation = (async () => {
+      try {
+        const total = await addDocumentWorkTime(documentId, delta)
+        lastSavedElapsedRef.current = elapsed
+        if (activeRef.current) {
+          onTotalWorkTimeChange(total)
+          onUnsavedChange(false)
+        }
+        return true
+      } catch {
+        if (activeRef.current) {
+          setError(true)
+          onUnsavedChange(true)
+        }
+        return false
+      } finally {
+        savingRef.current = false
+        savePromiseRef.current = null
+        if (activeRef.current) {
+          setSaving(false)
+          onSavingChange(false)
+        }
+      }
+    })()
+    savePromiseRef.current = operation
+    return operation
+  }, [documentId, onSavingChange, onTotalWorkTimeChange, onUnsavedChange])
+
+  const pauseAndSave = useCallback(async () => {
+    const elapsed = elapsedNow()
+    if (runningRef.current) {
+      elapsedBaseRef.current = elapsed
+      startedAtRef.current = null
+      runningRef.current = false
+      setElapsedMs(elapsed)
+      setRunning(false)
+    }
+    if (!await saveElapsed(elapsed)) throw new Error('작업시간을 저장하지 못했습니다.')
+  }, [elapsedNow, saveElapsed])
+
   useEffect(() => {
-    onClockChange({ sessionId, elapsedNow })
+    onClockChange({ sessionId, elapsedNow, pauseAndSave })
     return () => onClockChange(null)
-  }, [elapsedNow, onClockChange, sessionId])
+  }, [elapsedNow, onClockChange, pauseAndSave, sessionId])
 
   useEffect(() => {
     activeRef.current = true
@@ -58,48 +115,10 @@ export default function DocumentWorkTimer({ documentId, portalTarget, onTotalWor
     }
   }, [elapsedNow, running])
 
-  async function saveElapsed(elapsed: number) {
-    const delta = Math.max(0, elapsed - lastSavedElapsedRef.current)
-    if (delta === 0) {
-      onUnsavedChange(false)
-      setError(false)
-      return
-    }
-    savingRef.current = true
-    setSaving(true)
-    onSavingChange(true)
-    setError(false)
-    try {
-      const total = await addDocumentWorkTime(documentId, delta)
-      lastSavedElapsedRef.current = elapsed
-      if (activeRef.current) {
-        onTotalWorkTimeChange(total)
-        onUnsavedChange(false)
-      }
-    } catch {
-      if (activeRef.current) {
-        setError(true)
-        onUnsavedChange(true)
-      }
-    } finally {
-      savingRef.current = false
-      if (activeRef.current) {
-        setSaving(false)
-        onSavingChange(false)
-      }
-    }
-  }
-
   async function toggle() {
     if (savingRef.current) return
     if (runningRef.current) {
-      const elapsed = elapsedNow()
-      elapsedBaseRef.current = elapsed
-      startedAtRef.current = null
-      runningRef.current = false
-      setElapsedMs(elapsed)
-      setRunning(false)
-      await saveElapsed(elapsed)
+      try { await pauseAndSave() } catch { /* The retry message remains visible while the timer stays paused. */ }
       return
     }
     if (elapsedBaseRef.current > lastSavedElapsedRef.current) {

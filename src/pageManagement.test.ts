@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { PageRecord } from './types'
-import { canHidePageSelection, compactPageThumbnails, completePageList, movePagesToThumbnailGroup, nextVisiblePageAfterHide, normalizeHiddenPageGroups, normalizeThumbnailGroups, updatePageHiddenState, visiblePageRange } from './pageManagement'
+import { canHidePageSelection, compactPageThumbnails, completePageList, movePagesToThumbnailGroup, nextVisiblePageAfterHide, normalizeHiddenPageGroups, normalizeThumbnailGroups, reorderThumbnailGroups, thumbnailPagesForDrag, updatePageHiddenState, visiblePageRange } from './pageManagement'
 
 describe('page visibility and thumbnails', () => {
   it('shows every PDF page and supplies the default state for pages without records', () => {
@@ -75,6 +75,14 @@ describe('page visibility and thumbnails', () => {
       { type: 'label-group', groupId: 'sleeve', name: '소매', pageNumbers: [5], expanded: false, children: [] },
       { type: 'label-group', groupId: 'empty', name: '비어 있음', pageNumbers: [], expanded: false, children: [] },
     ])
+
+    expect(compactPageThumbnails(5, records, [groups[1], groups[0], groups[2]])).toEqual([
+      { type: 'page', pageNumber: 1 },
+      { type: 'label-group', groupId: 'sleeve', name: '소매', pageNumbers: [5], expanded: false, children: [] },
+      { type: 'hidden-group', groupId: 'hide-3', firstPage: 3, pageNumbers: [3], expanded: false },
+      { type: 'label-group', groupId: 'body', name: '몸판', pageNumbers: [2, 4], expanded: false, children: [] },
+      { type: 'label-group', groupId: 'empty', name: '비어 있음', pageNumbers: [], expanded: false, children: [] },
+    ])
   })
 
   it('moves selected pages between named groups without changing page records', () => {
@@ -87,6 +95,20 @@ describe('page visibility and thumbnails', () => {
       { id: 'a', name: 'A', pageNumbers: [1, 2, 3] },
       { id: 'b', name: 'B', pageNumbers: [] },
     ])
+  })
+
+  it('keeps a multi-page drag intact and moves label order within its bounds', () => {
+    const groups = [
+      { id: 'a', name: 'A', pageNumbers: [1] },
+      { id: 'b', name: 'B', pageNumbers: [2] },
+      { id: 'c', name: 'C', pageNumbers: [3] },
+    ]
+
+    expect(thumbnailPagesForDrag([2, 3], 3)).toEqual([2, 3])
+    expect(thumbnailPagesForDrag([2, 3], 1)).toEqual([1])
+    expect(reorderThumbnailGroups(groups, 'b', -1).map((group) => group.id)).toEqual(['b', 'a', 'c'])
+    expect(reorderThumbnailGroups(groups, 'a', -1)).toBe(groups)
+    expect(reorderThumbnailGroups(groups, 'c', 1)).toBe(groups)
   })
 
   it('normalizes duplicate group membership and rejects invalid page numbers', () => {

@@ -1,6 +1,6 @@
 import 'fake-indexeddb/auto'
 import { describe, expect, it } from 'vitest'
-import { addDocument, addDocumentWorkTime, appendPhotoPages, createPhotoFolder, deleteDocument, duplicateDocument, getHomeProject, getPageRecognition, getPageWork, getPages, getPhotoPage, getPhotoPages, getViewer, listDocuments, markOpened, normalizePageWork, renameDocument, savePageRecognition, savePageWork, saveViewer, saveViewerAndPageWorks, setPageFlag, setPagesHiddenState, updateTags } from './storage'
+import { addDocument, addDocumentWorkTime, appendPhotoPages, createPhotoFolder, deleteDocument, duplicateDocument, getHomeProject, getPageRecognition, getPageWork, getPages, getPhotoPage, getPhotoPages, getViewer, listDocuments, markOpened, normalizePageWork, renameDocument, savePageRecognition, savePageWork, saveViewer, saveViewerAndPageVisibility, saveViewerAndPageWorks, setPageFlag, setPagesHiddenState, updateTags } from './storage'
 import { createCounter } from './smartCounter'
 import type { DocumentRecord } from './types'
 
@@ -202,6 +202,24 @@ describe('local document storage', () => {
       { pageNumber: 2, hidden: false },
       { pageNumber: 5, hidden: true, hiddenGroupId: 'second-hide' },
     ])
+    await deleteDocument(document.id)
+  })
+
+  it('saves label membership and removes hidden-page membership in one transaction', async () => {
+    const document = makeDocument(crypto.randomUUID(), 'Thumbnail group move.pdf', Date.now())
+    await addDocument(document)
+    await setPagesHiddenState(document.id, [2], true, 'hidden-set')
+    const viewer = await getViewer(document.id, document.pageCount)
+    const nextViewer = { ...viewer, thumbnailGroups: [{ id: 'label-a', name: 'A', pageNumbers: [3, 4] }] }
+
+    await saveViewerAndPageVisibility(nextViewer, [2, 3], false)
+
+    expect((await getViewer(document.id, document.pageCount)).thumbnailGroups).toEqual(nextViewer.thumbnailGroups)
+    expect(await getPages(document.id)).toMatchObject([
+      { pageNumber: 2, hidden: false },
+      { pageNumber: 3, hidden: false },
+    ])
+    expect((await getPages(document.id)).find((page) => page.pageNumber === 2)).not.toHaveProperty('hiddenGroupId')
     await deleteDocument(document.id)
   })
 

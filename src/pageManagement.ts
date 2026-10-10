@@ -31,6 +31,19 @@ export function movePagesToThumbnailGroup(groups: ThumbnailGroup[], pageNumbers:
     : { ...group, pageNumbers: group.pageNumbers.filter((page) => !selected.has(page)) })
 }
 
+export function reorderThumbnailGroups(groups: ThumbnailGroup[], groupId: string, direction: -1 | 1): ThumbnailGroup[] {
+  const index = groups.findIndex((group) => group.id === groupId)
+  const targetIndex = index + direction
+  if (index < 0 || targetIndex < 0 || targetIndex >= groups.length) return groups
+  const next = [...groups]
+  ;[next[index], next[targetIndex]] = [next[targetIndex], next[index]]
+  return next
+}
+
+export function thumbnailPagesForDrag(selectedPageNumbers: number[], sourcePageNumber: number): number[] {
+  return selectedPageNumbers.includes(sourcePageNumber) ? [...selectedPageNumbers] : [sourcePageNumber]
+}
+
 export function updatePageHiddenState(page: PageRecord, hidden: boolean, hiddenGroupId?: string): PageRecord {
   const next = { ...page, hidden }
   if (hiddenGroupId) next.hiddenGroupId = hiddenGroupId
@@ -92,11 +105,9 @@ export function compactPageThumbnails(pageCount: number, records: PageRecord[], 
   }
 
   const items: PageThumbnailItem[] = []
-  const groupByFirstPage = new Map<number, ThumbnailGroup>()
-  for (const group of validGroups) {
-    const firstPage = group.pageNumbers[0]
-    if (firstPage !== undefined) groupByFirstPage.set(firstPage, group)
-  }
+  const orderedNonEmptyGroups = validGroups.filter((group) => group.pageNumbers.length > 0)
+  const groupSlots = orderedNonEmptyGroups.map((group) => group.pageNumbers[0]).sort((a, b) => a - b)
+  const groupByFirstPage = new Map(groupSlots.map((slot, index) => [slot, orderedNonEmptyGroups[index]]))
   const groupedPages = new Set(validGroups.flatMap((group) => group.pageNumbers))
   const rootPages = Array.from({ length: pageCount }, (_, index) => index + 1).filter((pageNumber) => !groupedPages.has(pageNumber))
   const rootHiddenGroupByFirst = new Map<number, PageThumbnailItem & { type: 'hidden-group' }>()

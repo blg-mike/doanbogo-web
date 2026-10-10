@@ -418,7 +418,7 @@ function withTextBox(annotation: AnnotationRecord, pageHeight: number): Annotati
   return { ...annotation, points: [{ x: box.x, y: box.y }], boxWidth: box.width, boxHeight: box.height }
 }
 
-export function PdfPage({ pdf, page, paneId, pane, splitView, rotation, active, tool, lineSettings, counters, annotationStyle, work, workReady, colorworkBrushColor, colorworkBrushOpacity, colorworkEraser, createColorworkRequest, pageLinks, qrLinks, onPageRendered, onActivate, onWorkChange, onZoom, onCenter, onColorworkRequestHandled, onTextToolConsumed, onRegionHighlightToolConsumed }: {
+export function PdfPage({ pdf, page, paneId, pane, splitView, rotation, active, tool, lineSettings, counters, annotationStyle, work, workReady, pageWorkLoadError, onRetryPageWork, colorworkBrushColor, colorworkBrushOpacity, colorworkEraser, createColorworkRequest, pageLinks, qrLinks, onPageRendered, onActivate, onWorkChange, onZoom, onCenter, onColorworkRequestHandled, onTextToolConsumed, onRegionHighlightToolConsumed }: {
   pdf: PDFDocumentProxy
   page: number
   paneId: PaneId
@@ -432,6 +432,8 @@ export function PdfPage({ pdf, page, paneId, pane, splitView, rotation, active, 
   annotationStyle: AnnotationStyle
   work: PageWorkRecord
   workReady: boolean
+  pageWorkLoadError?: string
+  onRetryPageWork?: () => void
   colorworkBrushColor: string
   colorworkBrushOpacity: number
   colorworkEraser: boolean
@@ -2387,8 +2389,10 @@ export function PdfPage({ pdf, page, paneId, pane, splitView, rotation, active, 
           </div>
           </div>
         </div>
-        {renderError?.key !== renderKey && (!workReady || readyKey !== renderKey) && <div className={'pane-loading' + (workReady && displayedRaster?.pdf === pdf && displayedRaster.page === page ? ' pane-loading-refresh' : '')}><BrandLoading kind={workReady ? 'pdf' : 'page-work'} requestId={paneId + ':' + page + ':' + renderKey + ':' + workReady} layout={workReady && displayedRaster?.pdf === pdf && displayedRaster.page === page ? 'overlay' : 'pane'} /></div>}
-        {renderError?.key === renderKey && <div className="pane-error">{renderError.message}<button onClick={() => { setRenderError(null); setRetry((current) => current + 1) }}>{t("다시 시도")}</button></div>}
+        {!workReady && pageWorkLoadError && <div className="pane-error" role="alert">{pageWorkLoadError}<button type="button" onClick={onRetryPageWork}>{t("다시 시도")}</button></div>}
+        {!workReady && !pageWorkLoadError && <div className="pane-loading"><BrandLoading kind="page-work" requestId={paneId + ':' + page + ':page-work'} layout="pane" /></div>}
+        {workReady && renderError?.key !== renderKey && readyKey !== renderKey && <div className={'pane-loading' + (displayedRaster?.pdf === pdf && displayedRaster.page === page ? ' pane-loading-refresh' : '')}><BrandLoading kind="pdf" requestId={paneId + ':' + page + ':' + renderKey} layout={displayedRaster?.pdf === pdf && displayedRaster.page === page ? 'overlay' : 'pane'} /></div>}
+        {workReady && renderError?.key === renderKey && <div className="pane-error" role="alert">{renderError.message}<button type="button" onClick={() => { setRenderError(null); setRetry((current) => current + 1) }}>{t("다시 시도")}</button></div>}
       </div>
     </div>
     {active && regionPopoverOpen && selectedRegion && typeof document !== 'undefined' && createPortal(
