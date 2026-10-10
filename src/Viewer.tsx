@@ -53,6 +53,7 @@ type ThumbnailTouchGesture = {
   clientY: number
   button: HTMLButtonElement
   mode: 'pending' | 'scroll' | 'select' | 'drag'
+  dragPreview?: HTMLDivElement
   dropTarget?: { kind: 'hidden'; groupId: string | null; key: string } | { kind: 'label'; groupId: string; key: string }
   timer: number
   frameId?: number
@@ -454,6 +455,7 @@ export default function Viewer() {
       if (!gesture) return
       window.clearTimeout(gesture.timer)
       if (gesture.frameId !== undefined) window.cancelAnimationFrame(gesture.frameId)
+      gesture.dragPreview?.remove()
       thumbnailTouchGestureRef.current = null
     }
   }, [id])
@@ -1489,6 +1491,63 @@ export default function Viewer() {
     if (event.currentTarget.hasPointerCapture(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId)
   }
 
+  function setThumbnailDraggingVisuals(pageNumbers: number[], dragging: boolean) {
+    const rail = thumbnailRailRef.current
+    if (!rail) return
+    for (const pageNumber of pageNumbers) {
+      rail.querySelector<HTMLElement>('.page-thumbnail[data-page-number="' + pageNumber + '"]')?.classList.toggle('dragging-source', dragging)
+    }
+  }
+
+  function positionThumbnailDragPreview(gesture: ThumbnailTouchGesture) {
+    const preview = gesture.dragPreview
+    if (!preview) return
+    const left = clamp(gesture.clientX + 14, 8, Math.max(8, window.innerWidth - preview.offsetWidth - 8))
+    const top = clamp(gesture.clientY + 14, 8, Math.max(8, window.innerHeight - preview.offsetHeight - 8))
+    preview.style.transform = 'translate3d(' + left + 'px, ' + top + 'px, 0)'
+  }
+
+  function createThumbnailDragPreview(gesture: ThumbnailTouchGesture) {
+    const rail = thumbnailRailRef.current
+    const source = rail?.querySelector<HTMLButtonElement>('.page-thumbnail[data-page-number="' + gesture.pageNumber + '"]')
+    if (!source) return
+    const bounds = source.getBoundingClientRect()
+    const preview = document.createElement('div')
+    preview.className = 'thumbnail-drag-preview' + (gesture.draggedPages.length > 1 ? ' multiple' : '')
+    preview.setAttribute('aria-hidden', 'true')
+    preview.style.width = bounds.width + 'px'
+    preview.style.height = bounds.height + 'px'
+
+    const clone = source.cloneNode(true) as HTMLButtonElement
+    clone.classList.remove('dragging-source', 'drop-target-group', 'drop-target-outside')
+    clone.classList.add('thumbnail-drag-preview-card')
+    clone.removeAttribute('data-page-number')
+    clone.removeAttribute('aria-current')
+    clone.removeAttribute('aria-pressed')
+    clone.tabIndex = -1
+    clone.querySelector('.thumbnail-observer')?.remove()
+    const sourceCanvases = source.querySelectorAll('canvas')
+    clone.querySelectorAll('canvas').forEach((canvas, index) => {
+      const sourceCanvas = sourceCanvases[index]
+      if (!sourceCanvas?.width || !sourceCanvas.height) return
+      canvas.width = sourceCanvas.width
+      canvas.height = sourceCanvas.height
+      canvas.getContext('2d')?.drawImage(sourceCanvas, 0, 0)
+    })
+    preview.append(clone)
+
+    if (gesture.draggedPages.length > 1) {
+      const count = document.createElement('span')
+      count.className = 'thumbnail-drag-preview-count'
+      count.textContent = '×' + gesture.draggedPages.length
+      preview.append(count)
+    }
+
+    document.body.append(preview)
+    gesture.dragPreview = preview
+    positionThumbnailDragPreview(gesture)
+  }
+
   function beginThumbnailTouch(pageNumber: number, event: ReactPointerEvent<HTMLButtonElement>) {
     if ((event.pointerType !== 'touch' && event.pointerType !== 'mouse') || event.button !== 0 || event.ctrlKey || event.shiftKey || hiddenNumbers.has(pageNumber) || pageVisibilitySaving || thumbnailGroupSaving || !thumbnailRailRef.current) return
     const selectedPages = thumbnailPagesForDrag(selectedThumbnailPages, pageNumber)
@@ -1526,6 +1585,10 @@ export default function Viewer() {
     if (gesture.mode === 'pending' && Math.hypot(deltaX, deltaY) > 8) {
       window.clearTimeout(gesture.timer)
       gesture.mode = gesture.pointerType === 'mouse' || selectedThumbnailSet.has(gesture.pageNumber) ? 'drag' : 'scroll'
+      if (gesture.mode === 'drag') {
+        setThumbnailDraggingVisuals(gesture.draggedPages, true)
+        createThumbnailDragPreview(gesture)
+      }
     }
     if (gesture.mode === 'scroll' && Math.abs(deltaX) > Math.abs(deltaY)) event.preventDefault()
     if (gesture.mode === 'drag' || gesture.mode === 'select') event.preventDefault()
@@ -1537,6 +1600,7 @@ export default function Viewer() {
     if (thumbnailTouchGestureRef.current !== gesture) return
     const rail = thumbnailRailRef.current
     if (!rail) return
+    if (gesture.mode === 'drag') positionThumbnailDragPreview(gesture)
     if (gesture.mode === 'scroll') {
       const deltaX = gesture.clientX - gesture.startX
       const deltaY = gesture.clientY - gesture.startY
@@ -1571,6 +1635,8 @@ export default function Viewer() {
     window.clearTimeout(gesture.timer)
     if (gesture.frameId !== undefined) window.cancelAnimationFrame(gesture.frameId)
     if (!canceled && gesture.mode === 'drag') gesture.dropTarget = findThumbnailTouchDropTarget(gesture)
+    setThumbnailDraggingVisuals(gesture.draggedPages, false)
+    gesture.dragPreview?.remove()
     thumbnailTouchGestureRef.current = null
     if (!canceled && gesture.mode !== 'pending') {
       suppressThumbnailClickRef.current = true
@@ -1596,6 +1662,8 @@ export default function Viewer() {
       if (gesture) {
         window.clearTimeout(gesture.timer)
         if (gesture.frameId !== undefined) window.cancelAnimationFrame(gesture.frameId)
+        setThumbnailDraggingVisuals(gesture.draggedPages, false)
+        gesture.dragPreview?.remove()
         thumbnailTouchGestureRef.current = null
         if (gesture.button.hasPointerCapture(gesture.pointerId)) gesture.button.releasePointerCapture(gesture.pointerId)
       }
@@ -2112,6 +2180,7 @@ export default function Viewer() {
     }
     draggedThumbnailPageRef.current = pageNumber
     draggedThumbnailPagesRef.current = thumbnailPagesForDrag(selectedThumbnailPages, pageNumber)
+    setThumbnailDraggingVisuals(draggedThumbnailPagesRef.current, true)
     event.dataTransfer.setData('application/x-doanbogo-page', String(pageNumber))
     event.dataTransfer.setData('application/x-doanbogo-pages', JSON.stringify(draggedThumbnailPagesRef.current))
     event.dataTransfer.setData('text/plain', String(pageNumber))
@@ -2120,6 +2189,7 @@ export default function Viewer() {
   }
 
   function finishThumbnailDrag() {
+    setThumbnailDraggingVisuals(draggedThumbnailPagesRef.current, false)
     draggedThumbnailPageRef.current = null
     draggedThumbnailPagesRef.current = []
     updateThumbnailDropTarget(null)
