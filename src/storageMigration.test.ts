@@ -1,5 +1,5 @@
 import 'fake-indexeddb/auto'
-import { describe, expect, it, vi } from 'vitest'
+import { describe, expect, it } from 'vitest'
 
 function createLegacyDatabase() {
   return new Promise<IDBDatabase>((resolve, reject) => {
@@ -41,7 +41,7 @@ function createLegacyDatabase() {
 }
 
 describe('legacy database migration', () => {
-  it('normalizes existing counters and clears legacy page visibility while preserving bookmarks', async () => {
+  it('normalizes existing counters and restores legacy hidden pages while preserving bookmarks', async () => {
     const legacy = await createLegacyDatabase()
     legacy.close()
     const { getPageRecognition, getPages, getPreference, getViewer } = await import('./storage')
@@ -57,13 +57,6 @@ describe('legacy database migration', () => {
       { documentId: 'migration-document', pageNumber: 2, hidden: false, bookmarked: true },
       { documentId: 'migration-document', pageNumber: 3, hidden: false, bookmarked: false },
     ])
-
-    const { setPagesHiddenState } = await import('./storage')
-    await setPagesHiddenState('migration-document', [2], true, 'new-hidden')
-    vi.resetModules()
-    const { getPages: getPagesAfterReload } = await import('./storage')
-    await expect(getPagesAfterReload('migration-document')).resolves.toContainEqual({
-      documentId: 'migration-document', pageNumber: 2, hidden: true, hiddenGroupId: 'new-hidden', bookmarked: true,
-    })
+    expect(pages.every((page) => page.hidden === false && !('hiddenGroupId' in page))).toBe(true)
   })
 })

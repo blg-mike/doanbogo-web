@@ -211,8 +211,7 @@ export interface PageRecognitionRecord {
 export interface PageRecord {
   documentId: string
   pageNumber: number
-  hidden: boolean
-  hiddenGroupId?: string
+  hidden: false
   bookmarked: boolean
 }
 

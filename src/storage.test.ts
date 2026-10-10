@@ -1,6 +1,6 @@
 import 'fake-indexeddb/auto'
 import { describe, expect, it } from 'vitest'
-import { addDocument, addDocumentWorkTime, appendPhotoPages, createPhotoFolder, deleteDocument, duplicateDocument, getHomeProject, getPageRecognition, getPageWork, getPages, getPhotoPage, getPhotoPages, getViewer, listDocuments, markOpened, normalizePageWork, renameDocument, savePageRecognition, savePageWork, saveViewer, saveViewerAndPageVisibility, saveViewerAndPageWorks, setPageFlag, setPagesHiddenState, updateTags } from './storage'
+import { addDocument, addDocumentWorkTime, appendPhotoPages, createPhotoFolder, deleteDocument, duplicateDocument, getHomeProject, getPageRecognition, getPageWork, getPages, getPhotoPage, getPhotoPages, getViewer, listDocuments, markOpened, normalizePageWork, renameDocument, savePageRecognition, savePageRecords, savePageWork, saveViewer, saveViewerAndPageWorks, setPageFlag, updateTags } from './storage'
 import { createCounter } from './smartCounter'
 import type { DocumentRecord } from './types'
 
@@ -119,11 +119,13 @@ describe('local document storage', () => {
     await deleteDocument(copy.id)
   })
 
-  it('keeps each page flag, clamps restored pages, and removes all work with a document', async () => {
+  it('restores legacy hidden pages while preserving bookmarks and all document work', async () => {
     const document = makeDocument(crypto.randomUUID(), 'Pages.pdf', Date.now())
     await addDocument(document)
-    await setPageFlag(document.id, 3, 'hidden', true)
-    await setPageFlag(document.id, 5, 'bookmarked', true)
+    await savePageRecords([
+      { documentId: document.id, pageNumber: 3, hidden: true, hiddenGroupId: 'legacy-group', bookmarked: false } as unknown as import('./types').PageRecord,
+      { documentId: document.id, pageNumber: 5, hidden: false, bookmarked: true },
+    ])
     await savePageRecognition(document.id, 5, { pdfLinksDone: true, pdfLinks: [], qrLinksDone: true, qrLinks: [], qrInputMaxDimension: 1400 })
     const pdfLink = { x: 0.1, y: 0.2, width: 0.3, height: 0.1, href: 'https://example.com' }
     await savePageRecognition(document.id, 5, { pdfLinks: [pdfLink] })
@@ -144,7 +146,7 @@ describe('local document storage', () => {
     await saveViewer({ ...splitViewer, split: false })
 
     expect(await getPages(document.id)).toEqual([
-      { documentId: document.id, pageNumber: 3, hidden: true, bookmarked: false },
+      { documentId: document.id, pageNumber: 3, hidden: false, bookmarked: false },
       { documentId: document.id, pageNumber: 5, hidden: false, bookmarked: true },
     ])
     expect(await getPageRecognition(document.id, 5)).toMatchObject({
@@ -174,52 +176,17 @@ describe('local document storage', () => {
     expect((await listDocuments('name')).some((item) => item.id === document.id)).toBe(false)
   })
 
-  it('persists hidden group membership and keeps it through expand and re-hide', async () => {
-    const document = makeDocument(crypto.randomUUID(), 'Hidden groups.pdf', Date.now())
-    await addDocument(document)
-
-    await setPagesHiddenState(document.id, [2, 5], true, 'first-hide')
-    expect(await getPages(document.id)).toMatchObject([
-      { pageNumber: 2, hidden: true, hiddenGroupId: 'first-hide' },
-      { pageNumber: 5, hidden: true, hiddenGroupId: 'first-hide' },
-    ])
-
-    await setPagesHiddenState(document.id, [2, 5], false, 'first-hide')
-    expect(await getPages(document.id)).toMatchObject([
-      { pageNumber: 2, hidden: false, hiddenGroupId: 'first-hide' },
-      { pageNumber: 5, hidden: false, hiddenGroupId: 'first-hide' },
-    ])
-
-    await setPagesHiddenState(document.id, [2], false)
-    expect(await getPages(document.id)).toMatchObject([
-      { pageNumber: 2, hidden: false },
-      { pageNumber: 5, hidden: false, hiddenGroupId: 'first-hide' },
-    ])
-    expect((await getPages(document.id)).find((page) => page.pageNumber === 2)).not.toHaveProperty('hiddenGroupId')
-
-    await setPagesHiddenState(document.id, [5], true, 'second-hide')
-    expect(await getPages(document.id)).toMatchObject([
-      { pageNumber: 2, hidden: false },
-      { pageNumber: 5, hidden: true, hiddenGroupId: 'second-hide' },
-    ])
-    await deleteDocument(document.id)
-  })
-
-  it('saves label membership and removes hidden-page membership in one transaction', async () => {
+  it('saves label membership without changing page records', async () => {
     const document = makeDocument(crypto.randomUUID(), 'Thumbnail group move.pdf', Date.now())
     await addDocument(document)
-    await setPagesHiddenState(document.id, [2], true, 'hidden-set')
+    await savePageRecords([{ documentId: document.id, pageNumber: 2, hidden: false, bookmarked: true }])
     const viewer = await getViewer(document.id, document.pageCount)
     const nextViewer = { ...viewer, thumbnailGroups: [{ id: 'label-a', name: 'A', pageNumbers: [3, 4] }] }
 
-    await saveViewerAndPageVisibility(nextViewer, [2, 3], false)
+    await saveViewer(nextViewer)
 
     expect((await getViewer(document.id, document.pageCount)).thumbnailGroups).toEqual(nextViewer.thumbnailGroups)
-    expect(await getPages(document.id)).toMatchObject([
-      { pageNumber: 2, hidden: false },
-      { pageNumber: 3, hidden: false },
-    ])
-    expect((await getPages(document.id)).find((page) => page.pageNumber === 2)).not.toHaveProperty('hiddenGroupId')
+    expect(await getPages(document.id)).toEqual([{ documentId: document.id, pageNumber: 2, hidden: false, bookmarked: true }])
     await deleteDocument(document.id)
   })
 

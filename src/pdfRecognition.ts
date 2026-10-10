@@ -1,7 +1,7 @@
 import type { PDFDocumentProxy, PDFPageProxy, RenderTask } from 'pdfjs-dist'
 import type { DocumentRecord, PageRecognitionRecord } from './types'
 import { extractPdfPageLinks, type PdfQrLink } from './qr'
-import { getPageRecognition, getPages, savePageRecognition } from './storage'
+import { getPageRecognition, savePageRecognition } from './storage'
 import { pdfPageRenderQueue } from './pdfPageRenderQueue'
 import { viewerCanvasMemory } from './pdfRenderResources'
 import { openPdf } from './pdf'
@@ -12,8 +12,6 @@ type RecognitionJob = {
   viewerPdf: PDFDocumentProxy | null
   cancelled: boolean
   restartPages: boolean
-  hiddenPages: Set<number>
-  currentPage?: number
   cancelCurrent?: () => void
 }
 
@@ -200,12 +198,9 @@ async function runJob(job: RecognitionJob) {
     if (job.cancelled) return
     do {
       job.restartPages = false
-      job.hiddenPages = new Set((await getPages(job.record.id)).filter((page) => page.hidden).map((page) => page.pageNumber))
       for (let pageNumber = 1; pageNumber <= job.record.pageCount && !job.cancelled; pageNumber++) {
-        job.currentPage = undefined
         await waitUntilVisible(job)
         if (job.cancelled) break
-        if (job.hiddenPages.has(pageNumber)) continue
         const cached = await getPageRecognition(job.record.id, pageNumber).catch(() => undefined)
         if (job.cancelled) break
         if (cached?.pdfLinksDone && cached.qrLinksDone) {
@@ -241,7 +236,6 @@ async function runJob(job: RecognitionJob) {
           pageNumber--
           continue
         }
-        job.currentPage = pageNumber
         let pdfLinks = cached?.pdfLinks ?? []
         if (!cached?.pdfLinksDone) {
           try {
@@ -254,7 +248,6 @@ async function runJob(job: RecognitionJob) {
               pageNumber--
               continue
             }
-            if (job.hiddenPages.has(pageNumber)) continue
             const textRuns = content.items.flatMap((item) => 'str' in item ? [item] : [])
             pdfLinks = extractPdfPageLinks(annotations, textRuns, page.getViewport({ scale: 1 }))
             await savePageRecognition(job.record.id, pageNumber, { pdfLinksDone: true, pdfLinks })
@@ -268,7 +261,6 @@ async function runJob(job: RecognitionJob) {
           pageNumber--
           continue
         }
-        if (job.hiddenPages.has(pageNumber)) continue
         let qrLinks = cached?.qrLinks ?? []
         let qrLinksDone = cached?.qrLinksDone ?? false
         let qrRaster: QrRaster | null = null
@@ -289,10 +281,6 @@ async function runJob(job: RecognitionJob) {
           qrRaster?.release()
           break
         }
-        if (job.hiddenPages.has(pageNumber)) {
-          qrRaster?.release()
-          continue
-        }
         if (!qrLinksDone && qrRaster) {
           try {
             worker ??= await createQrWorker()
@@ -301,10 +289,8 @@ async function runJob(job: RecognitionJob) {
               worker = null
               break
             }
-            if (job.hiddenPages.has(pageNumber)) continue
             qrLinks = await decodeQr(worker, qrRaster.pixels, (cancel) => { job.cancelCurrent = cancel }).finally(() => { job.cancelCurrent = undefined })
             if (job.cancelled) break
-            if (job.hiddenPages.has(pageNumber)) continue
             qrLinksDone = true
             await savePageRecognition(job.record.id, pageNumber, { qrLinksDone: true, qrLinks, qrInputMaxDimension: Math.max(qrRaster.pixels.width, qrRaster.pixels.height) })
           } catch (error) {
@@ -395,7 +381,7 @@ export function enqueuePdfRecognition(record: Pick<DocumentRecord, 'id' | 'pageC
     if (restart) existing.restartPages = true
     return
   }
-  const job: RecognitionJob = { record, viewerPdf, cancelled: false, restartPages: false, hiddenPages: new Set() }
+  const job: RecognitionJob = { record, viewerPdf, cancelled: false, restartPages: false }
   jobs.set(record.id, job)
   queue.push(job)
   pump()
@@ -420,17 +406,6 @@ export function releasePdfRecognitionViewer(documentId: string, viewerPdf: PDFDo
   const job = jobs.get(documentId)
   if (job?.viewerPdf === viewerPdf) job.viewerPdf = null
   return Promise.allSettled([...(pdfOperations.get(viewerPdf) ?? [])]).then(() => {})
-}
-
-export function updatePdfRecognitionPageVisibility(documentId: string, pageNumbers: number[], hidden: boolean) {
-  const job = jobs.get(documentId)
-  if (!job) return
-  for (const pageNumber of pageNumbers) {
-    if (hidden) job.hiddenPages.add(pageNumber)
-    else job.hiddenPages.delete(pageNumber)
-  }
-  if (hidden && job.currentPage !== undefined && pageNumbers.includes(job.currentPage)) job.cancelCurrent?.()
-  if (!hidden) job.restartPages = true
 }
 
 export function cancelPdfRecognition(documentId: string) {

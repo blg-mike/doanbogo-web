@@ -1,6 +1,7 @@
 import { strFromU8, strToU8, unzipSync, zipSync } from 'fflate'
 import type { AnnotationRecord, ChartDocument, ColorworkGrid, CounterTimeLap, DocumentRecord, HomeProject, KnittingReport, PageRecord, PageWorkRecord, PhotoPageRecord, PreferenceRecord, RegionHighlight, ReportTimelinePhoto, ViewerSnapshot } from './types'
 import { normalizePageWork, readWorkspaceData, type WorkspaceData } from './storage'
+import { normalizeVisiblePageRecord } from './pageManagement'
 import { createDefaultCounters, isCurrentCounterSnapshots, isLegacyCounterSnapshots, normalizeCounterSnapshots, normalizeCounterTimeLaps, MAX_COUNTER_HISTORY } from './smartCounter'
 
 interface BackupDocument extends Omit<DocumentRecord, 'pdf' | 'cover'> {
@@ -295,7 +296,7 @@ export async function createWorkspaceBackup() {
     version: 14,
     exportedAt: Date.now(),
     documents,
-    pages: data.pages,
+    pages: data.pages.map(normalizeVisiblePageRecord),
     viewers: data.viewers,
     preferences: data.preferences,
     pageWork: data.pageWork,
@@ -436,7 +437,8 @@ export async function readWorkspaceBackup(file: File): Promise<WorkspaceData> {
       (entry.hiddenGroupId !== undefined && (typeof entry.hiddenGroupId !== 'string' || !entry.hiddenGroupId))) {
       throw new Error('작업 파일에 올바르지 않은 페이지 정보가 있습니다.')
     }
-    return entry as unknown as PageRecord
+    const { hiddenGroupId: _legacyHiddenGroupId, ...page } = entry
+    return { ...page, hidden: false } as unknown as PageRecord
   })
 
   const viewers = manifest.viewers.map((entry): ViewerSnapshot => {

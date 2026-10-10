@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest'
 import { strFromU8, strToU8, unzipSync, zipSync } from 'fflate'
 import { createWorkspaceBackup, readWorkspaceBackup } from './backup'
 import { createCounter, isLegacyCounterSnapshots } from './smartCounter'
-import { addDocument, addDocumentWorkTime, createPhotoFolder, deleteChart, deleteDocument, duplicateDocument, getChart, getHomeProject, getKnittingReport, getKnittingReports, getPageWork, getPages, getPhotoPages, getPreference, getViewer, importWorkspaceData, listCharts, listDocuments, saveChart, saveHomeProject, saveKnittingReport, savePageWork, savePreference, saveViewer, setPageFlag, setPagesHiddenState } from './storage'
+import { addDocument, addDocumentWorkTime, createPhotoFolder, deleteChart, deleteDocument, duplicateDocument, getChart, getHomeProject, getKnittingReport, getKnittingReports, getPageWork, getPages, getPhotoPages, getPreference, getViewer, importWorkspaceData, listCharts, listDocuments, saveChart, saveHomeProject, saveKnittingReport, savePageWork, savePreference, saveViewer, setPageFlag } from './storage'
 import { createKnittingChart, makeRasterPdf } from './charts'
 import type { DocumentRecord, KnittingReport } from './types'
 
@@ -273,7 +273,6 @@ describe('portable workspace backup', () => {
     const archivedAt = Date.now()
     await saveHomeProject({ ...originalProject!, status: 'paused', archivedAt })
     await setPageFlag(original.id, 3, 'bookmarked', true)
-    await setPagesHiddenState(original.id, [2, 5], true, 'hide-batch-1')
     const viewer = await getViewer(original.id, original.pageCount)
     const rowCounter = { ...createCounter('simple', '몸판 단'), id: 'body-row', value: 19, unit: 'row' as const, goalRow: 36, goalFinalSide: 'rs' as const, firstSide: 'ws' as const }
     const patternCounter = { ...createCounter('pattern', '몸판 무늬'), id: 'body-pattern', linkedToId: rowCounter.id, value: 3, currentRow: 19, patternRow: 3, startRow: 5, repeatLength: 12, repeatCount: 3, repeatStartNumber: 1, patternPreviewEnabled: true }
@@ -281,6 +280,7 @@ describe('portable workspace backup', () => {
     const counters = [rowCounter, patternCounter, taskCounter]
     await saveViewer({
       ...viewer,
+      thumbnailGroups: [{ id: 'label-a', name: 'A', pageNumbers: [2, 5] }],
       counters,
       counterHistory: [{ id: 'history-1', label: '몸판 단 · 19단 완료', counters, guides: [], actualRow: 19, baseCounterId: rowCounter.id, timeLapId: 'lap-1', savedAt: Date.now() }],
       counterTimeLaps: [{ id: 'lap-1', counterId: rowCounter.id, sessionId: 'session-1', historyEntryId: 'history-1', elapsedMs: 120000, durationMs: 120000, rowDelta: 1, recordedAt: Date.now() }],
@@ -342,18 +342,26 @@ describe('portable workspace backup', () => {
     const savedReport = await saveKnittingReport(report)
 
     const backup = await createWorkspaceBackup()
-    const restored = await readWorkspaceBackup(new File([backup], 'backup.doanbogo'))
     const archiveEntries = unzipSync(new Uint8Array(await backup.arrayBuffer()))
-    expect(JSON.parse(strFromU8(archiveEntries['manifest.json'])).version).toBe(14)
+    const manifest = JSON.parse(strFromU8(archiveEntries['manifest.json']))
+    expect(manifest.version).toBe(14)
+    manifest.pages.push(
+      { documentId: original.id, pageNumber: 2, hidden: true, hiddenGroupId: 'hide-batch-1', bookmarked: false },
+      { documentId: original.id, pageNumber: 5, hidden: true, hiddenGroupId: 'hide-batch-1', bookmarked: false },
+    )
+    const legacyBackup = new File([zipSync({ ...archiveEntries, 'manifest.json': strToU8(JSON.stringify(manifest)) })], 'legacy-hidden.doanbogo')
+    const restored = await readWorkspaceBackup(legacyBackup)
     const restoredViewer = restored.viewers.find((entry) => entry.documentId === original.id)!
     const restoredDocument = restored.documents.find((document) => document.id === original.id)!
     expect(restoredDocument.fileName).toBe(original.fileName)
     expect(new TextDecoder().decode(await restoredDocument.pdf!.arrayBuffer())).toBe('%PDF-1.7 sample')
-    expect(restored.pages.find((page) => page.pageNumber === 3)).toMatchObject({ documentId: original.id, pageNumber: 3, bookmarked: true })
-    expect(restored.pages.filter((page) => page.hiddenGroupId === 'hide-batch-1')).toMatchObject([
-      { documentId: original.id, pageNumber: 2, hidden: true },
-      { documentId: original.id, pageNumber: 5, hidden: true },
+    expect(restored.pages.find((page) => page.pageNumber === 3)).toMatchObject({ documentId: original.id, pageNumber: 3, hidden: false, bookmarked: true })
+    expect(restored.pages.filter((page) => [2, 5].includes(page.pageNumber))).toEqual([
+      { documentId: original.id, pageNumber: 2, hidden: false, bookmarked: false },
+      { documentId: original.id, pageNumber: 5, hidden: false, bookmarked: false },
     ])
+    expect(restored.pages.every((page) => !('hiddenGroupId' in page))).toBe(true)
+    expect(restoredViewer.thumbnailGroups).toEqual([{ id: 'label-a', name: 'A', pageNumbers: [2, 5] }])
     expect(restoredViewer.primary).toMatchObject({ page: 4, zoom: 2, centerX: 0.37, centerY: 0.68 })
     expect(restoredViewer.primary.rotations).toEqual({ 4: 90 })
     expect(restoredViewer.secondary.rotations).toEqual({ 1: 270 })

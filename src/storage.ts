@@ -1,7 +1,7 @@
 import { openDB, type DBSchema, type IDBPDatabase } from 'idb'
 import type { ChartDocument, CounterHistoryEntry, DocumentRecord, HomeProject, KnittingReport, PageRecognitionRecord, PageRecord, PageWorkRecord, PhotoPageRecord, PaneSnapshot, PreferenceRecord, ProgressGuide, SortMode, ViewerSnapshot } from './types'
 import { MAX_COUNTER_HISTORY, normalizeCounterSnapshots, normalizeCounterTimeLaps } from './smartCounter'
-import { normalizeThumbnailGroups, updatePageHiddenState } from './pageManagement'
+import { normalizeThumbnailGroups, normalizeVisiblePageRecord } from './pageManagement'
 
 interface DoanBogoDB extends DBSchema {
   documents: {
@@ -61,7 +61,7 @@ const temporary = {
 }
 
 const pageKey = (id: string, page: number) => id + '\u0000' + page
-const hiddenPageResetMigrationKey = 'reset-hidden-pages-v11'
+const hiddenPagesRemovalMigrationKey = 'remove-hidden-pages-v1'
 
 function stripLegacyTechniqueSlots(viewer: ViewerSnapshot): ViewerSnapshot {
   const cleaned = { ...viewer } as ViewerSnapshot & { techniqueSlots?: unknown }
@@ -243,14 +243,14 @@ async function database(): Promise<Database | null> {
       const migrationDone = migration.done
       try {
         const migrationStore = migration.objectStore('migrations')
-        if (!(await migrationStore.get(hiddenPageResetMigrationKey))) {
+        if (!(await migrationStore.get(hiddenPagesRemovalMigrationKey))) {
           let cursor = await migration.objectStore('pages').openCursor()
           while (cursor) {
-            const page = cursor.value as PageRecord
-            if (page.hidden || page.hiddenGroupId) await cursor.update(updatePageHiddenState(page, false))
+            const page = cursor.value as PageRecord & { hiddenGroupId?: string }
+            if (page.hidden !== false || page.hiddenGroupId !== undefined) await cursor.update(normalizeVisiblePageRecord(page))
             cursor = await cursor.continue()
           }
-          await migrationStore.put({ key: hiddenPageResetMigrationKey, value: 'complete' })
+          await migrationStore.put({ key: hiddenPagesRemovalMigrationKey, value: 'complete' })
         }
         await migrationDone
       } catch (error) {
@@ -275,7 +275,7 @@ async function loadIntoTemporary(db: Database) {
       db.getAll('documents'), db.getAll('pages'), db.getAll('viewers'), db.getAll('preferences'), db.getAll('pageWork'), db.getAll('charts'), db.getAll('knittingReportEntries'), db.getAll('photoPages'), db.getAll('homeProjects'), db.getAll('homeReports'),
     ])
     documents.forEach((item) => temporary.documents.set(item.id, item))
-    pages.forEach((item) => temporary.pages.set(pageKey(item.documentId, item.pageNumber), item))
+    pages.map(normalizeVisiblePageRecord).forEach((item) => temporary.pages.set(pageKey(item.documentId, item.pageNumber), item))
     viewers.forEach((item) => temporary.viewers.set(item.documentId, stripLegacyTechniqueSlots(item)))
     preferences.forEach((item) => temporary.preferences.set(item.key, item))
     pageWork.forEach((item) => temporary.pageWork.set(pageKey(item.documentId, item.pageNumber), item))
@@ -756,35 +756,39 @@ export async function savePageRecognition(id: string, pageNumber: number, change
 }
 
 export async function getPages(id: string) {
-  return access((db) => db.getAllFromIndex('pages', 'by-document', id), () => [...temporary.pages.values()].filter((page) => page.documentId === id))
+  return access((db) => db.getAllFromIndex('pages', 'by-document', id).then((pages) => pages.map(normalizeVisiblePageRecord)), () => [...temporary.pages.values()].filter((page) => page.documentId === id).map(normalizeVisiblePageRecord))
 }
 
 export async function getPage(id: string, pageNumber: number) {
-  return access((db) => db.get('pages', [id, pageNumber]), () => temporary.pages.get(pageKey(id, pageNumber)))
+  return access((db) => db.get('pages', [id, pageNumber]).then((page) => page ? normalizeVisiblePageRecord(page) : undefined), () => {
+    const page = temporary.pages.get(pageKey(id, pageNumber))
+    return page ? normalizeVisiblePageRecord(page) : undefined
+  })
 }
 
-export async function setPageFlag(id: string, pageNumber: number, flag: 'hidden' | 'bookmarked', value: boolean) {
+export async function setPageFlag(id: string, pageNumber: number, flag: 'bookmarked', value: boolean) {
   await access(async (db) => {
     const tx = db.transaction('pages', 'readwrite')
     const page = await tx.store.get([id, pageNumber]) ?? { documentId: id, pageNumber, hidden: false, bookmarked: false }
     page[flag] = value
-    await tx.store.put(page)
+    await tx.store.put(normalizeVisiblePageRecord(page))
     await tx.done
   }, () => {
     const key = pageKey(id, pageNumber)
     const page = temporary.pages.get(key) ?? { documentId: id, pageNumber, hidden: false, bookmarked: false }
-    temporary.pages.set(key, { ...page, [flag]: value })
+    temporary.pages.set(key, normalizeVisiblePageRecord({ ...page, [flag]: value }))
   })
 }
 
 export async function savePageRecords(records: PageRecord[]) {
   if (!records.length) return
+  const normalizedRecords = records.map(normalizeVisiblePageRecord)
   await access(async (db) => {
     const tx = db.transaction('pages', 'readwrite')
-    for (const record of records) await tx.store.put(record)
+    for (const record of normalizedRecords) await tx.store.put(record)
     await tx.done
   }, () => {
-    for (const record of records) temporary.pages.set(pageKey(record.documentId, record.pageNumber), record)
+    for (const record of normalizedRecords) temporary.pages.set(pageKey(record.documentId, record.pageNumber), record)
   })
 }
 
@@ -837,70 +841,21 @@ export async function saveViewerAndPageWorks(snapshot: ViewerSnapshot, works: Pa
   })
 }
 
-export async function saveViewerAndPageVisibility(snapshot: ViewerSnapshot, pageNumbers: number[], hidden: boolean, hiddenGroupId?: string) {
-  const viewer = stripLegacyTechniqueSlots(snapshot)
-  const uniquePages = [...new Set(pageNumbers)]
-  if (hidden && !hiddenGroupId) throw new Error('숨김 그룹 정보가 필요합니다.')
-  await access(async (db) => {
-    const tx = db.transaction(['viewers', 'pages'], 'readwrite')
-    const done = tx.done
-    try {
-      await tx.objectStore('viewers').put({ ...viewer, updatedAt: Date.now() })
-      const pageStore = tx.objectStore('pages')
-      for (const pageNumber of uniquePages) {
-        const page = await pageStore.get([viewer.documentId, pageNumber]) ?? { documentId: viewer.documentId, pageNumber, hidden: false, bookmarked: false }
-        await pageStore.put(updatePageHiddenState(page, hidden, hiddenGroupId))
-      }
-      await done
-    } catch (error) {
-      try { tx.abort() } catch { /* The transaction may already have finished. */ }
-      await done.catch(() => {})
-      throw error
-    }
-  }, () => {
-    temporary.viewers.set(viewer.documentId, { ...viewer, updatedAt: Date.now() })
-    for (const pageNumber of uniquePages) {
-      const key = pageKey(viewer.documentId, pageNumber)
-      const page = temporary.pages.get(key) ?? { documentId: viewer.documentId, pageNumber, hidden: false, bookmarked: false }
-      temporary.pages.set(key, updatePageHiddenState(page, hidden, hiddenGroupId))
-    }
-  })
-}
-
-export async function setPagesFlag(id: string, pageNumbers: number[], flag: 'hidden' | 'bookmarked', value: boolean) {
+export async function setPagesFlag(id: string, pageNumbers: number[], flag: 'bookmarked', value: boolean) {
   const uniquePages = [...new Set(pageNumbers)]
   await access(async (db) => {
     const tx = db.transaction('pages', 'readwrite')
     for (const pageNumber of uniquePages) {
       const page = await tx.store.get([id, pageNumber]) ?? { documentId: id, pageNumber, hidden: false, bookmarked: false }
       page[flag] = value
-      await tx.store.put(page)
+      await tx.store.put(normalizeVisiblePageRecord(page))
     }
     await tx.done
   }, () => {
     for (const pageNumber of uniquePages) {
       const key = pageKey(id, pageNumber)
       const page = temporary.pages.get(key) ?? { documentId: id, pageNumber, hidden: false, bookmarked: false }
-      temporary.pages.set(key, { ...page, [flag]: value })
-    }
-  })
-}
-
-export async function setPagesHiddenState(id: string, pageNumbers: number[], hidden: boolean, hiddenGroupId?: string) {
-  const uniquePages = [...new Set(pageNumbers)]
-  if (hidden && !hiddenGroupId) throw new Error('숨김 그룹 정보가 필요합니다.')
-  await access(async (db) => {
-    const tx = db.transaction('pages', 'readwrite')
-    for (const pageNumber of uniquePages) {
-      const page = await tx.store.get([id, pageNumber]) ?? { documentId: id, pageNumber, hidden: false, bookmarked: false }
-      await tx.store.put(updatePageHiddenState(page, hidden, hiddenGroupId))
-    }
-    await tx.done
-  }, () => {
-    for (const pageNumber of uniquePages) {
-      const key = pageKey(id, pageNumber)
-      const page = temporary.pages.get(key) ?? { documentId: id, pageNumber, hidden: false, bookmarked: false }
-      temporary.pages.set(key, updatePageHiddenState(page, hidden, hiddenGroupId))
+      temporary.pages.set(key, normalizeVisiblePageRecord({ ...page, [flag]: value }))
     }
   })
 }
@@ -956,7 +911,7 @@ export async function readWorkspaceData(): Promise<WorkspaceData> {
   const db = await database()
   if (!db) return {
     documents: [...temporary.documents.values()],
-    pages: [...temporary.pages.values()],
+    pages: [...temporary.pages.values()].map(normalizeVisiblePageRecord),
     viewers: [...temporary.viewers.values()].map(stripLegacyTechniqueSlots),
     preferences: [...temporary.preferences.values()],
     pageWork: [...temporary.pageWork.values()].map(normalizePageWork),
@@ -967,9 +922,9 @@ export async function readWorkspaceData(): Promise<WorkspaceData> {
   }
   return access((activeDb) => Promise.all([
     activeDb.getAll('documents'), activeDb.getAll('pages'), activeDb.getAll('viewers'), activeDb.getAll('preferences'), activeDb.getAll('pageWork'), activeDb.getAll('charts'), activeDb.getAll('knittingReportEntries'), activeDb.getAll('photoPages'), activeDb.getAll('homeProjects'),
-  ]).then(([documents, pages, viewers, preferences, pageWork, charts, knittingReports, photoPages, homeProjects]) => ({ documents, pages, viewers: viewers.map(stripLegacyTechniqueSlots), preferences, pageWork: pageWork.map(normalizePageWork), charts, knittingReports, photoPages, homeProjects })), () => ({
+  ]).then(([documents, pages, viewers, preferences, pageWork, charts, knittingReports, photoPages, homeProjects]) => ({ documents, pages: pages.map(normalizeVisiblePageRecord), viewers: viewers.map(stripLegacyTechniqueSlots), preferences, pageWork: pageWork.map(normalizePageWork), charts, knittingReports, photoPages, homeProjects })), () => ({
     documents: [...temporary.documents.values()],
-    pages: [...temporary.pages.values()],
+    pages: [...temporary.pages.values()].map(normalizeVisiblePageRecord),
     viewers: [...temporary.viewers.values()].map(stripLegacyTechniqueSlots),
     preferences: [...temporary.preferences.values()],
     pageWork: [...temporary.pageWork.values()].map(normalizePageWork),
@@ -993,7 +948,7 @@ export async function importWorkspaceData(incoming: WorkspaceData) {
   }
   const documents = incoming.documents.map((item) => ({ ...item, id: idMap.get(item.id)! }))
   const photoPages = (incoming.photoPages ?? []).map((item) => ({ ...item, documentId: idMap.get(item.documentId)! }))
-  const pages = incoming.pages.map((item) => ({ ...item, documentId: idMap.get(item.documentId)! }))
+  const pages = incoming.pages.map((item) => normalizeVisiblePageRecord({ ...item, documentId: idMap.get(item.documentId)! }))
   const viewers = incoming.viewers.map((item) => ({ ...stripLegacyTechniqueSlots(item), documentId: idMap.get(item.documentId)! }))
   const pageWork = (incoming.pageWork ?? []).map((item) => normalizePageWork({ ...item, documentId: idMap.get(item.documentId)! }))
   const charts = (incoming.charts ?? []).map((item) => {

@@ -166,16 +166,15 @@ function copyCanvas(target: HTMLCanvasElement, source: HTMLCanvasElement) {
   target.getContext('2d', { alpha: false })?.drawImage(source, 0, 0)
 }
 
-export function PdfThumbnail({ pdf, pageNumber, active, hidden, bookmarked, selected, draggable, title, dropTarget, disabled, root, onSelect, onDragStart, onDragEnd, onDragOver, onDrop, onPointerDown, onPointerMove, onPointerUp, onPointerCancel, onLostPointerCapture }: {
+export function PdfThumbnail({ pdf, pageNumber, active, bookmarked, selected, draggable, title, dropTarget, disabled, root, onSelect, onDragStart, onDragEnd, onDragOver, onDrop, onPointerDown, onPointerMove, onPointerUp, onPointerCancel, onLostPointerCapture }: {
   pdf: PDFDocumentProxy
   pageNumber: number
   active: boolean
-  hidden: boolean
   bookmarked: boolean
   selected?: boolean
   draggable?: boolean
   title?: string
-  dropTarget?: 'group' | 'outside'
+  dropTarget?: 'outside'
   disabled?: boolean
   root: RefObject<HTMLDivElement | null>
   onSelect: (event: ReactMouseEvent<HTMLButtonElement>) => void
@@ -219,7 +218,6 @@ export function PdfThumbnail({ pdf, pageNumber, active, hidden, bookmarked, sele
   useEffect(() => {
     if (!canvas) return
     const cache = cacheSessionRef.current?.cache
-    cache?.excludePage(pageNumber, hidden)
     if (!visible) {
       clearThumbnailCanvas(canvas, thumbnailJobRef.current)
       return
@@ -297,15 +295,15 @@ export function PdfThumbnail({ pdf, pageNumber, active, hidden, bookmarked, sele
       clearThumbnailCanvas(canvas, job)
       if (runningThumbnail !== job && thumbnailJobRef.current === job) thumbnailJobRef.current = null
     }
-  }, [canvas, hidden, pageNumber, pdf, visible])
+  }, [canvas, pageNumber, pdf, visible])
 
   return (
     <button
-      className={'page-thumbnail ' + (active ? 'active' : '') + (hidden ? ' hidden' : '') + (selected ? ' selected' : '') + (dropTarget ? ' drop-target-' + dropTarget : '')}
+      className={'page-thumbnail ' + (active ? 'active' : '') + (selected ? ' selected' : '') + (dropTarget ? ' drop-target-' + dropTarget : '')}
       data-page-number={pageNumber}
       draggable={draggable}
       title={title}
-      aria-label={hidden ? t('{page}페이지 숨김, 클릭하여 숨김 해제', { page: formatNumber(pageNumber) }) : t('{page}페이지 썸네일', { page: formatNumber(pageNumber) }) + (bookmarked ? t(', 북마크') : '') + (selected ? t(', 선택됨') : '')}
+      aria-label={t('{page}페이지 썸네일', { page: formatNumber(pageNumber) }) + (bookmarked ? t(', 북마크') : '') + (selected ? t(', 선택됨') : '')}
       aria-current={active ? 'page' : undefined}
       aria-pressed={selected}
       disabled={disabled}
@@ -322,14 +320,10 @@ export function PdfThumbnail({ pdf, pageNumber, active, hidden, bookmarked, sele
       onContextMenu={(event) => event.preventDefault()}
     >
       <span className="page-thumbnail-image">
-        {hidden
-          ? <span className="thumbnail-hidden-ellipsis" aria-hidden="true">…</span>
-          : <>
-            <canvas ref={setCanvas} width={0} height={0} aria-hidden="true" />
-            {(!ready || !visible) && <span className="thumbnail-placeholder">{pageNumber}</span>}
-            {selected && <span className="thumbnail-selection-mark">✓</span>}
-            {bookmarked && <span className="thumbnail-bookmark">★</span>}
-          </>}
+        <canvas ref={setCanvas} width={0} height={0} aria-hidden="true" />
+        {(!ready || !visible) && <span className="thumbnail-placeholder">{pageNumber}</span>}
+        {selected && <span className="thumbnail-selection-mark">✓</span>}
+        {bookmarked && <span className="thumbnail-bookmark">★</span>}
       </span>
       <span className="page-thumbnail-number">{pageNumber}</span>
       <span ref={observerTargetRef} className="thumbnail-observer" aria-hidden="true" />
