@@ -1,3 +1,4 @@
+import { formatNumber, t, type LocaleKey } from './locales/index'
 import { useCallback, useEffect, useRef, useState, type PointerEvent, type ReactNode } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import BrandLoading from './BrandLoading'
@@ -338,7 +339,7 @@ export default function ChartEditor() {
 
   function updateTitle(title: string) {
     if (!chart) return
-    transition({ ...chart, title: title.trim() || '제목 없음' })
+    transition({ ...chart, title: title.trim() || t('제목 없음') })
   }
 
   function updatePaletteColor(index: number, color: string) {
@@ -529,63 +530,63 @@ export default function ChartEditor() {
   }
 
   if (!chart || chart.id !== id) return missing
-    ? <main className="chart-not-found"><h1>차트를 찾을 수 없습니다</h1><button className="secondary-button" onClick={() => navigate('/')}>워크스페이스로</button></main>
+    ? <main className="chart-not-found"><h1>{t("차트를 찾을 수 없습니다")}</h1><button className="secondary-button" onClick={() => navigate('/')}>{t("워크스페이스로")}</button></main>
     : <BrandLoading kind="chart" requestId={'chart-data:' + id} layout="screen" />
 
   return (
     <main className="chart-editor-shell">
       <header className="chart-editor-header">
-        <button className="chart-back" onClick={() => { const current = chartRef.current; if (current) void saveChart(current).then(() => navigate('/'), () => navigate('/')); else navigate('/') }} aria-label="워크스페이스로"><ArrowLeft size={20} /><span>워크스페이스</span></button>
-        <input className="chart-title-input" aria-label="차트 이름" maxLength={120} value={chart.title} onChange={(event) => { chartRef.current = { ...chart, title: event.target.value }; setChart(chartRef.current) }} onBlur={(event) => updateTitle(event.currentTarget.value)} onKeyDown={(event) => { if (event.key === 'Enter') event.currentTarget.blur() }} />
-        <button className="chart-icon-button" disabled={!past.length} onClick={undo} title="실행 취소"><Undo2 size={17} /></button>
-        <button className="chart-icon-button" disabled={!future.length} onClick={redo} title="다시 실행"><Redo2 size={17} /></button>
-        <span className={'chart-save-state ' + saveStatus}>{saveStatus === 'saved' ? <><Check size={14} /> 저장됨</> : saveStatus === 'saving' ? <><Save size={14} /> 저장 중</> : '저장 오류'}</span>
-        <details className="chart-export-menu"><summary aria-label="내보내기"><Download size={17} /><ChevronDown size={13} /></summary><div><button disabled={exporting} onClick={() => void doExport('png')}>PNG 이미지 저장</button><button disabled={exporting} onClick={() => void doExport('pdf')}>PDF 저장</button></div></details>
+        <button className="chart-back" onClick={() => { const current = chartRef.current; if (current) void saveChart(current).then(() => navigate('/'), () => navigate('/')); else navigate('/') }} aria-label={t("워크스페이스로")}><ArrowLeft size={20} /><span>{t("워크스페이스")}</span></button>
+        <input className="chart-title-input" aria-label={t("차트 이름")} maxLength={120} value={chart.title} onChange={(event) => { chartRef.current = { ...chart, title: event.target.value }; setChart(chartRef.current) }} onBlur={(event) => updateTitle(event.currentTarget.value)} onKeyDown={(event) => { if (event.key === 'Enter') event.currentTarget.blur() }} />
+        <button className="chart-icon-button" disabled={!past.length} onClick={undo} title={t("실행 취소")}><Undo2 size={17} /></button>
+        <button className="chart-icon-button" disabled={!future.length} onClick={redo} title={t("다시 실행")}><Redo2 size={17} /></button>
+        <span className={'chart-save-state ' + saveStatus}>{saveStatus === 'saved' ? <><Check size={14} />{t(" 저장됨")}</> : saveStatus === 'saving' ? <><Save size={14} />{t(" 저장 중")}</> : t('저장 오류')}</span>
+        <details className="chart-export-menu"><summary aria-label={t("내보내기")}><Download size={17} /><ChevronDown size={13} /></summary><div><button disabled={exporting} onClick={() => void doExport('png')}>{t("PNG 이미지 저장")}</button><button disabled={exporting} onClick={() => void doExport('pdf')}>{t("PDF 저장")}</button></div></details>
       </header>
       {chart.craft === 'knitting' ? <div className="chart-editor-main knitting-editor">
         <aside className="chart-tool-panel">
-          <p className="chart-tool-heading">색상</p>
-          <div className="chart-palette">{chart.palette.map((color, index) => <div className="chart-swatch-wrap" key={index}><button aria-label={'색상 ' + (index + 1)} className={'chart-swatch ' + (selectedColor === color ? 'chosen' : '')} style={{ backgroundColor: color }} onClick={() => { setSelectedColor(color); setTool('paint') }} /><input type="color" aria-label="색상 변경" value={color} onChange={(event) => updatePaletteColor(index, event.target.value)} /></div>)}
-            {chart.palette.length < 12 && <label className="chart-add-swatch"><Plus size={15} /><input type="color" aria-label="색상 추가" value={selectedColor} onChange={(event) => addPaletteColor(event.target.value)} /></label>}</div>
-          <p className="chart-tool-heading">도구</p>
+          <p className="chart-tool-heading">{t("색상")}</p>
+          <div className="chart-palette">{chart.palette.map((color, index) => <div className="chart-swatch-wrap" key={index}><button aria-label={t('색상 {count}', { count: formatNumber(index + 1) })} className={'chart-swatch ' + (selectedColor === color ? 'chosen' : '')} style={{ backgroundColor: color }} onClick={() => { setSelectedColor(color); setTool('paint') }} /><input type="color" aria-label={t("색상 변경")} value={color} onChange={(event) => updatePaletteColor(index, event.target.value)} /></div>)}
+            {chart.palette.length < 12 && <label className="chart-add-swatch"><Plus size={15} /><input type="color" aria-label={t("색상 추가")} value={selectedColor} onChange={(event) => addPaletteColor(event.target.value)} /></label>}</div>
+          <p className="chart-tool-heading">{t("도구")}</p>
           <div className="chart-grid-tools">
-            <ToolButton active={tool === 'paint'} title="색칠" onClick={() => setTool('paint')}><Paintbrush size={18} /></ToolButton>
-            <ToolButton active={tool === 'erase'} title="지우개" onClick={() => setTool('erase')}><Eraser size={18} /></ToolButton>
-            <ToolButton active={tool === 'fill'} title="영역 채우기" onClick={() => setTool('fill')}><PaintBucket size={18} /></ToolButton>
-            <ToolButton active={tool === 'select'} title="영역 선택" onClick={() => setTool('select')}><MousePointer2 size={18} /></ToolButton>
-            <ToolButton active={tool === 'pan'} title="화면 이동" onClick={() => setTool('pan')}><Hand size={18} /></ToolButton>
+            <ToolButton active={tool === 'paint'} title={t("색칠")} onClick={() => setTool('paint')}><Paintbrush size={18} /></ToolButton>
+            <ToolButton active={tool === 'erase'} title={t("지우개")} onClick={() => setTool('erase')}><Eraser size={18} /></ToolButton>
+            <ToolButton active={tool === 'fill'} title={t("영역 채우기")} onClick={() => setTool('fill')}><PaintBucket size={18} /></ToolButton>
+            <ToolButton active={tool === 'select'} title={t("영역 선택")} onClick={() => setTool('select')}><MousePointer2 size={18} /></ToolButton>
+            <ToolButton active={tool === 'pan'} title={t("화면 이동")} onClick={() => setTool('pan')}><Hand size={18} /></ToolButton>
           </div>
-          {cellSelection && <div className="chart-selection-tools"><button onClick={copySelection}><Copy size={14} /> 복사</button><button onClick={pasteSelection}>붙여넣기</button><button aria-label="좌우 반전" onClick={() => mirrorSelection(true)}><FlipHorizontal2 size={15} /></button><button aria-label="상하 반전" onClick={() => mirrorSelection(false)}><FlipVertical2 size={15} /></button></div>}
-          <div className="chart-grid-size">{chart.width}코 × {chart.height}단<br /><small>원형뜨기 · 오른쪽에서 왼쪽</small></div>
+          {cellSelection && <div className="chart-selection-tools"><button onClick={copySelection}><Copy size={14} />{t(" 복사")}</button><button onClick={pasteSelection}>{t("붙여넣기")}</button><button aria-label={t("좌우 반전")} onClick={() => mirrorSelection(true)}><FlipHorizontal2 size={15} /></button><button aria-label={t("상하 반전")} onClick={() => mirrorSelection(false)}><FlipVertical2 size={15} /></button></div>}
+          <div className="chart-grid-size">{chart.width}{t("코 × ")}{chart.height}{t("단")}<br /><small>{t("원형뜨기 · 오른쪽에서 왼쪽")}</small></div>
         </aside>
         <section className="chart-canvas-area">
           <div className="chart-canvas-viewport" ref={viewportRef}>
-            <canvas ref={canvasRef} className={'knit-canvas tool-' + tool} onPointerDown={onGridPointerDown} onPointerMove={onGridPointerMove} onPointerUp={onGridPointerUp} onPointerCancel={onGridPointerUp} aria-label="대바늘 색상 차트 편집 캔버스" />
+            <canvas ref={canvasRef} className={'knit-canvas tool-' + tool} onPointerDown={onGridPointerDown} onPointerMove={onGridPointerMove} onPointerUp={onGridPointerUp} onPointerCancel={onGridPointerUp} aria-label={t("대바늘 색상 차트 편집 캔버스")} />
           </div>
           <ZoomControls zoom={zoom} setZoom={setZoom} maxZoom={gridMetrics?.maxZoom} />
         </section>
       </div> : <div className="chart-editor-main crochet-editor">
         <aside className="chart-tool-panel crochet-tool-panel">
-          <p className="chart-tool-heading">뜨개 기호</p>
-          <div className="chart-symbol-list">{crochetSymbols.map((item) => <button key={item.id} className={'chart-symbol-option ' + (selectedSymbol === item.id && tool === 'paint' ? 'active' : '')} onClick={() => { setSelectedSymbol(item.id); setTool('paint') }}><svg viewBox="0 0 40 50" aria-hidden="true"><g color={selectedColor} fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><SymbolGlyph symbol={item.id} /></g></svg><span>{item.name}</span></button>)}</div>
-          <div className="chart-crochet-palette" aria-label="실 색상">{chart.palette.map((color, index) => <div className="chart-swatch-wrap" key={index}><button aria-label={'실 색상 ' + (index + 1)} className={'chart-swatch ' + (selectedColor === color ? 'chosen' : '')} style={{ backgroundColor: color }} onClick={() => chooseColor(color)} /><input type="color" aria-label="실 색상 변경" value={color} onChange={(event) => updatePaletteColor(index, event.target.value)} /></div>)}{chart.palette.length < 12 && <label className="chart-add-swatch"><Plus size={15} /><input type="color" aria-label="실 색상 추가" value={selectedColor} onChange={(event) => addPaletteColor(event.target.value)} /></label>}</div>
-          <ToolButton active={tool !== 'paint'} title="기호 선택" onClick={() => setTool('select')}><MousePointer2 size={18} /></ToolButton>
-          <div className="chart-layer-panel"><div className="chart-layer-heading"><strong><Layers size={15} /> 레이어</strong><button aria-label="레이어 추가" onClick={addLayer}><Plus size={16} /></button></div>
-            {chart.layers.map((layer, index) => <div key={layer.id} className={'chart-layer-row ' + (activeLayer === layer.id ? 'active' : '')} onClick={() => setActiveLayer(layer.id)}><input aria-label={layer.name + ' 표시'} type="checkbox" checked={layer.visible} onChange={(event) => updateLayer(layer.id, { visible: event.target.checked })} /><input aria-label="레이어 이름" value={layer.name} onClick={(event) => event.stopPropagation()} onChange={(event) => updateLayer(layer.id, { name: event.target.value })} /><button aria-label={layer.locked ? '레이어 잠금 해제' : '레이어 잠금'} onClick={(event) => { event.stopPropagation(); updateLayer(layer.id, { locked: !layer.locked }) }}>{layer.locked ? '🔒' : '○'}</button><button disabled={index === 0} aria-label="레이어 위로" onClick={(event) => { event.stopPropagation(); moveLayer(layer.id, -1) }}>↑</button><button disabled={index === chart.layers.length - 1} aria-label="레이어 아래로" onClick={(event) => { event.stopPropagation(); moveLayer(layer.id, 1) }}>↓</button></div>)}
+          <p className="chart-tool-heading">{t("뜨개 기호")}</p>
+          <div className="chart-symbol-list">{crochetSymbols.map((item) => <button key={item.id} className={'chart-symbol-option ' + (selectedSymbol === item.id && tool === 'paint' ? 'active' : '')} onClick={() => { setSelectedSymbol(item.id); setTool('paint') }}><svg viewBox="0 0 40 50" aria-hidden="true"><g color={selectedColor} fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><SymbolGlyph symbol={item.id} /></g></svg><span>{t(item.name as LocaleKey)}</span></button>)}</div>
+          <div className="chart-crochet-palette" aria-label={t("실 색상")}>{chart.palette.map((color, index) => <div className="chart-swatch-wrap" key={index}><button aria-label={t('실 색상 {count}', { count: formatNumber(index + 1) })} className={'chart-swatch ' + (selectedColor === color ? 'chosen' : '')} style={{ backgroundColor: color }} onClick={() => chooseColor(color)} /><input type="color" aria-label={t("실 색상 변경")} value={color} onChange={(event) => updatePaletteColor(index, event.target.value)} /></div>)}{chart.palette.length < 12 && <label className="chart-add-swatch"><Plus size={15} /><input type="color" aria-label={t("실 색상 추가")} value={selectedColor} onChange={(event) => addPaletteColor(event.target.value)} /></label>}</div>
+          <ToolButton active={tool !== 'paint'} title={t("기호 선택")} onClick={() => setTool('select')}><MousePointer2 size={18} /></ToolButton>
+          <div className="chart-layer-panel"><div className="chart-layer-heading"><strong><Layers size={15} />{t(" 레이어")}</strong><button aria-label={t("레이어 추가")} onClick={addLayer}><Plus size={16} /></button></div>
+            {chart.layers.map((layer, index) => <div key={layer.id} className={'chart-layer-row ' + (activeLayer === layer.id ? 'active' : '')} onClick={() => setActiveLayer(layer.id)}><input aria-label={layer.name + ' ' + t('표시')} type="checkbox" checked={layer.visible} onChange={(event) => updateLayer(layer.id, { visible: event.target.checked })} /><input aria-label={t("레이어 이름")} value={layer.name} onClick={(event) => event.stopPropagation()} onChange={(event) => updateLayer(layer.id, { name: event.target.value })} /><button aria-label={layer.locked ? t('레이어 잠금 해제') : t('레이어 잠금')} onClick={(event) => { event.stopPropagation(); updateLayer(layer.id, { locked: !layer.locked }) }}>{layer.locked ? '🔒' : '○'}</button><button disabled={index === 0} aria-label={t("레이어 위로")} onClick={(event) => { event.stopPropagation(); moveLayer(layer.id, -1) }}>↑</button><button disabled={index === chart.layers.length - 1} aria-label={t("레이어 아래로")} onClick={(event) => { event.stopPropagation(); moveLayer(layer.id, 1) }}>↓</button></div>)}
           </div>
         </aside>
         <section className="chart-canvas-area crochet-canvas-area">
-          <div className="chart-freeform-toolbar" aria-label="선택한 기호 편집">
-            <span>{selectedObjects.length ? `${selectedObjects.length}개 선택` : '기호를 선택해 이동'}</span>
-            <button disabled={!selectedObjects.length} onClick={() => transformSelected((item) => ({ ...item, scale: Math.min(4, item.scale + .15) }))}><Plus size={15} /> 크게</button>
-            <button disabled={!selectedObjects.length} onClick={() => transformSelected((item) => ({ ...item, scale: Math.max(.25, item.scale - .15) }))}><Minus size={15} /> 작게</button>
+          <div className="chart-freeform-toolbar" aria-label={t("선택한 기호 편집")}>
+            <span>{selectedObjects.length ? t('{count}개 선택', { count: formatNumber(selectedObjects.length) }) : t('기호를 선택해 이동')}</span>
+            <button disabled={!selectedObjects.length} onClick={() => transformSelected((item) => ({ ...item, scale: Math.min(4, item.scale + .15) }))}><Plus size={15} />{t(" 크게")}</button>
+            <button disabled={!selectedObjects.length} onClick={() => transformSelected((item) => ({ ...item, scale: Math.max(.25, item.scale - .15) }))}><Minus size={15} />{t(" 작게")}</button>
             <button disabled={!selectedObjects.length} onClick={() => transformSelected((item) => ({ ...item, rotation: item.rotation - 15 }))}><RotateCcw size={15} /></button>
             <button disabled={!selectedObjects.length} onClick={() => transformSelected((item) => ({ ...item, rotation: item.rotation + 15 }))}><RotateCw size={15} /></button>
             <button disabled={!selectedObjects.length} onClick={() => { if (!chart || chart.craft !== 'crochet') return; const ids = new Set(selectedObjects); const copies = chart.objects.filter((item) => ids.has(item.id)).map((item) => ({ ...item, id: crypto.randomUUID(), x: item.x + 45, y: item.y + 45 })); transition({ ...chart, objects: [...chart.objects, ...copies] }); setSelectedObjects(copies.map((item) => item.id)) }}><Copy size={15} /></button>
             <button disabled={!selectedObjects.length} onClick={removeSelectedObjects}><Trash2 size={15} /></button>
           </div>
           <div className="chart-freeform-viewport">
-            <svg ref={freeformSvgRef} className="chart-freeform-canvas" style={{ width: `${zoom * 100}%`, minWidth: zoom > 1 ? `${zoom * 600}px` : undefined }} viewBox="0 0 1000 800" onPointerDown={onFreeformPointerDown} onPointerMove={(event) => { onFreeformPointerMove(event); moveObjects(event) }} onPointerUp={() => { onFreeformPointerUp(); stopObjectDrag() }} onPointerCancel={() => { stopObjectDrag(); freeSelectionStartRef.current = null; setFreeformSelection(null) }} aria-label="코바늘 기호 차트 편집 캔버스">
+            <svg ref={freeformSvgRef} className="chart-freeform-canvas" style={{ width: `${zoom * 100}%`, minWidth: zoom > 1 ? `${zoom * 600}px` : undefined }} viewBox="0 0 1000 800" onPointerDown={onFreeformPointerDown} onPointerMove={(event) => { onFreeformPointerMove(event); moveObjects(event) }} onPointerUp={() => { onFreeformPointerUp(); stopObjectDrag() }} onPointerCancel={() => { stopObjectDrag(); freeSelectionStartRef.current = null; setFreeformSelection(null) }} aria-label={t("코바늘 기호 차트 편집 캔버스")}>
               <defs><pattern id="chart-dot-grid" width="24" height="24" patternUnits="userSpaceOnUse"><circle cx="1" cy="1" r="1" fill="#e7ebf1" /></pattern></defs>
               <rect width="1000" height="800" fill="#fff" /><rect width="1000" height="800" fill="url(#chart-dot-grid)" />
               {[...chart.objects].filter((item) => chart.layers.some((layer) => layer.id === item.layerId && layer.visible)).sort((a, b) => chart.layers.findIndex((layer) => b.layerId === layer.id) - chart.layers.findIndex((layer) => a.layerId === layer.id)).map((item) => <g key={item.id} transform={`translate(${item.x} ${item.y}) rotate(${item.rotation}) scale(${item.scale})`} color={item.color} fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round" onPointerDown={(event) => startObjectDrag(event, item)}>
@@ -606,5 +607,5 @@ function ToolButton({ active, title, onClick, children }: { active: boolean; tit
 }
 
 function ZoomControls({ zoom, setZoom, maxZoom = 2.6 }: { zoom: number; setZoom: (value: number) => void; maxZoom?: number }) {
-  return <div className="chart-zoom-controls"><button aria-label="축소" onClick={() => setZoom(Math.max(.4, +(zoom - .2).toFixed(1)))}><Minus size={15} /></button><span>{Math.round(Math.min(zoom, maxZoom) * 100)}%</span><button aria-label="확대" onClick={() => setZoom(Math.min(maxZoom, +(zoom + .2).toFixed(1)))}><Plus size={15} /></button></div>
+  return <div className="chart-zoom-controls"><button aria-label={t("축소")} onClick={() => setZoom(Math.max(.4, +(zoom - .2).toFixed(1)))}><Minus size={15} /></button><span>{Math.round(Math.min(zoom, maxZoom) * 100)}%</span><button aria-label={t("확대")} onClick={() => setZoom(Math.min(maxZoom, +(zoom + .2).toFixed(1)))}><Plus size={15} /></button></div>
 }

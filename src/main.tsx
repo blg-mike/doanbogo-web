@@ -1,10 +1,11 @@
 import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import './index.css'
-import App from './App.tsx'
+import LocalizedApp from './LocalizedApp'
+import { LocaleProvider } from './locales'
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
-    <App />
+    <LocaleProvider><LocalizedApp /></LocaleProvider>
   </StrictMode>,
 )

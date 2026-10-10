@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { textNoteBoxAt, textNoteCounterRotation } from './textNote'
+import { textNoteBoxAt, textNoteCounterRotation, textNoteGestureExceededThreshold } from './textNote'
 
 describe('text note placement', () => {
   it('uses the existing default note dimensions', () => {
@@ -20,5 +20,15 @@ describe('text note rotation', () => {
     [270, 90],
   ])('counter-rotates a note by %i degrees', (pageRotation, noteRotation) => {
     expect(textNoteCounterRotation(pageRotation)).toBe(noteRotation)
+  })
+})
+
+describe('text note tap and drag intent', () => {
+  it('keeps a tap below the movement threshold so it can open the editor', () => {
+    expect(textNoteGestureExceededThreshold({ x: 100, y: 100 }, { x: 105, y: 104 })).toBe(false)
+  })
+
+  it('starts a move when the pointer passes the movement threshold', () => {
+    expect(textNoteGestureExceededThreshold({ x: 100, y: 100 }, { x: 108, y: 100 })).toBe(true)
   })
 })

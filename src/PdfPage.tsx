@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useLayoutEffect, useRef, useState, type MouseEvent as ReactMouseEvent, type PointerEvent as ReactPointerEvent, type RefObject } from 'react'
+import { formatNumber, t, translateMessage } from './locales/index'
+import { useCallback, useEffect, useLayoutEffect, useRef, useState, type DragEvent as ReactDragEvent, type MouseEvent as ReactMouseEvent, type PointerEvent as ReactPointerEvent, type RefObject } from 'react'
 import type { PDFDocumentProxy, PDFPageProxy, RenderTask } from 'pdfjs-dist'
 import { Trash2 } from 'lucide-react'
 import BrandLoading from './BrandLoading'
@@ -6,10 +7,10 @@ import { ProgressLineOverlay } from './ProgressLineOverlay'
 import type { AnnotationRecord, AnnotationStyle, AnnotationTool, ColorworkCell, ColorworkCreateRequest, ColorworkGrid, CounterSnapshot, PageRotation, PageWorkRecord, PaneId, PaneSnapshot, ProgressGuide, ProgressSettings } from './types'
 import { createColorworkGrid, resizeColorworkGridDisplay } from './colorwork'
 import { appendInkPoint, createInkAnnotation, createInkId, type ActiveInkStroke, type InkPoint } from './inkStroke'
-import { textNoteBoxAt, textNoteCounterRotation } from './textNote'
+import { textNoteBoxAt, textNoteCounterRotation, textNoteGestureExceededThreshold } from './textNote'
 import type { PdfQrLink } from './qr'
 import { rotatedPageSize } from './pageGeometry'
-import { displayRectToPageRect, focusRowSpacing, guidePositionForRotation, pageRectToDisplayRect } from './focusGeometry'
+import { displayRectToPageRect, focusBandHeightRatio, focusDimOpacity, focusRowSpacing, guidePositionForRotation, pageRectToDisplayRect } from './focusGeometry'
 import { clientPointForPagePosition, classifyWheelInput, isEditableTarget, pagePositionAtClientPoint, scrollOffsetForZoomFocus, wheelActionForBurst, wheelZoom, type WheelInput, type ZoomFocus } from './viewerInteraction'
 import { acquireThumbnailCache, getViewerResourcePolicy, pdfRasterScale, releaseCanvasWhenSettled, viewerCanvasMemory } from './pdfRenderResources'
 import { pdfPageRenderQueue } from './pdfPageRenderQueue'
@@ -150,16 +151,23 @@ function copyCanvas(target: HTMLCanvasElement, source: HTMLCanvasElement) {
   target.getContext('2d', { alpha: false })?.drawImage(source, 0, 0)
 }
 
-export function PdfThumbnail({ pdf, pageNumber, active, hidden, bookmarked, selected, disabled, root, onSelect, onPointerDown, onPointerMove, onPointerUp, onPointerCancel, onLostPointerCapture }: {
+export function PdfThumbnail({ pdf, pageNumber, active, hidden, bookmarked, selected, draggable, title, dropTarget, disabled, root, onSelect, onDragStart, onDragEnd, onDragOver, onDrop, onPointerDown, onPointerMove, onPointerUp, onPointerCancel, onLostPointerCapture }: {
   pdf: PDFDocumentProxy
   pageNumber: number
   active: boolean
   hidden: boolean
   bookmarked: boolean
   selected?: boolean
+  draggable?: boolean
+  title?: string
+  dropTarget?: 'group' | 'outside'
   disabled?: boolean
   root: RefObject<HTMLDivElement | null>
   onSelect: (event: ReactMouseEvent<HTMLButtonElement>) => void
+  onDragStart?: (event: ReactDragEvent<HTMLButtonElement>) => void
+  onDragEnd?: (event: ReactDragEvent<HTMLButtonElement>) => void
+  onDragOver?: (event: ReactDragEvent<HTMLButtonElement>) => void
+  onDrop?: (event: ReactDragEvent<HTMLButtonElement>) => void
   onPointerDown?: (event: ReactPointerEvent<HTMLButtonElement>) => void
   onPointerMove?: (event: ReactPointerEvent<HTMLButtonElement>) => void
   onPointerUp?: (event: ReactPointerEvent<HTMLButtonElement>) => void
@@ -278,13 +286,19 @@ export function PdfThumbnail({ pdf, pageNumber, active, hidden, bookmarked, sele
 
   return (
     <button
-      className={'page-thumbnail ' + (active ? 'active' : '') + (hidden ? ' hidden' : '') + (selected ? ' selected' : '')}
+      className={'page-thumbnail ' + (active ? 'active' : '') + (hidden ? ' hidden' : '') + (selected ? ' selected' : '') + (dropTarget ? ' drop-target-' + dropTarget : '')}
       data-page-number={pageNumber}
-      aria-label={hidden ? pageNumber + '페이지 숨김, 클릭하여 숨김 해제' : pageNumber + '페이지 썸네일' + (bookmarked ? ', 북마크' : '') + (selected ? ', 선택됨' : '')}
+      draggable={draggable}
+      title={title}
+      aria-label={hidden ? t('{page}페이지 숨김, 클릭하여 숨김 해제', { page: formatNumber(pageNumber) }) : t('{page}페이지 썸네일', { page: formatNumber(pageNumber) }) + (bookmarked ? t(', 북마크') : '') + (selected ? t(', 선택됨') : '')}
       aria-current={active ? 'page' : undefined}
       aria-pressed={selected}
       disabled={disabled}
       onClick={onSelect}
+      onDragStart={onDragStart}
+      onDragEnd={onDragEnd}
+      onDragOver={onDragOver}
+      onDrop={onDrop}
       onPointerDown={onPointerDown}
       onPointerMove={onPointerMove}
       onPointerUp={onPointerUp}
@@ -449,6 +463,7 @@ export function PdfPage({ pdf, page, paneId, pane, splitView, rotation, active, 
   const erasedIds = useRef(new Set<string>())
   const actionStartWork = useRef(work)
   const textDrag = useRef<{ id: string; pointerId: number; kind: 'move' | 'resize'; start: Point; original: { x: number; y: number; width: number; height: number }; before: PageWorkRecord } | null>(null)
+  const pendingTextGesture = useRef<{ id: string; pointerId: number; start: Point; clientX: number; clientY: number; original: { x: number; y: number; width: number; height: number }; wasEditing: boolean } | null>(null)
   const textEditBefore = useRef(new Map<string, PageWorkRecord>())
   const textStyleEditBefore = useRef<{ id: string; before: PageWorkRecord } | null>(null)
   const suppressTextBlur = useRef(new Set<string>())
@@ -637,7 +652,7 @@ export function PdfPage({ pdf, page, paneId, pane, splitView, rotation, active, 
       const timeoutPromise = new Promise<never>((_, reject) => { rejectTimeout = reject })
       timeoutId = window.setTimeout(() => {
         timedOut = true
-        const timeoutError = new Error('PDF 페이지 표시가 20초 안에 끝나지 않았습니다. 다시 시도해 주세요.')
+        const timeoutError = new Error(t('PDF 페이지 표시가 20초 안에 끝나지 않았습니다. 다시 시도해 주세요.'))
         if (renderTask) {
           renderTask.cancel()
           void renderTask.promise.catch(() => {}).then(() => rejectTimeout(timeoutError))
@@ -690,7 +705,7 @@ export function PdfPage({ pdf, page, paneId, pane, splitView, rotation, active, 
           } catch (cause) {
             if (timedOut) {
               await renderTask?.promise.catch(() => {})
-              throw new Error('PDF 페이지 표시가 20초 안에 끝나지 않았습니다. 다시 시도해 주세요.')
+              throw new Error(t('PDF 페이지 표시가 20초 안에 끝나지 않았습니다. 다시 시도해 주세요.'))
             }
             if (attempt || cancelled || (cause instanceof Error && cause.name === 'RenderingCancelledException')) throw cause
             clearCanvas(staging)
@@ -699,7 +714,7 @@ export function PdfPage({ pdf, page, paneId, pane, splitView, rotation, active, 
             renderTask = undefined
           }
         }
-        if (!rendered || !staging) throw new Error('PDF 페이지를 표시하지 못했습니다.')
+        if (!rendered || !staging) throw new Error(t('PDF 페이지를 표시하지 못했습니다.'))
         renderSettled = true
         if (cancelled || sequence !== renderSequence.current) return
         let failedImageCount = failedImageCounts.get(pdfPage)
@@ -733,7 +748,7 @@ export function PdfPage({ pdf, page, paneId, pane, splitView, rotation, active, 
         setReadyKey(renderKey)
       } catch (cause) {
         if (!cancelled && sequence === renderSequence.current && (timedOut || !(cause instanceof Error && cause.name === 'RenderingCancelledException'))) {
-          setRenderError({ key: renderKey, message: timedOut ? 'PDF 페이지 표시가 20초 안에 끝나지 않았습니다. 다시 시도해 주세요.' : cause instanceof Error ? cause.message : 'PDF 페이지를 표시하지 못했습니다.' })
+          setRenderError({ key: renderKey, message: timedOut ? t('PDF 페이지 표시가 20초 안에 끝나지 않았습니다. 다시 시도해 주세요.') : cause instanceof Error ? translateMessage(cause.message) : t('PDF 페이지를 표시하지 못했습니다.') })
         }
       } finally {
         renderSettled = true
@@ -1383,6 +1398,17 @@ export function PdfPage({ pdf, page, paneId, pane, splitView, rotation, active, 
     if (!annotation.text?.trim()) setSelectedNoteId((active) => active === id ? null : active)
   }
 
+  function startTextEdit(id: string) {
+    if (editingNoteId !== null && editingNoteId !== id && textEditBefore.current.has(editingNoteId)) finishTextEdit(editingNoteId)
+    const current = currentWorkRef.current
+    const annotation = current.annotations.find((item) => item.id === id && item.type === 'text')
+    if (!annotation) return
+    if (!textEditBefore.current.has(id)) textEditBefore.current.set(id, current)
+    setTextDraft({ id, value: annotation.text ?? '' })
+    setSelectedNoteId(id)
+    setEditingNoteId(id)
+  }
+
   function beginTextStyleChange(id: string) {
     if (textStyleEditBefore.current?.id === id) return
     finishTextStyleChange()
@@ -1425,7 +1451,7 @@ export function PdfPage({ pdf, page, paneId, pane, splitView, rotation, active, 
     setEditingNoteId((active) => active === id ? null : active)
   }
 
-  function beginTextTransform(event: ReactPointerEvent<HTMLElement>, annotation: AnnotationRecord, kind: 'move' | 'resize') {
+  function beginTextTransform(event: ReactPointerEvent<HTMLElement>, annotation: AnnotationRecord, kind: 'move' | 'resize', initial?: { start: Point; original: { x: number; y: number; width: number; height: number } }) {
     if (!displayedSize) return
     event.preventDefault()
     event.stopPropagation()
@@ -1439,9 +1465,9 @@ export function PdfPage({ pdf, page, paneId, pane, splitView, rotation, active, 
       id: annotation.id,
       pointerId: event.pointerId,
       kind,
-      start: pointFromEvent(event, layer, rotation),
-      original: box,
-      before: work,
+      start: initial?.start ?? pointFromEvent(event, layer, rotation),
+      original: initial?.original ?? box,
+      before: currentWorkRef.current,
     }
     setSelectedNoteId(annotation.id)
   }
@@ -1456,19 +1482,75 @@ export function PdfPage({ pdf, page, paneId, pane, splitView, rotation, active, 
     const box = drag.kind === 'move'
       ? { ...drag.original, x: Math.min(1 - drag.original.width, Math.max(0, drag.original.x + dx)), y: Math.min(1 - drag.original.height, Math.max(0, drag.original.y + dy)) }
       : { ...drag.original, width: Math.min(1 - drag.original.x, Math.max(0.08, drag.original.width + dx)), height: Math.min(1 - drag.original.y, Math.max(0.04, drag.original.height + dy)) }
-    onWorkChange({
-      ...work,
-      annotations: work.annotations.map((annotation) => annotation.id === drag.id
+    const current = currentWorkRef.current
+    const next = {
+      ...current,
+      annotations: current.annotations.map((annotation) => annotation.id === drag.id
         ? { ...annotation, points: [{ x: box.x, y: box.y }], boxWidth: box.width, boxHeight: box.height }
         : annotation),
-    }, false, false, drag.before)
+    }
+    currentWorkRef.current = next
+    onWorkChange(next, false, false, drag.before)
   }
 
   function finishTextTransform(event: ReactPointerEvent<HTMLDivElement>) {
     const drag = textDrag.current
     if (!drag || drag.pointerId !== event.pointerId) return
     textDrag.current = null
-    onWorkChange(work, true, true, drag.before)
+    onWorkChange(currentWorkRef.current, true, true, drag.before)
+  }
+
+  function movePendingTextGesture(event: ReactPointerEvent<HTMLDivElement>) {
+    const pending = pendingTextGesture.current
+    if (!pending || pending.pointerId !== event.pointerId || !textNoteGestureExceededThreshold({ x: pending.clientX, y: pending.clientY }, { x: event.clientX, y: event.clientY })) {
+      moveTextTransform(event)
+      return
+    }
+    pendingTextGesture.current = null
+    if (pending.wasEditing) textInputRef.current?.blur()
+    const annotation = currentWorkRef.current.annotations.find((item) => item.id === pending.id && item.type === 'text')
+    if (!annotation) return
+    beginTextTransform(event, annotation, 'move', { start: pending.start, original: pending.original })
+    moveTextTransform(event)
+  }
+
+  function finishPendingTextGesture(event: ReactPointerEvent<HTMLDivElement>, cancelled = false) {
+    const pending = pendingTextGesture.current
+    if (pending?.pointerId === event.pointerId) {
+      pendingTextGesture.current = null
+      if (!cancelled && !pending.wasEditing) startTextEdit(pending.id)
+    }
+    finishTextTransform(event)
+  }
+
+  function handleTextNotePointerDown(event: ReactPointerEvent<HTMLDivElement>, annotation: AnnotationRecord) {
+    event.stopPropagation()
+    onActivate()
+    setSelectedNoteId(annotation.id)
+    const target = event.target
+    const editingTarget = target instanceof Element && Boolean(target.closest('textarea'))
+    if (tool !== 'pan') {
+      if (!editingTarget) startTextEdit(annotation.id)
+      return
+    }
+    if (!displayedSize) return
+    if (editingNoteId !== null && editingNoteId !== annotation.id) finishTextEdit(editingNoteId)
+    const current = currentWorkRef.current
+    const currentAnnotation = current.annotations.find((item) => item.id === annotation.id && item.type === 'text')
+    const layer = annotationLayerRef.current
+    if (!currentAnnotation || !layer) return
+    const box = textBox(currentAnnotation, displayedSize.page.height)
+    try { event.currentTarget.setPointerCapture(event.pointerId) } catch { /* The tap and drag handlers also work without capture. */ }
+    pendingTextGesture.current = {
+      id: annotation.id,
+      pointerId: event.pointerId,
+      start: pointFromEvent(event, layer, rotation),
+      clientX: event.clientX,
+      clientY: event.clientY,
+      original: box,
+      wasEditing: editingTarget,
+    }
+    if (!editingTarget) event.preventDefault()
   }
 
   const deleteText = useCallback((id: string) => {
@@ -1612,7 +1694,7 @@ export function PdfPage({ pdf, page, paneId, pane, splitView, rotation, active, 
     const region = guide.chartRegion
     const displayRegion = region ? pageRectToDisplayRect(region, rotation) : undefined
     const spacing = focusRowSpacing(region, focus.rowSpacing, rotation)
-    const half = Math.max(0.002, spacing * (focus.range * 2 + 1) / 2)
+    const half = Math.max(0.002, focusBandHeightRatio(focus, spacing) / 2)
     const top = Math.max(0, guide.position - half)
     const bottom = Math.min(1, guide.position + half)
     const x = focus.scope === 'region' && displayRegion ? displayRegion.x : 0
@@ -1646,7 +1728,7 @@ export function PdfPage({ pdf, page, paneId, pane, splitView, rotation, active, 
     const bottom = Math.max(...fallbackRegions.map((region) => region.y + region.height))
     return 'inset(' + top * 100 + '% ' + (1 - right) * 100 + '% ' + (1 - bottom) * 100 + '% ' + left * 100 + '%)'
   })()
-  const focusDimOpacity = focusGuides.some((guide) => guide.focus?.strength === 'high') ? 0.32 : focusGuides.some((guide) => guide.focus?.strength === 'low') ? 0.15 : 0.22
+  const focusDimAmount = Math.max(...focusGuides.map((guide) => focusDimOpacity(guide.focus!)))
   const activeDraft = strokeRef.current?.documentId === work.documentId && strokeRef.current.pageNumber === page ? strokeRef.current : null
   const failedDraft = failedStrokeRef.current?.work.documentId === work.documentId && failedStrokeRef.current.work.pageNumber === page ? failedStrokeRef.current.annotation : null
   const draftType = activeDraft?.tool ?? (failedDraft?.type === 'pen' || failedDraft?.type === 'line' || failedDraft?.type === 'highlight' ? failedDraft.type : 'pen')
@@ -1660,14 +1742,14 @@ export function PdfPage({ pdf, page, paneId, pane, splitView, rotation, active, 
 
   return (
     <div className={'pdf-pane ' + (active ? 'is-active' : '')} onPointerDown={onActivate}>
-      <div className="pane-label">{active ? '현재 작업 영역' : '보조 영역'}</div>
-      {strokeError && <div className="ink-save-error" role="alert"><span>필기를 반영하지 못했습니다.</span><button type="button" onClick={retryStrokeSave}>다시 시도</button></div>}
+      <div className="pane-label">{active ? t('현재 작업 영역') : t('보조 영역')}</div>
+      {strokeError && <div className="ink-save-error" role="alert"><span>{t("필기를 반영하지 못했습니다.")}</span><button type="button" onClick={retryStrokeSave}>{t("다시 시도")}</button></div>}
       <div className="pdf-scroll-area" ref={scrollRef} onScroll={recordCenter} onPointerDown={pointerDown} onPointerMove={pointerMove} onPointerUp={pointerEnd} onPointerCancel={pointerEnd} onDoubleClick={doubleTap}>
         <div className="pdf-page-wrap" style={pageWrapStyle}>
           <div ref={rotationLayerRef} className="pdf-rotation-content" style={cssSize ? { width: cssSize.width, height: cssSize.height, transform: 'rotate(' + rotation + 'deg) scale(' + zoomPreviewScale + ')' } : undefined}>
           <div className="pdf-image-layer" style={cssSize ? { width: cssSize.width, height: cssSize.height } : undefined}>
-            <canvas ref={canvasRef} aria-label={'PDF ' + page + '페이지'} />
-            {focusGuides.length > 0 && <div className="pdf-focus-dim-fallback" aria-hidden="true" style={{ background: 'rgba(19,31,49,' + focusDimOpacity + ')', maskImage: 'linear-gradient(to ' + (focusAxis === 'x' ? 'right' : 'bottom') + ', ' + fallbackMaskStops.join(', ') + ')', WebkitMaskImage: 'linear-gradient(to ' + (focusAxis === 'x' ? 'right' : 'bottom') + ', ' + fallbackMaskStops.join(', ') + ')', clipPath: fallbackClipPath }} />}
+            <canvas ref={canvasRef} aria-label={t('PDF {page}페이지', { page: formatNumber(page) })} />
+            {focusGuides.length > 0 && <div className="pdf-focus-dim-fallback" aria-hidden="true" style={{ background: 'rgba(19,31,49,' + focusDimAmount + ')', maskImage: 'linear-gradient(to ' + (focusAxis === 'x' ? 'right' : 'bottom') + ', ' + fallbackMaskStops.join(', ') + ')', WebkitMaskImage: 'linear-gradient(to ' + (focusAxis === 'x' ? 'right' : 'bottom') + ', ' + fallbackMaskStops.join(', ') + ')', clipPath: fallbackClipPath }} />}
             {pageSize && cssSize && <>
             <svg
                 className={'pdf-svg-overlay ' + (tool === 'pan' ? 'pan-mode' : tool === 'text' ? 'text-mode' : 'draw-mode')}
@@ -1689,7 +1771,7 @@ export function PdfPage({ pdf, page, paneId, pane, splitView, rotation, active, 
             <div className="annotation-layer" ref={annotationLayerRef} style={{ width: cssSize.width, height: cssSize.height }}>
               {tool === 'text' && textPreviewPoint && (() => {
                 const box = textNoteBoxAt(textPreviewPoint)
-                return <div className="note-preview" aria-hidden="true" style={{ left: box.x * cssSize.width, top: box.y * cssSize.height, width: box.width * cssSize.width, height: box.height * cssSize.height, fontSize: annotationStyle.fontSize * cssSize.width / pageSize.width, transform: 'rotate(' + textNoteCounterRotation(rotation) + 'deg)' }}>텍스트 입력</div>
+                return <div className="note-preview" aria-hidden="true" style={{ left: box.x * cssSize.width, top: box.y * cssSize.height, width: box.width * cssSize.width, height: box.height * cssSize.height, fontSize: annotationStyle.fontSize * cssSize.width / pageSize.width, transform: 'rotate(' + textNoteCounterRotation(rotation) + 'deg)' }}>{t("텍스트 입력")}</div>
               })()}
               {work.annotations.filter((annotation) => annotation.type === 'text').map((annotation) => {
                 const box = textBox(annotation, pageSize.height)
@@ -1700,34 +1782,21 @@ export function PdfPage({ pdf, page, paneId, pane, splitView, rotation, active, 
                   key={annotation.id}
                   className={'page-note ' + (selected ? 'selected' : '') + (editing ? ' editing' : '')}
                   role="group"
-                  aria-label="페이지 노트"
+                  aria-label={t("페이지 노트")}
                   style={{ left: box.x * cssSize.width, top: box.y * cssSize.height, width: box.width * cssSize.width, height: box.height * cssSize.height, color: annotation.style.color, fontSize, transform: 'rotate(' + textNoteCounterRotation(rotation) + 'deg)' }}
-                  onPointerDown={(event) => {
-                    event.stopPropagation()
-                    onActivate()
-                    setSelectedNoteId(annotation.id)
-                    if (event.target instanceof Element && event.target.closest('textarea')) return
-                    if (tool === 'text') {
-                      if (!textEditBefore.current.has(annotation.id)) textEditBefore.current.set(annotation.id, currentWorkRef.current)
-                      setTextDraft({ id: annotation.id, value: annotation.text ?? '' })
-                      setEditingNoteId(annotation.id)
-                    } else {
-                      setEditingNoteId(null)
-                      if (tool === 'pan') beginTextTransform(event, annotation, 'move')
-                    }
-                  }}
-                  onPointerMove={moveTextTransform}
-                  onPointerUp={finishTextTransform}
-                  onPointerCancel={finishTextTransform}
+                  onPointerDown={(event) => handleTextNotePointerDown(event, annotation)}
+                  onPointerMove={movePendingTextGesture}
+                  onPointerUp={(event) => finishPendingTextGesture(event)}
+                  onPointerCancel={(event) => finishPendingTextGesture(event, true)}
                 >
-                  {selected && <button type="button" className="note-delete-button" aria-label="텍스트 객체 삭제" title="삭제" onPointerDown={(event) => { event.preventDefault(); event.stopPropagation() }} onClick={() => deleteText(annotation.id)}><Trash2 size={13} /></button>}
+                  {selected && <button type="button" className="note-delete-button" aria-label={t("텍스트 객체 삭제")} title={t("삭제")} onPointerDown={(event) => { event.preventDefault(); event.stopPropagation() }} onClick={() => deleteText(annotation.id)}><Trash2 size={13} /></button>}
                   {editing
                     ? <textarea
                       ref={textInputRef}
-                      aria-label="페이지 노트 내용"
+                      aria-label={t("페이지 노트 내용")}
                       autoFocus
                       maxLength={500}
-                      placeholder="여기에 텍스트 입력"
+                      placeholder={t("여기에 텍스트 입력")}
                       value={textDraft?.id === annotation.id ? textDraft.value : annotation.text ?? ''}
                       onFocus={() => {
                         suppressTextBlur.current.delete(annotation.id)
@@ -1739,7 +1808,7 @@ export function PdfPage({ pdf, page, paneId, pane, splitView, rotation, active, 
                       style={{ opacity: annotation.style.opacity }}
                     />
                     : <div className="note-display" style={{ opacity: annotation.style.opacity }}>{annotation.text}</div>}
-                  {editing && <button type="button" className="note-resize-handle" aria-label="노트 크기 조절" title="크기 조절" onPointerDown={(event) => beginTextTransform(event, annotation, 'resize')} />}
+                  {editing && <button type="button" className="note-resize-handle" aria-label={t("노트 크기 조절")} title={t("크기 조절")} onPointerDown={(event) => beginTextTransform(event, annotation, 'resize')} />}
                 </div>
               })}
               {active && (() => {
@@ -1749,14 +1818,14 @@ export function PdfPage({ pdf, page, paneId, pane, splitView, rotation, active, 
                   ref={textStyleToolbarRef}
                   className="text-style-toolbar"
                   role="toolbar"
-                  aria-label="선택한 텍스트 설정"
+                  aria-label={t("선택한 텍스트 설정")}
                   style={textToolbarPosition ? { left: textToolbarPosition.x, top: textToolbarPosition.y, transform: 'rotate(' + textNoteCounterRotation(rotation) + 'deg)' } : { left: 0, top: 0, visibility: 'hidden', transform: 'rotate(' + textNoteCounterRotation(rotation) + 'deg)' }}
                   onPointerDown={(event) => event.stopPropagation()}
                 >
-                  <label className="text-style-size" title="글자 크기">
-                    <span>크기</span>
+                  <label className="text-style-size" title={t("글자 크기")}>
+                    <span>{t("크기")}</span>
                     <input
-                      aria-label="텍스트 글자 크기"
+                      aria-label={t("텍스트 글자 크기")}
                       type="number"
                       min="10"
                       max="48"
@@ -1781,7 +1850,7 @@ export function PdfPage({ pdf, page, paneId, pane, splitView, rotation, active, 
                       onKeyDown={(event) => { if (event.key === 'Enter') event.currentTarget.blur() }}
                     />
                     <input
-                      aria-label="텍스트 글자 크기 조절"
+                      aria-label={t("텍스트 글자 크기 조절")}
                       type="range"
                       min="10"
                       max="48"
@@ -1796,14 +1865,14 @@ export function PdfPage({ pdf, page, paneId, pane, splitView, rotation, active, 
                       onChange={(event) => changeTextStyle(annotation.id, { fontSize: Number(event.currentTarget.value) }, true)}
                     />
                   </label>
-                  <label className="text-style-color" title="글자 색상">
-                    <span>색상</span>
-                    <input aria-label="텍스트 색상" type="color" value={annotation.style.color} onChange={(event) => changeTextStyle(annotation.id, { color: event.currentTarget.value })} />
+                  <label className="text-style-color" title={t("글자 색상")}>
+                    <span>{t("색상")}</span>
+                    <input aria-label={t("텍스트 색상")} type="color" value={annotation.style.color} onChange={(event) => changeTextStyle(annotation.id, { color: event.currentTarget.value })} />
                   </label>
-                  <label className="text-style-opacity" title="글자 투명도">
-                    <span>투명도 {Math.round(annotation.style.opacity * 100)}%</span>
+                  <label className="text-style-opacity" title={t("글자 투명도")}>
+                    <span>{t("투명도 ")}{Math.round(annotation.style.opacity * 100)}%</span>
                     <input
-                      aria-label="텍스트 투명도"
+                      aria-label={t("텍스트 투명도")}
                       type="range"
                       min="0"
                       max="100"
@@ -1823,7 +1892,7 @@ export function PdfPage({ pdf, page, paneId, pane, splitView, rotation, active, 
               {tool === 'pan' && pageLinks?.map((link, index) => <a
                 key={'pdf-' + index}
                 className="page-pdf-link"
-                aria-label={'웹 링크 새 탭 열기 ' + (index + 1)}
+                aria-label={t('웹 링크 새 탭 열기 {count}', { count: formatNumber(index + 1) })}
                 title={link.href}
                 href={link.href}
                 target="_blank"
@@ -1834,7 +1903,7 @@ export function PdfPage({ pdf, page, paneId, pane, splitView, rotation, active, 
               {pageLinks !== undefined && qrLinks?.filter((link) => !pageLinks.some((pageLink) => regionsOverlap(pageLink, link))).map((link, index) => <a
                 key={index}
                 className="page-qr-link"
-                aria-label={'QR 링크 열기 ' + (index + 1)}
+                aria-label={t('QR 링크 열기 {count}', { count: formatNumber(index + 1) })}
                 title={link.href}
                 href={link.href}
                 target="_blank"
@@ -1847,7 +1916,7 @@ export function PdfPage({ pdf, page, paneId, pane, splitView, rotation, active, 
               ref={colorworkPanelRef}
               className="page-colorwork-panel"
               role="group"
-              aria-label="컬러워크 모눈 패널"
+              aria-label={t("컬러워크 모눈 패널")}
               style={{ left: colorworkGrid.x * cssSize.width, top: colorworkGrid.y * cssSize.height, width: colorworkGrid.displayWidth * cssSize.width, height: colorworkGrid.displayHeight * cssSize.height, transform: rotation ? 'rotate(' + -rotation + 'deg)' : undefined, transformOrigin: 'center' }}
             >
               <div className="colorwork-column-numbers colorwork-column-numbers-top" aria-hidden="true" style={{ gridTemplateColumns: `repeat(${colorworkGrid.columns}, minmax(0, 1fr))`, fontSize: colorworkColumnFontSize }}>
@@ -1872,29 +1941,29 @@ export function PdfPage({ pdf, page, paneId, pane, splitView, rotation, active, 
               </div>
               <div
                 className="page-colorwork-header"
-                title="끌어서 컬러워크 모눈 위치 이동"
+                title={t("끌어서 컬러워크 모눈 위치 이동")}
                 onPointerDown={(event) => beginColorworkTransform(event, 'move')}
                 onPointerMove={moveColorworkTransform}
                 onPointerUp={finishColorworkTransform}
                 onPointerCancel={finishColorworkTransform}
                 onLostPointerCapture={finishColorworkTransform}
               >
-                <strong>{colorworkGrid.columns}코 × {colorworkGrid.rows}단</strong>
+                <strong>{colorworkGrid.columns}{t("코 × ")}{colorworkGrid.rows}{t("단")}</strong>
                 <span>{colorworkGrid.chartWidthCm} × {colorworkGrid.chartHeightCm}cm</span>
-                <button type="button" className="note-delete-button colorwork-delete-button" aria-label="컬러워크 삭제" title="컬러워크 삭제" onPointerDown={(event) => { event.preventDefault(); event.stopPropagation() }} onClick={() => onWorkChange({ ...work, colorworkGrid: undefined }, true, true, work)}><Trash2 size={13} /></button>
+                <button type="button" className="note-delete-button colorwork-delete-button" aria-label={t("컬러워크 삭제")} title={t("컬러워크 삭제")} onPointerDown={(event) => { event.preventDefault(); event.stopPropagation() }} onClick={() => onWorkChange({ ...work, colorworkGrid: undefined }, true, true, work)}><Trash2 size={13} /></button>
               </div>
               <canvas
                 ref={colorworkCanvasRef}
                 className="page-colorwork-canvas"
                 role="img"
-                aria-label={colorworkGrid.columns + '코 ' + colorworkGrid.rows + '단 컬러워크 모눈. 클릭하거나 드래그하여 칠합니다.'}
+                aria-label={t('{columns}코 {rows}단 컬러워크 모눈. 클릭하거나 드래그하여 칠합니다.', { columns: formatNumber(colorworkGrid.columns), rows: formatNumber(colorworkGrid.rows) })}
                 onPointerDown={beginColorworkStroke}
                 onPointerMove={moveColorworkStroke}
                 onPointerUp={finishColorworkStroke}
                 onPointerCancel={finishColorworkStroke}
                 onLostPointerCapture={finishColorworkStroke}
               />
-              <button type="button" className="colorwork-resize-both" aria-label="컬러워크 비율 유지하며 크기 조절" title="드래그해 비율을 유지하며 크기 조절" onPointerDown={(event) => beginColorworkTransform(event, 'resize')} onPointerMove={moveColorworkTransform} onPointerUp={finishColorworkTransform} onPointerCancel={finishColorworkTransform} onLostPointerCapture={finishColorworkTransform} />
+              <button type="button" className="colorwork-resize-both" aria-label={t("컬러워크 비율 유지하며 크기 조절")} title={t("드래그해 비율을 유지하며 크기 조절")} onPointerDown={(event) => beginColorworkTransform(event, 'resize')} onPointerMove={moveColorworkTransform} onPointerUp={finishColorworkTransform} onPointerCancel={finishColorworkTransform} onLostPointerCapture={finishColorworkTransform} />
             </div>}
             {guidePageSize && rotatedCssSize && lineSettings.horizontal.visible && <div className="pdf-guide-layer" style={guideLayerStyle}>
               <ProgressLineOverlay
@@ -1920,7 +1989,7 @@ export function PdfPage({ pdf, page, paneId, pane, splitView, rotation, active, 
           </div>
         </div>
         {renderError?.key !== renderKey && (!workReady || readyKey !== renderKey) && <div className={'pane-loading' + (workReady && displayedRaster?.pdf === pdf && displayedRaster.page === page ? ' pane-loading-refresh' : '')}><BrandLoading kind={workReady ? 'pdf' : 'page-work'} requestId={paneId + ':' + page + ':' + renderKey + ':' + workReady} layout={workReady && displayedRaster?.pdf === pdf && displayedRaster.page === page ? 'overlay' : 'pane'} /></div>}
-        {renderError?.key === renderKey && <div className="pane-error">{renderError.message}<button onClick={() => { setRenderError(null); setRetry((current) => current + 1) }}>다시 시도</button></div>}
+        {renderError?.key === renderKey && <div className="pane-error">{renderError.message}<button onClick={() => { setRenderError(null); setRetry((current) => current + 1) }}>{t("다시 시도")}</button></div>}
       </div>
     </div>
   )

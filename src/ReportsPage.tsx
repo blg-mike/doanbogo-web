@@ -1,9 +1,11 @@
+import { formatDate, t } from './locales/index'
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { FileText } from 'lucide-react'
 import AppNavigation from './AppNavigation'
 import { listHomeProjects, listHomeReports, type KnittingReportSummary } from './storage'
 import type { HomeProject } from './types'
+import { formatWorkTime } from './workTime'
 import './Home.css'
 
 function ReportCover({ project }: { project: HomeProject }) {
@@ -35,7 +37,7 @@ export default function ReportsPage() {
     return () => { active = false }
   }, [])
   return <div className="app-page-frame reports-page"><AppNavigation active="reports" /><main className="app-page-main">
-    <header className="collection-header"><div><p className="home-eyebrow">YOUR REPORTS</p><h1>뜨개보고서</h1><p>작성 중인 기록과 완성한 프로젝트 보고서를 확인해요.</p></div></header>
-    {loading ? <p className="collection-empty">보고서를 불러오는 중…</p> : items.length ? <section className="report-list">{items.map(({ report, project }) => <button className="home-report-card" key={report.id} onClick={() => navigate('/report/' + report.documentId + '/' + report.id)}><span className="home-report-cover"><ReportCover project={project} /></span><span className="home-report-info"><strong>{project.title}</strong><small>{report.status === 'complete' ? `완료 · ${new Date(report.completedAt ?? report.updatedAt).toLocaleDateString('ko-KR')}` : '작성 중'}</small><b>{report.status === 'complete' ? '보고서 보기' : '계속 작성'}</b></span></button>)}</section> : <p className="collection-empty">아직 보고서가 없습니다. 프로젝트에서 뜨개보고서를 작성할 수 있어요.</p>}
+    <header className="collection-header"><div><p className="home-eyebrow">{t('뜨개보고서')}</p><h1>{t("뜨개보고서")}</h1><p>{t("작성 중인 기록과 완성한 프로젝트 보고서를 확인해요.")}</p></div></header>
+    {loading ? <p className="collection-empty">{t("보고서를 불러오는 중…")}</p> : items.length ? <section className="report-list">{items.map(({ report, project }) => <button className="home-report-card" key={report.id} onClick={() => navigate('/report/' + report.documentId + '/' + report.id)}><span className="home-report-cover"><ReportCover project={project} /></span><span className="home-report-info"><strong>{project.title}</strong><small className={report.status === 'complete' ? 'is-complete' : 'is-draft'}>{report.status === 'complete' ? t('완료') + ' · ' + formatDate(report.completedAt ?? report.updatedAt) : t('작성 중')}</small><small>{t('누적 작업시간')} {formatWorkTime(project.totalWorkTimeMs ?? 0)}</small><b>{report.status === 'complete' ? t('보고서 보기') : t('계속 작성')}</b></span></button>)}</section> : <p className="collection-empty">{t("아직 보고서가 없습니다. 프로젝트에서 뜨개보고서를 작성할 수 있어요.")}</p>}
   </main></div>
 }

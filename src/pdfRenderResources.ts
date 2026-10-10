@@ -175,6 +175,12 @@ interface ThumbnailSession {
 
 const thumbnailSessions = new WeakMap<PDFDocumentProxy, ThumbnailSession>()
 
+export function setThumbnailPagesExcluded(pdf: PDFDocumentProxy, pageNumbers: number[], excluded: boolean) {
+  const cache = thumbnailSessions.get(pdf)?.cache
+  if (!cache) return
+  for (const pageNumber of pageNumbers) cache.excludePage(pageNumber, excluded)
+}
+
 export function acquireThumbnailCache(pdf: PDFDocumentProxy, policy = getViewerResourcePolicy()) {
   let session = thumbnailSessions.get(pdf)
   if (!session) {

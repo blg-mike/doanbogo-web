@@ -1,5 +1,15 @@
-import type { PageRotation, ProgressChartRegion, ProgressGuide } from './types'
+import type { PageRotation, ProgressChartRegion, ProgressFocusSettings, ProgressGuide } from './types'
 import { guideRowPosition } from './progressLines'
+
+const legacyFocusDimOpacity = { low: 0.15, medium: 0.22, high: 0.32 } as const
+
+export function focusDimOpacity(focus: ProgressFocusSettings) {
+  return focus.dimOpacity ?? legacyFocusDimOpacity[focus.strength]
+}
+
+export function focusBandHeightRatio(focus: ProgressFocusSettings, rowSpacing: number) {
+  return Math.min(1, focus.bandHeightRatio ?? rowSpacing * (focus.range * 2 + 1))
+}
 
 export interface NormalizedRect {
   x: number

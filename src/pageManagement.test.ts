@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { PageRecord } from './types'
-import { canHidePageSelection, compactPageThumbnails, completePageList, nextVisiblePageAfterHide, visiblePageRange } from './pageManagement'
+import { canHidePageSelection, compactPageThumbnails, completePageList, nextVisiblePageAfterHide, normalizeHiddenPageGroups, updatePageHiddenState, visiblePageRange } from './pageManagement'
 
 describe('page visibility and thumbnails', () => {
   it('shows every PDF page and supplies the default state for pages without records', () => {
@@ -19,18 +19,73 @@ describe('page visibility and thumbnails', () => {
     expect(canHidePageSelection(3, new Set([2]), new Set())).toBe(false)
   })
 
-  it('collapses each consecutive hidden-page run into one thumbnail item', () => {
-    expect(compactPageThumbnails(5, new Set([2, 3, 4]))).toEqual([
+  it('keeps adjacent hide operations as separate groups', () => {
+    const records: PageRecord[] = [
+      { documentId: 'doc', pageNumber: 2, hidden: true, hiddenGroupId: 'first', bookmarked: false },
+      { documentId: 'doc', pageNumber: 3, hidden: true, hiddenGroupId: 'first', bookmarked: false },
+      { documentId: 'doc', pageNumber: 4, hidden: true, hiddenGroupId: 'second', bookmarked: false },
+      { documentId: 'doc', pageNumber: 5, hidden: true, hiddenGroupId: 'second', bookmarked: false },
+    ]
+
+    expect(compactPageThumbnails(6, records)).toEqual([
       { type: 'page', pageNumber: 1 },
-      { type: 'hidden-run', firstPage: 2, lastPage: 4 },
-      { type: 'page', pageNumber: 5 },
+      { type: 'hidden-group', groupId: 'first', firstPage: 2, pageNumbers: [2, 3], expanded: false },
+      { type: 'hidden-group', groupId: 'second', firstPage: 4, pageNumbers: [4, 5], expanded: false },
+      { type: 'page', pageNumber: 6 },
     ])
-    expect(compactPageThumbnails(6, new Set([1, 3, 4, 6]))).toEqual([
-      { type: 'hidden-run', firstPage: 1, lastPage: 1 },
-      { type: 'page', pageNumber: 2 },
-      { type: 'hidden-run', firstPage: 3, lastPage: 4 },
-      { type: 'page', pageNumber: 5 },
-      { type: 'hidden-run', firstPage: 6, lastPage: 6 },
+  })
+
+  it('shows non-contiguous pages from one hide operation in a single group at its first page', () => {
+    const records: PageRecord[] = [2, 5, 8].map((pageNumber) => ({
+      documentId: 'doc', pageNumber, hidden: true, hiddenGroupId: 'batch', bookmarked: false,
+    }))
+
+    expect(compactPageThumbnails(8, records)).toEqual([
+      { type: 'page', pageNumber: 1 },
+      { type: 'hidden-group', groupId: 'batch', firstPage: 2, pageNumbers: [2, 5, 8], expanded: false },
+      { type: 'page', pageNumber: 3 },
+      { type: 'page', pageNumber: 4 },
+      { type: 'page', pageNumber: 6 },
+      { type: 'page', pageNumber: 7 },
+    ])
+  })
+
+  it('keeps the group visible and expanded after restoring its pages', () => {
+    const records: PageRecord[] = [2, 5, 8].map((pageNumber) => ({
+      documentId: 'doc', pageNumber, hidden: false, hiddenGroupId: 'batch', bookmarked: false,
+    }))
+
+    expect(compactPageThumbnails(8, records)).toEqual([
+      { type: 'page', pageNumber: 1 },
+      { type: 'hidden-group', groupId: 'batch', firstPage: 2, pageNumbers: [2, 5, 8], expanded: true },
+      { type: 'page', pageNumber: 3 },
+      { type: 'page', pageNumber: 4 },
+      { type: 'page', pageNumber: 6 },
+      { type: 'page', pageNumber: 7 },
+    ])
+  })
+
+  it('adds pages to a group and removes membership when moved outside', () => {
+    const page = { documentId: 'doc', pageNumber: 3, hidden: false, bookmarked: false }
+    const grouped = updatePageHiddenState(page, true, 'group-a')
+    expect(grouped).toMatchObject({ hidden: true, hiddenGroupId: 'group-a' })
+
+    const restored = updatePageHiddenState(grouped, false, 'group-a')
+    expect(restored).toMatchObject({ hidden: false, hiddenGroupId: 'group-a' })
+
+    const outside = updatePageHiddenState(restored, false)
+    expect(outside).toMatchObject({ hidden: false })
+    expect(outside).not.toHaveProperty('hiddenGroupId')
+  })
+
+  it('assigns separate legacy groups to contiguous hidden ranges', () => {
+    const records: PageRecord[] = [2, 3, 5, 7, 8].map((pageNumber) => ({
+      documentId: 'doc', pageNumber, hidden: true, bookmarked: false,
+    }))
+    let nextId = 0
+
+    expect(normalizeHiddenPageGroups(records, () => 'legacy-' + ++nextId).map((page) => [page.pageNumber, page.hiddenGroupId])).toEqual([
+      [2, 'legacy-1'], [3, 'legacy-1'], [5, 'legacy-2'], [7, 'legacy-3'], [8, 'legacy-3'],
     ])
   })
 

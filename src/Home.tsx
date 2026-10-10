@@ -1,3 +1,4 @@
+import { formatDate, formatNumber, formatRelativeTime, t } from './locales/index'
 import { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { ArrowRight, Clock3, FilePlus2, FileText, Grid3X3, Images, Search, X } from 'lucide-react'
@@ -6,16 +7,17 @@ import BrandLoading from './BrandLoading'
 import { counterSideForRow } from './smartCounter'
 import { getViewer, listHomeProjects, listHomeReports, type KnittingReportSummary } from './storage'
 import type { HomeProject, ViewerSnapshot } from './types'
+import { formatWorkTime } from './workTime'
 import './Home.css'
 
 function ago(timestamp: number | null) {
-  if (!timestamp) return '최근 작업 없음'
+  if (!timestamp) return t('최근 작업 없음')
   const minutes = Math.max(1, Math.floor((Date.now() - timestamp) / 60_000))
-  if (minutes < 60) return `${minutes}분 전`
+  if (minutes < 60) return formatRelativeTime(minutes, 'minute')
   const hours = Math.floor(minutes / 60)
-  if (hours < 24) return `${hours}시간 전`
+  if (hours < 24) return formatRelativeTime(hours, 'hour')
   const days = Math.floor(hours / 24)
-  return days < 30 ? `${days}일 전` : new Date(timestamp).toLocaleDateString('ko-KR', { month: 'short', day: 'numeric' })
+  return days < 30 ? formatRelativeTime(days, 'day') : formatDate(timestamp, { month: 'short', day: 'numeric' })
 }
 
 function Cover({ project, compact = false }: { project: HomeProject; compact?: boolean }) {
@@ -34,11 +36,11 @@ function Cover({ project, compact = false }: { project: HomeProject; compact?: b
 }
 
 function ProjectCard({ project, onOpen }: { project: HomeProject; onOpen: () => void }) {
-  const type = project.kind === 'chart' ? '차트' : project.documentKind === 'photos' ? '사진 도안' : 'PDF 도안'
-  const status = project.status === 'paused' ? '보류' : project.status === 'completed' ? '완료' : project.pageCount ? `${project.pageCount}페이지` : type
+  const type = project.kind === 'chart' ? t('차트') : project.documentKind === 'photos' ? t('사진 도안') : t('PDF 도안')
+  const status = project.status === 'paused' ? t('보류') : project.status === 'completed' ? t('완료') : project.pageCount ? `${formatNumber(project.pageCount)}${t('페이지')}` : type
   return <button className="home-project-card" onClick={onOpen}>
     <span className="home-project-cover"><Cover project={project} /><i>{type}</i></span>
-    <strong>{project.title}</strong><small>{status} · {ago(project.lastWorkedAt)}</small>
+    <strong>{project.title}</strong><small>{status} · {ago(project.lastWorkedAt)}</small>{project.kind === 'document' && <small>{t('누적 작업시간')} {formatWorkTime(project.totalWorkTimeMs ?? 0)}</small>}
   </button>
 }
 
@@ -104,23 +106,23 @@ export default function Home() {
   return <div className="app-page-frame home-page">
     <AppNavigation active="home" />
     <main className="app-page-main">
-      <header className="home-header"><div><p className="home-eyebrow">YOUR KNITTING SPACE</p><h1>도안보고</h1></div>
-        <div className="home-header-actions"><label className="home-search"><Search size={17} /><input value={query} onFocus={() => setSearchOpen(true)} onChange={(event) => setQuery(event.target.value)} placeholder="프로젝트 이름 또는 태그 검색" aria-label="프로젝트 이름 또는 태그 검색" /><kbd>⌘K</kbd></label>
-          <button className="home-new-button" aria-label="새 프로젝트" onClick={() => navigate('/projects/new')}><FilePlus2 size={17} /><span>새 프로젝트</span></button>
-          <button className="home-mobile-search" aria-label="검색" onClick={() => setSearchOpen(true)}><Search size={21} /></button>
+      <header className="home-header"><div><p className="home-eyebrow">{t('도안보고')}</p><h1>{t("도안보고")}</h1></div>
+        <div className="home-header-actions"><label className="home-search"><Search size={17} /><input value={query} onFocus={() => setSearchOpen(true)} onChange={(event) => setQuery(event.target.value)} placeholder={t("프로젝트 이름 또는 태그 검색")} aria-label={t("프로젝트 이름 또는 태그 검색")} /><kbd>⌘K</kbd></label>
+          <button className="home-new-button" aria-label={t("새 프로젝트")} onClick={() => navigate('/projects/new')}><FilePlus2 size={17} /><span>{t("새 프로젝트")}</span></button>
+          <button className="home-mobile-search" aria-label={t("검색")} onClick={() => setSearchOpen(true)}><Search size={21} /></button>
         </div>
       </header>
       {loading ? <div className="home-loading"><BrandLoading kind="app" requestId="home-summary" layout="pane" /></div> : <>
-        {searchOpen && <div className="home-search-overlay" role="dialog" aria-modal="true" aria-label="프로젝트 검색"><header><Search size={18} /><input autoFocus value={query} onChange={(event) => setQuery(event.target.value)} onKeyDown={(event) => { if (event.key === 'Enter' && searchable[0]) { setSearchOpen(false); openProject(searchable[0]) } }} placeholder="프로젝트 이름 또는 태그" /><button onClick={() => { setSearchOpen(false); setQuery('') }} aria-label="검색 닫기"><X size={19} /></button></header><div className="home-search-results">{query.trim() ? searchable.length ? searchable.map((project) => <button key={project.key} onClick={() => { setSearchOpen(false); openProject(project) }}><Cover project={project} compact /><span><strong>{project.title}</strong><small>{project.kind === 'chart' ? '차트' : project.documentKind === 'photos' ? '사진 도안' : 'PDF 도안'}{project.tags.length ? ' · ' + project.tags.join(', ') : ''}</small></span><ArrowRight size={16} /></button>) : <p>검색 결과가 없습니다.</p> : <p>프로젝트 이름이나 태그를 검색하세요.</p>}</div></div>}
+        {searchOpen && <div className="home-search-overlay" role="dialog" aria-modal="true" aria-label={t("프로젝트 검색")}><header><Search size={18} /><input autoFocus value={query} onChange={(event) => setQuery(event.target.value)} onKeyDown={(event) => { if (event.key === 'Enter' && searchable[0]) { setSearchOpen(false); openProject(searchable[0]) } }} placeholder={t("프로젝트 이름 또는 태그")} /><button onClick={() => { setSearchOpen(false); setQuery('') }} aria-label={t("검색 닫기")}><X size={19} /></button></header><div className="home-search-results">{query.trim() ? searchable.length ? searchable.map((project) => <button key={project.key} onClick={() => { setSearchOpen(false); openProject(project) }}><Cover project={project} compact /><span><strong>{project.title}</strong><small>{project.kind === 'chart' ? t('차트') : project.documentKind === 'photos' ? t('사진 도안') : t('PDF 도안')}{project.tags.length ? ' · ' + project.tags.join(', ') : ''}</small></span><ArrowRight size={16} /></button>) : <p>{t("검색 결과가 없습니다.")}</p> : <p>{t("프로젝트 이름이나 태그를 검색하세요.")}</p>}</div></div>}
         <div className="home-sections">
-          {latestWork && <section className="home-section home-recent-section"><div className="home-section-heading"><div><p className="home-eyebrow">PICK UP WHERE YOU LEFT OFF</p><h2>최근 작업</h2></div><span className="home-updated"><Clock3 size={14} />{ago(latestWork.lastWorkedAt)}</span></div>
-            <article className="home-recent-card"><button className="home-recent-cover" onClick={() => openProject(latestWork)}><Cover project={latestWork} /></button><div className="home-recent-info"><h3>{latestWork.title}</h3><p>{currentRow ? `${currentRow}단${side ? ' · ' + side : ''}` : latestWork.kind === 'chart' ? '차트 편집' : `${viewer?.[viewer.activePane ?? 'primary']?.page ?? 1} / ${latestWork.pageCount ?? 1}페이지`}</p>{mainCounter?.repeatCount ? <p>{mainCounter.repeatCount}번째 반복 중</p> : viewer?.split && <p>두 영역 보기 중</p>}<small>최근 작업 {ago(latestWork.lastWorkedAt)}</small></div><button className="home-resume-button" onClick={() => resume(latestWork)}>이어서 뜨기 <ArrowRight size={16} /></button></article>
+          {latestWork && <section className="home-section home-recent-section"><div className="home-section-heading"><div><p className="home-eyebrow">{t('이어서 뜨기 ')}</p><h2>{t("최근 작업")}</h2></div><span className="home-updated"><Clock3 size={14} />{ago(latestWork.lastWorkedAt)}</span></div>
+            <article className="home-recent-card"><button className="home-recent-cover" onClick={() => openProject(latestWork)}><Cover project={latestWork} /></button><div className="home-recent-info"><h3>{latestWork.title}</h3><p>{currentRow ? `${formatNumber(currentRow)}${t('단')}${side ? ' · ' + side : ''}` : latestWork.kind === 'chart' ? t('차트 편집') : `${formatNumber(viewer?.[viewer.activePane ?? 'primary']?.page ?? 1)} / ${formatNumber(latestWork.pageCount ?? 1)}${t('페이지')}`}</p>{mainCounter?.repeatCount ? <p>{formatNumber(mainCounter.repeatCount)}{t("번째 반복 중")}</p> : viewer?.split && <p>{t("두 영역 보기 중")}</p>}{latestWork.kind === 'document' && <p>{t('누적 작업시간')} {formatWorkTime(latestWork.totalWorkTimeMs ?? 0)}</p>}<small>{t("최근 작업 ")}{ago(latestWork.lastWorkedAt)}</small></div><button className="home-resume-button" onClick={() => resume(latestWork)}>{t("이어서 뜨기 ")}<ArrowRight size={16} /></button></article>
           </section>}
-          <section className="home-section"><div className="home-section-heading"><div><p className="home-eyebrow">YOUR PROJECTS</p><h2>내 프로젝트</h2></div><button className="home-view-all" onClick={() => navigate('/projects')}>전체 보기 <ArrowRight size={15} /></button></div>
-            {visibleProjects.length ? <div className="home-project-grid">{visibleProjects.map((project) => <ProjectCard key={project.key} project={project} onOpen={() => openProject(project)} />)}<button className="home-project-add" onClick={() => navigate('/projects/new')}><b>＋</b><span>새 프로젝트</span></button></div> : <div className="home-empty"><p>아직 프로젝트가 없어요. 도안이나 차트를 추가해 시작해 보세요.</p><button className="home-new-button" onClick={() => navigate('/projects/new')}>새 프로젝트 만들기 <ArrowRight size={15} /></button></div>}
+          <section className="home-section"><div className="home-section-heading"><div><p className="home-eyebrow">{t('프로젝트')}</p><h2>{t("내 프로젝트")}</h2></div><button className="home-view-all" onClick={() => navigate('/projects')}>{t("전체 보기 ")}<ArrowRight size={15} /></button></div>
+            {visibleProjects.length ? <div className="home-project-grid">{visibleProjects.map((project) => <ProjectCard key={project.key} project={project} onOpen={() => openProject(project)} />)}<button className="home-project-add" onClick={() => navigate('/projects/new')}><b>＋</b><span>{t("새 프로젝트")}</span></button></div> : <div className="home-empty"><p>{t("아직 프로젝트가 없어요. 도안이나 차트를 추가해 시작해 보세요.")}</p><button className="home-new-button" onClick={() => navigate('/projects/new')}>{t("새 프로젝트 만들기 ")}<ArrowRight size={15} /></button></div>}
           </section>
-          {visibleReports.length > 0 && <section className="home-section"><div className="home-section-heading"><div><p className="home-eyebrow">YOUR REPORTS</p><h2>최근 보고서</h2></div><button className="home-view-all" onClick={() => navigate('/reports')}>전체 보기 <ArrowRight size={15} /></button></div>
-            <div className="home-report-grid">{visibleReports.map((report) => { const project = reportProject(report); if (!project) return null; return <button className="home-report-card" key={report.id} onClick={() => navigate('/report/' + report.documentId + '/' + report.id)}><span className="home-report-cover"><Cover project={project} compact /></span><span className="home-report-info"><strong>{project.title}</strong><small>{report.status === 'complete' ? `완료 · ${new Date(report.completedAt ?? report.updatedAt).toLocaleDateString('ko-KR')}` : '작성 중'}</small><b>{report.status === 'complete' ? '보고서 보기' : '계속 작성'} <ArrowRight size={13} /></b></span></button> })}</div>
+          {visibleReports.length > 0 && <section className="home-section"><div className="home-section-heading"><div><p className="home-eyebrow">{t('뜨개보고서')}</p><h2>{t("최근 보고서")}</h2></div><button className="home-view-all" onClick={() => navigate('/reports')}>{t("전체 보기 ")}<ArrowRight size={15} /></button></div>
+            <div className="home-report-grid">{visibleReports.map((report) => { const project = reportProject(report); if (!project) return null; return <button className="home-report-card" key={report.id} onClick={() => navigate('/report/' + report.documentId + '/' + report.id)}><span className="home-report-cover"><Cover project={project} compact /></span><span className="home-report-info"><strong>{project.title}</strong><small>{report.status === 'complete' ? t('완료') + ' · ' + formatDate(report.completedAt ?? report.updatedAt) : t('작성 중')}</small><b>{report.status === 'complete' ? t('보고서 보기') : t('계속 작성')} <ArrowRight size={13} /></b></span></button> })}</div>
           </section>}
         </div>
       </>}

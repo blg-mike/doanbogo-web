@@ -1,3 +1,4 @@
+import { t } from './locales/index'
 import { useEffect, useState } from 'react'
 import { addVisibleLoadingTime, getNextLoadingDelay, selectBrandLoadingCopy, type BrandLoadingKind } from './brandLoadingState'
 
@@ -70,7 +71,7 @@ function TimedBrandLoading({ layout = 'pane', messageOverride, requestId }: Bran
   const content = !visible ? null : messageOverride !== undefined
     ? <span className="brand-loading-error" role="alert">{messageOverride}</span>
     : <>
-      <span className="sr-only" role="status" aria-live="polite">불러오는 중</span>
+      <span className="sr-only" role="status" aria-live="polite">{t("불러오는 중")}</span>
       <svg className="brand-loading-symbol" viewBox="0 0 48 48" aria-hidden="true">
         <path className="brand-loading-needle" d="M7 36 40 11M7 29h35m0 0-5-4" />
         <path className="brand-loading-stitch brand-loading-stitch-1" d="M7 29c0-10 8-10 8 0" />
@@ -78,7 +79,7 @@ function TimedBrandLoading({ layout = 'pane', messageOverride, requestId }: Bran
         <path className="brand-loading-stitch brand-loading-stitch-3" d="M23 29c0-10 8-10 8 0" />
         <path className="brand-loading-stitch brand-loading-stitch-4" d="M31 29c0-10 8-10 8 0" />
       </svg>
-      <span className="brand-loading-copy" aria-hidden="true">{message}</span>
+      <span className="brand-loading-copy" aria-hidden="true">{t(message as import('./locales').LocaleKey)}</span>
     </>
 
   if (layout === 'screen') return <main className={className} aria-busy="true" data-paused={paused}>{content}</main>

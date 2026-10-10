@@ -1,3 +1,4 @@
+import { t, type LocaleKey } from './locales'
 import { FUNCTIONAL_COLOR_PRESETS } from './designTokens'
 
 export function ColorPresetButtons({ value, onChange, label, className, presets = FUNCTIONAL_COLOR_PRESETS }: {
@@ -13,9 +14,9 @@ export function ColorPresetButtons({ value, onChange, label, className, presets 
     {options.map((preset) => <button
       key={preset.color}
       type="button"
-      aria-label={preset.name}
+      aria-label={t(preset.name as LocaleKey)}
       aria-pressed={preset.color.toLowerCase() === value.toLowerCase()}
-      title={preset.name}
+      title={t(preset.name as LocaleKey)}
       style={{ backgroundColor: preset.color }}
       onClick={() => onChange(preset.color)}
     />)}

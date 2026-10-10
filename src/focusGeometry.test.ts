@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { displayRectToPageRect, focusRowSpacing, formatFocusSpacingPercent, guidePositionForRotation, pageRectToDisplayRect, parseFocusSpacingPercent } from './focusGeometry'
-import type { ProgressGuide } from './types'
+import { displayRectToPageRect, focusBandHeightRatio, focusDimOpacity, focusRowSpacing, formatFocusSpacingPercent, guidePositionForRotation, pageRectToDisplayRect, parseFocusSpacingPercent } from './focusGeometry'
+import type { ProgressFocusSettings, ProgressGuide } from './types'
 
 describe('focus view rotation geometry', () => {
   const rect = { x: 0.17, y: 0.23, width: 0.41, height: 0.52 }
@@ -52,5 +52,21 @@ describe('focus spacing percentage input', () => {
     expect(parseFocusSpacingPercent('0.4')).toBeNull()
     expect(parseFocusSpacingPercent('50.5')).toBeNull()
     expect(parseFocusSpacingPercent('abc')).toBeNull()
+  })
+})
+
+describe('focus overlay settings', () => {
+  const legacyFocus: ProgressFocusSettings = { enabled: true, strength: 'low', range: 1, scope: 'page', rowSpacing: 0.04 }
+
+  it('keeps old focus strengths and row-based band widths when new values are absent', () => {
+    expect(focusDimOpacity(legacyFocus)).toBe(0.15)
+    expect(focusBandHeightRatio(legacyFocus, legacyFocus.rowSpacing)).toBeCloseTo(0.12)
+  })
+
+  it('uses the saved slider values after a user adjusts the focus overlay', () => {
+    const adjusted = { ...legacyFocus, dimOpacity: 0.58, bandHeightRatio: 0.17 }
+    expect(focusDimOpacity(adjusted)).toBe(0.58)
+    expect(focusBandHeightRatio(adjusted, legacyFocus.rowSpacing)).toBe(0.17)
+    expect(focusBandHeightRatio({ ...adjusted, bandHeightRatio: undefined }, 0.9)).toBe(1)
   })
 })

@@ -1,6 +1,7 @@
 import { openDB, type DBSchema, type IDBPDatabase } from 'idb'
 import type { ChartDocument, CounterHistoryEntry, DocumentRecord, HomeProject, KnittingReport, PageRecognitionRecord, PageRecord, PageWorkRecord, PhotoPageRecord, PaneSnapshot, PreferenceRecord, ProgressGuide, SortMode, ViewerSnapshot } from './types'
 import { MAX_COUNTER_HISTORY, normalizeCounterSnapshots } from './smartCounter'
+import { updatePageHiddenState } from './pageManagement'
 
 interface DoanBogoDB extends DBSchema {
   documents: {
@@ -296,7 +297,7 @@ export async function addDocument(record: DocumentRecord) {
 }
 
 function documentProject(record: DocumentRecord): HomeProject {
-  return { key: 'document:' + record.id, entityId: record.id, kind: 'document', title: record.fileName.replace(/\.pdf$/i, ''), fileName: record.fileName, documentKind: record.kind ?? 'pdf', pageCount: record.pageCount, cover: record.cover, tags: record.tags ?? [], status: 'active', archivedAt: null, deletedAt: null, lastWorkedAt: record.lastOpenedAt ?? null, createdAt: record.createdAt }
+  return { key: 'document:' + record.id, entityId: record.id, kind: 'document', title: record.fileName.replace(/\.pdf$/i, ''), fileName: record.fileName, documentKind: record.kind ?? 'pdf', pageCount: record.pageCount, cover: record.cover, tags: record.tags ?? [], status: 'active', archivedAt: null, deletedAt: null, lastWorkedAt: record.lastOpenedAt ?? null, createdAt: record.createdAt, totalWorkTimeMs: record.totalWorkTimeMs ?? 0 }
 }
 
 function chartProject(record: ChartDocument): HomeProject {
@@ -315,6 +316,36 @@ export async function getHomeProject(kind: HomeProject['kind'], entityId: string
 export async function saveHomeProject(project: HomeProject) {
   await access(async (db) => { await db.put('homeProjects', project) }, () => { temporary.homeProjects.set(project.key, project) })
   return project
+}
+
+export async function addDocumentWorkTime(id: string, elapsedMs: number) {
+  if (!Number.isSafeInteger(elapsedMs) || elapsedMs < 0) throw new Error('작업시간 값이 올바르지 않습니다.')
+  if (elapsedMs === 0) {
+    const document = await getDocument(id)
+    if (!document) throw new Error('도안을 찾을 수 없습니다.')
+    return document.totalWorkTimeMs ?? 0
+  }
+  return access(async (db) => {
+    const tx = db.transaction(['documents', 'homeProjects'], 'readwrite')
+    const document = await tx.objectStore('documents').get(id)
+    if (!document) throw new Error('도안을 찾을 수 없습니다.')
+    const project = await tx.objectStore('homeProjects').get('document:' + id)
+    const totalWorkTimeMs = (document.totalWorkTimeMs ?? project?.totalWorkTimeMs ?? 0) + elapsedMs
+    if (!Number.isSafeInteger(totalWorkTimeMs)) throw new Error('누적 작업시간이 너무 큽니다.')
+    await tx.objectStore('documents').put({ ...document, totalWorkTimeMs })
+    await tx.objectStore('homeProjects').put({ ...(project ?? documentProject(document)), totalWorkTimeMs })
+    await tx.done
+    return totalWorkTimeMs
+  }, () => {
+    const document = temporary.documents.get(id)
+    if (!document) throw new Error('도안을 찾을 수 없습니다.')
+    const project = temporary.homeProjects.get('document:' + id)
+    const totalWorkTimeMs = (document.totalWorkTimeMs ?? project?.totalWorkTimeMs ?? 0) + elapsedMs
+    if (!Number.isSafeInteger(totalWorkTimeMs)) throw new Error('누적 작업시간이 너무 큽니다.')
+    temporary.documents.set(id, { ...document, totalWorkTimeMs })
+    temporary.homeProjects.set('document:' + id, { ...(project ?? documentProject(document)), totalWorkTimeMs })
+    return totalWorkTimeMs
+  })
 }
 
 export async function listHomeReports() {
@@ -598,6 +629,7 @@ export async function duplicateDocument(id: string) {
       createdAt: Date.now(),
       lastOpenedAt: null,
       tags: [],
+      totalWorkTimeMs: 0,
     }
     await addDocument(copy)
   }
@@ -722,6 +754,17 @@ export async function setPageFlag(id: string, pageNumber: number, flag: 'hidden'
   })
 }
 
+export async function savePageRecords(records: PageRecord[]) {
+  if (!records.length) return
+  await access(async (db) => {
+    const tx = db.transaction('pages', 'readwrite')
+    for (const record of records) await tx.store.put(record)
+    await tx.done
+  }, () => {
+    for (const record of records) temporary.pages.set(pageKey(record.documentId, record.pageNumber), record)
+  })
+}
+
 export async function getPageWork(id: string, pageNumber: number): Promise<PageWorkRecord> {
   const saved = await access((db) => db.get('pageWork', [id, pageNumber]), () => temporary.pageWork.get(pageKey(id, pageNumber)))
   const work = normalizePageWork(saved ?? {
@@ -786,6 +829,25 @@ export async function setPagesFlag(id: string, pageNumbers: number[], flag: 'hid
       const key = pageKey(id, pageNumber)
       const page = temporary.pages.get(key) ?? { documentId: id, pageNumber, hidden: false, bookmarked: false }
       temporary.pages.set(key, { ...page, [flag]: value })
+    }
+  })
+}
+
+export async function setPagesHiddenState(id: string, pageNumbers: number[], hidden: boolean, hiddenGroupId?: string) {
+  const uniquePages = [...new Set(pageNumbers)]
+  if (hidden && !hiddenGroupId) throw new Error('숨김 그룹 정보가 필요합니다.')
+  await access(async (db) => {
+    const tx = db.transaction('pages', 'readwrite')
+    for (const pageNumber of uniquePages) {
+      const page = await tx.store.get([id, pageNumber]) ?? { documentId: id, pageNumber, hidden: false, bookmarked: false }
+      await tx.store.put(updatePageHiddenState(page, hidden, hiddenGroupId))
+    }
+    await tx.done
+  }, () => {
+    for (const pageNumber of uniquePages) {
+      const key = pageKey(id, pageNumber)
+      const page = temporary.pages.get(key) ?? { documentId: id, pageNumber, hidden: false, bookmarked: false }
+      temporary.pages.set(key, updatePageHiddenState(page, hidden, hiddenGroupId))
     }
   })
 }
@@ -890,7 +952,7 @@ export async function importWorkspaceData(incoming: WorkspaceData) {
     ...documents.map((item, index) => {
       const originalId = incoming.documents[index].id
       const saved = savedProjectByKey.get('document:' + originalId)
-      return saved ? { ...saved, key: 'document:' + item.id, entityId: item.id, cover: item.cover, fileName: item.fileName } : documentProject(item)
+      return saved ? { ...saved, key: 'document:' + item.id, entityId: item.id, cover: item.cover, fileName: item.fileName, totalWorkTimeMs: item.totalWorkTimeMs ?? saved.totalWorkTimeMs ?? 0 } : documentProject(item)
     }),
     ...charts.map((item, index) => {
       const originalId = incoming.charts[index].id

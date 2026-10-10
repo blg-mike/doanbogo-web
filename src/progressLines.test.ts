@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { guideRowPosition, migrateProgressGuides, prepareProgressGuidesForDirectInteraction, progressGuideCandidates } from './progressLines'
+import { createDefaultPrimaryProgressGuide, DEFAULT_PROGRESS_LINE_THICKNESS, guideRowPosition, migrateProgressGuides, prepareProgressGuidesForDirectInteraction, progressGuideCandidates } from './progressLines'
 import type { PageWorkRecord } from './types'
 
 function legacyWork(): PageWorkRecord {
@@ -66,8 +66,15 @@ describe('progress line migration', () => {
   it('starts a new line when there are no legacy guides to migrate', () => {
     const work: PageWorkRecord = { documentId: 'doc', pageNumber: 1, horizontalPosition: 0.37, verticalPosition: 0.5, annotations: [], horizontalGuides: [], verticalGuides: [], progressMigration: 'pending' }
     const migrated = migrateProgressGuides(work, '', [])
-    expect(migrated.horizontalGuides).toEqual([expect.objectContaining({ role: 'primary', position: 0.37, xStartRatio: 0.15, xEndRatio: 0.85 })])
+    expect(migrated.horizontalGuides).toEqual([expect.objectContaining({ role: 'primary', position: 0.37, xStartRatio: 0, xEndRatio: 1, thickness: 12 })])
     expect(migrated.progressMigration).toBe('complete')
     expect(migrated.legacyProgressGuides).toEqual({ horizontalGuides: [], verticalGuides: [] })
+  })
+
+  it('creates new primary guides at full page width with the enlarged default thickness', () => {
+    expect(createDefaultPrimaryProgressGuide(0.62)).toMatchObject({
+      role: 'primary', position: 0.62, xStartRatio: 0, xEndRatio: 1,
+      thickness: DEFAULT_PROGRESS_LINE_THICKNESS,
+    })
   })
 })

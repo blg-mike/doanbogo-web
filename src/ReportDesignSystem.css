@@ -1,0 +1,232 @@
+.knitting-report-editor .report-appbar { border-color: var(--color-divider); background: var(--color-surface); }
+.knitting-report-editor .report-appbar-back,
+.knitting-report-editor .report-more-trigger { width: 44px; height: 44px; border-radius: 8px; color: var(--color-secondary); }
+.knitting-report-editor .report-appbar-back:hover,
+.knitting-report-editor .report-more-trigger:hover { color: var(--color-primary); background: var(--color-primary-soft); }
+.knitting-report-editor .report-appbar-edit,
+.knitting-report-editor .report-status-toggle { min-height: 44px; border: 1px solid var(--color-border); border-radius: 8px; color: var(--color-secondary); background: var(--color-surface-subtle); }
+.knitting-report-editor .report-appbar-share { min-height: 44px; border: 1px solid var(--color-primary); border-radius: 8px; color: var(--color-surface); background: var(--color-primary); }
+.knitting-report-editor .report-appbar-share:hover:not(:disabled) { background: var(--color-primary-hover); }
+.knitting-report-editor .report-appbar-edit:hover:not(:disabled) { border-color: var(--color-secondary); background: var(--color-secondary-soft); }
+.knitting-report-editor .report-status-toggle:hover:not(:disabled):not([aria-pressed="true"]) { border-color: var(--color-secondary); background: var(--color-secondary-soft); }
+.knitting-report-editor .report-status-toggle[aria-pressed="true"] { border-color: var(--color-tertiary); color: var(--color-tertiary); background: var(--color-tertiary-soft); }
+.knitting-report-editor .report-status-toggle[aria-pressed="true"]:hover:not(:disabled) { border-color: var(--color-tertiary); color: var(--color-tertiary); background: var(--color-tertiary-soft); }
+.knitting-report-editor .report-save-indicator { color: var(--color-tertiary); }
+.knitting-report-editor .report-more-menu { border-color: var(--color-border); border-radius: 12px; background: var(--color-surface); box-shadow: 0 8px 24px rgba(44,43,39,.1); }
+.knitting-report-editor .report-more-menu > label { color: var(--color-text-secondary); }
+.knitting-report-editor .report-more-menu select { min-height: 44px; color: var(--color-text); }
+.knitting-report-editor .report-more-menu > button { min-height: 44px; color: var(--color-secondary); border-radius: 8px; }
+.knitting-report-editor .report-more-menu > button:hover:not(:disabled) { color: var(--color-primary); background: var(--color-primary-soft); }
+.knitting-report-editor .report-cover-card { border-color: var(--color-border); border-radius: 16px; background: var(--color-surface); box-shadow: 0 1px 3px rgba(44,43,39,.08); }
+.knitting-report-editor .report-cover-card > .report-photo-field { background: var(--color-surface-subtle); }
+.knitting-report-editor .report-cover-card > .report-photo-field .report-photo-button { min-height: 44px; border: 1px solid var(--color-border); border-radius: 8px; color: var(--color-secondary); background: var(--color-surface); box-shadow: 0 1px 3px rgba(44,43,39,.08); }
+.knitting-report-editor .report-cover-eyebrow,
+.knitting-report-editor .report-detail-header small { color: var(--color-text-muted); }
+.knitting-report-editor .report-cover-copy .report-title-row h1,
+.knitting-report-editor .report-detail-header h2 { color: var(--color-text); }
+.knitting-report-editor .report-title-edit-trigger,
+.knitting-report-editor .report-title-action { width: 44px; height: 44px; border-color: var(--color-border); border-radius: 8px; color: var(--color-secondary); background: var(--color-surface); }
+.knitting-report-editor .report-title-edit-trigger:hover:not(:disabled),
+.knitting-report-editor .report-title-action:hover:not(:disabled) { border-color: var(--color-primary); color: var(--color-primary); background: var(--color-primary-soft); }
+.knitting-report-editor .report-title-action.save { color: var(--color-primary); }
+.knitting-report-editor .report-title-action.cancel { color: var(--color-secondary); }
+.knitting-report-editor .report-title-input { min-height: 44px; border-color: var(--color-border); border-radius: 8px; color: var(--color-text); }
+.knitting-report-editor .report-cover-pattern { min-height: 44px; color: var(--color-text-secondary); }
+.knitting-report-editor .report-cover-dates { color: var(--color-text-muted); }
+.knitting-report-editor .report-cover-dates button { min-height: 44px; padding: 0 8px; border-radius: 8px; color: var(--color-secondary); }
+.knitting-report-editor .report-cover-dates button:hover { background: var(--color-secondary-soft); }
+.knitting-report-editor .report-overview-section h2,
+.knitting-report-editor .report-personal-section h2,
+.knitting-report-editor .report-photo-section h2 { color: var(--color-text); }
+.knitting-report-editor .report-overview-section header p,
+.knitting-report-editor .report-personal-section header p,
+.knitting-report-editor .report-photo-section header p { color: var(--color-text-secondary); }
+.knitting-report-editor .report-facts { color: var(--color-text-secondary); }
+.knitting-report-editor .report-facts svg { color: var(--color-secondary); }
+.knitting-report-editor .report-status-badge { color: var(--color-secondary); background: var(--color-secondary-soft); }
+.knitting-report-editor .report-status-badge.status-완료,
+.knitting-report-editor .report-status-badge.status-완성 { color: var(--color-tertiary); background: var(--color-tertiary-soft); }
+.knitting-report-editor .report-summary-card { border-color: var(--color-border); border-radius: 12px; color: var(--color-text); background: var(--color-surface); }
+.knitting-report-editor .report-summary-card:hover { border-color: var(--color-primary); background: var(--color-primary-soft); }
+.knitting-report-editor .report-summary-icon,
+.knitting-report-editor .report-personal-icon { color: var(--color-secondary); background: var(--color-secondary-soft); }
+.knitting-report-editor .report-summary-copy strong { color: var(--color-text); }
+.knitting-report-editor .report-summary-copy small { color: var(--color-text-secondary); }
+.knitting-report-editor .report-recommended { color: var(--color-secondary); background: var(--color-secondary-soft); }
+.knitting-report-editor .report-summary-edit,
+.knitting-report-editor .report-personal-chevron { color: var(--color-secondary); }
+.knitting-report-editor .report-help-mark { border-color: var(--color-border); color: var(--color-secondary); }
+.knitting-report-editor .report-personal-card { min-height: 44px; border: 1px solid var(--color-border); border-radius: 12px; color: var(--color-text); background: var(--color-surface-subtle); }
+.knitting-report-editor .report-personal-card:hover,
+.knitting-report-editor .report-personal-card.open { border-color: var(--color-primary); color: var(--color-primary); background: var(--color-primary-soft); }
+.knitting-report-editor .report-personal-inline { border-color: var(--color-border); border-radius: 12px; background: var(--color-surface); }
+.knitting-report-editor .report-more-records,
+.knitting-report-editor .report-candidate-notice { min-height: 44px; border-color: var(--color-border); border-radius: 8px; color: var(--color-secondary); background: var(--color-surface); }
+.knitting-report-editor .report-more-records:hover { border-color: var(--color-secondary); background: var(--color-secondary-soft); }
+.knitting-report-editor .report-candidate-notice:hover { border-color: var(--color-primary); color: var(--color-primary); background: var(--color-primary-soft); }
+.knitting-report-editor .report-analysis-notice { color: var(--color-tertiary); }
+.knitting-report-editor .report-photo-tile { border-color: var(--color-border); border-radius: 12px; background: var(--color-surface); }
+.knitting-report-editor .report-photo-open { background: var(--color-surface-subtle); }
+.knitting-report-editor .report-photo-label input,
+.knitting-report-editor .report-photo-date input,
+.knitting-report-editor .report-photo-tile > input { min-height: 44px; border-color: var(--color-border); border-radius: 8px; color: var(--color-text); font-size: 11px; }
+.knitting-report-editor .report-photo-tools { border: 1px solid var(--color-border); border-radius: 8px; background: var(--color-surface); }
+.knitting-report-editor .report-photo-tools button { width: 44px; height: 44px; border-radius: 8px; color: var(--color-secondary); }
+.knitting-report-editor .report-photo-tools button:hover:not(:disabled) { color: var(--color-primary); background: var(--color-primary-soft); }
+.knitting-report-editor .report-photo-delete,
+.knitting-report-editor .report-remove-photo { width: 44px; height: 44px; border-radius: 8px; color: var(--color-danger); background: var(--color-danger-soft); }
+.knitting-report-editor .report-photo-add { min-height: 98px; border-color: var(--color-border); border-radius: 12px; color: var(--color-secondary); background: var(--color-surface-subtle); }
+.knitting-report-editor .report-bottom-actions { border-color: var(--color-border); background: var(--color-surface); box-shadow: 0 -1px 6px rgba(44,43,39,.06); }
+.knitting-report-editor .report-bottom-actions button { min-height: 44px; border-radius: 8px; }
+.knitting-report-editor .report-save-button { color: var(--color-surface); background: var(--color-primary); }
+.knitting-report-editor .report-save-button:hover:not(:disabled) { background: var(--color-primary-hover); }
+.knitting-report-editor .report-caption-button { border: 1px solid var(--color-border); color: var(--color-secondary); background: var(--color-secondary-soft); }
+.knitting-report-editor .report-caption-button:hover:not(:disabled) { background: var(--color-border); }
+.knitting-report-editor .report-detail-dialog,
+.knitting-report-editor .report-candidate-dialog { border-color: var(--color-border); border-radius: 16px; background: var(--color-surface); }
+.knitting-report-editor .report-detail-header { border-color: var(--color-divider); }
+.knitting-report-editor .report-detail-header h2 { color: var(--color-text); }
+.knitting-report-editor .report-detail-header p,
+.knitting-report-editor .report-detail-hint,
+.knitting-report-editor .report-field-hint,
+.knitting-report-editor .report-empty-hint { color: var(--color-text-secondary); }
+.knitting-report-editor .report-detail-subheading h3,
+.knitting-report-editor .report-subheading h3 { color: var(--color-text); }
+.knitting-report-editor .report-subheading > span,
+.knitting-report-editor .report-detail-subheading > span { color: var(--color-text-muted); }
+.knitting-report-editor .report-field { color: var(--color-text-secondary); }
+.knitting-report-editor .report-field input,
+.knitting-report-editor .report-field select,
+.knitting-report-editor .report-field textarea,
+.knitting-report-editor .report-table-row > input,
+.knitting-report-editor .report-pattern-size-row > input,
+.knitting-report-editor .report-finished-photos input,
+.knitting-report-editor .report-measurement-edit-row > input,
+.knitting-report-editor .report-measurement-edit-row > select,
+.knitting-report-editor .report-candidate-card > input,
+.knitting-report-editor .report-candidate-values textarea { min-height: 44px; border-color: var(--color-border); border-radius: 8px; color: var(--color-text); background: var(--color-surface); }
+.knitting-report-editor .report-field input:focus,
+.knitting-report-editor .report-field select:focus,
+.knitting-report-editor .report-field textarea:focus,
+.knitting-report-editor .report-table-row > input:focus,
+.knitting-report-editor .report-pattern-size-row > input:focus,
+.knitting-report-editor .report-finished-photos input:focus,
+.knitting-report-editor .report-measurement-edit-row > input:focus,
+.knitting-report-editor .report-measurement-edit-row > select:focus,
+.knitting-report-editor .report-candidate-card > input:focus,
+.knitting-report-editor .report-candidate-values textarea:focus { border-color: var(--color-primary); box-shadow: 0 0 0 3px var(--color-focus-ring); }
+.knitting-report-editor .report-tag-options button { min-height: 44px; border-radius: 8px; color: var(--color-secondary); }
+.knitting-report-editor .report-tag-options button.selected { border-color: var(--color-primary); color: var(--color-primary); background: var(--color-primary-soft); }
+.knitting-report-editor .report-measurement-table,
+.knitting-report-editor .report-entry-card,
+.knitting-report-editor .report-finished-photos article,
+.knitting-report-editor .report-candidate-card { border-color: var(--color-border); border-radius: 12px; background: var(--color-surface); }
+.knitting-report-editor .report-table-head,
+.knitting-report-editor .report-pattern-size-head { color: var(--color-text-secondary); background: var(--color-surface-subtle); }
+.knitting-report-editor .report-table-row > span,
+.knitting-report-editor .report-entry-title { color: var(--color-text); }
+.knitting-report-editor .report-pattern-size-row + .report-pattern-size-row,
+.knitting-report-editor .report-table-row + .report-table-row { border-color: var(--color-divider); }
+.knitting-report-editor .report-add-button { min-height: 44px; border: 1px solid var(--color-border); border-radius: 8px; color: var(--color-secondary); background: var(--color-secondary-soft); }
+.knitting-report-editor .report-add-button:hover:not(:disabled) { background: var(--color-border); }
+.knitting-report-editor .report-measurement-edit-row > button,
+.knitting-report-editor .report-icon-button { width: 44px; min-height: 44px; border-radius: 8px; color: var(--color-danger); }
+.knitting-report-editor .report-measurement-edit-row > button:hover,
+.knitting-report-editor .report-icon-button:hover { color: var(--color-danger); background: var(--color-danger-soft); }
+.knitting-report-editor .report-entry-with-photo .report-photo-field,
+.knitting-report-editor .report-photo-field { border-color: var(--color-border); color: var(--color-text-muted); background: var(--color-surface-subtle); }
+.knitting-report-editor .report-photo-button { min-height: 44px; border-color: var(--color-border); border-radius: 8px; color: var(--color-secondary); background: var(--color-surface); }
+.knitting-report-editor .report-photo-button:hover { border-color: var(--color-secondary); background: var(--color-secondary-soft); }
+.knitting-report-editor .report-error,
+.knitting-report-editor .report-icon-button.danger,
+.knitting-report-editor .instagram-report-error,
+.knitting-report-editor .instagram-caption-warning,
+.knitting-report-editor .instagram-caption-count.over { color: var(--color-danger); }
+.knitting-report-editor .report-linked-file,
+.knitting-report-editor .report-pattern-size-head,
+.knitting-report-editor .report-tension,
+.knitting-report-editor .report-candidate-values { border-color: var(--color-border); color: var(--color-text-secondary); background: var(--color-surface-subtle); }
+.knitting-report-editor .report-tension label { color: var(--color-secondary); background: var(--color-secondary-soft); }
+.knitting-report-editor .report-tension label.selected { border-color: var(--color-primary); color: var(--color-primary); background: var(--color-primary-soft); }
+.knitting-report-editor .report-inspector { border-color: var(--color-divider); background: var(--color-surface); }
+.knitting-report-editor .report-inspector::before { background: var(--color-border); }
+.knitting-report-editor .report-inspector .icon-button { width: 44px; height: 44px; }
+.knitting-report-editor .report-navigation { border-color: var(--color-divider); background: var(--color-surface-subtle); }
+.knitting-report-editor .report-nav-back,
+.knitting-report-editor .report-nav-list button,
+.knitting-report-editor .report-nav-add { min-height: 44px; border: 1px solid transparent; border-radius: 8px; color: var(--color-secondary); }
+.knitting-report-editor .report-nav-back:hover,
+.knitting-report-editor .report-nav-list button:hover:not(:disabled) { background: var(--color-secondary-soft); }
+.knitting-report-editor .report-nav-label,
+.knitting-report-editor .report-nav-list button small { color: var(--color-text-muted); }
+.knitting-report-editor .report-nav-list button.active { border-color: var(--color-primary); color: var(--color-primary); background: var(--color-primary-soft); }
+.knitting-report-editor .report-nav-add { border-color: var(--color-border); color: var(--color-secondary); background: var(--color-surface); }
+.knitting-report-editor .report-nav-add:hover:not(:disabled) { border-color: var(--color-secondary); background: var(--color-secondary-soft); }
+.knitting-report-editor .report-candidate-card > label { color: var(--color-text); }
+.knitting-report-editor .report-candidate-card > small,
+.knitting-report-editor .report-candidate-values > span,
+.knitting-report-editor .report-candidate-actions { color: var(--color-text-secondary); }
+.knitting-report-editor .report-candidate-actions { border-color: var(--color-divider); }
+.knitting-report-editor .report-candidate-actions .primary-button { min-height: 44px; border: 0; border-radius: 8px; }
+.knitting-report-editor .instagram-caption-dialog,
+.knitting-report-editor .instagram-report-dialog { border-color: var(--color-border); border-radius: 16px; background: var(--color-surface); }
+.knitting-report-editor .instagram-caption-choices fieldset,
+.knitting-report-editor .instagram-report-photo-list { border-color: var(--color-border); border-radius: 12px; background: var(--color-surface); }
+.knitting-report-editor .instagram-caption-choices legend,
+.knitting-report-editor .instagram-report-photo-choice strong { color: var(--color-text); }
+.knitting-report-editor .instagram-caption-choices legend small,
+.knitting-report-editor .instagram-caption-choices label,
+.knitting-report-editor .instagram-report-photo-choice small,
+.knitting-report-editor .instagram-report-limit,
+.knitting-report-editor .instagram-report-empty { color: var(--color-text-secondary); }
+.knitting-report-editor .instagram-caption-choices label { min-height: 44px; }
+.knitting-report-editor .instagram-caption-choices input,
+.knitting-report-editor .instagram-report-photo-choice input { width: 18px; height: 18px; accent-color: var(--color-primary); }
+.knitting-report-editor .instagram-report-photo-choice { min-height: 64px; border-color: var(--color-divider); }
+.knitting-report-editor .instagram-report-photo-choice img { background: var(--color-surface-subtle); }
+.knitting-report-editor .instagram-report-preview { background: var(--color-surface-subtle); }
+.knitting-report-editor .instagram-report-preview > div { color: var(--color-text-secondary); }
+.knitting-report-editor .instagram-report-actions > button { min-height: 44px; border-radius: 8px; }
+.knitting-report-editor .instagram-caption-dialog > textarea { min-height: 260px; border-color: var(--color-border); border-radius: 8px; color: var(--color-text); }
+.knitting-report-editor .instagram-caption-count { color: var(--color-text-muted); }
+.knitting-report-editor .instagram-report-dialog > .modal-heading small { color: var(--color-text-secondary); }
+.knitting-report-editor .instagram-caption-backdrop .modal-heading .icon-button,
+.knitting-report-editor .instagram-report-backdrop .modal-heading .icon-button,
+.knitting-report-editor .report-candidate-dialog .report-detail-header .icon-button { width: 44px; height: 44px; border-radius: 8px; }
+.knitting-report-editor .report-undo-snackbar { border-color: var(--color-border); border-radius: 12px; color: var(--color-text); box-shadow: 0 1px 3px rgba(44,43,39,.08); }
+.knitting-report-editor .report-undo-snackbar > button { min-height: 44px; border-radius: 8px; color: var(--color-secondary); background: var(--color-secondary-soft); }
+.knitting-report-editor .report-undo-snackbar > button:hover:not(:disabled) { background: var(--color-border); }
+.knitting-report-editor .report-undo-snackbar > button:last-child { width: 44px; color: var(--color-secondary); background: transparent; }
+.knitting-report-editor .report-photo-lightbox section > button { width: 44px; height: 44px; border-radius: 8px; color: var(--color-text); background: var(--color-surface); }
+.knitting-report-editor .report-photo-lightbox section > button:hover { color: var(--color-primary); background: var(--color-primary-soft); }
+.knitting-report-editor .report-save-button:disabled,
+.knitting-report-editor .report-caption-button:disabled,
+.knitting-report-editor .report-appbar-actions button:disabled { opacity: .5; cursor: not-allowed; }
+.knitting-report-editor button:focus-visible,
+.knitting-report-editor input:focus-visible,
+.knitting-report-editor select:focus-visible,
+.knitting-report-editor textarea:focus-visible { outline: 3px solid var(--color-focus-ring); outline-offset: 2px; }
+
+.viewer-shell .report-thumbnail { border-color: var(--color-border); border-radius: 8px; color: var(--color-secondary); background: var(--color-surface); }
+.viewer-shell .report-thumbnail:hover { border-color: var(--color-secondary); color: var(--color-secondary); background: var(--color-secondary-soft); }
+.viewer-shell .report-thumbnail.active { border-color: var(--color-primary); color: var(--color-primary); background: var(--color-primary-soft); }
+.viewer-shell .report-thumbnail-icon { border-color: var(--color-border); border-radius: 8px; color: var(--color-secondary); background: var(--color-surface-subtle); }
+.viewer-shell .report-thumbnail-icon i { color: var(--color-secondary); background: var(--color-secondary-soft); }
+.viewer-shell .report-thumbnail-icon i { display: grid; place-items: center; border: 1px solid var(--color-border); }
+.viewer-shell .report-thumbnail small { color: var(--color-text-muted); }
+
+.reports-page .report-list .home-report-info small.is-complete { color: var(--color-tertiary); }
+
+.knitting-report-editor .report-measurement-edit-row { grid-template-columns: minmax(68px,.8fr) minmax(62px,.8fr) minmax(62px,.8fr) 62px 44px; }
+
+@media (max-width: 767px) {
+  .knitting-report-editor .report-inspector { border-radius: 16px 16px 0 0; box-shadow: 0 -2px 12px rgba(44,43,39,.1); }
+  .knitting-report-editor .report-bottom-actions { box-shadow: 0 -1px 6px rgba(44,43,39,.06); }
+  .knitting-report-editor .report-measurement-edit-row { grid-template-columns: minmax(52px,.8fr) minmax(48px,.7fr) minmax(48px,.7fr) 52px 44px; }
+  body:has(.knitting-report-editor) .pwa-notice { bottom: calc(65px + max(18px, env(safe-area-inset-bottom))); }
+}
+
+body:has(.knitting-report-editor) .pwa-notice { border-color: var(--color-border); border-radius: 12px; color: var(--color-text-secondary); background: var(--color-surface); box-shadow: 0 1px 3px rgba(44,43,39,.08); }
+body:has(.knitting-report-editor) .pwa-notice-icon { color: var(--color-tertiary); background: var(--color-tertiary-soft); }
+body:has(.knitting-report-editor) .pwa-dismiss-button { width: 44px; height: 44px; border-radius: 8px; color: var(--color-secondary); }
+body:has(.knitting-report-editor) .pwa-dismiss-button:focus-visible { outline: 3px solid var(--color-focus-ring); outline-offset: 2px; }

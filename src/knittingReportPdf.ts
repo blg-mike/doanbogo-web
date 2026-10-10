@@ -1,5 +1,8 @@
 import { makeRasterPdf } from './charts'
+import { formatDate, formatNumber, t, translateMessage } from './locales'
+import type { LocaleKey } from './locales'
 import type { KnittingReport, ReportAccessory, ReportMeasurement, ReportModification, ReportNeedle, ReportYarn } from './types'
+import { formatWorkTime } from './workTime'
 
 const PAGE_WIDTH = 1240
 const PAGE_HEIGHT = 1754
@@ -10,7 +13,28 @@ const BOTTOM = PAGE_HEIGHT - 102
 type Page = { canvas: HTMLCanvasElement; context: CanvasRenderingContext2D; y: number }
 
 function cleanFileName(value: string) {
-  return value.trim().replace(/[\\/:*?"<>|]/g, '_').slice(0, 80) || '뜨개보고서'
+  return value.trim().replace(/[\\/:*?"<>|]/g, '_').slice(0, 80) || t('뜨개보고서')
+}
+
+const translatedChoiceFields = new Set(['project.craft', 'project.status', 'finished.washed', 'review.difficulty', 'review.fit', 'review.satisfaction', 'review.yarnSatisfaction', 'review.patternSatisfaction', 'review.makeAgain'])
+const numericReportFields = new Set(['usedSkeins', 'usedWeight', 'usedMeters', 'price', 'quantity', 'skeinWeight', 'skeinLength', 'gauge.patternStitches', 'gauge.patternRows', 'gauge.beforeStitches', 'gauge.beforeRows', 'gauge.afterStitches', 'gauge.afterRows'])
+
+function formatNumericText(value?: string) {
+  if (!value || !/^[+-]?\d+(?:[.,]\d+)?$/.test(value.trim())) return value ?? ''
+  return formatNumber(Number(value.trim().replace(',', '.')))
+}
+
+function reportFieldValue(field: string, value?: string) {
+  if (!value) return ''
+  if (translatedChoiceFields.has(field)) return translateMessage(value)
+  if (field === 'pattern.features') return value.split(',').map((item) => translateMessage(item.trim())).join(', ')
+  if (numericReportFields.has(field)) return formatNumericText(value)
+  return value
+}
+
+function formatActivityDate(value: string) {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value)
+  return match ? formatDate(new Date(Number(match[1]), Number(match[2]) - 1, Number(match[3]))) : value
 }
 
 function wrapText(context: CanvasRenderingContext2D, value: string, maxWidth: number) {
@@ -45,9 +69,9 @@ function drawImageContain(context: CanvasRenderingContext2D, image: HTMLImageEle
   context.drawImage(image, x + (width - drawWidth) / 2, y + (height - drawHeight) / 2, drawWidth, drawHeight)
 }
 
-export async function exportKnittingReportPdf(report: KnittingReport) {
+export async function exportKnittingReportPdf(report: KnittingReport, totalWorkTimeMs = 0) {
   const pages: Page[] = []
-  const title = report.fields['project.name']?.trim() || report.title || '뜨개 프로젝트'
+  const title = report.fields['project.name']?.trim() || report.title || t('뜨개 프로젝트')
   const values = report.fields
   let page = {} as Page
 
@@ -60,8 +84,8 @@ export async function exportKnittingReportPdf(report: KnittingReport) {
     context.fillStyle = '#fffdfa'
     context.fillRect(0, 0, PAGE_WIDTH, PAGE_HEIGHT)
     context.fillStyle = '#8b8294'
-    context.font = '600 20px "Noto Sans KR", sans-serif'
-    context.fillText('도안보고  ·  뜨개보고서', LEFT, 58)
+    context.font = '600 20px "Noto Sans KR", "Noto Sans JP", "Yu Gothic", "Meiryo", Arial, sans-serif'
+    context.fillText(t('도안보고  ·  뜨개보고서'), LEFT, 58)
     context.strokeStyle = '#e8e2e6'
     context.lineWidth = 2
     context.beginPath(); context.moveTo(LEFT, 78); context.lineTo(RIGHT, 78); context.stroke()
@@ -69,8 +93,8 @@ export async function exportKnittingReportPdf(report: KnittingReport) {
     pages.push(page)
     if (first) {
       context.fillStyle = '#34283b'
-      context.font = '700 52px "Noto Sans KR", sans-serif'
-      context.fillText('뜨개보고서', LEFT, 145)
+      context.font = '700 52px "Noto Sans KR", "Noto Sans JP", "Yu Gothic", "Meiryo", Arial, sans-serif'
+      context.fillText(t('뜨개보고서'), LEFT, 145)
       context.fillStyle = '#958796'
       context.font = 'italic 24px Georgia, serif'
       context.fillText('Knitting Report', LEFT + 300, 142)
@@ -78,8 +102,8 @@ export async function exportKnittingReportPdf(report: KnittingReport) {
       context.font = '700 34px "Noto Sans KR", sans-serif'
       context.fillText(title, LEFT, 202, 790)
       context.fillStyle = '#817887'
-      context.font = '20px "Noto Sans KR", sans-serif'
-      context.fillText('작성일  ' + new Date(report.createdAt).toLocaleDateString('ko-KR'), RIGHT - 235, 202)
+      context.font = '20px "Noto Sans KR", "Noto Sans JP", "Yu Gothic", "Meiryo", Arial, sans-serif'
+      context.fillText(t('작성일  ') + formatDate(report.createdAt), RIGHT - 235, 202)
       page.y = 244
     } else {
       context.fillStyle = '#4d4652'
@@ -96,7 +120,7 @@ export async function exportKnittingReportPdf(report: KnittingReport) {
     if (page.y + height > BOTTOM) makePage()
   }
 
-  function drawSection(number: string, name: string) {
+  function drawSection(number: string, name: LocaleKey) {
     ensure(74)
     page.context.fillStyle = '#f5e8ec'
     page.context.beginPath(); page.context.roundRect(LEFT, page.y, RIGHT - LEFT, 56, 13); page.context.fill()
@@ -104,7 +128,7 @@ export async function exportKnittingReportPdf(report: KnittingReport) {
     page.context.font = '700 23px "Noto Sans KR", sans-serif'
     page.context.fillText(number, LEFT + 18, page.y + 37)
     page.context.font = '700 27px "Noto Sans KR", sans-serif'
-    page.context.fillText(name, LEFT + 82, page.y + 37)
+    page.context.fillText(t(name), LEFT + 82, page.y + 37)
     page.y += 76
   }
 
@@ -147,10 +171,15 @@ export async function exportKnittingReportPdf(report: KnittingReport) {
   }
 
   function drawMeasurementRows(rows: ReportMeasurement[]) {
-    drawTableHeader(['항목', '도안', '완성', ''])
+    drawTableHeader([t('항목'), t('도안'), t('완성'), ''])
     const widths = [260, 350, 350, RIGHT - LEFT - 960]
     for (const row of rows) {
-      const formatMeasure = (value: string) => value.trim() && !/(?:cm|inch|in)\s*$/i.test(value.trim()) ? `${value} ${row.unit ?? 'cm'}` : value
+      const formatMeasure = (value: string) => {
+        const text = value.trim()
+        if (!text || /(?:cm|inch|in)\s*$/i.test(text)) return text
+        const numeric = /^[+-]?\d+(?:[.,]\d+)?$/.test(text) ? formatNumericText(text) : text
+        return `${numeric} ${row.unit === 'inch' ? t('inch') : row.unit ?? 'cm'}`
+      }
       const entries = [row.label, formatMeasure(row.pattern), formatMeasure(row.finished), '']
       const height = Math.max(46, ...entries.map((value, index) => {
         page.context.font = '18px "Noto Sans KR", sans-serif'
@@ -158,7 +187,7 @@ export async function exportKnittingReportPdf(report: KnittingReport) {
       }))
       if (page.y + height > BOTTOM) {
         makePage()
-        drawTableHeader(['항목', '도안', '완성', ''])
+        drawTableHeader([t('항목'), t('도안'), t('완성'), ''])
       }
       let x = LEFT + 14
       entries.forEach((value, index) => {
@@ -188,15 +217,15 @@ export async function exportKnittingReportPdf(report: KnittingReport) {
       drawImageContain(page.context, image, LEFT + 3, page.y + 3, 144, 144)
       page.y += 164
     }
-    for (const [label, value] of filled) drawPair(label, value)
+    for (const [label, value] of filled) drawPair(t(label as LocaleKey), value)
     page.y += 14
   }
 
   function nonEmpty(entries: [string, string][]) { return entries.some(([, value]) => Boolean(value?.trim())) }
 
   const projectPairs: [string, string][] = [
-    ['뜨개 종류', values['project.craft']], ['상태', values['project.status']], ['CO (시작일)', values['project.co']],
-    ['FO (완성일)', values['project.fo']], ['만든 대상', values['project.recipient']], ['메모', values['project.memo']],
+    ['뜨개 종류', reportFieldValue('project.craft', values['project.craft'])], ['상태', reportFieldValue('project.status', values['project.status'])], ['CO (시작일)', values['project.co']],
+    ['FO (완성일)', values['project.fo']], ['누적 작업시간', formatWorkTime(totalWorkTimeMs)], ['작업시간 메모', values['project.workTime']], ['만든 대상', values['project.recipient']], ['메모', values['project.memo']],
   ]
   if (nonEmpty(projectPairs) || report.representativePhoto || title) {
     drawSection('01', '프로젝트 정보')
@@ -206,11 +235,11 @@ export async function exportKnittingReportPdf(report: KnittingReport) {
   const patternPairs: [string, string][] = [
     ['도안명', values['pattern.name']], ['원작자 · 디자이너', values['pattern.designer']], ['도안 출처', values['pattern.source']],
     ['도안 구매처', values['pattern.seller']], ['도안 링크', values['pattern.link']], ['사용 언어', values['pattern.language']],
-    ['원본 사이즈', values['pattern.originalSizes']], ['선택 사이즈', values['pattern.selectedSize']], ['디자인 특징', values['pattern.features']], ['도안 메모', values['pattern.memo']],
+    ['원본 사이즈', values['pattern.originalSizes']], ['선택 사이즈', values['pattern.selectedSize']], ['디자인 특징', reportFieldValue('pattern.features', values['pattern.features'])], ['도안 메모', values['pattern.memo']],
   ]
   if (nonEmpty(patternPairs) || report.measurements.some((row) => row.pattern.trim())) {
     drawSection('02', '도안 정보')
-    await drawCard(values['pattern.name'] || '도안 정보', '', patternPairs.filter(([label]) => label !== '도안명'))
+    await drawCard(values['pattern.name'] || t('도안 정보'), '', patternPairs.filter(([label]) => label !== '도안명'))
     if (report.measurements.some((row) => row.pattern.trim())) drawMeasurementRows(report.measurements.filter((row) => row.label.trim() || row.pattern.trim()))
   }
 
@@ -222,7 +251,7 @@ export async function exportKnittingReportPdf(report: KnittingReport) {
   const printableYarns = report.yarns.filter((yarn) => yarnFields.some(([key]) => String(yarn[key] ?? '').trim()) || yarn.photo)
   if (printableYarns.length) {
     drawSection('03', '사용한 실')
-    for (const [index, yarn] of printableYarns.entries()) await drawCard(yarn.product || yarn.brand || '실 ' + (index + 1), yarn.photo, yarnFields.map(([key, label]) => [label, String(yarn[key] ?? '')] as [string, string]))
+    for (const [index, yarn] of printableYarns.entries()) await drawCard(yarn.product || yarn.brand || t('실') + ' ' + formatNumber(index + 1), yarn.photo, yarnFields.map(([key, label]) => [label, reportFieldValue(key, String(yarn[key] ?? '')) ?? ''] as [string, string]))
   }
 
   const needleFields: [keyof ReportNeedle, string][] = [['section', '구간'], ['type', '바늘 종류'], ['size', '사이즈'], ['cableLength', '케이블 길이'], ['memo', '메모']]
@@ -231,19 +260,19 @@ export async function exportKnittingReportPdf(report: KnittingReport) {
   const printableAccessories = report.accessories.filter((row) => row.photo || accessoryFields.some(([key]) => row[key].trim()))
   if (printableNeedles.length || printableAccessories.length) {
     drawSection('04', '바늘 · 부자재')
-    for (const [index, row] of printableNeedles.entries()) await drawCard(row.section || '바늘 ' + (index + 1), '', needleFields.map(([key, label]) => [label, row[key]]))
-    for (const [index, row] of printableAccessories.entries()) await drawCard(row.type || '부자재 ' + (index + 1), row.photo, accessoryFields.map(([key, label]) => [label, row[key]]))
+    for (const [index, row] of printableNeedles.entries()) await drawCard(row.section || t('바늘') + ' ' + (index + 1), '', needleFields.map(([key, label]) => [label, row[key]]))
+    for (const [index, row] of printableAccessories.entries()) await drawCard(row.type || t('부자재') + ' ' + (index + 1), row.photo, accessoryFields.map(([key, label]) => [label, row[key]]))
   }
 
   const gaugePairs: [string, string][] = [
-    ['측정 기준', values['gauge.unit']], ['도안 게이지', [values['gauge.patternStitches'] && values['gauge.patternStitches'] + '코', values['gauge.patternRows'] && values['gauge.patternRows'] + '단'].filter(Boolean).join(' × ')],
-    ['세탁 전 게이지', [values['gauge.beforeStitches'] && values['gauge.beforeStitches'] + '코', values['gauge.beforeRows'] && values['gauge.beforeRows'] + '단'].filter(Boolean).join(' × ')],
-    ['세탁 후 게이지', [values['gauge.afterStitches'] && values['gauge.afterStitches'] + '코', values['gauge.afterRows'] && values['gauge.afterRows'] + '단'].filter(Boolean).join(' × ')],
-    ['손땀', values['gauge.tension'] ? ['많이 널손', '널손', '보통', '쫀손', '많이 쫀손'][Number(values['gauge.tension']) - 1] : ''], ['메모', values['gauge.memo']],
+    ['측정 기준', values['gauge.unit']], ['도안 게이지', [values['gauge.patternStitches'] && formatNumericText(values['gauge.patternStitches']) + t('코'), values['gauge.patternRows'] && formatNumericText(values['gauge.patternRows']) + t('단')].filter(Boolean).join(' × ')],
+    ['세탁 전 게이지', [values['gauge.beforeStitches'] && formatNumericText(values['gauge.beforeStitches']) + t('코'), values['gauge.beforeRows'] && formatNumericText(values['gauge.beforeRows']) + t('단')].filter(Boolean).join(' × ')],
+    ['세탁 후 게이지', [values['gauge.afterStitches'] && formatNumericText(values['gauge.afterStitches']) + t('코'), values['gauge.afterRows'] && formatNumericText(values['gauge.afterRows']) + t('단')].filter(Boolean).join(' × ')],
+    ['손땀', values['gauge.tension'] ? t((['많이 널손', '널손', '보통', '쫀손', '많이 쫀손'][Number(values['gauge.tension']) - 1] ?? '보통') as LocaleKey) : ''], ['메모', values['gauge.memo']],
   ]
   if (nonEmpty(gaugePairs)) {
     drawSection('05', '게이지 · 손땀')
-    await drawCard('게이지', '', gaugePairs)
+    await drawCard(t('게이지'), '', gaugePairs)
   }
 
   const completedMeasures = report.measurements.filter((row) => row.finished.trim())
@@ -252,7 +281,7 @@ export async function exportKnittingReportPdf(report: KnittingReport) {
   if (completedMeasures.length || printableMods.length) {
     drawSection('06', '사이즈 · 변형')
     if (completedMeasures.length) drawMeasurementRows(completedMeasures)
-    for (const [index, row] of printableMods.entries()) await drawCard(row.section || '변형 ' + (index + 1), '', modificationFields.map(([key, label]) => [label, row[key]]))
+    for (const [index, row] of printableMods.entries()) await drawCard(row.section || t('변형') + ' ' + (index + 1), '', modificationFields.map(([key, label]) => [label, row[key]]))
   }
 
   const processPhotos = report.workPhotos.slice().sort((left, right) => left.activityDate.localeCompare(right.activityDate) || left.uploadedAt - right.uploadedAt)
@@ -269,18 +298,18 @@ export async function exportKnittingReportPdf(report: KnittingReport) {
         page.context.strokeStyle = '#e8e2e6'; page.context.stroke()
         if (image) drawImageContain(page.context, image, x + 12, page.y + 12, 496, 254)
         page.context.fillStyle = '#554a58'; page.context.font = '18px "Noto Sans KR", sans-serif'
-        page.context.fillText(`${photo.activityDate} · ${photo.label || '작업 기록'}`, x + 15, page.y + 292, 490)
+          page.context.fillText(`${formatActivityDate(photo.activityDate)} · ${photo.label || t('작업 기록')}`, x + 15, page.y + 292, 490)
       }
       page.y += 330
     }
   }
 
   const washPairs: [string, string][] = [
-    ['세탁 여부', values['finished.washed']], ['세탁 방법', values['finished.washingMethod']], ['블로킹 방법', values['finished.blockingMethod']],
+    ['세탁 여부', reportFieldValue('finished.washed', values['finished.washed'])], ['세탁 방법', values['finished.washingMethod']], ['블로킹 방법', values['finished.blockingMethod']],
     ['세탁 전 크기', values['finished.beforeSize']], ['세탁 후 크기', values['finished.afterSize']], ['세탁·블로킹 변화', values['finished.washMemo']],
-    ['난이도', values['review.difficulty']], ['핏', values['review.fit']], ['전체 만족도', values['review.satisfaction']],
+    ['난이도', reportFieldValue('review.difficulty', values['review.difficulty'])], ['핏', reportFieldValue('review.fit', values['review.fit'])], ['전체 만족도', reportFieldValue('review.satisfaction', values['review.satisfaction'])],
     ['실 메모', values['private.yarnMemo']],
-    ['실 만족도', values['review.yarnSatisfaction']], ['도안 만족도', values['review.patternSatisfaction']], ['다시 뜰 의향', values['review.makeAgain']],
+    ['실 만족도', reportFieldValue('review.yarnSatisfaction', values['review.yarnSatisfaction'])], ['도안 만족도', reportFieldValue('review.patternSatisfaction', values['review.patternSatisfaction'])], ['다시 뜰 의향', reportFieldValue('review.makeAgain', values['review.makeAgain'])],
     ['문제와 해결', values['review.problems']], ['다음에 바꾸고 싶은 점', values['review.nextChanges']], ['완성 메모', values['review.memo']],
   ]
   const printablePhotos = report.finishedPhotos.filter((photo) => photo.dataUrl)
@@ -298,24 +327,24 @@ export async function exportKnittingReportPdf(report: KnittingReport) {
           page.context.strokeStyle = '#e8e2e6'; page.context.stroke()
           if (image) drawImageContain(page.context, image, x + 12, page.y + 12, 496, 254)
           page.context.fillStyle = '#554a58'; page.context.font = '18px "Noto Sans KR", sans-serif'
-          page.context.fillText(photo.label || '완성 사진', x + 15, page.y + 292, 490)
+          page.context.fillText(photo.label || t('완성 사진'), x + 15, page.y + 292, 490)
         }
         page.y += 330
       }
     }
-    if (nonEmpty(washPairs)) await drawCard('세탁 · 착용 후기', '', washPairs)
+    if (nonEmpty(washPairs)) await drawCard(t('세탁 · 착용 후기'), '', washPairs)
   }
 
   if (pages.length === 1 && page.y < 450) {
     page.context.fillStyle = '#8a818d'; page.context.font = '20px "Noto Sans KR", sans-serif'
-    page.context.fillText('작성한 보고서 내용이 없습니다.', LEFT, page.y + 18)
+    page.context.fillText(t('작성한 보고서 내용이 없습니다.'), LEFT, page.y + 18)
   }
 
   const rasterPages = pages.map(({ canvas, context }, index) => {
     context.fillStyle = '#8b8294'; context.font = '16px "Noto Sans KR", sans-serif'
     context.textAlign = 'right'
     context.fillText(title, RIGHT, PAGE_HEIGHT - 53)
-    context.fillText(`${index + 1} / ${pages.length}`, RIGHT, PAGE_HEIGHT - 28)
+    context.fillText(`${formatNumber(index + 1)} / ${formatNumber(pages.length)}`, RIGHT, PAGE_HEIGHT - 28)
     context.textAlign = 'left'
     const data = canvas.toDataURL('image/jpeg', 0.92)
     const jpeg = Uint8Array.from(atob(data.slice(data.indexOf(',') + 1)), (character) => character.charCodeAt(0))
@@ -325,7 +354,7 @@ export async function exportKnittingReportPdf(report: KnittingReport) {
   const url = URL.createObjectURL(blob)
   const anchor = document.createElement('a')
   anchor.href = url
-  anchor.download = cleanFileName(title) + '_뜨개보고서.pdf'
+  anchor.download = cleanFileName(title) + '_' + t('뜨개보고서') + '.pdf'
   anchor.click()
   window.setTimeout(() => URL.revokeObjectURL(url), 1000)
 }

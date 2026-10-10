@@ -71,7 +71,7 @@ function isGuideArray(value: unknown) {
     (guide.xStartRatio === undefined || guide.xEndRatio === undefined || (guide.xStartRatio as number) < (guide.xEndRatio as number)) &&
     (guide.markerProgress === undefined || Number.isFinite(guide.markerProgress) && (guide.markerProgress as number) >= 0 && (guide.markerProgress as number) <= 1) &&
     (guide.opacity === undefined || Number.isFinite(guide.opacity) && (guide.opacity as number) >= 0.3 && (guide.opacity as number) <= 1) &&
-    (guide.thickness === undefined || Number.isFinite(guide.thickness) && (guide.thickness as number) >= 1 && (guide.thickness as number) <= 12) &&
+    (guide.thickness === undefined || Number.isFinite(guide.thickness) && (guide.thickness as number) >= 1 && (guide.thickness as number) <= 36) &&
     (guide.rowSpacing === undefined || Number.isFinite(guide.rowSpacing) && (guide.rowSpacing as number) > 0 && (guide.rowSpacing as number) <= 1) &&
     (guide.rowSpacingStartRow === undefined || Number.isSafeInteger(guide.rowSpacingStartRow) && (guide.rowSpacingStartRow as number) >= 1 && (guide.rowSpacingStartRow as number) <= 9999) &&
     (guide.rowSpacingDirection === undefined || guide.rowSpacingDirection === 'up' || guide.rowSpacingDirection === 'down') &&
@@ -100,7 +100,9 @@ function isGuideArray(value: unknown) {
       (guide.chartRegion.rowLayout === undefined || isObject(guide.chartRegion.rowLayout) && Number.isFinite(guide.chartRegion.rowLayout.top) && Number(guide.chartRegion.rowLayout.top) >= 0 && Number(guide.chartRegion.rowLayout.top) <= 1 && Number.isFinite(guide.chartRegion.rowLayout.height) && Number(guide.chartRegion.rowLayout.height) > 0 && Number(guide.chartRegion.rowLayout.height) <= 1 && Number(guide.chartRegion.rowLayout.top) + Number(guide.chartRegion.rowLayout.height) <= 1.000001) &&
       (guide.chartRegion.rowPositions === undefined || Array.isArray(guide.chartRegion.rowPositions) && guide.chartRegion.rowPositions.length === Number(guide.chartRegion.lastRow) - Number(guide.chartRegion.firstRow) + 1 && guide.chartRegion.rowPositions.every((position) => Number.isFinite(position) && Number(position) >= 0 && Number(position) <= 1))) &&
     (guide.focus === undefined || isObject(guide.focus) && typeof guide.focus.enabled === 'boolean' && ['low', 'medium', 'high'].includes(String(guide.focus.strength)) &&
-      [0, 1, 2].includes(guide.focus.range as number) && ['page', 'region'].includes(String(guide.focus.scope)) && Number.isFinite(guide.focus.rowSpacing) && Number(guide.focus.rowSpacing) > 0 && Number(guide.focus.rowSpacing) <= 1))
+      [0, 1, 2].includes(guide.focus.range as number) && ['page', 'region'].includes(String(guide.focus.scope)) && Number.isFinite(guide.focus.rowSpacing) && Number(guide.focus.rowSpacing) > 0 && Number(guide.focus.rowSpacing) <= 1 &&
+      (guide.focus.dimOpacity === undefined || Number.isFinite(guide.focus.dimOpacity) && Number(guide.focus.dimOpacity) >= 0 && Number(guide.focus.dimOpacity) <= 0.8) &&
+      (guide.focus.bandHeightRatio === undefined || Number.isFinite(guide.focus.bandHeightRatio) && Number(guide.focus.bandHeightRatio) >= 0.01 && Number(guide.focus.bandHeightRatio) <= 0.3)))
 }
 
 function isCounterHistory(value: unknown) {
@@ -289,12 +291,13 @@ export async function readWorkspaceBackup(file: File): Promise<WorkspaceData> {
   const ids = new Set<string>()
   const documents: DocumentRecord[] = manifest.documents.map((entry, index) => {
     if (!isObject(entry)) throw new Error('작업 파일에 올바르지 않은 도안 정보가 있습니다.')
-    const { id, fileName, size, pageCount, createdAt, lastOpenedAt, tags, pdfPath, coverPath } = entry
+    const { id, fileName, size, pageCount, createdAt, lastOpenedAt, tags, pdfPath, coverPath, totalWorkTimeMs } = entry
     const photoFolder = (manifest.version as number) >= 13 && entry.kind === 'photos'
     if (typeof id !== 'string' || !id || ids.has(id) || typeof fileName !== 'string' || !fileName ||
       !Number.isSafeInteger(size) || (size as number) < 0 || !Number.isSafeInteger(pageCount) || (pageCount as number) < 1 ||
       typeof createdAt !== 'number' || !Number.isFinite(createdAt) ||
       !(lastOpenedAt === null || (typeof lastOpenedAt === 'number' && Number.isFinite(lastOpenedAt))) || !isStringArray(tags) ||
+      (totalWorkTimeMs !== undefined && (!Number.isSafeInteger(totalWorkTimeMs) || (totalWorkTimeMs as number) < 0)) ||
       (entry.kind !== undefined && entry.kind !== 'pdf' && entry.kind !== 'photos')) {
       throw new Error('작업 파일에 올바르지 않은 도안 정보가 있습니다.')
     }
@@ -328,6 +331,7 @@ export async function readWorkspaceBackup(file: File): Promise<WorkspaceData> {
       createdAt,
       lastOpenedAt,
       tags,
+      totalWorkTimeMs: typeof totalWorkTimeMs === 'number' ? totalWorkTimeMs : 0,
       pdf: pdfBlob,
       cover,
     }
@@ -381,7 +385,8 @@ export async function readWorkspaceBackup(file: File): Promise<WorkspaceData> {
   const pages = manifest.pages.map((entry): PageRecord => {
     if (!isObject(entry) || typeof entry.documentId !== 'string' || !pageCounts.has(entry.documentId) ||
       !Number.isSafeInteger(entry.pageNumber) || (entry.pageNumber as number) < 1 || (entry.pageNumber as number) > pageCounts.get(entry.documentId)! ||
-      typeof entry.hidden !== 'boolean' || typeof entry.bookmarked !== 'boolean') {
+      typeof entry.hidden !== 'boolean' || typeof entry.bookmarked !== 'boolean' ||
+      (entry.hiddenGroupId !== undefined && (typeof entry.hiddenGroupId !== 'string' || !entry.hiddenGroupId))) {
       throw new Error('작업 파일에 올바르지 않은 페이지 정보가 있습니다.')
     }
     return entry as unknown as PageRecord
@@ -492,6 +497,7 @@ export async function readWorkspaceBackup(file: File): Promise<WorkspaceData> {
       !(entry.deletedAt === null || typeof entry.deletedAt === 'number' && Number.isFinite(entry.deletedAt)) ||
       !(entry.lastWorkedAt === null || typeof entry.lastWorkedAt === 'number' && Number.isFinite(entry.lastWorkedAt)) ||
       !Number.isFinite(entry.createdAt) || !isStringArray(entry.tags) ||
+      (entry.totalWorkTimeMs !== undefined && (!Number.isSafeInteger(entry.totalWorkTimeMs) || (entry.totalWorkTimeMs as number) < 0)) ||
       (entry.kind === 'document' && !documentById.has(entry.entityId)) || (entry.kind === 'chart' && !chartById.has(entry.entityId))) {
       throw new Error('작업 파일에 올바르지 않은 프로젝트 상태가 있습니다.')
     }
@@ -502,8 +508,8 @@ export async function readWorkspaceBackup(file: File): Promise<WorkspaceData> {
   const homeProjects = [
     ...documents.map((item): HomeProject => {
       const saved = projectByKey.get('document:' + item.id)
-      return saved ? { ...saved, fileName: item.fileName, documentKind: item.kind ?? 'pdf', pageCount: item.pageCount, cover: item.cover } :
-        { key: 'document:' + item.id, entityId: item.id, kind: 'document', title: item.fileName.replace(/\.pdf$/i, ''), fileName: item.fileName, documentKind: item.kind ?? 'pdf', pageCount: item.pageCount, cover: item.cover, tags: item.tags, status: 'active', archivedAt: null, deletedAt: null, lastWorkedAt: item.lastOpenedAt, createdAt: item.createdAt }
+      return saved ? { ...saved, fileName: item.fileName, documentKind: item.kind ?? 'pdf', pageCount: item.pageCount, cover: item.cover, totalWorkTimeMs: item.totalWorkTimeMs ?? saved.totalWorkTimeMs ?? 0 } :
+        { key: 'document:' + item.id, entityId: item.id, kind: 'document', title: item.fileName.replace(/\.pdf$/i, ''), fileName: item.fileName, documentKind: item.kind ?? 'pdf', pageCount: item.pageCount, cover: item.cover, tags: item.tags, status: 'active', archivedAt: null, deletedAt: null, lastWorkedAt: item.lastOpenedAt, createdAt: item.createdAt, totalWorkTimeMs: item.totalWorkTimeMs ?? 0 }
     }),
     ...charts.map((item): HomeProject => {
       const saved = projectByKey.get('chart:' + item.id)

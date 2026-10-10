@@ -9,6 +9,12 @@ export function textNoteCounterRotation(rotation: number): number {
   return (360 - rotation % 360) % 360
 }
 
+export function textNoteGestureExceededThreshold(start: { x: number; y: number }, current: { x: number; y: number }, threshold = 8): boolean {
+  const dx = current.x - start.x
+  const dy = current.y - start.y
+  return dx * dx + dy * dy >= threshold * threshold
+}
+
 export function textNoteBoxAt(point: { x: number; y: number }): TextNoteBox {
   const width = 0.3
   const height = 0.12

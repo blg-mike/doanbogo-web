@@ -1,5 +1,18 @@
 import type { PageWorkRecord, ProgressGuide } from './types'
 
+export const DEFAULT_PROGRESS_LINE_THICKNESS = 12
+
+export function createDefaultPrimaryProgressGuide(position: number): ProgressGuide {
+  return {
+    id: crypto.randomUUID(),
+    position,
+    role: 'primary',
+    xStartRatio: 0,
+    xEndRatio: 1,
+    thickness: DEFAULT_PROGRESS_LINE_THICKNESS,
+  }
+}
+
 export interface ProgressGuideCandidate {
   axis: 'horizontal' | 'vertical'
   guide: ProgressGuide
@@ -38,7 +51,7 @@ export function migrateProgressGuides(work: PageWorkRecord, primaryKey: string, 
   const selectedReferences = references.map((key) => byKey.get(key)).filter((candidate): candidate is ProgressGuideCandidate => Boolean(candidate))
   const mainGuide: ProgressGuide = primary
     ? convert(primary, 'primary')
-    : { id: crypto.randomUUID(), position: work.horizontalPosition ?? 0.5, role: 'primary', xStartRatio: 0.15, xEndRatio: 0.85 }
+    : createDefaultPrimaryProgressGuide(work.horizontalPosition ?? 0.5)
 
   return {
     ...work,

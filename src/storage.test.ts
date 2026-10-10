@@ -1,6 +1,6 @@
 import 'fake-indexeddb/auto'
 import { describe, expect, it } from 'vitest'
-import { addDocument, appendPhotoPages, createPhotoFolder, deleteDocument, duplicateDocument, getPageRecognition, getPageWork, getPages, getPhotoPage, getPhotoPages, getViewer, listDocuments, markOpened, normalizePageWork, renameDocument, savePageRecognition, savePageWork, saveViewer, saveViewerAndPageWorks, setPageFlag, updateTags } from './storage'
+import { addDocument, addDocumentWorkTime, appendPhotoPages, createPhotoFolder, deleteDocument, duplicateDocument, getHomeProject, getPageRecognition, getPageWork, getPages, getPhotoPage, getPhotoPages, getViewer, listDocuments, markOpened, normalizePageWork, renameDocument, savePageRecognition, savePageWork, saveViewer, saveViewerAndPageWorks, setPageFlag, setPagesHiddenState, updateTags } from './storage'
 import { createCounter } from './smartCounter'
 import type { DocumentRecord } from './types'
 
@@ -48,6 +48,17 @@ describe('local document storage', () => {
     await deleteDocument(document.id)
   })
 
+  it('adds paused work time atomically to the document and workspace summary', async () => {
+    const document = makeDocument(crypto.randomUUID(), 'Timer.pdf', Date.now())
+    await addDocument(document)
+
+    await Promise.all([addDocumentWorkTime(document.id, 30_000), addDocumentWorkTime(document.id, 20_000)])
+
+    expect((await listDocuments()).find((item) => item.id === document.id)?.totalWorkTimeMs).toBe(50_000)
+    expect((await getHomeProject('document', document.id))?.totalWorkTimeMs).toBe(50_000)
+    await deleteDocument(document.id)
+  })
+
   it('searches by filename and tag and keeps the selected ordering', async () => {
     const prefix = crypto.randomUUID()
     const first = makeDocument(prefix + '-a', 'Cardigan.pdf', 1)
@@ -67,7 +78,7 @@ describe('local document storage', () => {
   })
 
   it('duplicates the PDF while starting with fresh tags and viewer state', async () => {
-    const original = makeDocument(crypto.randomUUID(), 'Pattern.pdf', Date.now(), ['coat'])
+    const original = { ...makeDocument(crypto.randomUUID(), 'Pattern.pdf', Date.now(), ['coat']), totalWorkTimeMs: 60_000 }
     await addDocument(original)
     await setPageFlag(original.id, 4, 'bookmarked', true)
     const copy = await duplicateDocument(original.id)
@@ -75,6 +86,7 @@ describe('local document storage', () => {
 
     expect(savedCopy?.fileName).toBe('복사본 - Pattern.pdf')
     expect(savedCopy?.tags).toEqual([])
+    expect(savedCopy?.totalWorkTimeMs).toBe(0)
     expect(savedCopy?.pdf?.size).toBe(original.pdf!.size)
     expect((await getViewer(copy.id, copy.pageCount)).primary.page).toBe(1)
     expect(await getPages(copy.id)).toEqual([])
@@ -160,6 +172,37 @@ describe('local document storage', () => {
     expect(await getPageRecognition(document.id, 5)).toBeUndefined()
     expect(await getPageWork(document.id, 5)).toMatchObject({ horizontalPosition: 0.5, verticalPosition: 0.5, annotations: [] })
     expect((await listDocuments('name')).some((item) => item.id === document.id)).toBe(false)
+  })
+
+  it('persists hidden group membership and keeps it through expand and re-hide', async () => {
+    const document = makeDocument(crypto.randomUUID(), 'Hidden groups.pdf', Date.now())
+    await addDocument(document)
+
+    await setPagesHiddenState(document.id, [2, 5], true, 'first-hide')
+    expect(await getPages(document.id)).toMatchObject([
+      { pageNumber: 2, hidden: true, hiddenGroupId: 'first-hide' },
+      { pageNumber: 5, hidden: true, hiddenGroupId: 'first-hide' },
+    ])
+
+    await setPagesHiddenState(document.id, [2, 5], false, 'first-hide')
+    expect(await getPages(document.id)).toMatchObject([
+      { pageNumber: 2, hidden: false, hiddenGroupId: 'first-hide' },
+      { pageNumber: 5, hidden: false, hiddenGroupId: 'first-hide' },
+    ])
+
+    await setPagesHiddenState(document.id, [2], false)
+    expect(await getPages(document.id)).toMatchObject([
+      { pageNumber: 2, hidden: false },
+      { pageNumber: 5, hidden: false, hiddenGroupId: 'first-hide' },
+    ])
+    expect((await getPages(document.id)).find((page) => page.pageNumber === 2)).not.toHaveProperty('hiddenGroupId')
+
+    await setPagesHiddenState(document.id, [5], true, 'second-hide')
+    expect(await getPages(document.id)).toMatchObject([
+      { pageNumber: 2, hidden: false },
+      { pageNumber: 5, hidden: true, hiddenGroupId: 'second-hide' },
+    ])
+    await deleteDocument(document.id)
   })
 
   it('commits counter state and linked guide work in the same storage transaction', async () => {

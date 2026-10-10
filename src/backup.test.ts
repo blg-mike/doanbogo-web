@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest'
 import { strFromU8, strToU8, unzipSync, zipSync } from 'fflate'
 import { createWorkspaceBackup, readWorkspaceBackup } from './backup'
 import { createCounter, isLegacyCounterSnapshots } from './smartCounter'
-import { addDocument, createPhotoFolder, deleteChart, deleteDocument, duplicateDocument, getChart, getHomeProject, getKnittingReport, getKnittingReports, getPageWork, getPages, getPhotoPages, getViewer, importWorkspaceData, listCharts, listDocuments, saveChart, saveHomeProject, saveKnittingReport, savePageWork, savePreference, saveViewer, setPageFlag } from './storage'
+import { addDocument, addDocumentWorkTime, createPhotoFolder, deleteChart, deleteDocument, duplicateDocument, getChart, getHomeProject, getKnittingReport, getKnittingReports, getPageWork, getPages, getPhotoPages, getPreference, getViewer, importWorkspaceData, listCharts, listDocuments, saveChart, saveHomeProject, saveKnittingReport, savePageWork, savePreference, saveViewer, setPageFlag, setPagesHiddenState } from './storage'
 import { createKnittingChart, makeRasterPdf } from './charts'
 import type { DocumentRecord, KnittingReport } from './types'
 
@@ -62,6 +62,29 @@ describe('portable workspace backup', () => {
     await savePageWork({ ...work, horizontalPosition: 0.25 })
     expect(await getPageWork('migration-check', 1)).toMatchObject({ horizontalPosition: 0.25 })
     await deleteDocument('migration-check')
+  })
+
+  it('round-trips accumulated document work time and defaults missing timer fields to zero', async () => {
+    const id = crypto.randomUUID()
+    const pdf = new Blob(['%PDF timer'], { type: 'application/pdf' })
+    await addDocument({ id, fileName: 'timer.pdf', size: pdf.size, pageCount: 1, createdAt: Date.now(), lastOpenedAt: null, tags: [], pdf, cover: null })
+    await addDocumentWorkTime(id, 3_723_000)
+
+    const backup = await createWorkspaceBackup()
+    const restored = await readWorkspaceBackup(new File([backup], 'timer.doanbogo'))
+    expect(restored.documents.find((item) => item.id === id)?.totalWorkTimeMs).toBe(3_723_000)
+    expect(restored.homeProjects?.find((item) => item.entityId === id)?.totalWorkTimeMs).toBe(3_723_000)
+
+    const files = unzipSync(new Uint8Array(await backup.arrayBuffer()))
+    const manifest = JSON.parse(strFromU8(files['manifest.json'])) as { documents: Record<string, unknown>[]; homeProjects: Record<string, unknown>[] }
+    delete manifest.documents.find((item) => item.id === id)!.totalWorkTimeMs
+    delete manifest.homeProjects.find((item) => item.entityId === id)!.totalWorkTimeMs
+    files['manifest.json'] = strToU8(JSON.stringify(manifest))
+    const withoutTimerFields = await readWorkspaceBackup(new File([zipSync(files, { level: 0 })], 'older-timer.doanbogo'))
+    expect(withoutTimerFields.documents.find((item) => item.id === id)?.totalWorkTimeMs).toBe(0)
+    expect(withoutTimerFields.homeProjects?.find((item) => item.entityId === id)?.totalWorkTimeMs).toBe(0)
+
+    await deleteDocument(id)
   })
 
   it('round-trips photo folders and image pages in the v14 backup', async () => {
@@ -226,6 +249,7 @@ describe('portable workspace backup', () => {
     const archivedAt = Date.now()
     await saveHomeProject({ ...originalProject!, status: 'paused', archivedAt })
     await setPageFlag(original.id, 3, 'bookmarked', true)
+    await setPagesHiddenState(original.id, [2, 5], true, 'hide-batch-1')
     const viewer = await getViewer(original.id, original.pageCount)
     const rowCounter = { ...createCounter('simple', '몸판 단'), id: 'body-row', value: 19, unit: 'row' as const, goalRow: 36, goalFinalSide: 'rs' as const, firstSide: 'ws' as const }
     const patternCounter = { ...createCounter('pattern', '몸판 무늬'), id: 'body-pattern', linkedToId: rowCounter.id, value: 3, currentRow: 19, patternRow: 3, startRow: 5, repeatLength: 12, repeatCount: 3, repeatStartNumber: 1, patternPreviewEnabled: true }
@@ -260,7 +284,7 @@ describe('portable workspace backup', () => {
       pageNumber: 4,
       horizontalPosition: 0.32,
       verticalPosition: 0.72,
-      horizontalGuides: [{ id: 'h-1', position: 0.32, linkedCounterId: patternCounter.id, name: patternCounter.name, color: patternCounter.color, chartRegion: { x: 0.1, y: 0.2, width: 0.8, height: 0.6, firstRow: 1, lastRow: 12, startCounterRow: 5, repeat: true, direction: 'top-to-bottom' }, focus: { enabled: true, strength: 'low', range: 1, scope: 'region', rowSpacing: 0.05 } }, { id: 'h-2', position: 0.68 }],
+      horizontalGuides: [{ id: 'h-1', position: 0.32, thickness: 36, linkedCounterId: patternCounter.id, name: patternCounter.name, color: patternCounter.color, chartRegion: { x: 0.1, y: 0.2, width: 0.8, height: 0.6, firstRow: 1, lastRow: 12, startCounterRow: 5, repeat: true, direction: 'top-to-bottom' }, focus: { enabled: true, strength: 'low', range: 1, scope: 'region', rowSpacing: 0.05, dimOpacity: 0.58, bandHeightRatio: 0.12 } }, { id: 'h-2', position: 0.68 }],
       verticalGuides: [{ id: 'v-1', position: 0.72 }],
       colorworkGrid: {
         chartWidthCm: 2, chartHeightCm: 3, gaugeStitches: 18, gaugeRows: 24, columns: 4, rows: 7,
@@ -273,6 +297,7 @@ describe('portable workspace backup', () => {
       ],
     })
     await savePreference('view', 'list')
+    await savePreference('language', 'ja')
     const chart = createKnittingChart(2, 3, 'in', 18, 24)
     chart.title = '작은 색상 차트'
     chart.cells[0] = '#e34b4b'
@@ -295,7 +320,11 @@ describe('portable workspace backup', () => {
     const restoredDocument = restored.documents.find((document) => document.id === original.id)!
     expect(restoredDocument.fileName).toBe(original.fileName)
     expect(new TextDecoder().decode(await restoredDocument.pdf!.arrayBuffer())).toBe('%PDF-1.7 sample')
-    expect(restored.pages[0]).toMatchObject({ documentId: original.id, pageNumber: 3, bookmarked: true })
+    expect(restored.pages.find((page) => page.pageNumber === 3)).toMatchObject({ documentId: original.id, pageNumber: 3, bookmarked: true })
+    expect(restored.pages.filter((page) => page.hiddenGroupId === 'hide-batch-1')).toMatchObject([
+      { documentId: original.id, pageNumber: 2, hidden: true },
+      { documentId: original.id, pageNumber: 5, hidden: true },
+    ])
     expect(restoredViewer.primary).toMatchObject({ page: 4, zoom: 2, centerX: 0.37, centerY: 0.68 })
     expect(restoredViewer.primary.rotations).toEqual({ 4: 90 })
     expect(restoredViewer.secondary.rotations).toEqual({ 1: 270 })
@@ -315,7 +344,7 @@ describe('portable workspace backup', () => {
     expect(restoredViewer.counterGuideAutoPanId).toBe('h-1')
     expect(restored.pageWork[0]).toMatchObject({
       pageNumber: 4,
-      horizontalGuides: [{ id: 'h-1', position: 0.32, linkedCounterId: 'body-pattern', focus: { enabled: true, strength: 'low', range: 1, scope: 'region', rowSpacing: 0.05 } }, { id: 'h-2', position: 0.68 }],
+      horizontalGuides: [{ id: 'h-1', position: 0.32, thickness: 36, linkedCounterId: 'body-pattern', focus: { enabled: true, strength: 'low', range: 1, scope: 'region', rowSpacing: 0.05, dimOpacity: 0.58, bandHeightRatio: 0.12 } }, { id: 'h-2', position: 0.68 }],
       verticalGuides: [{ id: 'v-1', position: 0.72 }],
       colorworkGrid: { chartWidthCm: 2, chartHeightCm: 3, columns: 4, rows: 7, visible: true },
       annotations: [{ id: 'ink-1', type: 'line' }, { id: 'note-1', text: '앞판\n무늬 반복', boxWidth: 0.42, boxHeight: 0.18 }],
@@ -323,15 +352,17 @@ describe('portable workspace backup', () => {
     expect(restored.pageWork[0].colorworkGrid?.cells).toHaveLength(28)
     expect(restored.pageWork[0].colorworkGrid?.cells[0]).toEqual({ color: '#f1c40f', opacity: 0.25 })
     expect(restored.preferences).toContainEqual({ key: 'view', value: 'list' })
+    expect(restored.preferences).toContainEqual({ key: 'language', value: 'ja' })
     expect(restored.charts).toEqual([expect.objectContaining({ id: chart.id, title: chart.title, cells: ['#e34b4b', null, null, null, null, null] })])
     expect(restored.homeProjects).toContainEqual(expect.objectContaining({ key: 'document:' + original.id, status: 'paused', archivedAt }))
     expect(restored.knittingReports.filter((item) => item.documentId === original.id)).toEqual([savedReport])
 
     expect(await importWorkspaceData(restored)).toBe(2)
+    expect(await getPreference('language')).toBe('ja')
     const imported = (await listDocuments('name')).find((item) => item.id !== original.id)
     expect(imported?.id).toBeTruthy()
     expect(await getHomeProject('document', imported!.id)).toMatchObject({ status: 'paused', archivedAt })
-    expect((await getPages(imported!.id))[0]).toMatchObject({ documentId: imported!.id, pageNumber: 3, bookmarked: true })
+    expect((await getPages(imported!.id)).find((page) => page.pageNumber === 3)).toMatchObject({ documentId: imported!.id, pageNumber: 3, bookmarked: true })
     expect((await getViewer(imported!.id, original.pageCount)).primary).toMatchObject({ page: 4, zoom: 2, centerX: 0.37, centerY: 0.68 })
     expect((await getViewer(imported!.id, original.pageCount)).counters?.[1]).toMatchObject({ kind: 'pattern', value: 3, name: '몸판 무늬' })
     expect(await getPageWork(imported!.id, 4)).toMatchObject({
@@ -465,7 +496,9 @@ describe('portable workspace backup', () => {
     const pdf = new TextEncoder().encode('%PDF-1.7 too-many-guides')
     for (const horizontalGuides of [
       Array.from({ length: 11 }, (_, index) => ({ id: 'h-' + index, position: 0.5 })),
-      [{ id: 'h-1', position: 0.5, thickness: 13 }],
+      [{ id: 'h-1', position: 0.5, thickness: 37 }],
+      [{ id: 'h-1', position: 0.5, focus: { enabled: true, strength: 'medium', range: 0, scope: 'page', rowSpacing: 0.03, dimOpacity: 0.81 } }],
+      [{ id: 'h-1', position: 0.5, focus: { enabled: true, strength: 'medium', range: 0, scope: 'page', rowSpacing: 0.03, bandHeightRatio: 0.31 } }],
     ]) {
       const manifest = {
         format: 'doanbogo', version: 3, exportedAt: Date.now(),

@@ -2,6 +2,7 @@ import * as pdfjs from 'pdfjs-dist'
 import PdfWorker from 'pdfjs-dist/build/pdf.worker.min.mjs?worker&inline'
 import workerUrl from 'pdfjs-dist/build/pdf.worker.min.mjs?url'
 import { pdfBinaryResourceOptions } from './pdfBinaryResources'
+import { t } from './locales'
 
 if (!import.meta.env.VITE_PORTABLE) pdfjs.GlobalWorkerOptions.workerSrc = workerUrl
 
@@ -159,7 +160,7 @@ export async function openPdf(blob: Blob) {
 
 export function pdfErrorMessage(error: unknown) {
   const message = error instanceof Error ? error.message : String(error)
-  if (/password|encrypted/i.test(message)) return '암호가 설정된 PDF입니다. 암호 없는 파일로 다시 시도해 주세요.'
-  if (/worker/i.test(message)) return 'PDF Worker를 시작하지 못했습니다. 페이지를 새로고침한 뒤 다시 시도해 주세요.'
-  return 'PDF를 읽지 못했습니다. 파일 접근 권한과 PDF 상태를 확인해 주세요.'
+  if (/password|encrypted/i.test(message)) return t('암호가 설정된 PDF입니다. 암호 없는 파일로 다시 시도해 주세요.')
+  if (/worker/i.test(message)) return t('PDF Worker를 시작하지 못했습니다. 페이지를 새로고침한 뒤 다시 시도해 주세요.')
+  return t('PDF를 읽지 못했습니다. 파일 접근 권한과 PDF 상태를 확인해 주세요.')
 }

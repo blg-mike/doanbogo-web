@@ -1,4 +1,5 @@
 import type { ChartDocument, CrochetSymbolId } from './types'
+import { formatNumber, t } from './locales'
 
 export const defaultPalette = ['#e34b4b', '#f3b21a', '#79bb45', '#288ed4', '#694bc6', '#df72b2', '#9c694c', '#ffffff']
 
@@ -14,7 +15,7 @@ export const crochetSymbols: { id: CrochetSymbolId; name: string; short: string 
 export function createKnittingChart(width: number, height: number, unit: 'in' | 'cm', gaugeStitches: number, gaugeRows: number): ChartDocument {
   const now = Date.now()
   return {
-    id: crypto.randomUUID(), title: '제목 없음', craft: 'knitting', createdAt: now, updatedAt: now, lastOpenedAt: null,
+    id: crypto.randomUUID(), title: t('제목 없음'), craft: 'knitting', createdAt: now, updatedAt: now, lastOpenedAt: null,
     unit, width, height, gaugeStitches, gaugeRows, palette: [...defaultPalette],
     cells: Array.from({ length: width * height }, () => null), objects: [], layers: [],
   }
@@ -23,9 +24,9 @@ export function createKnittingChart(width: number, height: number, unit: 'in' | 
 export function createCrochetChart(): ChartDocument {
   const now = Date.now()
   return {
-    id: crypto.randomUUID(), title: '제목 없음', craft: 'crochet', createdAt: now, updatedAt: now, lastOpenedAt: null,
+    id: crypto.randomUUID(), title: t('제목 없음'), craft: 'crochet', createdAt: now, updatedAt: now, lastOpenedAt: null,
     unit: 'in', width: 20, height: 20, gaugeStitches: 18, gaugeRows: 24, palette: [...defaultPalette],
-    cells: [], objects: [], layers: [{ id: crypto.randomUUID(), name: '레이어 1', visible: true, locked: false }],
+    cells: [], objects: [], layers: [{ id: crypto.randomUUID(), name: t('레이어 {count}', { count: formatNumber(1) }), visible: true, locked: false }],
   }
 }
 

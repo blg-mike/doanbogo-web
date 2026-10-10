@@ -67,6 +67,8 @@ export interface ProgressFocusSettings {
   range: 0 | 1 | 2
   scope: 'page' | 'region'
   rowSpacing: number
+  dimOpacity?: number
+  bandHeightRatio?: number
 }
 
 export interface AnnotationStyle {
@@ -148,6 +150,7 @@ export interface DocumentRecord {
   createdAt: number
   lastOpenedAt: number | null
   tags: string[]
+  totalWorkTimeMs?: number
   pdf: Blob | null
   cover: Blob | null
 }
@@ -170,6 +173,7 @@ export interface HomeProject {
   deletedAt: number | null
   lastWorkedAt: number | null
   createdAt: number
+  totalWorkTimeMs?: number
 }
 
 export interface PhotoPageRecord {
@@ -197,6 +201,7 @@ export interface PageRecord {
   documentId: string
   pageNumber: number
   hidden: boolean
+  hiddenGroupId?: string
   bookmarked: boolean
 }
 
