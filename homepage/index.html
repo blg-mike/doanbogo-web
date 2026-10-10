@@ -43,12 +43,12 @@
               <option value="nb">Norsk (bokmål)</option>
               <option value="fi">Suomi</option>
             </select>
-            <svg aria-hidden="true" viewBox="0 0 20 20"><path d="m5.5 7.5 4.5 4.5 4.5-4.5"/></svg>
+            <span class="icon-sprite icon--chevron" aria-hidden="true"></span>
           </label>
-          <a class="button button-primary header-cta" href="./index.html"><span data-i18n="start">지금 시작하기</span><svg aria-hidden="true" viewBox="0 0 20 20"><path d="M4 10h11M10 5l5 5-5 5"/></svg></a>
+          <a class="button button-primary header-cta" href="./index.html"><span data-i18n="start">지금 시작하기</span><span class="icon-sprite icon--arrow" aria-hidden="true"></span></a>
           <button class="menu-toggle" type="button" aria-expanded="false" aria-controls="mobile-menu" aria-label="메뉴 열기" data-i18n-aria-label="menuOpen">
-            <svg class="menu-open-icon" aria-hidden="true" viewBox="0 0 24 24"><path d="M4 7h16M4 12h16M4 17h16"/></svg>
-            <svg class="menu-close-icon" aria-hidden="true" viewBox="0 0 24 24"><path d="m6 6 12 12M18 6 6 18"/></svg>
+            <span class="menu-open-icon icon-sprite icon--menu" aria-hidden="true"></span>
+            <span class="menu-close-icon icon-sprite icon--close" aria-hidden="true"></span>
           </button>
         </div>
       </div>
@@ -67,10 +67,10 @@
           <h1 id="hero-title" data-i18n="heroTitle">도안은 편하게,<br>뜨개는 더 즐겁게.</h1>
           <p class="hero-description" data-i18n="heroBody">PDF 도안을 보며 지금 뜨는 단을 표시하세요. 진행선과 단수 카운터, 메모까지 한곳에 모아두고 다음에도 이어서 뜰 수 있어요.</p>
           <div class="hero-actions">
-            <a class="button button-primary button-large" href="./index.html"><span data-i18n="startNow">도안보고 시작하기</span><svg aria-hidden="true" viewBox="0 0 20 20"><path d="M4 10h11M10 5l5 5-5 5"/></svg></a>
+            <a class="button button-primary button-large" href="./index.html"><span data-i18n="startNow">도안보고 시작하기</span><span class="icon-sprite icon--arrow" aria-hidden="true"></span></a>
             <a class="button button-secondary button-large" href="#features" data-i18n="seeFeatures">기능 살펴보기</a>
           </div>
-          <p class="hero-note"><span class="note-mark" aria-hidden="true">↳</span><span data-i18n="trialNote">계정 없이 브라우저에서 바로 시작할 수 있어요.</span></p>
+          <p class="hero-note"><span class="note-mark icon-sprite icon--arrow" aria-hidden="true"></span><span data-i18n="trialNote">계정 없이 브라우저에서 바로 시작할 수 있어요.</span></p>
         </div>
         <figure class="hero-figure">
           <div class="device-stage">
@@ -89,19 +89,19 @@
       <section class="tool-strip" aria-label="주요 기능">
         <div class="tool-strip-inner page-width">
           <article class="tool-item">
-            <span class="tool-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M6 3.75h8l4 4v12.5H6zM14 3.75v4h4M9 12h6M9 16h6"/></svg></span>
+            <span class="tool-icon" aria-hidden="true"><span class="icon-sprite icon--pdf"></span></span>
             <span><strong data-i18n="benefitPdfTitle">PDF 도안 보기</strong><small data-i18n="benefitPdfBody">페이지를 넘기고 원하는 만큼 확대해요.</small></span>
           </article>
           <article class="tool-item">
-            <span class="tool-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M4 12h16M7 8v8M17 8v8M6 5v2M18 5v2M6 17v2M18 17v2"/></svg></span>
+            <span class="tool-icon" aria-hidden="true"><span class="icon-sprite icon--counter"></span></span>
             <span><strong data-i18n="benefitProgressTitle">진행선과 단수 카운터</strong><small data-i18n="benefitProgressBody">지금 뜨는 위치와 단수를 기록해요.</small></span>
           </article>
           <article class="tool-item">
-            <span class="tool-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M6 4.5h12v15l-6-3.5-6 3.5zM9 9h6"/></svg></span>
+            <span class="tool-icon" aria-hidden="true"><span class="icon-sprite icon--bookmark"></span></span>
             <span><strong data-i18n="benefitNotesTitle">메모와 북마크</strong><small data-i18n="benefitNotesBody">필요한 페이지와 중요한 부분에 표시해요.</small></span>
           </article>
           <article class="tool-item">
-            <span class="tool-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M3.75 6.5h6l2 2h8.5v10.75H3.75zM3.75 8.5V5h7l2 2"/></svg></span>
+            <span class="tool-icon" aria-hidden="true"><span class="icon-sprite icon--folder"></span></span>
             <span><strong data-i18n="benefitProjectsTitle">프로젝트 기록</strong><small data-i18n="benefitProjectsBody">작업 시간을 기록하고 다음에 이어가요.</small></span>
           </article>
         </div>
@@ -113,9 +113,9 @@
           <p class="section-lead" data-i18n="problemLead">도안에 표시하고 단수를 세고 작업을 기록해, 다음 뜨개 시간에 바로 이어갑니다.</p>
         </div>
         <div class="friction-list">
-          <article class="friction-row"><span class="friction-no">01</span><h3 data-i18n="problemOneQ">몇 단까지 떴는지 헷갈릴 때</h3><span class="friction-arrow" aria-hidden="true">→</span><p data-i18n="problemOneA">차트 위 진행선과 단수 카운터로 현재 위치를 표시하세요.</p></article>
-          <article class="friction-row"><span class="friction-no">02</span><h3 data-i18n="problemTwoQ">여러 페이지 도안을 오갈 때</h3><span class="friction-arrow" aria-hidden="true">→</span><p data-i18n="problemTwoA">페이지와 확대를 조절하며 같은 파일 안에서 살펴보세요.</p></article>
-          <article class="friction-row"><span class="friction-no">03</span><h3 data-i18n="problemThreeQ">다음에 작업을 이어갈 때</h3><span class="friction-arrow" aria-hidden="true">→</span><p data-i18n="problemThreeA">프로젝트에 남긴 작업 상태와 시간을 보고 이어서 시작하세요.</p></article>
+          <article class="friction-row"><span class="friction-no">01</span><h3 data-i18n="problemOneQ">몇 단까지 떴는지 헷갈릴 때</h3><span class="friction-arrow icon-sprite icon--arrow" aria-hidden="true"></span><p data-i18n="problemOneA">차트 위 진행선과 단수 카운터로 현재 위치를 표시하세요.</p></article>
+          <article class="friction-row"><span class="friction-no">02</span><h3 data-i18n="problemTwoQ">여러 페이지 도안을 오갈 때</h3><span class="friction-arrow icon-sprite icon--arrow" aria-hidden="true"></span><p data-i18n="problemTwoA">페이지와 확대를 조절하며 같은 파일 안에서 살펴보세요.</p></article>
+          <article class="friction-row"><span class="friction-no">03</span><h3 data-i18n="problemThreeQ">다음에 작업을 이어갈 때</h3><span class="friction-arrow icon-sprite icon--arrow" aria-hidden="true"></span><p data-i18n="problemThreeA">프로젝트에 남긴 작업 상태와 시간을 보고 이어서 시작하세요.</p></article>
         </div>
       </section>
 
@@ -140,7 +140,7 @@
               <article class="feature-detail">
                 <span class="detail-number">03</span><div><h3 data-i18n="featureNotesTitle">메모와 프로젝트를 남겨두세요</h3><p data-i18n="featureNotesBody">중요한 페이지를 북마크하고 도안에 메모하세요. 작업 시간과 상태는 프로젝트 기록에서 볼 수 있습니다.</p></div>
               </article>
-              <a class="text-link" href="./index.html#/projects" data-i18n="allProjects">프로젝트 화면 열기 <span aria-hidden="true">↗</span></a>
+              <a class="text-link" href="./index.html#/projects"><span data-i18n="allProjects">프로젝트 화면 열기</span><span class="icon-sprite icon--external" aria-hidden="true"></span></a>
             </div>
           </div>
         </div>
@@ -149,16 +149,16 @@
       <section class="how-section page-width" id="how" aria-labelledby="how-title">
         <div class="section-heading split-heading how-heading"><div><p class="eyebrow" data-i18n="howKicker">도안이 준비되어 있다면</p><h2 id="how-title" data-i18n="howTitle">세 가지 동작으로<br>다음 단을 시작해요.</h2></div><p class="section-lead" data-i18n="howLead">도안을 불러오고, 현재 위치를 표시한 뒤, 다음에 이어서 뜰 수 있도록 저장하세요.</p></div>
         <ol class="steps-list">
-          <li class="step-item"><span class="step-number">01</span><div class="step-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M6 3.75h8l4 4v12.5H6zM14 3.75v4h4M12 11v7M9 14l3-3 3 3"/></svg></div><div class="step-copy"><h3 data-i18n="stepOneTitle">PDF 도안 불러오기</h3><p data-i18n="stepOneBody">브라우저에서 가지고 있는 도안을 엽니다.</p></div><span class="step-connector" aria-hidden="true">→</span></li>
-          <li class="step-item"><span class="step-number">02</span><div class="step-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M4 12h16M7 8v8M17 8v8M6 5v2M18 5v2"/></svg></div><div class="step-copy"><h3 data-i18n="stepTwoTitle">위치와 단수 표시하기</h3><p data-i18n="stepTwoBody">진행선과 카운터로 작업 위치를 기록합니다.</p></div><span class="step-connector" aria-hidden="true">→</span></li>
-          <li class="step-item"><span class="step-number">03</span><div class="step-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M4 5.5h16v13H4zM8 9h8M8 12.5h8M8 16h5"/></svg></div><div class="step-copy"><h3 data-i18n="stepThreeTitle">기록하고 이어서 뜨기</h3><p data-i18n="stepThreeBody">메모를 저장하고 다음에 같은 도안으로 돌아옵니다.</p></div></li>
+          <li class="step-item"><span class="step-number">01</span><div class="step-icon" aria-hidden="true"><span class="icon-sprite icon--import"></span></div><div class="step-copy"><h3 data-i18n="stepOneTitle">PDF 도안 불러오기</h3><p data-i18n="stepOneBody">브라우저에서 가지고 있는 도안을 엽니다.</p></div><span class="step-connector icon-sprite icon--arrow" aria-hidden="true"></span></li>
+          <li class="step-item"><span class="step-number">02</span><div class="step-icon" aria-hidden="true"><span class="icon-sprite icon--chart"></span></div><div class="step-copy"><h3 data-i18n="stepTwoTitle">위치와 단수 표시하기</h3><p data-i18n="stepTwoBody">진행선과 카운터로 작업 위치를 기록합니다.</p></div><span class="step-connector icon-sprite icon--arrow" aria-hidden="true"></span></li>
+          <li class="step-item"><span class="step-number">03</span><div class="step-icon" aria-hidden="true"><span class="icon-sprite icon--record"></span></div><div class="step-copy"><h3 data-i18n="stepThreeTitle">기록하고 이어서 뜨기</h3><p data-i18n="stepThreeBody">메모를 저장하고 다음에 같은 도안으로 돌아옵니다.</p></div></li>
         </ol>
         <a class="button button-secondary how-link" href="./index.html#/projects/new" data-i18n="choosePattern">도안 선택하기</a>
       </section>
 
       <section class="record-band" aria-labelledby="record-title">
         <div class="record-inner page-width">
-          <div class="record-mark" aria-hidden="true"><svg viewBox="0 0 160 160"><path d="M35 86c0-30 18-52 45-52s45 22 45 52-18 49-45 49S35 116 35 86Zm10-21 72 43M39 93l62-48M49 116l63-62M41 76l66 47M55 42l65 74M36 103l48-69M50 130l74-70M67 134l57-40"/><path d="M125 122c12 10 18 17 23 26"/></svg></div>
+          <div class="record-mark" aria-hidden="true"><span class="icon-sprite icon--record"></span></div>
           <div><p class="eyebrow" data-i18n="recordKicker">다시 도안을 펼치는 날에도</p><h2 id="record-title" data-i18n="recordTitle">마지막으로 뜬 곳부터<br>차분히 이어가세요.</h2><p class="record-description" data-i18n="recordBody">페이지 위 작업 표시와 프로젝트 기록을 남기면, 다음 뜨개 시간에 필요한 내용을 다시 확인할 수 있어요.</p></div>
           <div class="record-footnote"><span class="record-rule" aria-hidden="true"></span><p data-i18n="recordLocalNote">작업 데이터는 이 브라우저에 저장됩니다.</p></div>
         </div>
@@ -167,20 +167,20 @@
       <section class="faq-section page-width" id="faq" aria-labelledby="faq-title">
         <div class="section-heading faq-heading"><p class="eyebrow" data-i18n="faqKicker">시작 전에 확인해 보세요</p><h2 id="faq-title" data-i18n="faqTitle">자주 묻는 질문</h2></div>
         <div class="faq-list">
-          <details class="faq-item"><summary data-i18n="faqOneQ">어떤 뜨개도안을 사용할 수 있나요?</summary><p data-i18n="faqOneA">PDF 도안을 열 수 있고, 종이 도안은 사진 도안 폴더로 만들 수 있어요. 나만의 뜨개 차트를 직접 그릴 수도 있습니다.</p></details>
-          <details class="faq-item"><summary data-i18n="faqTwoQ">도안과 작업 내용은 어디에 저장되나요?</summary><p data-i18n="faqTwoA">도안과 작업 데이터는 브라우저 로컬 저장소에 저장됩니다. 자동 기기 간 동기화는 제공하지 않으므로, 기기를 옮길 때는 작업 파일을 내보내어 백업하고 가져오세요.</p></details>
-          <details class="faq-item"><summary data-i18n="faqThreeQ">회원가입이나 로그인이 필요한가요?</summary><p data-i18n="faqThreeA">현재 앱에는 가입·로그인 절차가 없습니다. 브라우저에서 앱을 열어 도안을 추가하면 바로 시작할 수 있어요.</p></details>
-          <details class="faq-item"><summary data-i18n="faqFourQ">태블릿과 휴대폰에서도 쓸 수 있나요?</summary><p data-i18n="faqFourA">모바일·태블릿 화면에 맞춰 배치되는 웹 앱입니다. 브라우저에서 열어 현재 기기에 맞는 화면으로 사용할 수 있습니다.</p></details>
+          <details class="faq-item"><summary><span data-i18n="faqOneQ">어떤 뜨개도안을 사용할 수 있나요?</span><span class="faq-toggle-icon icon-sprite icon--plus" aria-hidden="true"></span></summary><p data-i18n="faqOneA">PDF 도안을 열 수 있고, 종이 도안은 사진 도안 폴더로 만들 수 있어요. 나만의 뜨개 차트를 직접 그릴 수도 있습니다.</p></details>
+          <details class="faq-item"><summary><span data-i18n="faqTwoQ">도안과 작업 내용은 어디에 저장되나요?</span><span class="faq-toggle-icon icon-sprite icon--plus" aria-hidden="true"></span></summary><p data-i18n="faqTwoA">도안과 작업 데이터는 브라우저 로컬 저장소에 저장됩니다. 자동 기기 간 동기화는 제공하지 않으므로, 기기를 옮길 때는 작업 파일을 내보내어 백업하고 가져오세요.</p></details>
+          <details class="faq-item"><summary><span data-i18n="faqThreeQ">회원가입이나 로그인이 필요한가요?</span><span class="faq-toggle-icon icon-sprite icon--plus" aria-hidden="true"></span></summary><p data-i18n="faqThreeA">현재 앱에는 가입·로그인 절차가 없습니다. 브라우저에서 앱을 열어 도안을 추가하면 바로 시작할 수 있어요.</p></details>
+          <details class="faq-item"><summary><span data-i18n="faqFourQ">태블릿과 휴대폰에서도 쓸 수 있나요?</span><span class="faq-toggle-icon icon-sprite icon--plus" aria-hidden="true"></span></summary><p data-i18n="faqFourA">모바일·태블릿 화면에 맞춰 배치되는 웹 앱입니다. 브라우저에서 열어 현재 기기에 맞는 화면으로 사용할 수 있습니다.</p></details>
         </div>
       </section>
 
       <section class="closing-cta" aria-labelledby="closing-title">
         <div class="closing-inner page-width">
-          <span class="closing-stitch" aria-hidden="true">⌁</span>
+          <span class="closing-stitch icon-sprite icon--stitch" aria-hidden="true"></span>
           <p class="eyebrow" data-i18n="closingKicker">도안은 가까이에, 뜨개는 느긋하게</p>
           <h2 id="closing-title" data-i18n="closingTitle">이제 뜨개에만<br>집중해 보세요.</h2>
           <p data-i18n="closingBody">도안보고에서 다음 뜨개 시간을 시작합니다.</p>
-          <a class="button button-primary button-large" href="./index.html"><span data-i18n="startNow">도안보고 시작하기</span><svg aria-hidden="true" viewBox="0 0 20 20"><path d="M4 10h11M10 5l5 5-5 5"/></svg></a>
+          <a class="button button-primary button-large" href="./index.html"><span data-i18n="startNow">도안보고 시작하기</span><span class="icon-sprite icon--arrow" aria-hidden="true"></span></a>
         </div>
       </section>
     </main>
@@ -189,7 +189,7 @@
       <div class="footer-inner page-width">
         <div class="footer-brand"><a class="brand" href="#top" aria-label="도안보고 홈"><img src="@@LOGO@@" width="32" height="32" alt="" loading="lazy"><span>도안보고</span></a><p data-i18n="footerCopy">좋아하는 도안 곁에서, 뜨개를 이어가세요.</p></div>
         <nav class="footer-nav" aria-label="서비스 안내"><strong data-i18n="footerService">서비스</strong><a href="#features" data-i18n="navFeatures">기능</a><a href="#how" data-i18n="navHow">사용 방법</a><a href="#faq" data-i18n="navFaq">자주 묻는 질문</a></nav>
-        <div class="footer-language"><label class="language-picker"><span class="sr-only" data-i18n="languageLabel">언어 선택</span><select class="language-mirror" aria-label="언어 선택" data-i18n-aria-label="languageLabel"><option value="auto" data-i18n="languageAuto">기기 언어</option><option value="ko">한국어</option><option value="en">English</option><option value="ja">日本語</option><option value="de">Deutsch</option><option value="da">Dansk</option><option value="nb">Norsk (bokmål)</option><option value="fi">Suomi</option></select><svg aria-hidden="true" viewBox="0 0 20 20"><path d="m5.5 7.5 4.5 4.5 4.5-4.5"/></svg></label><a class="footer-start" href="./index.html" data-i18n="start">지금 시작하기</a></div>
+        <div class="footer-language"><label class="language-picker"><span class="sr-only" data-i18n="languageLabel">언어 선택</span><select class="language-mirror" aria-label="언어 선택" data-i18n-aria-label="languageLabel"><option value="auto" data-i18n="languageAuto">기기 언어</option><option value="ko">한국어</option><option value="en">English</option><option value="ja">日本語</option><option value="de">Deutsch</option><option value="da">Dansk</option><option value="nb">Norsk (bokmål)</option><option value="fi">Suomi</option></select><span class="icon-sprite icon--chevron" aria-hidden="true"></span></label><a class="footer-start" href="./index.html" data-i18n="start">지금 시작하기</a></div>
       </div>
       <div class="footer-bottom page-width"><span>© <span id="year">2026</span> 도안보고</span><span data-i18n="footerStorage">도안과 작업 데이터는 브라우저에 저장됩니다.</span></div>
     </footer>

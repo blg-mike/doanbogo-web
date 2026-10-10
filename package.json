@@ -6,9 +6,9 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
-    "build:portable": "tsc -b && vite build --mode portable",
+    "build:portable": "tsc -b && vite build --mode portable && npm run build:homepage",
     "build:homepage": "node scripts/build-homepage.mjs",
-    "build:site": "npm run build:portable && npm run build:homepage",
+    "build:site": "npm run build:portable",
     "check:design-system": "node scripts/check-design-system.mjs",
     "lint": "oxlint",
     "preview": "vite preview",

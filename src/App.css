@@ -1234,7 +1234,7 @@
 .viewer-floating-bar { position: absolute; z-index: 1; box-sizing: border-box; display: flex; align-items: center; gap: 3px; pointer-events: auto; border: 1px solid var(--color-divider); border-radius: 12px; color: var(--color-text); background: var(--color-surface); box-shadow: 0 2px 10px rgba(44,43,39,.12); }
 .viewer-mini-bar { z-index: 2; top: calc(var(--viewer-header-height) + 12px); left: 12px; width: 64px; max-width: calc(100vw - 24px); padding: 0; flex-direction: column; align-items: stretch; gap: 0; border-color: var(--color-divider); border-radius: 12px; background: var(--color-surface); }
 .viewer-mini-bar:not(.expanded) { border-color: transparent; background: transparent; box-shadow: none; }
-.viewer-timer-bar { top: calc(var(--viewer-header-height) + 8px); right: 12px; max-width: min(320px, calc(100% - 24px)); padding: 3px 4px; }
+.viewer-timer-bar { top: calc(var(--viewer-header-height) + 8px); right: 12px; width: max-content; max-width: min(720px, calc(100% - 24px)); flex-wrap: nowrap; padding: 3px 4px; }
 .viewer-shell.counter-panel-visible:not(.report-mode) .viewer-timer-bar:not(.positioned) { right: calc(min(360px, 100% - 24px) + 20px); }
 .viewer-floating-drag-handle { width: 44px; height: 44px; display: grid; flex: 0 0 44px; place-items: center; padding: 0; border: 0; border-radius: 8px; color: var(--color-text-muted); background: transparent; cursor: grab; touch-action: none; user-select: none; -webkit-user-select: none; }
 .viewer-floating-drag-handle:hover { color: var(--color-primary); background: var(--color-primary-soft); }
@@ -1271,13 +1271,13 @@
 .viewer-tools .chart-tool small { max-width: 38px; overflow: hidden; font-size: 8px; text-overflow: ellipsis; }
 .viewer-tools .control-separator { width: 30px; height: 1px; flex: 0 0 1px; margin: 3px 0; background: var(--color-divider); }
 .viewer-controlbar > .control-separator { width: 30px; height: 1px; flex: 0 0 1px; margin: 3px auto; background: var(--color-divider); }
-.viewer-counter-tools { width: 100%; display: flex; flex-direction: column; align-items: center; gap: 2px; }
-.viewer-mini-bar .viewer-counter-tools .viewer-mini-lap-toggle { width: 52px; min-width: 52px; height: 44px; flex: 0 0 44px; flex-direction: column; gap: 0; padding: 2px; font-size: 8px; }
+.viewer-counter-tools { width: auto; display: flex; flex: 0 0 auto; align-items: center; gap: 2px; }
 .viewer-counter-tools .viewer-mini-counter-step:hover:not(:disabled) { border-color: var(--color-secondary); }
 .viewer-counter-tools .viewer-mini-lap-toggle:focus-visible, .viewer-counter-tools .viewer-mini-counter-step:focus-visible, .viewer-counter-tools .viewer-mini-counter-row:focus-visible, .viewer-counter-tools .viewer-mini-counter-row-input:focus-visible { outline: 2px solid var(--color-focus-ring); outline-offset: 2px; }
 .viewer-mini-scroll::-webkit-scrollbar { width: 4px; }
 .viewer-mini-scroll::-webkit-scrollbar-thumb { border-radius: 4px; background: var(--color-border); }
-.viewer-timer-portal-host { min-width: 0; max-width: calc(100vw - 54px); display: flex; flex: 0 0 auto; align-items: center; }
+.viewer-timer-divider { width: 1px; height: 28px; flex: 0 0 1px; margin: 0 2px; background: var(--color-divider); }
+.viewer-timer-portal-host { min-width: 0; display: flex; flex: 0 0 auto; align-items: center; }
 .viewer-timer-bar .viewer-work-timer { max-width: 100%; padding: 0; border: 0; background: transparent; }
 .viewer-timer-bar .viewer-work-timer-toggle { border: 1px solid var(--color-border); border-radius: 8px; color: var(--color-primary); background: var(--color-primary-soft); }
 .viewer-timer-bar .viewer-work-timer-toggle:hover:not(:disabled) { border-color: var(--color-primary); color: var(--color-primary-pressed); background: var(--color-primary-soft); }
@@ -1303,6 +1303,7 @@
 
 @media (max-width: 760px) {
   .viewer-shell { --viewer-header-height: 56px; --viewer-thumbnail-strip-height: 154px; }
+  .viewer-mini-bar { top: calc(var(--viewer-header-height) + 68px); }
   .viewer-shell.counter-panel-visible:not(.report-mode) .viewer-timer-bar:not(.positioned) { right: 12px; }
 }
 
@@ -1493,6 +1494,8 @@
 }
 
 @media (max-width: 430px) {
-  .viewer-counter-tools { gap: 2px; }
+  .viewer-counter-tools { gap: 1px; }
   .viewer-mini-counter-row, .viewer-mini-counter-row-input { width: 48px; flex-basis: 48px; }
+  .viewer-timer-bar .viewer-mini-lap-toggle { width: 44px; min-width: 44px; flex-basis: 44px; padding: 0; }
+  .viewer-timer-bar .viewer-mini-lap-toggle span { display: none; }
 }

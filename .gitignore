@@ -8,7 +8,8 @@ lerna-debug.log*
 node_modules
 dist
 dist-ssr
-portable
+/portable/*
+!/portable/homepage.html
 coverage
 *.local
 *.tsbuildinfo

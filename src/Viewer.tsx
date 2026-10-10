@@ -236,6 +236,7 @@ export default function Viewer() {
   const [timerBarState, setTimerBarState] = useState<{ documentId: string; left: number | null; top: number }>(() => ({ documentId: id, left: null, top: 12 }))
   if (timerBarState.documentId !== id) setTimerBarState({ documentId: id, left: null, top: 12 })
   const timerBarPosition = timerBarState.documentId === id ? timerBarState : { documentId: id, left: null, top: 12 }
+  const timerBarPositioned = timerBarPosition.left !== null
   const timerBarDragRef = useRef<TimerBarDrag | null>(null)
   const [timerHasUnsaved, setTimerHasUnsaved] = useState(false)
   const [timerSaving, setTimerSaving] = useState(false)
@@ -1732,6 +1733,26 @@ export default function Viewer() {
     if (timerBarDragRef.current?.pointerId === event.pointerId) timerBarDragRef.current = null
   }
 
+  useEffect(() => {
+    if (!timerBarPositioned) return
+    const shell = viewerShellRef.current
+    const bar = shell?.querySelector<HTMLElement>('.viewer-timer-bar')
+    if (!shell || !bar) return
+    const keepBarInBounds = () => {
+      const shellRect = shell.getBoundingClientRect()
+      setTimerBarState((current) => {
+        if (current.documentId !== id || current.left === null) return current
+        const left = clamp(current.left, 0, Math.max(0, shellRect.width - bar.offsetWidth))
+        const top = clamp(current.top, 0, Math.max(0, shellRect.height - bar.offsetHeight))
+        return left === current.left && top === current.top ? current : { ...current, left, top }
+      })
+    }
+    const observer = new ResizeObserver(keepBarInBounds)
+    observer.observe(shell)
+    observer.observe(bar)
+    return () => observer.disconnect()
+  }, [id, timerBarPositioned])
+
   function moveDivider(event: ReactPointerEvent<HTMLButtonElement>) {
     const drag = dragRef.current
     if (!drag || drag.pointerId !== event.pointerId) return
@@ -2292,8 +2313,20 @@ export default function Viewer() {
         </div>}
       </section>
       <div className="viewer-floating-layer">
-        <div className={'viewer-floating-bar viewer-timer-bar' + (timerBarPosition.left === null ? '' : ' positioned')} style={timerBarPosition.left === null ? undefined : { left: timerBarPosition.left, top: timerBarPosition.top, right: 'auto' }} role="group" aria-label={t('작업 타이머')}>
+        <div className={'viewer-floating-bar viewer-timer-bar' + (timerBarPosition.left === null ? '' : ' positioned')} style={timerBarPosition.left === null ? undefined : { left: timerBarPosition.left, top: timerBarPosition.top, right: 'auto' }} role="group" aria-label={`${t('카운터')} · ${t('작업 타이머')}`}>
           <button type="button" className="viewer-floating-drag-handle" aria-label={t('작업 타이머 이동')} title={t('작업 타이머 이동')} onPointerDown={beginTimerBarDrag} onPointerMove={moveTimerBarDrag} onPointerUp={finishTimerBarDrag} onPointerCancel={finishTimerBarDrag} onLostPointerCapture={finishTimerBarDrag}><GripVertical size={17} /></button>
+          {!reportMode && <div className="viewer-counter-tools" role="group" aria-label={t('카운터')}>
+            <button type="button" className="viewer-mini-counter-step" aria-label={t('이전 단으로 되돌리기')} title={mainCounterCanStepBack ? t('이전 단으로 되돌리기') : t('정확한 복원 이력이 없습니다')} disabled={!mainCounterCanStepBack || counterActionSaving} onClick={() => { if (mainCounter && mainCounter.value > 1) rewindCounter(mainCounter.id, mainCounter.value - 1, true) }}>−</button>
+            {mainCounter && (counterRowEditing
+              ? <input ref={counterRowInputRef} className="viewer-mini-counter-row-input" aria-label={t('단 번호 입력')} type="number" inputMode="numeric" min="1" max={MAX_COUNTER_ROW} step="1" autoFocus disabled={counterActionSaving} value={counterRowDraft} onChange={(event) => setCounterRowDraft(event.currentTarget.value)} onBlur={() => { if (skipCounterRowBlurRef.current) { skipCounterRowBlurRef.current = false; return } finishCounterRowEdit() }} onKeyDown={(event) => {
+                if (event.key === 'Enter') { event.preventDefault(); event.currentTarget.blur() }
+                if (event.key === 'Escape') { event.preventDefault(); skipCounterRowBlurRef.current = true; setCounterRowDraft(String(mainCounter.value)); setCounterRowEditing(false); event.currentTarget.blur() }
+              }} />
+              : <button type="button" className="viewer-mini-counter-row" aria-label={t('현재 단 입력')} title={t('현재 단 입력')} disabled={counterActionSaving} onClick={beginCounterRowEdit}><strong>{formatNumber(mainCounter.value)}</strong><span>{t('단')}</span><small>{counterSideForRow(mainCounter, mainCounter.value).toUpperCase()}</small></button>)}
+            <button type="button" className="viewer-mini-counter-step" aria-label={t('현재 단 완료 후 다음 단으로 이동')} disabled={!mainCounter || counterActionSaving || mainCounter.goalCompleted === true || mainCounter.value >= MAX_COUNTER_ROW && mainCounter.goalRow !== mainCounter.value} onClick={() => { if (mainCounter) advanceCounterGroup(mainCounter.id) }}>+</button>
+            <button type="button" className={'viewer-mini-lap-toggle' + (counterPanelVisible ? ' active' : '')} aria-label={counterAlertPending ? t('카운터 · 확인할 알림 있음') : t('타임랩')} title={t('타임랩')} aria-pressed={counterPanelVisible} onClick={() => setSavedCounterSession({ documentId: id, visible: !counterPanelVisible })}><Tally5 size={16} /><span>{t('타임랩')}</span>{counterAlertPending && <i className="counter-notification-dot" aria-hidden="true" />}</button>
+          </div>}
+          {!reportMode && <span className="viewer-timer-divider" aria-hidden="true" />}
           <div className="viewer-timer-portal-host" ref={setTimerPortalHost} />
         </div>
         {!reportMode && <div className={'viewer-floating-bar viewer-mini-bar' + (miniBarOpen ? ' expanded' : '')}>
@@ -2322,18 +2355,6 @@ export default function Viewer() {
               </>}
               {(activeAnnotationStyle || activeColorworkGrid) && <button ref={miniBarSettingsTriggerRef} type="button" className={'viewer-tool compact-tool ' + (miniBarSettingsOpen ? 'active' : '')} aria-label={t('도구 설정')} title={t('도구 설정')} aria-expanded={miniBarSettingsOpen} onClick={() => setMiniBarSettingsOpen((open) => !open)}><Settings2 size={17} /></button>}
             </div>
-          </div>
-          <span className="control-separator" aria-hidden="true" />
-          <div className="viewer-counter-tools" role="group" aria-label={t('카운터')}>
-            <button type="button" className="viewer-mini-counter-step" aria-label={t('이전 단으로 되돌리기')} title={mainCounterCanStepBack ? t('이전 단으로 되돌리기') : t('정확한 복원 이력이 없습니다')} disabled={!mainCounterCanStepBack || counterActionSaving} onClick={() => { if (mainCounter && mainCounter.value > 1) rewindCounter(mainCounter.id, mainCounter.value - 1, true) }}>−</button>
-            {mainCounter && (counterRowEditing
-              ? <input ref={counterRowInputRef} className="viewer-mini-counter-row-input" aria-label={t('단 번호 입력')} type="number" inputMode="numeric" min="1" max={MAX_COUNTER_ROW} step="1" autoFocus disabled={counterActionSaving} value={counterRowDraft} onChange={(event) => setCounterRowDraft(event.currentTarget.value)} onBlur={() => { if (skipCounterRowBlurRef.current) { skipCounterRowBlurRef.current = false; return } finishCounterRowEdit() }} onKeyDown={(event) => {
-                if (event.key === 'Enter') { event.preventDefault(); event.currentTarget.blur() }
-                if (event.key === 'Escape') { event.preventDefault(); skipCounterRowBlurRef.current = true; setCounterRowDraft(String(mainCounter.value)); setCounterRowEditing(false); event.currentTarget.blur() }
-              }} />
-              : <button type="button" className="viewer-mini-counter-row" aria-label={t('현재 단 입력')} title={t('현재 단 입력')} disabled={counterActionSaving} onClick={beginCounterRowEdit}><strong>{formatNumber(mainCounter.value)}</strong><span>{t('단')}</span><small>{counterSideForRow(mainCounter, mainCounter.value).toUpperCase()}</small></button>)}
-            <button type="button" className="viewer-mini-counter-step" aria-label={t('현재 단 완료 후 다음 단으로 이동')} disabled={!mainCounter || counterActionSaving || mainCounter.goalCompleted === true || mainCounter.value >= MAX_COUNTER_ROW && mainCounter.goalRow !== mainCounter.value} onClick={() => { if (mainCounter) advanceCounterGroup(mainCounter.id) }}>+</button>
-            <button type="button" className={'viewer-mini-lap-toggle' + (counterPanelVisible ? ' active' : '')} aria-label={counterAlertPending ? t('카운터 · 확인할 알림 있음') : t('타임랩')} title={t('타임랩')} aria-pressed={counterPanelVisible} onClick={() => setSavedCounterSession({ documentId: id, visible: !counterPanelVisible })}><Tally5 size={16} /><span>{t('타임랩')}</span>{counterAlertPending && <i className="counter-notification-dot" aria-hidden="true" />}</button>
           </div>
         </section>
           </div>
