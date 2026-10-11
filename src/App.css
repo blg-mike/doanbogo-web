@@ -88,6 +88,9 @@
 .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0,0,0,0); white-space: nowrap; }
 
 .viewer-shell { width: 100%; height: 100vh; height: 100dvh; display: flex; flex-direction: column; overflow: hidden; background: #e7e9ed; }
+.viewer-shell:not(.report-mode), .viewer-shell:not(.report-mode) *, .thumbnail-group-settings-popover, .thumbnail-group-settings-popover * { -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
+.viewer-shell input, .viewer-shell textarea, .viewer-shell select, .viewer-shell [contenteditable]:not([contenteditable="false"]), .viewer-shell [role="textbox"], .thumbnail-group-settings-popover input, .thumbnail-group-settings-popover textarea, .thumbnail-group-settings-popover select, .thumbnail-group-settings-popover [contenteditable]:not([contenteditable="false"]), .thumbnail-group-settings-popover [role="textbox"] { -webkit-user-select: text; user-select: text; -webkit-touch-callout: default; }
+.viewer-shell:not(.report-mode) img { -webkit-user-drag: none; user-drag: none; }
 .viewer-header { z-index: 2; min-height: 62px; display: flex; align-items: center; gap: 14px; padding: 0 18px; border-bottom: 1px solid var(--color-border); background: #fff; }
 .viewer-brand { display: flex; flex: 0 0 auto; flex-direction: column; align-items: center; gap: 1px; color: var(--color-text-muted); font-size: 9px; line-height: 1; white-space: nowrap; }
 .viewer-brand img { display: block; width: 38px; height: 38px; object-fit: contain; }
@@ -498,14 +501,14 @@
 .thumbnail-group-add { height: 36px; min-width: 44px; display: inline-flex; flex: 0 0 auto; align-items: center; justify-content: center; gap: 5px; padding: 0 9px; border: 1px solid var(--color-border); border-radius: 8px; color: var(--color-text-secondary); background: #fff; font: inherit; font-size: 10px; cursor: pointer; }
 .thumbnail-group-add:hover { border-color: var(--color-primary); color: var(--color-primary); background: var(--color-primary-soft); }
 .thumbnail-group-add:disabled { opacity: .55; cursor: wait; }
-.thumbnail-group-list { min-width: 0; height: 100%; display: flex; flex: 1 1 auto; align-items: center; gap: 6px; overflow-x: auto; overflow-y: hidden; scrollbar-width: thin; }
-.thumbnail-group-label { height: 32px; min-width: 44px; display: inline-flex; flex: 0 0 auto; align-items: center; gap: 6px; padding: 0 9px; border: 1px solid var(--color-border); border-radius: 8px; color: var(--color-text-secondary); background: #fff; font: inherit; font-size: 10px; cursor: grab; touch-action: pan-x; }
+.thumbnail-group-list { min-width: 0; height: 100%; display: flex; flex: 1 1 auto; align-items: center; gap: 6px; overflow-x: auto; overflow-y: hidden; overscroll-behavior-x: contain; overscroll-behavior-y: none; scrollbar-width: thin; touch-action: pan-x; }
+.thumbnail-group-label { height: 32px; min-width: 44px; display: inline-flex; flex: 0 0 auto; align-items: center; gap: 6px; padding: 0 9px; border: 1px solid var(--color-border); border-radius: 8px; color: var(--color-text-secondary); background: #fff; font: inherit; font-size: 10px; cursor: grab; touch-action: pan-x; -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
 .thumbnail-group-label > span { max-width: 110px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .thumbnail-group-label small { min-width: 17px; height: 17px; display: grid; place-items: center; border-radius: 999px; color: var(--color-text-muted); background: var(--color-surface-subtle); font-size: 9px; font-variant-numeric: tabular-nums; }
 .thumbnail-group-label:hover, .thumbnail-group-label.expanded { border-color: var(--color-primary); color: var(--color-primary); background: var(--color-primary-soft); }
 .thumbnail-group-label.drop-target { outline: 2px solid var(--color-primary); outline-offset: 1px; }
 .thumbnail-group-label:disabled { opacity: .55; cursor: wait; }
-.page-thumbnail-strip { height: 120px; display: flex; align-items: stretch; gap: 8px; overflow-x: auto; overflow-y: hidden; padding: 28px 14px 8px; border-bottom: 1px solid var(--color-divider); scrollbar-width: thin; }
+.page-thumbnail-strip { height: 120px; display: flex; align-items: stretch; gap: 8px; overflow-x: auto; overflow-y: hidden; overscroll-behavior-x: contain; overscroll-behavior-y: none; padding: 28px 14px 8px; border-bottom: 1px solid var(--color-divider); scrollbar-width: thin; touch-action: pan-x; }
 .page-thumbnail-entry { position: relative; flex: 0 0 88px; min-width: 0; height: 100%; }
 .page-thumbnail-entry.thumbnail-label-group-entry { display: grid; grid-template-rows: 18px minmax(0,1fr); gap: 3px; overflow: visible; }
 .thumbnail-label-group-name { min-width: 0; max-width: 100%; height: 18px; overflow: hidden; padding: 0 2px; border: 0; color: var(--color-text-secondary); background: transparent; font: inherit; font-size: 9px; font-weight: 600; text-align: center; text-overflow: ellipsis; white-space: nowrap; cursor: pointer; }
@@ -538,7 +541,7 @@
 .thumbnail-group-settings-popover [role="alert"], .thumbnail-group-error { color: var(--color-danger); font-size: 10px; }
 .thumbnail-group-dialog .modal-form { padding-top: 16px; }
 .thumbnail-group-dialog .modal-form input { box-sizing: border-box; }
-.page-thumbnail { position: relative; width: 100%; height: 100%; min-width: 0; display: flex; flex-direction: column; gap: 4px; padding: 4px; overflow: hidden; border: 1px solid var(--color-border); border-radius: 8px; color: #748096; background: #fff; cursor: pointer; touch-action: pan-y; user-select: none; -webkit-user-select: none; }
+.page-thumbnail { position: relative; width: 100%; height: 100%; min-width: 0; display: flex; flex-direction: column; gap: 4px; padding: 4px; overflow: hidden; border: 1px solid var(--color-border); border-radius: 8px; color: #748096; background: #fff; cursor: pointer; touch-action: none; user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; }
 .page-thumbnail[draggable="true"] { cursor: grab; }
 .page-thumbnail[draggable="true"]:active { cursor: grabbing; }
 .page-thumbnail.dragging-source { opacity: .42; transition: opacity 100ms ease; }

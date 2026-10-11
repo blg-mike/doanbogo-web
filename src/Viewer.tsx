@@ -100,6 +100,12 @@ function dividerRatio(position: number, start: number, extent: number) {
   return clamp((position - start - handleSize / 2) / Math.max(1, extent - handleSize), 0.25, 0.75)
 }
 
+function preventViewerContextMenu(event: ReactMouseEvent<HTMLElement>) {
+  const target = event.target
+  if (target instanceof Element && target.closest('input, textarea, select, [contenteditable]:not([contenteditable="false"]), [role="textbox"]')) return
+  event.preventDefault()
+}
+
 function splitBasis(ratio: number) {
   return 'calc(' + ratio * 100 + '% - ' + ratio * 14 + 'px)'
 }
@@ -200,6 +206,13 @@ export default function Viewer() {
   const [searchParams, setSearchParams] = useSearchParams()
   const tabletResourcePolicy = getViewerResourcePolicy().tablet
   const reportMode = searchParams.get('report') === '1'
+  useEffect(() => {
+    if (reportMode) return
+    const roots = [document.documentElement, document.body]
+    const previous = roots.map((root) => root.style.overscrollBehaviorY)
+    roots.forEach((root) => { root.style.overscrollBehaviorY = 'none' })
+    return () => roots.forEach((root, index) => { root.style.overscrollBehaviorY = previous[index] })
+  }, [reportMode])
   const [showZoomHint, setShowZoomHint] = useState(() => {
     if (tabletResourcePolicy || zoomHintShownInSession) return false
     try {
@@ -457,15 +470,20 @@ export default function Viewer() {
   }, [pageWorkPersistence])
 
   useEffect(() => {
+    const rail = thumbnailRailRef.current
     return () => {
       const gesture = thumbnailTouchGestureRef.current
       if (!gesture) return
       window.clearTimeout(gesture.timer)
       if (gesture.frameId !== undefined) window.cancelAnimationFrame(gesture.frameId)
+      gesture.draggedPages.forEach((pageNumber) => rail?.querySelector<HTMLElement>('.page-thumbnail[data-page-number="' + pageNumber + '"]')?.classList.remove('dragging-source'))
       gesture.dragPreview?.remove()
       thumbnailTouchGestureRef.current = null
+      try {
+        if (gesture.button.hasPointerCapture(gesture.pointerId)) gesture.button.releasePointerCapture(gesture.pointerId)
+      } catch { /* The browser may already have released the pointer. */ }
     }
-  }, [id])
+  }, [id, loadedId, thumbnailCollapsed])
 
   function setThumbnailSelection(next: ThumbnailSelection | null | ((current: ThumbnailSelection | null) => ThumbnailSelection | null)) {
     setThumbnailUi((current) => {
@@ -1655,6 +1673,11 @@ export default function Viewer() {
     setThumbnailDraggingVisuals(gesture.draggedPages, false)
     gesture.dragPreview?.remove()
     thumbnailTouchGestureRef.current = null
+    if (canceled) updateThumbnailDropTarget(null)
+    if (canceled && gesture.mode !== 'pending') {
+      suppressThumbnailClickRef.current = true
+      window.setTimeout(() => { suppressThumbnailClickRef.current = false }, 0)
+    }
     if (!canceled && gesture.mode !== 'pending') {
       suppressThumbnailClickRef.current = true
       window.setTimeout(() => { suppressThumbnailClickRef.current = false }, 0)
@@ -2266,7 +2289,7 @@ export default function Viewer() {
   return (
     <>
     {timerElement}
-    <main ref={viewerShellRef} className={'viewer-shell' + (reportMode ? ' report-mode' : '') + (thumbnailCollapsed ? ' thumbnail-collapsed' : '') + (selectedThumbnailPages.length > 0 || thumbnailGroupError ? ' thumbnail-feedback-visible' : '') + (counterPanelVisible && !reportMode ? ' counter-panel-visible' : '')}>
+    <main ref={viewerShellRef} className={'viewer-shell' + (reportMode ? ' report-mode' : '') + (thumbnailCollapsed ? ' thumbnail-collapsed' : '') + (selectedThumbnailPages.length > 0 || thumbnailGroupError ? ' thumbnail-feedback-visible' : '') + (counterPanelVisible && !reportMode ? ' counter-panel-visible' : '')} onContextMenu={reportMode ? undefined : preventViewerContextMenu}>
       {suspendError && <div className="viewer-save-warning" role="alert"><span>{translateMessage(suspendError)}</span><button type="button" aria-label={t("저장 알림 닫기")} onClick={() => setSuspendError('')}><X size={14} /></button></div>}
       {annotationLimitNotice && <div className="viewer-limit-notice" role="status" aria-live="polite">{annotationLimitNotice}</div>}
       {showZoomHint && !reportMode && <aside className="viewer-zoom-hint" role="status"><span>{t("마우스 휠로 확대 · 이동 도구에서 드래그로 이동")}</span><button type="button" aria-label={t("확대·이동 안내 닫기")} onClick={() => setShowZoomHint(false)}><X size={15} /></button></aside>}
@@ -2452,6 +2475,7 @@ export default function Viewer() {
         style={{ left: thumbnailGroupPopover.left + 'px', top: thumbnailGroupPopover.top + 'px', maxHeight: 'calc(100vh - 16px)', overflowY: 'auto' }}
         role="dialog"
         aria-label={t('그룹 설정')}
+        onContextMenu={preventViewerContextMenu}
         onSubmit={(event) => {
           event.preventDefault()
           if (thumbnailGroupPopover.mode === 'rename') void renameThumbnailGroup(thumbnailGroupPopover.groupId, thumbnailGroupDraft)
