@@ -123,17 +123,34 @@ describe('portable workspace backup', () => {
     await saveViewer({ ...viewer, thumbnailGroups: [
       { id: 'body', name: '몸판', pageNumbers: [1, 3] },
       { id: 'empty', name: '빈 그룹', pageNumbers: [] },
+    ], thumbnailRailOrder: [
+      { type: 'group', groupId: 'empty' },
+      { type: 'page', pageNumber: 2 },
+      { type: 'group', groupId: 'body' },
+      { type: 'page', pageNumber: 4 },
     ] })
 
     expect((await getViewer(id, 4)).thumbnailGroups).toEqual([
       { id: 'body', name: '몸판', pageNumbers: [1, 3] },
       { id: 'empty', name: '빈 그룹', pageNumbers: [] },
     ])
+    expect((await getViewer(id, 4)).thumbnailRailOrder).toEqual([
+      { type: 'group', groupId: 'empty' },
+      { type: 'page', pageNumber: 2 },
+      { type: 'group', groupId: 'body' },
+      { type: 'page', pageNumber: 4 },
+    ])
     const backup = await createWorkspaceBackup()
     const restored = await readWorkspaceBackup(new File([backup], 'groups.doanbogo'))
     expect(restored.viewers.find((item) => item.documentId === id)?.thumbnailGroups).toEqual([
       { id: 'body', name: '몸판', pageNumbers: [1, 3] },
       { id: 'empty', name: '빈 그룹', pageNumbers: [] },
+    ])
+    expect(restored.viewers.find((item) => item.documentId === id)?.thumbnailRailOrder).toEqual([
+      { type: 'group', groupId: 'empty' },
+      { type: 'page', pageNumber: 2 },
+      { type: 'group', groupId: 'body' },
+      { type: 'page', pageNumber: 4 },
     ])
 
     await deleteDocument(id)
@@ -375,7 +392,7 @@ describe('portable workspace backup', () => {
     expect(restoredViewer.counterHistory).toHaveLength(1)
     expect(restoredViewer.counterHistory?.[0].baseCounterId).toBe('body-row')
     expect(restoredViewer.counterHistory?.[0].timeLapId).toBe('lap-1')
-    expect(restoredViewer.counterTimeLaps).toMatchObject([{ id: 'lap-1', counterId: 'body-row', sessionId: 'session-1', historyEntryId: 'history-1', elapsedMs: 120000, durationMs: 120000, rowDelta: 1 }])
+    expect(restoredViewer.counterTimeLaps).toMatchObject([{ id: 'lap-1', counterId: 'body-row', sessionId: 'session-1', historyEntryId: 'history-1', elapsedMs: 120000, durationMs: 120000, rowDelta: 1, rowNumber: 20 }])
     expect(restoredViewer.counterPreviewEnabled).toBe(true)
     expect(restoredViewer.counterVibrationEnabled).toBe(true)
     expect(restoredViewer.counterMainId).toBe('body-row')

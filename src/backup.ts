@@ -1,5 +1,5 @@
 import { strFromU8, strToU8, unzipSync, zipSync } from 'fflate'
-import type { AnnotationRecord, ChartDocument, ColorworkGrid, CounterTimeLap, DocumentRecord, HomeProject, KnittingReport, PageRecord, PageWorkRecord, PhotoPageRecord, PreferenceRecord, RegionHighlight, ReportTimelinePhoto, ViewerSnapshot } from './types'
+import type { AnnotationRecord, ChartDocument, ColorworkGrid, CounterHistoryEntry, CounterTimeLap, DocumentRecord, HomeProject, KnittingReport, PageRecord, PageWorkRecord, PhotoPageRecord, PreferenceRecord, RegionHighlight, ReportTimelinePhoto, ViewerSnapshot } from './types'
 import { normalizePageWork, readWorkspaceData, type WorkspaceData } from './storage'
 import { normalizeVisiblePageRecord } from './pageManagement'
 import { createDefaultCounters, isCurrentCounterSnapshots, isLegacyCounterSnapshots, normalizeCounterSnapshots, normalizeCounterTimeLaps, MAX_COUNTER_HISTORY } from './smartCounter'
@@ -51,6 +51,27 @@ function isThumbnailGroups(value: unknown, pageCount: number) {
       pages.add(page as number)
       return true
     })
+  })
+}
+
+function isThumbnailRailOrder(value: unknown, pageCount: number, groups: unknown) {
+  if (!Array.isArray(value) || !Array.isArray(groups)) return false
+  const groupIds = new Set(groups.filter(isObject).map((group) => group.id).filter((id): id is string => typeof id === 'string'))
+  const groupedPages = new Set(groups.filter(isObject).flatMap((group) => Array.isArray(group.pageNumbers) ? group.pageNumbers : []))
+  const keys = new Set<string>()
+  return value.every((item) => {
+    if (!isObject(item)) return false
+    let key: string
+    if (item.type === 'page' && Number.isSafeInteger(item.pageNumber) && (item.pageNumber as number) >= 1 && (item.pageNumber as number) <= pageCount && !groupedPages.has(item.pageNumber)) {
+      key = 'page:' + item.pageNumber
+    } else if (item.type === 'group' && typeof item.groupId === 'string' && groupIds.has(item.groupId)) {
+      key = 'group:' + item.groupId
+    } else {
+      return false
+    }
+    if (keys.has(key)) return false
+    keys.add(key)
+    return true
   })
 }
 
@@ -140,6 +161,7 @@ function isCounterTimeLaps(value: unknown): value is CounterTimeLap[] {
     typeof entry.historyEntryId === 'string' && entry.historyEntryId.length > 0 && entry.historyEntryId.length <= 100 &&
     Number.isSafeInteger(entry.elapsedMs) && (entry.elapsedMs as number) >= 0 && Number.isSafeInteger(entry.durationMs) && (entry.durationMs as number) >= 0 &&
     (entry.durationMs as number) <= (entry.elapsedMs as number) && (entry.rowDelta === -1 || entry.rowDelta === 1) &&
+    (entry.rowNumber === undefined || Number.isSafeInteger(entry.rowNumber) && (entry.rowNumber as number) >= 1 && (entry.rowNumber as number) <= 9999) &&
     Number.isSafeInteger(entry.recordedAt) && (entry.recordedAt as number) >= 0 && Boolean(ids.add(entry.id)))
 }
 
@@ -458,6 +480,7 @@ export async function readWorkspaceBackup(file: File): Promise<WorkspaceData> {
       ((manifest.version as number) >= 12 && (entry.counterMainId !== undefined && typeof entry.counterMainId !== 'string' || entry.counterVibrationEnabled !== undefined && typeof entry.counterVibrationEnabled !== 'boolean' || entry.counterAlertAcknowledged !== undefined && typeof entry.counterAlertAcknowledged !== 'string' || typeof entry.counterAlertAcknowledged === 'string' && entry.counterAlertAcknowledged.length > 500)) ||
       (entry.counterTimeLaps !== undefined && !isCounterTimeLaps(entry.counterTimeLaps)) ||
       (entry.thumbnailGroups !== undefined && !isThumbnailGroups(entry.thumbnailGroups, pageCounts.get(entry.documentId)!)) ||
+      (entry.thumbnailRailOrder !== undefined && !isThumbnailRailOrder(entry.thumbnailRailOrder, pageCounts.get(entry.documentId)!, entry.thumbnailGroups ?? [])) ||
       !Number.isFinite(entry.wideRatio) || !Number.isFinite(entry.tallRatio) || !Number.isFinite(entry.updatedAt) ||
       (entry.progressSettings !== undefined && !isProgressSettings(entry.progressSettings)) ||
       (entry.annotationSettings !== undefined && !isAnnotationSettings(entry.annotationSettings))) {
@@ -467,8 +490,9 @@ export async function readWorkspaceBackup(file: File): Promise<WorkspaceData> {
     delete viewer.techniqueSlots
     if ((manifest.version as number) < 9) viewer.counters = createDefaultCounters()
     else if ((manifest.version as number) < 10) viewer.counters = normalizeCounterSnapshots(viewer.counters)
-    viewer.counterHistory = Array.isArray(viewer.counterHistory) ? viewer.counterHistory.slice(-MAX_COUNTER_HISTORY) : []
-    viewer.counterTimeLaps = normalizeCounterTimeLaps(viewer.counterTimeLaps)
+    const counterHistory = Array.isArray(viewer.counterHistory) ? viewer.counterHistory.slice(-MAX_COUNTER_HISTORY) as CounterHistoryEntry[] : []
+    viewer.counterHistory = counterHistory
+    viewer.counterTimeLaps = normalizeCounterTimeLaps(viewer.counterTimeLaps, counterHistory)
     return viewer as unknown as ViewerSnapshot
   })
 

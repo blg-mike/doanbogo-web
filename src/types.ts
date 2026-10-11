@@ -221,6 +221,10 @@ export interface ThumbnailGroup {
   pageNumbers: number[]
 }
 
+export type ThumbnailRailOrderItem =
+  | { type: 'page'; pageNumber: number }
+  | { type: 'group'; groupId: string }
+
 export interface PaneSnapshot {
   page: number
   zoom: number
@@ -310,6 +314,7 @@ export interface CounterTimeLap {
   elapsedMs: number
   durationMs: number
   rowDelta: -1 | 1
+  rowNumber?: number
   recordedAt: number
 }
 
@@ -336,6 +341,7 @@ export interface ViewerSnapshot {
   counterVibrationEnabled?: boolean
   counterAlertAcknowledged?: string
   thumbnailGroups?: ThumbnailGroup[]
+  thumbnailRailOrder?: ThumbnailRailOrderItem[]
   updatedAt: number
 }
 

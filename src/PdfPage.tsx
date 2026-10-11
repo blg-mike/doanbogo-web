@@ -14,7 +14,7 @@ import { textNoteBoxAt, textNoteCounterRotation, textNoteGestureExceededThreshol
 import type { PdfQrLink } from './qr'
 import { rotatedPageSize } from './pageGeometry'
 import { displayRectToPageRect, focusBandHeightRatio, focusDimOpacity, focusRowSpacing, guidePositionForRotation, pageRectToDisplayRect } from './focusGeometry'
-import { clientPointForPagePosition, classifyWheelInput, isEditableTarget, pagePositionAtClientPoint, scrollOffsetForZoomFocus, wheelActionForBurst, wheelZoom, type WheelInput, type ZoomFocus } from './viewerInteraction'
+import { clientPointForPagePosition, classifyWheelInput, isEditableTarget, pagePositionAtClientPoint, pinchPreviewTranslation, scrollOffsetForZoomFocus, wheelActionForBurst, wheelZoom, type WheelInput, type ZoomFocus } from './viewerInteraction'
 import { acquireThumbnailCache, getViewerResourcePolicy, pdfRasterScale, releaseCanvasWhenSettled, viewerCanvasMemory } from './pdfRenderResources'
 import { pdfPageRenderQueue } from './pdfPageRenderQueue'
 import type { LimitedAnnotationKind } from './annotationLimits'
@@ -488,7 +488,7 @@ export function PdfPage({ pdf, page, paneId, pane, splitView, rotation, active, 
   const pointers = useRef(new Map<number, { x: number; y: number }>())
   const gesture = useRef<
     | { kind: 'pan'; pointerId: number; x: number; y: number; scrollLeft: number; scrollTop: number }
-    | { kind: 'pinch'; firstId: number; secondId: number; distance: number; zoom: number; centerX: number; centerY: number }
+    | { kind: 'pinch'; firstId: number; secondId: number; distance: number; zoom: number; pagePoint: Point; pageWidth: number; pageHeight: number; layerCenterX: number; layerCenterY: number }
     | null
   >(null)
   const strokeRef = useRef<ActiveInkStroke | null>(null)
@@ -1183,15 +1183,20 @@ export function PdfPage({ pdf, page, paneId, pane, splitView, rotation, active, 
     } else if (current.kind === 'pan') {
       const first = pointers.current.get(current.pointerId)
       if (!first) return
-      const rect = area.getBoundingClientRect()
       const midpointX = (first.x + event.clientX) / 2
       const midpointY = (first.y + event.clientY) / 2
+      const layer = rotationLayerRef.current
+      if (!layer) return
+      const layerRect = layer.getBoundingClientRect()
       gesture.current = {
         kind: 'pinch', firstId: current.pointerId, secondId: event.pointerId,
         distance: Math.max(1, Math.hypot(event.clientX - first.x, event.clientY - first.y)),
         zoom: pinchZoom.current ?? pane.zoom,
-        centerX: Math.min(1, Math.max(0, (area.scrollLeft + midpointX - rect.left) / Math.max(area.scrollWidth, 1))),
-        centerY: Math.min(1, Math.max(0, (area.scrollTop + midpointY - rect.top) / Math.max(area.scrollHeight, 1))),
+        pagePoint: pagePositionAtClientPoint(layerRect, layer.clientWidth, layer.clientHeight, rotation, zoomPreviewScale, midpointX, midpointY),
+        pageWidth: layer.clientWidth,
+        pageHeight: layer.clientHeight,
+        layerCenterX: layerRect.left + layerRect.width / 2,
+        layerCenterY: layerRect.top + layerRect.height / 2,
       }
     }
   }
@@ -1212,9 +1217,11 @@ export function PdfPage({ pdf, page, paneId, pane, splitView, rotation, active, 
       if (!first || !second) return
       const zoom = Math.min(5, Math.max(1, current.zoom * Math.hypot(second.x - first.x, second.y - first.y) / current.distance))
       pinchZoom.current = zoom
-      if (rotationLayerRef.current) {
+      const layer = rotationLayerRef.current
+      if (layer) {
         const scale = canPreviewZoom && displayedRaster ? zoom / displayedRaster.zoom : 1
-        rotationLayerRef.current.style.transform = 'rotate(' + rotation + 'deg) scale(' + scale + ')'
+        const translation = pinchPreviewTranslation(current.layerCenterX, current.layerCenterY, current.pageWidth, current.pageHeight, rotation, scale, current.pagePoint.x, current.pagePoint.y, (first.x + second.x) / 2, (first.y + second.y) / 2)
+        layer.style.transform = 'translate(' + translation.x + 'px, ' + translation.y + 'px) rotate(' + rotation + 'deg) scale(' + scale + ')'
       }
     }
   }
@@ -1223,10 +1230,33 @@ export function PdfPage({ pdf, page, paneId, pane, splitView, rotation, active, 
     const current = gesture.current
     const area = scrollRef.current
     if (!pointers.current.has(event.pointerId)) return
-    if (tool === 'pan' && current?.kind === 'pinch' && area && pinchZoom.current !== null) {
-      centerRef.current = { x: current.centerX, y: current.centerY }
-      onCenter(current.centerX, current.centerY)
-      onZoom(pinchZoom.current)
+    if (event.type === 'pointercancel') {
+      pointers.current.clear()
+      gesture.current = null
+      pinchZoom.current = null
+      zoomFocusRef.current = null
+      if (rotationLayerRef.current) rotationLayerRef.current.style.transform = 'rotate(' + rotation + 'deg) scale(' + zoomPreviewScale + ')'
+      return
+    }
+    pointers.current.set(event.pointerId, { x: event.clientX, y: event.clientY })
+    if (tool === 'pan' && current?.kind === 'pinch' && area) {
+      const first = pointers.current.get(current.firstId)
+      const second = pointers.current.get(current.secondId)
+      if (first && second) {
+        const zoom = Math.min(5, Math.max(1, current.zoom * Math.hypot(second.x - first.x, second.y - first.y) / current.distance))
+        const midpointX = (first.x + second.x) / 2
+        const midpointY = (first.y + second.y) / 2
+        const focus: ZoomFocus = { ...current.pagePoint, clientX: midpointX, clientY: midpointY, zoom }
+        if (zoom !== pane.zoom) {
+          zoomFocusRef.current = focus
+          onZoom(zoom)
+        } else {
+          if (rotationLayerRef.current) rotationLayerRef.current.style.transform = 'rotate(' + rotation + 'deg) scale(' + zoomPreviewScale + ')'
+          zoomFocusRef.current = null
+          applyZoomFocus(focus)
+          recordCenter()
+        }
+      }
     }
     pointers.current.delete(event.pointerId)
     pinchZoom.current = null
@@ -1377,6 +1407,10 @@ export function PdfPage({ pdf, page, paneId, pane, splitView, rotation, active, 
   useLayoutEffect(() => () => {
     const stroke = strokeRef.current
     if (stroke) finishInkStrokeRef.current(stroke.pointerId)
+    pointers.current.clear()
+    gesture.current = null
+    pinchZoom.current = null
+    zoomFocusRef.current = null
   }, [pdf, page, rotation, work.documentId])
 
   function doubleTap(event: React.MouseEvent<HTMLDivElement>) {
@@ -2071,10 +2105,10 @@ export function PdfPage({ pdf, page, paneId, pane, splitView, rotation, active, 
 
   return (
     <>
-    <div className={'pdf-pane ' + (active ? 'is-active' : '')} onPointerDown={onActivate}>
+    <div className={'pdf-pane ' + (active ? 'is-active' : '')}>
       <div className="pane-label">{active ? t('현재 작업 영역') : t('보조 영역')}</div>
       {strokeError && <div className="ink-save-error" role="alert"><span>{t("필기를 반영하지 못했습니다.")}</span><button type="button" onClick={retryStrokeSave}>{t("다시 시도")}</button></div>}
-      <div className="pdf-scroll-area" ref={scrollRef} onScroll={recordCenter} onPointerDown={pointerDown} onPointerMove={pointerMove} onPointerUp={pointerEnd} onPointerCancel={pointerEnd} onDoubleClick={doubleTap}>
+      <div className="pdf-scroll-area" ref={scrollRef} onScroll={recordCenter} onPointerDownCapture={onActivate} onPointerDown={pointerDown} onPointerMove={pointerMove} onPointerUp={pointerEnd} onPointerCancel={pointerEnd} onDoubleClick={doubleTap}>
         <div className="pdf-page-wrap" style={pageWrapStyle}>
           <div ref={rotationLayerRef} className="pdf-rotation-content" style={cssSize ? { width: cssSize.width, height: cssSize.height, transform: 'rotate(' + rotation + 'deg) scale(' + zoomPreviewScale + ')' } : undefined}>
           <div className="pdf-image-layer" style={cssSize ? { width: cssSize.width, height: cssSize.height } : undefined}>

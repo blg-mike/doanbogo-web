@@ -2,7 +2,7 @@ import { formatDate, formatDayCount, formatNumber, t, translateMessage, type Loc
 import { useEffect, useRef, useState, type KeyboardEvent, type ReactNode } from 'react'
 import { ArrowLeft, CalendarDays, Check, ChevronDown, ChevronUp, Clipboard, Clock3, Download, Ellipsis, Gauge, ImagePlus, Pencil, Plus, Ruler, Scissors, Share2, Shirt, Sparkles, Trash2, X } from 'lucide-react'
 import BrandLoading from './BrandLoading'
-import { getKnittingReportById, getKnittingReports, getPageWorks, getViewer, saveKnittingReport, type KnittingReportSummary } from './storage'
+import { deleteKnittingReport, getKnittingReportById, getKnittingReports, getPageWorks, getViewer, saveKnittingReport, type KnittingReportSummary } from './storage'
 import type { CounterSnapshot, KnittingReport, ReportAccessory, ReportMeasurement, ReportModification, ReportNeedle, ReportTimelinePhoto, ReportYarn } from './types'
 import { exportKnittingReportPdf } from './knittingReportPdf'
 import InstagramReportDialog from './InstagramReportDialog'
@@ -11,7 +11,7 @@ import { analyzeKnittingReportCandidates } from './knittingReportAnalysis'
 import { formatWorkTime } from './workTime'
 import './ReportDesignSystem.css'
 
-type Props = { documentId: string; fileName: string; pageCount: number; totalWorkTimeMs: number; reportId?: string; onBack: () => void }
+type Props = { documentId: string; fileName: string; pageCount: number; totalWorkTimeMs: number; reportId?: string; onBack: () => void; onReportChange?: (reportId: string) => void }
 type FieldKind = 'text' | 'date' | 'number' | 'url' | 'multiline' | 'select' | 'tags'
 type DetailId = 'project' | 'pattern' | 'size' | 'yarn' | 'needles' | 'modifications' | 'oneLine' | 'gauge' | 'measurements' | 'fit' | 'yarnMemo' | 'detailMemo' | 'extras'
 
@@ -158,7 +158,7 @@ function PersonalCard({ title, summary, icon, open, onClick }: { title: string; 
   return <button type="button" className={'report-personal-card' + (open ? ' open' : '')} aria-expanded={open} onClick={onClick}><span className="report-personal-icon">{icon}</span><span className="report-summary-copy"><strong>{title}</strong><small>{summary || t('필요할 때 다시 확인할 수 있도록 자세히 남겨두세요.')}</small></span><ChevronDown size={17} className="report-personal-chevron" /></button>
 }
 
-export default function KnittingReport({ documentId, fileName, pageCount, totalWorkTimeMs, reportId, onBack }: Props) {
+export default function KnittingReport({ documentId, fileName, pageCount, totalWorkTimeMs, reportId, onBack, onReportChange }: Props) {
   const [report, setReport] = useState<KnittingReport | null>(null)
   const [reports, setReports] = useState<KnittingReportSummary[]>([])
   const [saveState, setSaveState] = useState('불러오는 중')
@@ -175,8 +175,12 @@ export default function KnittingReport({ documentId, fileName, pageCount, totalW
   const [undoDelete, setUndoDelete] = useState<{ label: string; restore: (current: KnittingReport) => KnittingReport } | null>(null)
   const [expandedPersonal, setExpandedPersonal] = useState<string[]>([])
   const [moreOpen, setMoreOpen] = useState(false)
+  const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false)
+  const [deleteError, setDeleteError] = useState('')
   const moreTriggerRef = useRef<HTMLButtonElement>(null)
   const moreMenuRef = useRef<HTMLDivElement>(null)
+  const onReportChangeRef = useRef(onReportChange)
+  onReportChangeRef.current = onReportChange
   useEffect(() => {
     if (!moreOpen) return
     function handlePointerDown(event: globalThis.PointerEvent) {
@@ -206,6 +210,7 @@ export default function KnittingReport({ documentId, fileName, pageCount, totalW
   const undoTimer = useRef<number | undefined>(undefined)
   const photoProcessingCount = useRef(0)
   const reportRef = useRef<KnittingReport | null>(null)
+  const deletingReportIdRef = useRef<string | null>(null)
   const analyzeNowRef = useRef<(target?: KnittingReport | null) => Promise<void>>(async () => {})
   const saveQueueRef = useRef(Promise.resolve())
 
@@ -232,6 +237,7 @@ export default function KnittingReport({ documentId, fileName, pageCount, totalW
       reportRef.current = current
       setReport(current)
       setSaveState('저장됨')
+      if (reportId !== current.id) onReportChangeRef.current?.(current.id)
       if (createdOnOpen) void analyzeNowRef.current(current)
     })().catch(() => { if (!disposed) setSaveState('불러오지 못했습니다. 페이지를 다시 열어 주세요.') })
     return () => {
@@ -271,6 +277,7 @@ export default function KnittingReport({ documentId, fileName, pageCount, totalW
       reportRef.current = next
       setReport(next)
       setSaveState('저장됨')
+      onReportChangeRef.current?.(next.id)
     } catch (cause) {
       setSaveState(cause instanceof Error ? translateMessage(cause.message) : t('보고서를 불러오지 못했습니다.'))
     } finally {
@@ -288,9 +295,58 @@ export default function KnittingReport({ documentId, fileName, pageCount, totalW
       setReport(next)
       setReports((items) => [...items, summarizeReport(next)])
       setSaveState('저장됨')
+      onReportChangeRef.current?.(next.id)
       void analyzeNow(next)
     } catch (cause) {
       setSaveState(cause instanceof Error ? translateMessage(cause.message) : t('보고서를 추가하지 못했습니다.'))
+    } finally {
+      setSwitching(false)
+    }
+  }
+
+  async function confirmDeleteReport() {
+    const current = reportRef.current
+    if (!current || switching || exporting || processingPhotos || titleEditing) return
+    let deleted = false
+    setSwitching(true)
+    setDeleteError('')
+    deletingReportIdRef.current = current.id
+    try {
+      await flushPendingReport()
+      const persisted = reportRef.current
+      if (!persisted || persisted.id !== current.id) throw new Error('보고서를 삭제하지 못했습니다. 저장 공간을 확인하고 다시 시도해 주세요.')
+      await saveQueueRef.current
+      reportRef.current = null
+      await deleteKnittingReport(persisted.id)
+      deleted = true
+      const remaining = await getKnittingReports(documentId)
+      setReports(remaining.map(summarizeReport))
+      setDeleteConfirmOpen(false)
+      setMoreOpen(false)
+      setUndoDelete(null)
+      if (!remaining.length) {
+        setReport(null)
+        onBack()
+        return
+      }
+      const next = remaining.reduce((latest, item) => item.updatedAt > latest.updatedAt ? item : latest)
+      deletingReportIdRef.current = null
+      reportRef.current = next
+      setReport(next)
+      setSaveState('저장됨')
+      onReportChangeRef.current?.(next.id)
+    } catch (cause) {
+      if (deleted) {
+        reportRef.current = null
+        setReport(null)
+        onBack()
+        return
+      }
+      const latest = reportRef.current ?? current
+      reportRef.current = latest
+      setReport(latest)
+      deletingReportIdRef.current = null
+      setDeleteError(cause instanceof Error ? translateMessage(cause.message) : t('보고서를 삭제하지 못했습니다. 저장 공간을 확인하고 다시 시도해 주세요.'))
     } finally {
       setSwitching(false)
     }
@@ -389,6 +445,7 @@ export default function KnittingReport({ documentId, fileName, pageCount, totalW
   }
 
   async function saveImmediately(next: KnittingReport) {
+    if (deletingReportIdRef.current === next.id) throw new Error(t('보고서를 삭제하지 못했습니다. 저장 공간을 확인하고 다시 시도해 주세요.'))
     if (timer.current !== undefined) window.clearTimeout(timer.current)
     timer.current = undefined
     const saved = await persistReport(next)
@@ -402,13 +459,13 @@ export default function KnittingReport({ documentId, fileName, pageCount, totalW
   }
 
   async function analyzeNow(target = reportRef.current) {
-    if (!target || analysisLoading) return
+    if (!target || analysisLoading || deletingReportIdRef.current === target.id) return
     setAnalysisLoading(true)
     setAnalysisNotice('')
     try {
       await flushPendingReport()
       const current = reportRef.current
-      if (!current || current.id !== target.id) return
+      if (!current || current.id !== target.id || deletingReportIdRef.current === target.id) return
       const [works, viewer] = await Promise.all([getPageWorks(documentId), getViewer(documentId, pageCount)])
       const reportNotes = [
         ...(['project.memo', 'pattern.memo', 'gauge.memo', 'review.problems', 'review.memo', 'finished.washMemo', 'private.yarnMemo'] as const)
@@ -692,7 +749,7 @@ export default function KnittingReport({ documentId, fileName, pageCount, totalW
   return <div className="knitting-report-editor">
     <header className="report-appbar"><button type="button" className="report-appbar-back" aria-label={t("도안으로 돌아가기")} onClick={onBack}><ArrowLeft size={20} /></button><strong>{t("뜨개보고서")}</strong><div className="report-appbar-actions"><span className="report-save-indicator"><i />{translateMessage(saveState)}</span><button type="button" className="report-status-toggle" aria-pressed={report.status === 'complete'} disabled={switching || exporting || processingPhotos || titleEditing} onClick={() => update((current) => ({ ...current, status: current.status === 'complete' ? 'draft' : 'complete', completedAt: current.status === 'complete' ? null : Date.now() }))}>{report.status === 'complete' ? t('작성 중으로 변경') : t('작성 완료')}</button><button type="button" className="report-appbar-edit" disabled={switching || exporting || processingPhotos} onClick={() => setActiveDetail(activeDetail ? null : 'project')}><Pencil size={15} /><span>{activeDetail ? t('닫기') : t('편집')}</span></button><button type="button" className="report-appbar-share" disabled={switching || processingPhotos || titleEditing} onClick={() => void openCaption()}><Share2 size={15} /><span>{t("공유하기")}</span></button><button ref={moreTriggerRef} type="button" className="report-more-trigger" aria-label={t("보고서 메뉴")} aria-expanded={moreOpen} onClick={() => setMoreOpen((value) => !value)}><Ellipsis size={22} /></button></div>
       {moreOpen && <div ref={moreMenuRef} className="report-more-menu"><label>{t("보고서 선택")}<select aria-label={t("보고서 선택")} value={report.id} disabled={switching || processingPhotos || titleEditing} onChange={(event) => { setMoreOpen(false); void switchReport(event.currentTarget.value) }}>{reports.map((item, index) => <option key={item.id} value={item.id}>{item.title || t('보고서') + ' ' + (index + 1)}</option>)}</select></label>
-        <button type="button" disabled={switching || exporting || processingPhotos || titleEditing} onClick={() => { setMoreOpen(false); void addReport() }}><Plus size={15} />{t("보고서 추가")}</button><button type="button" disabled={switching || exporting || processingPhotos || titleEditing} onClick={() => { setMoreOpen(false); void downloadReport() }}><Download size={15} />{t("PDF 다운로드")}</button><button type="button" disabled={switching || processingPhotos || titleEditing} onClick={() => { setMoreOpen(false); void openInstagramImage() }}><ImagePlus size={15} />{t("인스타 이미지 만들기")}</button><button type="button" disabled={analysisLoading || switching} onClick={() => { setMoreOpen(false); void analyzeNow() }}><Sparkles size={15} />{t("수정사항 다시 찾기")}</button>
+        <button type="button" disabled={switching || exporting || processingPhotos || titleEditing} onClick={() => { setMoreOpen(false); setActiveDetail('project') }}><Pencil size={15} />{t("수정")}</button><button type="button" className="danger-action" disabled={switching || exporting || processingPhotos || titleEditing || analysisLoading} onClick={() => { setMoreOpen(false); setDeleteError(''); setDeleteConfirmOpen(true) }}><Trash2 size={15} />{t("삭제")}</button><button type="button" disabled={switching || exporting || processingPhotos || titleEditing} onClick={() => { setMoreOpen(false); void addReport() }}><Plus size={15} />{t("보고서 추가")}</button><button type="button" disabled={switching || exporting || processingPhotos || titleEditing} onClick={() => { setMoreOpen(false); void downloadReport() }}><Download size={15} />{t("PDF 다운로드")}</button><button type="button" disabled={switching || processingPhotos || titleEditing} onClick={() => { setMoreOpen(false); void openInstagramImage() }}><ImagePlus size={15} />{t("인스타 이미지 만들기")}</button><button type="button" disabled={analysisLoading || switching} onClick={() => { setMoreOpen(false); void analyzeNow() }}><Sparkles size={15} />{t("수정사항 다시 찾기")}</button>
       </div>}
     </header>
     <div className={'report-workspace' + (activeDetail ? ' editing' : '')}>
@@ -735,6 +792,7 @@ export default function KnittingReport({ documentId, fileName, pageCount, totalW
     {activeDetail && <aside className="report-inspector" aria-label={detailTitles[activeDetail]}><header className="report-detail-header"><button type="button" className="icon-button report-inspector-back" aria-label={t("보고서로 돌아가기")} onClick={() => setActiveDetail(null)}><ArrowLeft size={18} /></button><div><small>{t("뜨개보고서")}</small><h2 id="report-inspector-title">{detailTitles[activeDetail]}</h2></div><button type="button" className="text-button report-inspector-done" onClick={() => setActiveDetail(null)}>{t("완료")}</button></header><div className="report-detail-body">{detailContent(activeDetail)}</div></aside>}
     </div>
     <footer className="report-bottom-actions"><button type="button" className="report-save-button" disabled={switching || exporting || processingPhotos} onClick={async () => { setSwitching(true); try { await flushPendingReport(); setSaveState('저장됨') } catch (cause) { setSaveState(cause instanceof Error ? translateMessage(cause.message) : t('저장하지 못했습니다.')) } finally { setSwitching(false) }}}>{t("저장")}</button><button type="button" className="report-caption-button" disabled={switching || processingPhotos || titleEditing} onClick={() => void openCaption()}><Clipboard size={17} />{t("IG 문구 복사")}</button></footer>
+    {deleteConfirmOpen && <div className="modal-backdrop report-delete-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget && !switching) { setDeleteConfirmOpen(false); setDeleteError('') } }}><section className="modal-card report-delete-dialog" role="dialog" aria-modal="true" aria-labelledby="report-delete-title"><header className="modal-heading"><h2 id="report-delete-title">{t('보고서 삭제')}</h2><button type="button" className="icon-button" aria-label={t('닫기')} disabled={switching} onClick={() => { setDeleteConfirmOpen(false); setDeleteError('') }}><X size={19} /></button></header><div className="settings-copy"><p>{t('{title} 보고서와 소속 사진·기록을 삭제할까요? 연결된 PDF·프로젝트·다른 보고서는 유지됩니다.', { title: reportTitle })}</p>{deleteError && <p className="report-error" role="alert">{deleteError}</p>}<div className="modal-actions"><button type="button" className="secondary-button" disabled={switching} onClick={() => { setDeleteConfirmOpen(false); setDeleteError('') }}>{t('취소')}</button><button type="button" className="danger-button" disabled={switching} onClick={() => void confirmDeleteReport()}>{t('삭제')}</button></div></div></section></div>}
     {undoDelete && <div className="report-undo-snackbar" role="status"><span>{undoDelete.label}</span><button type="button" onClick={undoLastDelete}>{t("실행 취소")}</button><button type="button" aria-label={t("알림 닫기")} onClick={() => { if (undoTimer.current !== undefined) window.clearTimeout(undoTimer.current); undoTimer.current = undefined; setUndoDelete(null) }}><X size={15} /></button></div>}
     {previewPhoto && <div className="report-photo-lightbox" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) setPreviewPhoto('') }}><section role="dialog" aria-modal="true" aria-label={t("사진 크게 보기")}><button type="button" aria-label={t("사진 닫기")} onClick={() => setPreviewPhoto('')}><X size={20} /></button><img src={previewPhoto} alt={t("보고서 사진")} /></section></div>}
     {captionOpen && <InstagramCaptionDialog report={report} onClose={() => setCaptionOpen(false)} onCopied={() => setSaveState('IG 문구가 복사됐어요.')} />}

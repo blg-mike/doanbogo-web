@@ -21,6 +21,18 @@ describe('counter model', () => {
     ])).toEqual([lap])
   })
 
+  it('stores each time-lap row and only reconstructs older rows from its exact history entry', () => {
+    const counter = { ...createCounter('simple', '몸판'), id: 'main', value: 12, unit: 'row' as const, goalRow: 36 }
+    const legacyLap = { id: 'lap-1', counterId: 'main', sessionId: 'session-1', historyEntryId: 'history-1', elapsedMs: 120_000, durationMs: 60_000, rowDelta: 1 as const, recordedAt: 1 }
+    const history = [{ id: 'history-1', label: '몸판 · 12단 완료', counters: [counter], guides: [], actualRow: 12, baseCounterId: 'main', timeLapId: 'lap-1', savedAt: 1 }]
+
+    expect(normalizeCounterTimeLaps([legacyLap], history)[0].rowNumber).toBe(13)
+    expect(normalizeCounterTimeLaps([legacyLap])[0]).not.toHaveProperty('rowNumber')
+    expect(normalizeCounterTimeLaps([{ ...legacyLap, rowNumber: 13 }])[0].rowNumber).toBe(13)
+    expect(normalizeCounterTimeLaps([{ ...legacyLap, rowNumber: 0 }])).toEqual([])
+    expect(normalizeCounterTimeLaps([legacyLap], [{ ...history[0], counters: [{ ...counter, goalRow: 12 }] }])[0].rowNumber).toBe(12)
+  })
+
   it('migrates old repeat and task data without losing counts or work records', () => {
     const legacy = Array.from({ length: 5 }, (_, index) => ({
       mode: index === 0 ? 'repeat' : 'simple', value: index === 0 ? 19 : 0, repeatName: '몸판', startRow: 5,

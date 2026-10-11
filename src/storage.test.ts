@@ -1,8 +1,8 @@
 import 'fake-indexeddb/auto'
 import { describe, expect, it } from 'vitest'
-import { addDocument, addDocumentWorkTime, appendPhotoPages, createPhotoFolder, deleteDocument, duplicateDocument, getHomeProject, getPageRecognition, getPageWork, getPages, getPhotoPage, getPhotoPages, getViewer, listDocuments, markOpened, normalizePageWork, renameDocument, savePageRecognition, savePageRecords, savePageWork, saveViewer, saveViewerAndPageWorks, setPageFlag, updateTags } from './storage'
+import { addDocument, addDocumentWorkTime, appendPhotoPages, createPhotoFolder, deleteDocument, deleteKnittingReport, duplicateDocument, getHomeProject, getKnittingReportById, getKnittingReports, getPageRecognition, getPageWork, getPages, getPhotoPage, getPhotoPages, getViewer, listDocuments, listHomeReports, markOpened, normalizePageWork, renameDocument, saveKnittingReport, savePageRecognition, savePageRecords, savePageWork, saveViewer, saveViewerAndPageWorks, setPageFlag, updateTags } from './storage'
 import { createCounter } from './smartCounter'
-import type { DocumentRecord } from './types'
+import type { DocumentRecord, KnittingReport } from './types'
 
 function makeDocument(id: string, fileName: string, createdAt: number, tags: string[] = []): DocumentRecord {
   return {
@@ -19,6 +19,30 @@ function makeDocument(id: string, fileName: string, createdAt: number, tags: str
 }
 
 describe('local document storage', () => {
+  it('deletes one report and its home summary atomically without deleting the project or its other reports', async () => {
+    const document = makeDocument(crypto.randomUUID(), 'Report deletion.pdf', Date.now())
+    await addDocument(document)
+    const makeReport = (id: string, title: string): KnittingReport => ({
+      id, documentId: document.id, title, createdAt: Date.now(), updatedAt: Date.now(), fields: { 'project.name': title },
+      representativePhoto: 'data:image/jpeg;base64,photo', yarns: [], needles: [], accessories: [], measurements: [], modifications: [],
+      finishedPhotos: [{ id: id + '-finished', label: '완성', dataUrl: 'data:image/jpeg;base64,finished' }],
+      workPhotos: [{ id: id + '-work', label: '진행', dataUrl: 'data:image/jpeg;base64,work', uploadedAt: Date.now(), activityDate: '2026-10-11' }],
+    })
+    const removed = makeReport('report-remove-' + crypto.randomUUID(), '삭제할 보고서')
+    const retained = makeReport('report-keep-' + crypto.randomUUID(), '유지할 보고서')
+    await saveKnittingReport(removed)
+    await saveKnittingReport(retained)
+
+    await deleteKnittingReport(removed.id)
+
+    expect(await getKnittingReportById(removed.id)).toBeUndefined()
+    expect(await getKnittingReports(document.id)).toEqual([expect.objectContaining({ id: retained.id, workPhotos: retained.workPhotos })])
+    expect((await listHomeReports()).some((report) => report.id === removed.id)).toBe(false)
+    expect((await listHomeReports()).some((report) => report.id === retained.id)).toBe(true)
+    expect((await listDocuments()).some((item) => item.id === document.id)).toBe(true)
+    await deleteDocument(document.id)
+  })
+
   it('starts new page work without creating a progress line', async () => {
     const work = await getPageWork(crypto.randomUUID(), 1)
 

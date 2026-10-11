@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { anchoredScrollOffset, classifyWheelInput, clientPointForPagePosition, isEditableTarget, pagePositionAtClientPoint, scrollOffsetForZoomFocus, wheelActionForBurst, wheelZoom } from './viewerInteraction'
+import { anchoredScrollOffset, classifyWheelInput, clientPointForPagePosition, isEditableTarget, pagePositionAtClientPoint, pinchPreviewTranslation, scrollOffsetForZoomFocus, wheelActionForBurst, wheelZoom } from './viewerInteraction'
 
 describe('PDF viewer input helpers', () => {
   it('recognizes stepped mouse wheels while preserving trackpad scrolling', () => {
@@ -35,6 +35,14 @@ describe('PDF viewer input helpers', () => {
     const point = clientPointForPagePosition(rect, 400, 200, 90, 2, 0.25, 0.75)
     expect(point).toEqual({ x: 200, y: 200 })
     expect(pagePositionAtClientPoint(rect, 400, 200, 90, 2, point.x, point.y)).toEqual({ x: 0.25, y: 0.75 })
+  })
+
+  it('keeps the pinch anchor under the moving midpoint for both page orientations', () => {
+    for (const rotation of [0, 90]) {
+      const translation = pinchPreviewTranslation(300, 400, 400, 800, rotation, 1.8, 0.27, 0.64, 280, 450)
+      const anchor = clientPointForPagePosition({ left: 299.5, top: 399.5, width: 1, height: 1 } as DOMRect, 400, 800, rotation, 1.8, 0.27, 0.64)
+      expect({ x: anchor.x + translation.x, y: anchor.y + translation.y }).toEqual({ x: 280, y: 450 })
+    }
   })
 
   it('clamps zoom anchoring to the available scroll range', () => {

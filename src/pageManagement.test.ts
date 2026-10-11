@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { PageRecord } from './types'
-import { compactPageThumbnails, completePageList, movePagesToThumbnailGroup, normalizeThumbnailGroups, removePagesFromThumbnailGroups, reorderThumbnailGroups, thumbnailPagesForDrag, visiblePageRange } from './pageManagement'
+import { compactPageThumbnails, completePageList, movePagesToThumbnailGroup, moveThumbnailRailItem, normalizeThumbnailGroups, normalizeThumbnailRailOrder, reconcileThumbnailRailOrder, removePagesFromThumbnailGroups, reorderThumbnailGroups, thumbnailPagesForDrag, visiblePageRange } from './pageManagement'
 
 describe('page thumbnails', () => {
   it('shows every page and supplies the default state for missing records', () => {
@@ -50,6 +50,50 @@ describe('page thumbnails', () => {
       { type: 'page', pageNumber: 3 },
       { type: 'label-group', groupId: 'body', name: '몸판', pageNumbers: [2, 4], expanded: false, children: [] },
       { type: 'label-group', groupId: 'empty', name: '비어 있음', pageNumbers: [], expanded: false, children: [] },
+    ])
+  })
+
+  it('keeps an explicit rail order independent from label order', () => {
+    const groups = [
+      { id: 'body', name: '몸판', pageNumbers: [2, 4] },
+      { id: 'sleeve', name: '소매', pageNumbers: [5] },
+      { id: 'empty', name: '비어 있음', pageNumbers: [] },
+    ]
+    const railOrder = [
+      { type: 'page' as const, pageNumber: 1 },
+      { type: 'group' as const, groupId: 'sleeve' },
+      { type: 'page' as const, pageNumber: 3 },
+      { type: 'group' as const, groupId: 'body' },
+      { type: 'group' as const, groupId: 'empty' },
+    ]
+
+    expect(compactPageThumbnails(5, [groups[1], groups[0], groups[2]], null, railOrder).map((item) => item.type === 'page' ? 'page:' + item.pageNumber : 'group:' + item.groupId)).toEqual([
+      'page:1', 'group:sleeve', 'page:3', 'group:body', 'group:empty',
+    ])
+  })
+
+  it('moves a group before or after a page in the rail order', () => {
+    const order = [
+      { type: 'page' as const, pageNumber: 3 },
+      { type: 'page' as const, pageNumber: 4 },
+      { type: 'page' as const, pageNumber: 5 },
+      { type: 'group' as const, groupId: 'one' },
+    ]
+    expect(moveThumbnailRailItem(order, 'group:one', 'page:4', 'before')).toEqual([
+      { type: 'page', pageNumber: 3 }, { type: 'group', groupId: 'one' }, { type: 'page', pageNumber: 4 }, { type: 'page', pageNumber: 5 },
+    ])
+    expect(moveThumbnailRailItem(order, 'group:one', 'page:4', 'after').map((item) => item.type === 'page' ? 'page:' + item.pageNumber : 'group:' + item.groupId)).toEqual([
+      'page:3', 'page:4', 'group:one', 'page:5',
+    ])
+  })
+
+  it('reconciles membership changes while restoring ungrouped pages by page number', () => {
+    const before = [{ id: 'one', name: '그룹1', pageNumbers: [2, 4] }]
+    const after = [{ id: 'one', name: '그룹1', pageNumbers: [4] }]
+    const savedOrder = normalizeThumbnailRailOrder(undefined, 5, before)
+    const next = reconcileThumbnailRailOrder(savedOrder, before, after, 5)
+    expect(next.map((item) => item.type === 'page' ? 'page:' + item.pageNumber : 'group:' + item.groupId)).toEqual([
+      'page:1', 'group:one', 'page:2', 'page:3', 'page:5',
     ])
   })
 

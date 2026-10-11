@@ -10,20 +10,34 @@ export const MAX_COUNTERS = 80
 export const MAX_COUNTER_HISTORY = 200
 const MAX_COUNTER_TASK_OCCURRENCES = MAX_COUNTER_ROW * MAX_COUNTER_TASK_RULES
 
-export function normalizeCounterTimeLaps(value: unknown): CounterTimeLap[] {
+export function normalizeCounterTimeLaps(value: unknown, history: CounterHistoryEntry[] = []): CounterTimeLap[] {
   if (!Array.isArray(value)) return []
   const ids = new Set<string>()
-  return value.filter((item): item is CounterTimeLap => {
-    if (!item || typeof item !== 'object') return false
+  const laps: CounterTimeLap[] = []
+  for (const item of value) {
+    if (!item || typeof item !== 'object') continue
     const lap = item as Partial<CounterTimeLap>
     if (typeof lap.id !== 'string' || !lap.id || lap.id.length > 100 || ids.has(lap.id) || typeof lap.counterId !== 'string' || !lap.counterId || lap.counterId.length > 100 ||
       typeof lap.sessionId !== 'string' || !lap.sessionId || lap.sessionId.length > 100 || typeof lap.historyEntryId !== 'string' || !lap.historyEntryId || lap.historyEntryId.length > 100 ||
       !Number.isSafeInteger(lap.elapsedMs) || (lap.elapsedMs ?? -1) < 0 || !Number.isSafeInteger(lap.durationMs) || (lap.durationMs ?? -1) < 0 ||
       (lap.durationMs ?? 0) > (lap.elapsedMs ?? 0) || (lap.rowDelta !== -1 && lap.rowDelta !== 1) ||
-      !Number.isSafeInteger(lap.recordedAt) || (lap.recordedAt ?? 0) < 0) return false
+      !Number.isSafeInteger(lap.recordedAt) || (lap.recordedAt ?? 0) < 0 ||
+      (lap.rowNumber !== undefined && (!Number.isSafeInteger(lap.rowNumber) || lap.rowNumber < 1 || lap.rowNumber > MAX_COUNTER_ROW))) continue
     ids.add(lap.id)
-    return true
-  })
+    let rowNumber = lap.rowNumber
+    if (rowNumber === undefined) {
+      const entry = history.find((candidate) => candidate.id === lap.historyEntryId && candidate.timeLapId === lap.id)
+      if (entry && entry.baseCounterId) {
+        if (lap.rowDelta === -1 && entry.actualRow >= 1 && entry.actualRow <= MAX_COUNTER_ROW) rowNumber = entry.actualRow
+        else if (lap.rowDelta === 1 && entry.actualRow >= 1 && entry.actualRow <= MAX_COUNTER_ROW) {
+          const base = entry.counters.find((counter) => counter.id === entry.baseCounterId)
+          if (base?.kind === 'simple' && base.unit === 'row') rowNumber = base.goalRow === base.value ? base.value : Math.min(MAX_COUNTER_ROW, entry.actualRow + 1)
+        }
+      }
+    }
+    laps.push({ ...lap, ...(rowNumber === undefined ? {} : { rowNumber }) } as CounterTimeLap)
+  }
+  return laps
 }
 
 type LegacyCounter = {

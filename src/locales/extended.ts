@@ -297,12 +297,12 @@ Object.assign(extendedTranslations.fi, {
   '+1단': '+1 kerros', '−1단': '−1 kerros', '일시정지를 누르지 않아 마지막 저장 이후 측정한 시간은 누적 작업시간에 저장되지 않습니다.': 'Edellisen tallennuksen jälkeen mitattua aikaa ei lisätä kokonaistyöaikaan, koska ajastinta ei keskeytetty.',
 })
 const thumbnailLabelAndExitTranslations = {
-  en: { '이름 바꾸기': 'Rename', '순서 바꾸기': 'Reorder', '라벨 해지하기': 'Remove label', '위로 이동': 'Move up', '아래로 이동': 'Move down', '라벨 순서': 'Label order', '저장하고 나가기': 'Save and exit', '저장하는 중…': 'Saving before exit…', '저장하지 못했습니다. 저장 공간을 확인한 뒤 다시 시도해 주세요.': 'Could not save. Check available storage and try again.' },
-  ja: { '이름 바꾸기': '名前を変更', '순서 바꾸기': '順序を変更', '라벨 해지하기': 'ラベルを解除', '위로 이동': '上へ移動', '아래로 이동': '下へ移動', '라벨 순서': 'ラベルの順序', '저장하고 나가기': '保存して終了', '저장하는 중…': '終了前に保存中…', '저장하지 못했습니다. 저장 공간을 확인한 뒤 다시 시도해 주세요.': '保存できませんでした。保存領域を確認して、もう一度お試しください。' },
-  de: { '이름 바꾸기': 'Umbenennen', '순서 바꾸기': 'Reihenfolge ändern', '라벨 해지하기': 'Label entfernen', '위로 이동': 'Nach oben', '아래로 이동': 'Nach unten', '라벨 순서': 'Labelreihenfolge', '저장하고 나가기': 'Speichern und beenden', '저장하는 중…': 'Speichern vor dem Beenden…', '저장하지 못했습니다. 저장 공간을 확인한 뒤 다시 시도해 주세요.': 'Speichern fehlgeschlagen. Prüfen Sie den verfügbaren Speicher und versuchen Sie es erneut.' },
-  da: { '이름 바꾸기': 'Omdøb', '순서 바꾸기': 'Skift rækkefølge', '라벨 해지하기': 'Fjern mærkat', '위로 이동': 'Flyt op', '아래로 이동': 'Flyt ned', '라벨 순서': 'Mærkatrækkefølge', '저장하고 나가기': 'Gem og afslut', '저장하는 중…': 'Gemmer før afslutning…', '저장하지 못했습니다. 저장 공간을 확인한 뒤 다시 시도해 주세요.': 'Kunne ikke gemme. Kontrollér lagerpladsen, og prøv igen.' },
-  nb: { '이름 바꾸기': 'Gi nytt navn', '순서 바꾸기': 'Endre rekkefølge', '라벨 해지하기': 'Fjern etikett', '위로 이동': 'Flytt opp', '아래로 이동': 'Flytt ned', '라벨 순서': 'Etikettrekkefølge', '저장하고 나가기': 'Lagre og avslutt', '저장하는 중…': 'Lagrer før avslutning…', '저장하지 못했습니다. 저장 공간을 확인한 뒤 다시 시도해 주세요.': 'Kunne ikke lagre. Kontroller lagringsplassen og prøv igjen.' },
-  fi: { '이름 바꾸기': 'Nimeä uudelleen', '순서 바꾸기': 'Muuta järjestystä', '라벨 해지하기': 'Poista tunniste', '위로 이동': 'Siirrä ylös', '아래로 이동': 'Siirrä alas', '라벨 순서': 'Tunnisteiden järjestys', '저장하고 나가기': 'Tallenna ja poistu', '저장하는 중…': 'Tallennetaan ennen poistumista…', '저장하지 못했습니다. 저장 공간을 확인한 뒤 다시 시도해 주세요.': 'Tallennus epäonnistui. Tarkista tallennustila ja yritä uudelleen.' },
+  en: { '이름 바꾸기': 'Rename', '순서 바꾸기': 'Reorder', '라벨 해지하기': 'Remove label', '위로 이동': 'Move up', '아래로 이동': 'Move down', '라벨 순서': 'Label order', '길게 눌러 순서 변경': 'Press and hold to reorder', '저장하고 나가기': 'Save and exit', '저장하는 중…': 'Saving before exit…', '저장하지 못했습니다. 저장 공간을 확인한 뒤 다시 시도해 주세요.': 'Could not save. Check available storage and try again.' },
+  ja: { '이름 바꾸기': '名前を変更', '순서 바꾸기': '順序を変更', '라벨 해지하기': 'ラベルを解除', '위로 이동': '上へ移動', '아래로 이동': '下へ移動', '라벨 순서': 'ラベルの順序', '길게 눌러 순서 변경': '長押しして並べ替え', '저장하고 나가기': '保存して終了', '저장하는 중…': '終了前に保存中…', '저장하지 못했습니다. 저장 공간을 확인한 뒤 다시 시도해 주세요.': '保存できませんでした。保存領域を確認して、もう一度お試しください。' },
+  de: { '이름 바꾸기': 'Umbenennen', '순서 바꾸기': 'Reihenfolge ändern', '라벨 해지하기': 'Label entfernen', '위로 이동': 'Nach oben', '아래로 이동': 'Nach unten', '라벨 순서': 'Labelreihenfolge', '길게 눌러 순서 변경': 'Zum Sortieren gedrückt halten', '저장하고 나가기': 'Speichern und beenden', '저장하는 중…': 'Speichern vor dem Beenden…', '저장하지 못했습니다. 저장 공간을 확인한 뒤 다시 시도해 주세요.': 'Speichern fehlgeschlagen. Prüfen Sie den verfügbaren Speicher und versuchen Sie es erneut.' },
+  da: { '이름 바꾸기': 'Omdøb', '순서 바꾸기': 'Skift rækkefølge', '라벨 해지하기': 'Fjern mærkat', '위로 이동': 'Flyt op', '아래로 이동': 'Flyt ned', '라벨 순서': 'Mærkatrækkefølge', '길게 눌러 순서 변경': 'Hold nede for at ændre rækkefølge', '저장하고 나가기': 'Gem og afslut', '저장하는 중…': 'Gemmer før afslutning…', '저장하지 못했습니다. 저장 공간을 확인한 뒤 다시 시도해 주세요.': 'Kunne ikke gemme. Kontrollér lagerpladsen, og prøv igen.' },
+  nb: { '이름 바꾸기': 'Gi nytt navn', '순서 바꾸기': 'Endre rekkefølge', '라벨 해지하기': 'Fjern etikett', '위로 이동': 'Flytt opp', '아래로 이동': 'Flytt ned', '라벨 순서': 'Etikettrekkefølge', '길게 눌러 순서 변경': 'Trykk og hold for å endre rekkefølge', '저장하고 나가기': 'Lagre og avslutt', '저장하는 중…': 'Lagrer før avslutning…', '저장하지 못했습니다. 저장 공간을 확인한 뒤 다시 시도해 주세요.': 'Kunne ikke lagre. Kontroller lagringsplassen og prøv igjen.' },
+  fi: { '이름 바꾸기': 'Nimeä uudelleen', '순서 바꾸기': 'Muuta järjestystä', '라벨 해지하기': 'Poista tunniste', '위로 이동': 'Siirrä ylös', '아래로 이동': 'Siirrä alas', '라벨 순서': 'Tunnisteiden järjestys', '길게 눌러 순서 변경': 'Muuta järjestystä pitämällä painettuna', '저장하고 나가기': 'Tallenna ja poistu', '저장하는 중…': 'Tallennetaan ennen poistumista…', '저장하지 못했습니다. 저장 공간을 확인한 뒤 다시 시도해 주세요.': 'Tallennus epäonnistui. Tarkista tallennustila ja yritä uudelleen.' },
 }
 Object.assign(extendedTranslations.en, thumbnailLabelAndExitTranslations.en)
 Object.assign(extendedTranslations.ja, thumbnailLabelAndExitTranslations.ja)
@@ -325,3 +325,42 @@ Object.assign(extendedTranslations.de, annotationPaletteTranslations.de)
 Object.assign(extendedTranslations.da, annotationPaletteTranslations.da)
 Object.assign(extendedTranslations.nb, annotationPaletteTranslations.nb)
 Object.assign(extendedTranslations.fi, annotationPaletteTranslations.fi)
+
+const reportDeleteTranslations = {
+  en: {
+    '단수 미기록': 'Row not recorded', '보고서 삭제': 'Delete report',
+    '{title} 보고서와 소속 사진·기록을 삭제할까요? 연결된 PDF·프로젝트·다른 보고서는 유지됩니다.': 'Delete the {title} report and its photos and notes? The linked PDF, project, and other reports will remain.',
+    '보고서를 삭제하지 못했습니다. 저장 공간을 확인하고 다시 시도해 주세요.': 'Could not delete the report. Check storage and try again.',
+  },
+  ja: {
+    '단수 미기록': '段数未記録', '보고서 삭제': 'レポートを削除',
+    '{title} 보고서와 소속 사진·기록을 삭제할까요? 연결된 PDF·프로젝트·다른 보고서는 유지됩니다.': '「{title}」レポートとその写真・記録を削除しますか？リンクされたPDF、プロジェクト、他のレポートは残ります。',
+    '보고서를 삭제하지 못했습니다. 저장 공간을 확인하고 다시 시도해 주세요.': 'レポートを削除できませんでした。保存領域を確認してもう一度お試しください。',
+  },
+  de: {
+    '단수 미기록': 'Reihenzahl nicht erfasst', '보고서 삭제': 'Bericht löschen',
+    '{title} 보고서와 소속 사진·기록을 삭제할까요? 연결된 PDF·프로젝트·다른 보고서는 유지됩니다.': 'Den Bericht „{title}“ und die zugehörigen Fotos und Notizen löschen? Die verknüpfte PDF, das Projekt und andere Berichte bleiben erhalten.',
+    '보고서를 삭제하지 못했습니다. 저장 공간을 확인하고 다시 시도해 주세요.': 'Der Bericht konnte nicht gelöscht werden. Prüfen Sie den Speicher und versuchen Sie es erneut.',
+  },
+  da: {
+    '단수 미기록': 'Række ikke registreret', '보고서 삭제': 'Slet rapport',
+    '{title} 보고서와 소속 사진·기록을 삭제할까요? 연결된 PDF·프로젝트·다른 보고서는 유지됩니다.': 'Slet rapporten {title} og dens fotos og noter? Den tilknyttede PDF, projektet og andre rapporter bevares.',
+    '보고서를 삭제하지 못했습니다. 저장 공간을 확인하고 다시 시도해 주세요.': 'Rapporten kunne ikke slettes. Kontrollér lagerpladsen, og prøv igen.',
+  },
+  nb: {
+    '단수 미기록': 'Rad ikke registrert', '보고서 삭제': 'Slett rapport',
+    '{title} 보고서와 소속 사진·기록을 삭제할까요? 연결된 PDF·프로젝트·다른 보고서는 유지됩니다.': 'Slette rapporten {title} og tilhørende bilder og notater? Den tilknyttede PDF-en, prosjektet og andre rapporter beholdes.',
+    '보고서를 삭제하지 못했습니다. 저장 공간을 확인하고 다시 시도해 주세요.': 'Kunne ikke slette rapporten. Kontroller lagringsplassen og prøv igjen.',
+  },
+  fi: {
+    '단수 미기록': 'Kerros ei tallennettu', '보고서 삭제': 'Poista raportti',
+    '{title} 보고서와 소속 사진·기록을 삭제할까요? 연결된 PDF·프로젝트·다른 보고서는 유지됩니다.': 'Poistetaanko raportti {title} sekä sen kuvat ja muistiinpanot? Yhdistetty PDF, projekti ja muut raportit säilyvät.',
+    '보고서를 삭제하지 못했습니다. 저장 공간을 확인하고 다시 시도해 주세요.': 'Raporttia ei voitu poistaa. Tarkista tallennustila ja yritä uudelleen.',
+  },
+}
+Object.assign(extendedTranslations.en, reportDeleteTranslations.en)
+Object.assign(extendedTranslations.ja, reportDeleteTranslations.ja)
+Object.assign(extendedTranslations.de, reportDeleteTranslations.de)
+Object.assign(extendedTranslations.da, reportDeleteTranslations.da)
+Object.assign(extendedTranslations.nb, reportDeleteTranslations.nb)
+Object.assign(extendedTranslations.fi, reportDeleteTranslations.fi)

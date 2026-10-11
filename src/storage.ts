@@ -1,7 +1,7 @@
 import { openDB, type DBSchema, type IDBPDatabase } from 'idb'
 import type { ChartDocument, CounterHistoryEntry, DocumentRecord, HomeProject, KnittingReport, PageRecognitionRecord, PageRecord, PageWorkRecord, PhotoPageRecord, PaneSnapshot, PreferenceRecord, ProgressGuide, SortMode, ViewerSnapshot } from './types'
 import { MAX_COUNTER_HISTORY, normalizeCounterSnapshots, normalizeCounterTimeLaps } from './smartCounter'
-import { normalizeThumbnailGroups, normalizeVisiblePageRecord } from './pageManagement'
+import { normalizeThumbnailGroups, normalizeThumbnailRailOrder, normalizeVisiblePageRecord } from './pageManagement'
 
 interface DoanBogoDB extends DBSchema {
   documents: {
@@ -68,7 +68,7 @@ function stripLegacyTechniqueSlots(viewer: ViewerSnapshot): ViewerSnapshot {
   delete cleaned.techniqueSlots
   const counterHistory = Array.isArray(cleaned.counterHistory) ? cleaned.counterHistory.slice(-MAX_COUNTER_HISTORY).filter((item): item is CounterHistoryEntry =>
     Boolean(item && typeof item === 'object' && Array.isArray(item.counters) && Array.isArray(item.guides))) : []
-  return { ...cleaned, counters: normalizeCounterSnapshots(cleaned.counters), counterHistory, counterTimeLaps: normalizeCounterTimeLaps(cleaned.counterTimeLaps) }
+  return { ...cleaned, counters: normalizeCounterSnapshots(cleaned.counters), counterHistory, counterTimeLaps: normalizeCounterTimeLaps(cleaned.counterTimeLaps, counterHistory) }
 }
 
 export function normalizePageWork(work: PageWorkRecord): PageWorkRecord {
@@ -567,6 +567,18 @@ export async function saveKnittingReport(report: KnittingReport) {
   return saved
 }
 
+export async function deleteKnittingReport(id: string) {
+  await access(async (db) => {
+    const tx = db.transaction(['knittingReportEntries', 'homeReports'], 'readwrite')
+    await tx.objectStore('knittingReportEntries').delete(id)
+    await tx.objectStore('homeReports').delete(id)
+    await tx.done
+  }, () => {
+    temporary.knittingReports.delete(id)
+    temporary.homeReports.delete(id)
+  })
+}
+
 export async function markOpened(id: string) {
   const now = Date.now()
   await access(async (db) => {
@@ -866,9 +878,11 @@ export async function getViewer(id: string, pageCount: number): Promise<ViewerSn
   const stored = await access((db) => db.get('viewers', id), () => temporary.viewers.get(id))
   if (stored) {
     const saved = stripLegacyTechniqueSlots(stored)
+    const thumbnailGroups = normalizeThumbnailGroups(saved.thumbnailGroups, pageCount)
     return {
       ...saved,
-      thumbnailGroups: normalizeThumbnailGroups(saved.thumbnailGroups, pageCount),
+      thumbnailGroups,
+      ...(saved.thumbnailRailOrder === undefined ? {} : { thumbnailRailOrder: normalizeThumbnailRailOrder(saved.thumbnailRailOrder, pageCount, thumbnailGroups) }),
       splitInitialized: saved.splitInitialized ?? saved.split,
       wideRatio: saved.wideRatio === 0.65 ? 0.5 : saved.wideRatio ?? 0.5,
       tallRatio: saved.tallRatio === 0.65 ? 0.5 : saved.tallRatio ?? 0.5,

@@ -1,5 +1,5 @@
 import { formatNumber, t, translateMessage } from './locales/index'
-import { Fragment, useCallback, useEffect, useMemo, useRef, useState, type DragEvent as ReactDragEvent, type FormEvent as ReactFormEvent, type MouseEvent as ReactMouseEvent, type PointerEvent as ReactPointerEvent, type ReactNode, type UIEvent as ReactUIEvent } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, type DragEvent as ReactDragEvent, type FormEvent as ReactFormEvent, type MouseEvent as ReactMouseEvent, type PointerEvent as ReactPointerEvent, type ReactNode, type UIEvent as ReactUIEvent } from 'react'
 import type { PDFDocumentProxy } from 'pdfjs-dist'
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { ArrowLeft, Bookmark, Check, ChevronDown, ChevronLeft, ChevronRight, ChevronUp, Columns2, Eraser, Eye, EyeClosed, EyeOff, Files, Grid3X3, GripVertical, Highlighter, Maximize2, Minus, MousePointer2, Pencil, Plus, Redo2, RotateCwSquare, ScanLine, Settings2, Square, Tally5, Type, Undo2, X } from 'lucide-react'
@@ -12,7 +12,7 @@ import { pdfPageRenderQueue } from './pdfPageRenderQueue'
 import { openPdf, pdfErrorMessage } from './pdf'
 import { openPhotoDocument } from './photoDocument'
 import KnittingReport from './KnittingReport'
-import type { AnnotationSettings, AnnotationStyle, AnnotationTool, ColorworkCreateRequest, ColorworkSettings, CounterHistoryEntry, CounterSnapshot, CounterTimeLap, DocumentRecord, PageRecord, PageRotation, PageWorkRecord, PaneId, PaneSnapshot, ProgressGuide, ProgressSettings, ThumbnailGroup, ViewerSnapshot } from './types'
+import type { AnnotationSettings, AnnotationStyle, AnnotationTool, ColorworkCreateRequest, ColorworkSettings, CounterHistoryEntry, CounterSnapshot, CounterTimeLap, DocumentRecord, PageRecord, PageRotation, PageWorkRecord, PaneId, PaneSnapshot, ProgressGuide, ProgressSettings, ThumbnailGroup, ThumbnailRailOrderItem, ViewerSnapshot } from './types'
 import { defaultColorworkSettings, getColorworkDimensions, resizeColorworkGrid } from './colorwork'
 import { MAX_COUNTER_HISTORY, MAX_COUNTER_ROW, advanceLinkedCounters, counterAlertState, counterSideForRow, createCounter, findCounterRewindCheckpoint, normalizeCounterSnapshots, progressGuideForCounter, reanchorProgressGuideForCounter, restoreCounterGroup, setCounterGroupRow } from './smartCounter'
 import CounterPanel from './CounterPanel'
@@ -24,7 +24,7 @@ import { PageWorkPersistence } from './pageWorkPersistence'
 import { enqueuePdfRecognition, pausePdfRecognitionForReport, releasePdfRecognitionViewer, resumePdfRecognitionFromReport, subscribePdfRecognition } from './pdfRecognition'
 import { getViewerResourcePolicy, setThumbnailPagesExcluded } from './pdfRenderResources'
 import { guidePositionForRotation } from './focusGeometry'
-import { compactPageThumbnails, completePageList, createThumbnailGroupId, movePagesToThumbnailGroup, removePagesFromThumbnailGroups, reorderThumbnailGroups, thumbnailPagesForDrag, visiblePageRange, type PageThumbnailItem } from './pageManagement'
+import { compactPageThumbnails, completePageList, createThumbnailGroupId, movePagesToThumbnailGroup, moveThumbnailRailItem, normalizeThumbnailRailOrder, reconcileThumbnailRailOrder, removePagesFromThumbnailGroups, reorderThumbnailGroups, thumbnailPagesForDrag, thumbnailRailOrderKey, visiblePageRange, type PageThumbnailItem } from './pageManagement'
 import { createDefaultPrimaryProgressGuide, migrateProgressGuides, prepareProgressGuidesForDirectInteraction, progressGuideCandidates } from './progressLines'
 import { ColorPresetButtons } from './ColorPresetButtons'
 import { ANNOTATION_COLOR_PRESETS, DESIGN_SYSTEM_COLORS, FUNCTIONAL_COLOR_PRESETS } from './designTokens'
@@ -58,6 +58,26 @@ type ThumbnailTouchGesture = {
   dropTarget?: { kind: 'outside'; key: string } | { kind: 'label'; groupId: string; key: string }
   timer: number
   frameId?: number
+}
+type ThumbnailReorderTarget = { kind: 'labels' | 'rail'; itemKey: string; position: 'before' | 'after' }
+type ThumbnailReorderGesture = {
+  kind: 'labels' | 'rail'
+  pointerId: number
+  pointerType: 'mouse' | 'touch'
+  sourceKey: string
+  startX: number
+  startY: number
+  startScrollLeft: number
+  clientX: number
+  clientY: number
+  button: HTMLButtonElement
+  sourceElement: HTMLElement
+  scrollElement: HTMLDivElement
+  mode: 'pending' | 'scroll' | 'drag' | 'cancel'
+  timer: number
+  frameId?: number
+  preview?: HTMLDivElement
+  target?: ThumbnailReorderTarget
 }
 type CounterGuideAction = { kind: 'advance' | 'correct'; pageNumber: number; guideId: string }
 type CounterTimeLapAction = Omit<CounterTimeLap, 'historyEntryId'>
@@ -344,6 +364,10 @@ export default function Viewer() {
   const [thumbnailUi, setThumbnailUi] = useState<{ documentId: string; selection: ThumbnailSelection | null }>(() => ({ documentId: id, selection: null }))
   const thumbnailSelection = thumbnailUi.documentId === id ? thumbnailUi.selection : null
   const thumbnailTouchGestureRef = useRef<ThumbnailTouchGesture | null>(null)
+  const thumbnailReorderGestureRef = useRef<ThumbnailReorderGesture | null>(null)
+  const [thumbnailReorderFeedbackUi, setThumbnailReorderFeedbackUi] = useState<{ documentId: string; target: ThumbnailReorderTarget | null }>(() => ({ documentId: id, target: null }))
+  const thumbnailReorderFeedback = thumbnailReorderFeedbackUi.documentId === id ? thumbnailReorderFeedbackUi.target : null
+  const thumbnailReorderFeedbackRef = useRef<ThumbnailReorderTarget | null>(null)
   const suppressThumbnailClickRef = useRef(false)
   const draggedThumbnailPageRef = useRef<number | null>(null)
   const draggedThumbnailPagesRef = useRef<number[]>([])
@@ -365,6 +389,7 @@ export default function Viewer() {
   const [miniBarState, setMiniBarState] = useState(() => ({ documentId: id, open: false }))
   if (miniBarState.documentId !== id) setMiniBarState({ documentId: id, open: false })
   const miniBarOpen = miniBarState.documentId === id && miniBarState.open
+  const closeMiniBarOnPdfActionRef = useRef(false)
   const miniBarAccordionButtonRef = useRef<HTMLButtonElement>(null)
   const miniBarControlsRef = useRef<HTMLDivElement>(null)
   const miniBarControlsId = 'viewer-tools-' + id.replace(/[^a-zA-Z0-9_-]/g, '-')
@@ -472,6 +497,19 @@ export default function Viewer() {
   useEffect(() => {
     const rail = thumbnailRailRef.current
     return () => {
+      const reorderGesture = thumbnailReorderGestureRef.current
+      if (reorderGesture) {
+        window.clearTimeout(reorderGesture.timer)
+        if (reorderGesture.frameId !== undefined) window.cancelAnimationFrame(reorderGesture.frameId)
+        reorderGesture.sourceElement.classList.remove('thumbnail-reordering-source')
+        reorderGesture.preview?.remove()
+        thumbnailReorderGestureRef.current = null
+        thumbnailReorderFeedbackRef.current = null
+        setThumbnailReorderFeedbackUi({ documentId: id, target: null })
+        try {
+          if (reorderGesture.button.hasPointerCapture(reorderGesture.pointerId)) reorderGesture.button.releasePointerCapture(reorderGesture.pointerId)
+        } catch { /* The browser may already have released the pointer. */ }
+      }
       const gesture = thumbnailTouchGestureRef.current
       if (!gesture) return
       window.clearTimeout(gesture.timer)
@@ -484,6 +522,34 @@ export default function Viewer() {
       } catch { /* The browser may already have released the pointer. */ }
     }
   }, [id, loadedId, thumbnailCollapsed])
+
+  const cancelThumbnailReorder = useCallback(() => {
+    const gesture = thumbnailReorderGestureRef.current
+    if (!gesture) return
+    window.clearTimeout(gesture.timer)
+    if (gesture.frameId !== undefined) window.cancelAnimationFrame(gesture.frameId)
+    gesture.sourceElement.classList.remove('thumbnail-reordering-source')
+    gesture.preview?.remove()
+    thumbnailReorderGestureRef.current = null
+    thumbnailReorderFeedbackRef.current = null
+    setThumbnailReorderFeedbackUi({ documentId: id, target: null })
+    suppressThumbnailClickRef.current = true
+    window.setTimeout(() => { suppressThumbnailClickRef.current = false }, 0)
+    try {
+      if (gesture.button.hasPointerCapture(gesture.pointerId)) gesture.button.releasePointerCapture(gesture.pointerId)
+    } catch { /* The browser may already have released the pointer. */ }
+  }, [id])
+
+  useEffect(() => {
+    const handleEscape = (event: KeyboardEvent) => {
+      if (event.key !== 'Escape' || !thumbnailReorderGestureRef.current) return
+      event.preventDefault()
+      event.stopPropagation()
+      cancelThumbnailReorder()
+    }
+    window.addEventListener('keydown', handleEscape, true)
+    return () => window.removeEventListener('keydown', handleEscape, true)
+  }, [cancelThumbnailReorder])
 
   function setThumbnailSelection(next: ThumbnailSelection | null | ((current: ThumbnailSelection | null) => ThumbnailSelection | null)) {
     setThumbnailUi((current) => {
@@ -852,12 +918,47 @@ export default function Viewer() {
   const isSplit = snapshot?.split
   const activePaneId = snapshot?.activePane
 
-  useDismissiblePopover(miniBarOpen && !miniBarSettingsOpen, miniBarControlsRef, miniBarAccordionButtonRef, () => {
-    setMiniBarState((current) => current.documentId === id ? { ...current, open: false } : current)
-    setMiniBarSettingsOpen(false)
-    if (miniBarControlsRef.current?.contains(document.activeElement)) miniBarAccordionButtonRef.current?.focus()
-  })
+  useEffect(() => {
+    if (!miniBarOpen) return
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key !== 'Escape') return
+      if (event.target instanceof Element && event.target.closest('.counter-modal-backdrop')) return
+      event.preventDefault()
+      event.stopPropagation()
+      closeMiniBarOnPdfActionRef.current = false
+      setMiniBarState((current) => current.documentId === id ? { ...current, open: false } : current)
+      setMiniBarSettingsOpen(false)
+      miniBarAccordionButtonRef.current?.focus()
+    }
+    document.addEventListener('keydown', closeOnEscape, true)
+    return () => document.removeEventListener('keydown', closeOnEscape, true)
+  }, [miniBarOpen, id, setMiniBarSettingsOpen])
   useDismissiblePopover(miniBarSettingsOpen, miniBarSettingsPanelRef, miniBarSettingsTriggerRef, () => setMiniBarSettingsOpen(false))
+
+  useEffect(() => {
+    const root = document.documentElement
+    const previousHeight = root.style.getPropertyValue('--viewer-viewport-height')
+    const hadLock = root.classList.contains('viewer-viewport-locked')
+    const updateViewport = () => {
+      const height = window.visualViewport?.height ?? window.innerHeight
+      root.style.setProperty('--viewer-viewport-height', Math.max(1, height) + 'px')
+    }
+    root.classList.add('viewer-viewport-locked')
+    updateViewport()
+    window.addEventListener('resize', updateViewport)
+    window.addEventListener('orientationchange', updateViewport)
+    window.visualViewport?.addEventListener('resize', updateViewport)
+    window.visualViewport?.addEventListener('scroll', updateViewport)
+    return () => {
+      window.removeEventListener('resize', updateViewport)
+      window.removeEventListener('orientationchange', updateViewport)
+      window.visualViewport?.removeEventListener('resize', updateViewport)
+      window.visualViewport?.removeEventListener('scroll', updateViewport)
+      if (!hadLock) root.classList.remove('viewer-viewport-locked')
+      if (previousHeight) root.style.setProperty('--viewer-viewport-height', previousHeight)
+      else root.style.removeProperty('--viewer-viewport-height')
+    }
+  }, [])
 
   useEffect(() => {
     if (!thumbnailGroupPopover || thumbnailGroupPopover.documentId !== id) return
@@ -1242,13 +1343,13 @@ export default function Viewer() {
     setCounterActionSaving(false)
   }
 
-  function createCounterTimeLap(counterId: string, rowDelta: -1 | 1): CounterTimeLapAction {
+  function createCounterTimeLap(counterId: string, rowDelta: -1 | 1, rowNumber: number): CounterTimeLapAction {
     const clock = timerClockRef.current
     if (!clock && !fallbackTimerSessionIdRef.current) fallbackTimerSessionIdRef.current = crypto.randomUUID()
     const sessionId = clock?.sessionId ?? fallbackTimerSessionIdRef.current
     const elapsedMs = Math.max(0, Math.floor(clock?.elapsedNow() ?? 0))
     const baseline = lapBaselineRef.current?.sessionId === sessionId ? lapBaselineRef.current.elapsedMs : 0
-    return { id: crypto.randomUUID(), counterId, sessionId, elapsedMs, durationMs: Math.max(0, elapsedMs - baseline), rowDelta, recordedAt: Date.now() }
+    return { id: crypto.randomUUID(), counterId, sessionId, elapsedMs, durationMs: Math.max(0, elapsedMs - baseline), rowDelta, rowNumber, recordedAt: Date.now() }
   }
 
   function beginCounterRowEdit() {
@@ -1281,12 +1382,12 @@ export default function Viewer() {
     const base = currentCounters.find((counter) => counter.id === counterId)
     if (!base || base.kind !== 'simple' || base.unit !== 'row' || base.linkedToId || base.goalCompleted || base.value >= MAX_COUNTER_ROW && base.goalRow !== base.value) return
     if (!acquireCounterActionLock()) return
-    const lapAction = createCounterTimeLap(counterId, 1)
     const completingGoal = Boolean(base.goalRow && base.value === base.goalRow)
     const advanced = advanceLinkedCounters(currentCounters, counterId, base.value)
     const nextCounters = completingGoal
       ? advanced.map((counter) => counter.id === base.id ? { ...counter, value: base.value, goalCompleted: true } : counter)
       : advanced
+    const lapAction = createCounterTimeLap(counterId, 1, nextCounters.find((counter) => counter.id === base.id)?.value ?? base.value)
     const activePage = current[current.activePane].page
     const activeWork = workRef.current[activePage]
     const activeRotation = current[current.activePane].rotations?.[activePage] ?? activeWork?.rotation ?? 0
@@ -1348,7 +1449,7 @@ export default function Viewer() {
       verticalGuides: item.verticalGuides.filter((guide) => guide.linkedCounterId && groupIds.has(guide.linkedCounterId)),
     })).filter((item) => item.horizontalGuides.length || item.verticalGuides.length)
     if (!acquireCounterActionLock()) return
-    const lapAction = recordLap ? createCounterTimeLap(baseId, -1) : undefined
+    const lapAction = recordLap ? createCounterTimeLap(baseId, -1, next.find((counter) => counter.id === baseId)?.value ?? targetRow) : undefined
     const operation = commitCounterTransaction(next, '단 되돌아가기', targetRow, restoreGuides, true, undefined, baseId, undefined, undefined, lapAction)
     void operation.finally(releaseCounterActionLock)
   }
@@ -1496,9 +1597,196 @@ export default function Viewer() {
     return undefined
   }
 
+  function updateThumbnailReorderFeedback(nextTarget: ThumbnailReorderTarget | undefined) {
+    const next = nextTarget ?? null
+    const current = thumbnailReorderFeedbackRef.current
+    if (current?.kind === next?.kind && current?.itemKey === next?.itemKey && current?.position === next?.position) return
+    thumbnailReorderFeedbackRef.current = next
+    setThumbnailReorderFeedbackUi({ documentId: id, target: next })
+  }
+
+  function thumbnailReorderTargetAt(gesture: ThumbnailReorderGesture): ThumbnailReorderTarget | undefined {
+    const root = gesture.scrollElement
+    const bounds = root.getBoundingClientRect()
+    if (gesture.clientX < bounds.left || gesture.clientX > bounds.right || gesture.clientY < bounds.top || gesture.clientY > bounds.bottom) return undefined
+    const selector = gesture.kind === 'labels' ? '[data-thumbnail-order-label]' : '[data-thumbnail-rail-item]'
+    const targetElement = document.elementFromPoint(gesture.clientX, gesture.clientY)?.closest<HTMLElement>(selector)
+    const readTarget = (element: HTMLElement): ThumbnailReorderTarget | undefined => {
+      const itemKey = gesture.kind === 'labels' ? 'group:' + (element.dataset.thumbnailOrderLabel ?? '') : element.dataset.thumbnailRailItem
+      if (!itemKey || itemKey === gesture.sourceKey) return undefined
+      const rect = element.getBoundingClientRect()
+      return { kind: gesture.kind, itemKey, position: gesture.clientX < rect.left + rect.width / 2 ? 'before' : 'after' }
+    }
+    if (targetElement) return readTarget(targetElement)
+    const candidates = [...root.querySelectorAll<HTMLElement>(selector)].filter((element) => {
+      const itemKey = gesture.kind === 'labels' ? 'group:' + (element.dataset.thumbnailOrderLabel ?? '') : element.dataset.thumbnailRailItem
+      return itemKey && itemKey !== gesture.sourceKey
+    })
+    if (!candidates.length) return undefined
+    let closest = candidates[0]
+    let closestDistance = Number.POSITIVE_INFINITY
+    for (const candidate of candidates) {
+      const rect = candidate.getBoundingClientRect()
+      const distance = Math.abs(gesture.clientX - (rect.left + rect.width / 2))
+      if (distance < closestDistance) {
+        closest = candidate
+        closestDistance = distance
+      }
+    }
+    return readTarget(closest)
+  }
+
+  function createThumbnailReorderPreview(gesture: ThumbnailReorderGesture) {
+    const bounds = gesture.sourceElement.getBoundingClientRect()
+    const preview = document.createElement('div')
+    preview.className = 'thumbnail-reorder-preview'
+    preview.setAttribute('aria-hidden', 'true')
+    preview.style.width = bounds.width + 'px'
+    preview.style.height = bounds.height + 'px'
+    const clone = gesture.sourceElement.cloneNode(true) as HTMLElement
+    clone.classList.remove('thumbnail-reordering-source', 'thumbnail-order-before', 'thumbnail-order-after', 'drop-target')
+    clone.classList.add('thumbnail-reorder-preview-content')
+    clone.removeAttribute('data-thumbnail-rail-item')
+    clone.removeAttribute('data-thumbnail-order-label')
+    clone.removeAttribute('data-thumbnail-label-drop')
+    clone.removeAttribute('aria-current')
+    clone.removeAttribute('aria-pressed')
+    clone.removeAttribute('aria-expanded')
+    clone.removeAttribute('aria-haspopup')
+    clone.tabIndex = -1
+    const sourceCanvases = gesture.sourceElement.querySelectorAll('canvas')
+    clone.querySelectorAll('canvas').forEach((canvas, index) => {
+      const sourceCanvas = sourceCanvases[index]
+      if (!sourceCanvas?.width || !sourceCanvas.height) return
+      canvas.width = sourceCanvas.width
+      canvas.height = sourceCanvas.height
+      canvas.getContext('2d')?.drawImage(sourceCanvas, 0, 0)
+    })
+    if (clone instanceof HTMLButtonElement) clone.disabled = false
+    preview.append(clone)
+    document.body.append(preview)
+    gesture.preview = preview
+    positionThumbnailReorderPreview(gesture)
+  }
+
+  function positionThumbnailReorderPreview(gesture: ThumbnailReorderGesture) {
+    if (!gesture.preview) return
+    const left = clamp(gesture.clientX + 14, 8, Math.max(8, window.innerWidth - gesture.preview.offsetWidth - 8))
+    const top = clamp(gesture.clientY + 14, 8, Math.max(8, window.innerHeight - gesture.preview.offsetHeight - 8))
+    gesture.preview.style.transform = 'translate3d(' + left + 'px, ' + top + 'px, 0)'
+  }
+
+  function processThumbnailReorderFrame(gesture: ThumbnailReorderGesture) {
+    gesture.frameId = undefined
+    if (thumbnailReorderGestureRef.current !== gesture) return
+    if (gesture.mode === 'scroll') {
+      gesture.scrollElement.scrollLeft = gesture.startScrollLeft - (gesture.clientX - gesture.startX)
+      return
+    }
+    if (gesture.mode !== 'drag') return
+    positionThumbnailReorderPreview(gesture)
+    gesture.target = thumbnailReorderTargetAt(gesture)
+    updateThumbnailReorderFeedback(gesture.target)
+    const bounds = gesture.scrollElement.getBoundingClientRect()
+    const edge = 32
+    const direction = gesture.clientX < bounds.left + edge ? -1 : gesture.clientX > bounds.right - edge ? 1 : 0
+    if (direction) {
+      gesture.scrollElement.scrollLeft += direction * 14
+      gesture.frameId = window.requestAnimationFrame(() => processThumbnailReorderFrame(gesture))
+    }
+  }
+
+  function scheduleThumbnailReorderFrame(gesture: ThumbnailReorderGesture) {
+    if (gesture.frameId === undefined) gesture.frameId = window.requestAnimationFrame(() => processThumbnailReorderFrame(gesture))
+  }
+
+  function beginThumbnailReorder(kind: ThumbnailReorderGesture['kind'], sourceKey: string, event: ReactPointerEvent<HTMLButtonElement>, scrollElement: HTMLDivElement, sourceElement: HTMLElement) {
+    if ((event.pointerType !== 'touch' && event.pointerType !== 'mouse') || event.button !== 0 || thumbnailGroupSavingRef.current || !scrollElement || thumbnailReorderGestureRef.current) return
+    const gesture: ThumbnailReorderGesture = {
+      kind,
+      pointerId: event.pointerId,
+      pointerType: event.pointerType,
+      sourceKey,
+      startX: event.clientX,
+      startY: event.clientY,
+      startScrollLeft: scrollElement.scrollLeft,
+      clientX: event.clientX,
+      clientY: event.clientY,
+      button: event.currentTarget,
+      sourceElement,
+      scrollElement,
+      mode: 'pending',
+      timer: 0,
+    }
+    thumbnailReorderGestureRef.current = gesture
+    try { gesture.button.setPointerCapture(event.pointerId) } catch { /* The browser may already have canceled this pointer. */ }
+    gesture.timer = window.setTimeout(() => {
+      if (thumbnailReorderGestureRef.current !== gesture || gesture.mode !== 'pending') return
+      gesture.mode = 'drag'
+      gesture.sourceElement.classList.add('thumbnail-reordering-source')
+      createThumbnailReorderPreview(gesture)
+      scheduleThumbnailReorderFrame(gesture)
+    }, 450)
+  }
+
+  function moveThumbnailReorder(event: ReactPointerEvent<HTMLButtonElement>) {
+    const gesture = thumbnailReorderGestureRef.current
+    if (!gesture || gesture.pointerId !== event.pointerId) return
+    gesture.clientX = event.clientX
+    gesture.clientY = event.clientY
+    if (gesture.mode === 'pending' && Math.hypot(event.clientX - gesture.startX, event.clientY - gesture.startY) > 8) {
+      window.clearTimeout(gesture.timer)
+      gesture.mode = Math.abs(event.clientX - gesture.startX) >= Math.abs(event.clientY - gesture.startY) ? 'scroll' : 'cancel'
+    }
+    if (gesture.mode === 'scroll' || gesture.mode === 'drag') event.preventDefault()
+    scheduleThumbnailReorderFrame(gesture)
+  }
+
+  function persistThumbnailReorder(gesture: ThumbnailReorderGesture, target: ThumbnailReorderTarget) {
+    if (gesture.kind === 'labels') {
+      const sourceId = gesture.sourceKey.slice('group:'.length)
+      const targetId = target.itemKey.slice('group:'.length)
+      const nextGroups = [...thumbnailGroups]
+      const sourceIndex = nextGroups.findIndex((group) => group.id === sourceId)
+      if (sourceIndex < 0 || sourceId === targetId) return
+      const [source] = nextGroups.splice(sourceIndex, 1)
+      const targetIndex = nextGroups.findIndex((group) => group.id === targetId)
+      if (targetIndex < 0) return
+      nextGroups.splice(targetIndex + (target.position === 'after' ? 1 : 0), 0, source)
+      if (nextGroups.every((group, index) => group.id === thumbnailGroups[index]?.id)) return
+      void saveThumbnailGroups(nextGroups)
+      return
+    }
+    if (!snapshot || !pdf) return
+    const order = normalizeThumbnailRailOrder(snapshot.thumbnailRailOrder, pdf.numPages, thumbnailGroups)
+    const nextOrder = moveThumbnailRailItem(order, gesture.sourceKey, target.itemKey, target.position)
+    if (nextOrder.length !== order.length || nextOrder.some((item, index) => thumbnailRailOrderKey(item) !== thumbnailRailOrderKey(order[index]))) void saveThumbnailGroups(thumbnailGroups, nextOrder)
+  }
+
+  function finishThumbnailReorder(event: ReactPointerEvent<HTMLButtonElement>, canceled = false) {
+    const gesture = thumbnailReorderGestureRef.current
+    if (!gesture || gesture.pointerId !== event.pointerId) return
+    window.clearTimeout(gesture.timer)
+    if (gesture.frameId !== undefined) window.cancelAnimationFrame(gesture.frameId)
+    if (!canceled && gesture.mode === 'drag') gesture.target = thumbnailReorderTargetAt(gesture)
+    const shouldSuppressClick = canceled || gesture.mode !== 'pending'
+    gesture.sourceElement.classList.remove('thumbnail-reordering-source')
+    gesture.preview?.remove()
+    thumbnailReorderGestureRef.current = null
+    updateThumbnailReorderFeedback(undefined)
+    if (shouldSuppressClick) {
+      suppressThumbnailClickRef.current = true
+      window.setTimeout(() => { suppressThumbnailClickRef.current = false }, 0)
+    }
+    if (!canceled && gesture.mode === 'drag' && gesture.target) persistThumbnailReorder(gesture, gesture.target)
+    try {
+      if (gesture.button.hasPointerCapture(event.pointerId)) gesture.button.releasePointerCapture(event.pointerId)
+    } catch { /* The browser may already have released the pointer. */ }
+  }
+
   function beginThumbnailMouseDrag(event: ReactPointerEvent<HTMLDivElement>) {
     if (event.pointerType !== 'mouse' || event.button !== 0 || event.ctrlKey || event.shiftKey) return
-    if ((event.target as HTMLElement).closest('.page-thumbnail')) return
+    if ((event.target as HTMLElement).closest('.page-thumbnail, .thumbnail-label-group-card')) return
     suppressThumbnailClickRef.current = false
     thumbnailMouseDragRef.current = { pointerId: event.pointerId, startX: event.clientX, scrollLeft: event.currentTarget.scrollLeft, dragging: false }
   }
@@ -1923,7 +2211,14 @@ export default function Viewer() {
       colorworkBrushColor={colorworkBrushColor}
       colorworkBrushOpacity={colorworkBrushOpacity}
       colorworkEraser={colorworkEraser}
-      onActivate={() => { if (!active) mutateSnapshot((current) => ({ ...current, activePane: paneId })) }}
+      onActivate={() => {
+        if (closeMiniBarOnPdfActionRef.current) {
+          closeMiniBarOnPdfActionRef.current = false
+          setMiniBarState((current) => current.documentId === id ? { ...current, open: false } : current)
+          setMiniBarSettingsOpen(false)
+        }
+        if (!active) mutateSnapshot((current) => ({ ...current, activePane: paneId }))
+      }}
       onWorkChange={setPageWork}
       onCenter={(x, y) => saveCenter(paneId, x, y)}
       onZoom={(zoom) => changePane(paneId, (current) => ({ ...current, zoom }), true)}
@@ -1943,7 +2238,7 @@ export default function Viewer() {
     thumbnailGroups.forEach((group) => group.pageNumbers.forEach((pageNumber) => memberships.set(pageNumber, group.id)))
     return memberships
   }, [thumbnailGroups])
-  const thumbnailItems = useMemo(() => pdf ? compactPageThumbnails(pdf.numPages, thumbnailGroups, expandedThumbnailGroupId) : [], [pdf, thumbnailGroups, expandedThumbnailGroupId])
+  const thumbnailItems = useMemo(() => pdf ? compactPageThumbnails(pdf.numPages, thumbnailGroups, expandedThumbnailGroupId, snapshot?.thumbnailRailOrder) : [], [pdf, thumbnailGroups, expandedThumbnailGroupId, snapshot?.thumbnailRailOrder])
 
   function canDropPagesOutsideGroups(pageNumbers: number[]) {
     return pageNumbers.some((pageNumber) => thumbnailGroupByPage.has(pageNumber))
@@ -1953,16 +2248,21 @@ export default function Viewer() {
     return thumbnailGroups.some((group) => group.id === targetGroupId) && pageNumbers.some((pageNumber) => thumbnailGroupByPage.get(pageNumber) !== targetGroupId)
   }
 
-  async function saveThumbnailGroups(nextGroups: ThumbnailGroup[]) {
+  async function saveThumbnailGroups(nextGroups: ThumbnailGroup[], requestedRailOrder?: ThumbnailRailOrderItem[]) {
     if (thumbnailGroupSavingRef.current) return false
     const current = snapshotRef.current
     if (!current) return false
+    const pageCount = pdf?.numPages ?? 0
+    const currentGroups = current.thumbnailGroups ?? EMPTY_THUMBNAIL_GROUPS
+    const nextRailOrder = requestedRailOrder
+      ? normalizeThumbnailRailOrder(requestedRailOrder, pageCount, nextGroups)
+      : reconcileThumbnailRailOrder(current.thumbnailRailOrder, currentGroups, nextGroups, pageCount)
     thumbnailGroupSavingRef.current = true
     setThumbnailGroupSaving(true)
     setThumbnailGroupError('')
     if (saveTimer.current !== undefined) window.clearTimeout(saveTimer.current)
     saveTimer.current = undefined
-    const optimistic = { ...current, thumbnailGroups: nextGroups }
+    const optimistic = { ...current, thumbnailGroups: nextGroups, thumbnailRailOrder: nextRailOrder }
     snapshotRef.current = optimistic
     setSnapshot(optimistic)
     const operation = (async () => {
@@ -1972,7 +2272,7 @@ export default function Viewer() {
         return true
       } catch (error) {
         const latest = snapshotRef.current ?? optimistic
-        const rollback = { ...latest, thumbnailGroups: current.thumbnailGroups }
+        const rollback = { ...latest, thumbnailGroups: current.thumbnailGroups, thumbnailRailOrder: current.thumbnailRailOrder }
         snapshotRef.current = rollback
         setSnapshot(rollback)
         try { await saveViewer(rollback) } catch { /* Keep the visible rollback and report the storage failure. */ }
@@ -2212,7 +2512,9 @@ export default function Viewer() {
     const state = pageRecords.get(pageNumber)
     const active = snapshot![snapshot!.activePane].page === pageNumber
     const selected = selectedThumbnailSet.has(pageNumber)
-    return <div className={'page-thumbnail-entry' + (nested ? ' thumbnail-group-child-entry' : '')} key={pageNumber} data-thumbnail-label-drop={labelGroupId}>
+    const railKey = nested ? undefined : 'page:' + pageNumber
+    const reorderFeedback = railKey && thumbnailReorderFeedback?.kind === 'rail' && thumbnailReorderFeedback.itemKey === railKey ? ' thumbnail-order-' + thumbnailReorderFeedback.position : ''
+    return <div className={'page-thumbnail-entry' + (nested ? ' thumbnail-group-child-entry' : '') + reorderFeedback} key={pageNumber} data-thumbnail-label-drop={labelGroupId} data-thumbnail-rail-item={railKey}>
       <PdfThumbnail
         pdf={pdf!} pageNumber={pageNumber} active={active} bookmarked={Boolean(state?.bookmarked)} selected={selected} draggable={false}
         dropTarget={thumbnailDropTarget === 'outside-page:' + pageNumber ? 'outside' : undefined}
@@ -2233,7 +2535,9 @@ export default function Viewer() {
 
   function renderThumbnailItem(item: PageThumbnailItem, nested = false, labelGroupId?: string): ReactNode {
     if (item.type === 'page') return renderPageThumbnail(item.pageNumber, nested, labelGroupId)
-    return <Fragment key={'label-' + item.groupId}>
+    const railKey = 'group:' + item.groupId
+    const reorderFeedback = thumbnailReorderFeedback?.kind === 'rail' && thumbnailReorderFeedback.itemKey === railKey ? ' thumbnail-order-' + thumbnailReorderFeedback.position : ''
+    return <div className={'thumbnail-rail-group-block' + reorderFeedback} data-thumbnail-rail-item={railKey} key={'label-' + item.groupId}>
       <div className="page-thumbnail-entry thumbnail-label-group-entry">
         <button
           type="button"
@@ -2249,13 +2553,21 @@ export default function Viewer() {
           type="button"
           className={'thumbnail-label-group-card' + (item.expanded ? ' expanded' : '') + (thumbnailDropTarget === 'label-group:' + item.groupId ? ' drop-target' : '')}
           data-thumbnail-label-drop={item.groupId}
-          aria-label={t('그룹 {name}, 페이지 {count}개', { name: item.name, count: item.pageNumbers.length })}
+          aria-label={t('그룹 {name}, 페이지 {count}개', { name: item.name, count: item.pageNumbers.length }) + '. ' + t('길게 눌러 순서 변경')}
           aria-expanded={item.expanded}
-          title={t('그룹 {name}, 페이지 {count}개', { name: item.name, count: item.pageNumbers.length })}
+          title={t('그룹 {name}, 페이지 {count}개', { name: item.name, count: item.pageNumbers.length }) + ' · ' + t('길게 눌러 순서 변경')}
           disabled={thumbnailGroupSaving}
           onClick={() => toggleThumbnailLabelGroup(item.groupId)}
           onDragOver={(event) => thumbnailDragOverLabelGroup(item.groupId, event)}
           onDrop={(event) => dropThumbnailIntoLabelGroup(item.groupId, event)}
+          onPointerDown={(event) => {
+            const sourceElement = event.currentTarget.closest<HTMLElement>('[data-thumbnail-rail-item]') ?? event.currentTarget
+            if (thumbnailRailRef.current) beginThumbnailReorder('rail', railKey, event, thumbnailRailRef.current, sourceElement)
+          }}
+          onPointerMove={moveThumbnailReorder}
+          onPointerUp={finishThumbnailReorder}
+          onPointerCancel={(event) => finishThumbnailReorder(event, true)}
+          onLostPointerCapture={(event) => finishThumbnailReorder(event, true)}
         >
           <span className="thumbnail-label-group-image"><Files size={21} /><small>{t('{count}개 페이지', { count: item.pageNumbers.length })}</small></span>
         </button>
@@ -2263,7 +2575,7 @@ export default function Viewer() {
       {item.expanded && <div className="thumbnail-group-children" role="group" aria-label={t('그룹 {name}의 페이지', { name: item.name })}>
         {item.children.map((child) => renderThumbnailItem(child, true, item.groupId))}
       </div>}
-    </Fragment>
+    </div>
   }
 
   const timerPortalTarget = loadError?.id === id || suspended || loading || loadedId !== id || !pdf || !snapshot ? null : timerPortalHost
@@ -2327,17 +2639,25 @@ export default function Viewer() {
             {thumbnailGroups.map((group) => <button
               type="button"
               key={group.id}
-              className={'thumbnail-group-label' + (thumbnailDropTarget === 'label-group:' + group.id ? ' drop-target' : '') + (expandedThumbnailGroupId === group.id ? ' expanded' : '')}
+              className={'thumbnail-group-label' + (thumbnailDropTarget === 'label-group:' + group.id ? ' drop-target' : '') + (expandedThumbnailGroupId === group.id ? ' expanded' : '') + (thumbnailReorderFeedback?.kind === 'labels' && thumbnailReorderFeedback.itemKey === 'group:' + group.id ? ' thumbnail-order-' + thumbnailReorderFeedback.position : '')}
               data-thumbnail-group-settings={group.id}
               data-thumbnail-label-drop={group.id}
-              aria-label={t('그룹 설정: {name}, 페이지 {count}개', { name: group.name, count: group.pageNumbers.length })}
+              data-thumbnail-order-label={group.id}
+              aria-label={t('그룹 설정: {name}, 페이지 {count}개', { name: group.name, count: group.pageNumbers.length }) + '. ' + t('길게 눌러 순서 변경')}
               aria-haspopup="dialog"
               aria-expanded={thumbnailGroupPopover?.groupId === group.id}
-              title={group.name + ' · ' + t('{count}개 페이지', { count: group.pageNumbers.length })}
+              title={group.name + ' · ' + t('{count}개 페이지', { count: group.pageNumbers.length }) + ' · ' + t('길게 눌러 순서 변경')}
               disabled={thumbnailGroupSaving}
               onClick={(event) => openThumbnailGroupPopover(group.id, event)}
               onDragOver={(event) => thumbnailDragOverLabelGroup(group.id, event)}
               onDrop={(event) => dropThumbnailIntoLabelGroup(group.id, event)}
+              onPointerDown={(event) => {
+                if (thumbnailGroupListRef.current) beginThumbnailReorder('labels', 'group:' + group.id, event, thumbnailGroupListRef.current, event.currentTarget)
+              }}
+              onPointerMove={moveThumbnailReorder}
+              onPointerUp={finishThumbnailReorder}
+              onPointerCancel={(event) => finishThumbnailReorder(event, true)}
+              onLostPointerCapture={(event) => finishThumbnailReorder(event, true)}
             ><span>{thumbnailGroupLabel(group.name)}</span><small>{group.pageNumbers.length}</small></button>)}
           </div>
         </div>
@@ -2421,24 +2741,20 @@ export default function Viewer() {
           <div className="viewer-timer-portal-host" ref={setTimerPortalHost} />
         </div>
         {!reportMode && <div className={'viewer-floating-bar viewer-mini-bar' + (miniBarOpen ? ' expanded' : '')}>
-          <button ref={miniBarAccordionButtonRef} type="button" className="viewer-mini-accordion-button" aria-label={t('뷰어 도구')} title={t('뷰어 도구')} aria-expanded={miniBarOpen} aria-controls={miniBarControlsId} onClick={() => { const open = !miniBarOpen; setMiniBarState({ documentId: id, open }); if (!open) setMiniBarSettingsOpen(false) }}>
+          <button ref={miniBarAccordionButtonRef} type="button" className="viewer-mini-accordion-button" aria-label={t('뷰어 도구')} title={t('뷰어 도구')} aria-expanded={miniBarOpen} aria-controls={miniBarControlsId} onClick={() => { const open = !miniBarOpen; if (!open) closeMiniBarOnPdfActionRef.current = false; setMiniBarState({ documentId: id, open }); if (!open) setMiniBarSettingsOpen(false) }}>
             <Grid3X3 size={17} /><span aria-hidden="true">{miniBarOpen ? <ChevronUp size={16} /> : <ChevronDown size={16} />}</span>
           </button>
-          <div id={miniBarControlsId} ref={miniBarControlsRef} className="viewer-mini-scroll" hidden={!miniBarOpen} onClick={(event) => {
-            if (!(event.target instanceof Element) || !event.target.closest('button')) return
-            setMiniBarState((current) => current.documentId === id ? { ...current, open: false } : current)
-            miniBarAccordionButtonRef.current?.focus()
-          }}>
+          <div id={miniBarControlsId} ref={miniBarControlsRef} className="viewer-mini-scroll" hidden={!miniBarOpen}>
         <section className="viewer-controlbar" role="toolbar" aria-orientation="vertical" aria-label={t('뷰어 도구')}>
           <div className="viewer-controlbar-main">
             <div className="viewer-tools" role="group" aria-label={t('필기 도구')}>
-              <button type="button" className={'viewer-tool tool-toggle ' + (tool === 'pan' ? 'active' : '')} aria-label={t('이동 도구')} title={t('이동')} aria-pressed={tool === 'pan'} onClick={() => setTool('pan')}><MousePointer2 size={17} /><span>{t('이동')}</span></button>
-              <button type="button" className={'viewer-tool tool-toggle ' + (tool === 'pen' ? 'active' : '')} aria-label={t('펜')} title={t('펜')} aria-pressed={tool === 'pen'} onClick={() => { setTool('pen'); setMiniBarSettingsOpen(true) }}><Pencil size={17} /><span>{t('펜')}</span></button>
-              <button type="button" className={'viewer-tool tool-toggle ' + (tool === 'line' ? 'active' : '')} aria-label={t('직선')} title={t('직선')} aria-pressed={tool === 'line'} onClick={() => setTool('line')}><Minus size={17} /><span>{t('직선')}</span></button>
-              <button type="button" className={'viewer-tool tool-toggle ' + (tool === 'highlight' ? 'active' : '')} aria-label={t('형광펜')} title={t('형광펜')} aria-pressed={tool === 'highlight'} onClick={() => { setTool('highlight'); setMiniBarSettingsOpen(true) }}><Highlighter size={17} /><span>{t('형광펜')}</span></button>
-              <button type="button" className={'viewer-tool tool-toggle ' + (tool === 'eraser' ? 'active' : '')} aria-label={t('지우개')} title={t('지우개')} aria-pressed={tool === 'eraser'} onClick={() => setTool('eraser')}><Eraser size={17} /><span>{t('지우개')}</span></button>
-              <button type="button" className={'viewer-tool tool-toggle ' + (tool === 'text' ? 'active' : '')} aria-label={t('텍스트')} title={t('텍스트')} aria-pressed={tool === 'text'} onClick={() => setTool('text')}><Type size={17} /><span>{t('텍스트')}</span></button>
-              <button type="button" className={'viewer-tool tool-toggle region-highlight-tool ' + (tool === 'region-highlight' ? 'active' : '')} aria-label={t('구간 강조')} title={t('구간 강조')} aria-pressed={tool === 'region-highlight'} onClick={() => { setMiniBarSettingsOpen(false); setTool('region-highlight') }}><Square size={17} /><span>{t('구간 강조')}</span></button>
+              <button type="button" className={'viewer-tool tool-toggle ' + (tool === 'pan' ? 'active' : '')} aria-label={t('이동 도구')} title={t('이동')} aria-pressed={tool === 'pan'} onClick={() => { closeMiniBarOnPdfActionRef.current = true; setTool('pan') }}><MousePointer2 size={17} /><span>{t('이동')}</span></button>
+              <button type="button" className={'viewer-tool tool-toggle ' + (tool === 'pen' ? 'active' : '')} aria-label={t('펜')} title={t('펜')} aria-pressed={tool === 'pen'} onClick={() => { closeMiniBarOnPdfActionRef.current = false; setTool('pen'); setMiniBarSettingsOpen(true) }}><Pencil size={17} /><span>{t('펜')}</span></button>
+              <button type="button" className={'viewer-tool tool-toggle ' + (tool === 'line' ? 'active' : '')} aria-label={t('직선')} title={t('직선')} aria-pressed={tool === 'line'} onClick={() => { closeMiniBarOnPdfActionRef.current = false; setTool('line') }}><Minus size={17} /><span>{t('직선')}</span></button>
+              <button type="button" className={'viewer-tool tool-toggle ' + (tool === 'highlight' ? 'active' : '')} aria-label={t('형광펜')} title={t('형광펜')} aria-pressed={tool === 'highlight'} onClick={() => { closeMiniBarOnPdfActionRef.current = false; setTool('highlight'); setMiniBarSettingsOpen(true) }}><Highlighter size={17} /><span>{t('형광펜')}</span></button>
+              <button type="button" className={'viewer-tool tool-toggle ' + (tool === 'eraser' ? 'active' : '')} aria-label={t('지우개')} title={t('지우개')} aria-pressed={tool === 'eraser'} onClick={() => { closeMiniBarOnPdfActionRef.current = false; setTool('eraser') }}><Eraser size={17} /><span>{t('지우개')}</span></button>
+              <button type="button" className={'viewer-tool tool-toggle ' + (tool === 'text' ? 'active' : '')} aria-label={t('텍스트')} title={t('텍스트')} aria-pressed={tool === 'text'} onClick={() => { closeMiniBarOnPdfActionRef.current = false; setTool('text') }}><Type size={17} /><span>{t('텍스트')}</span></button>
+              <button type="button" className={'viewer-tool tool-toggle region-highlight-tool ' + (tool === 'region-highlight' ? 'active' : '')} aria-label={t('구간 강조')} title={t('구간 강조')} aria-pressed={tool === 'region-highlight'} onClick={() => { closeMiniBarOnPdfActionRef.current = false; setMiniBarSettingsOpen(false); setTool('region-highlight') }}><Square size={17} /><span>{t('구간 강조')}</span></button>
               <button type="button" className="viewer-tool chart-tool" aria-label={t('컬러워크 설정')} title={t('차트 크기와 뜨개 게이지 설정')} disabled={!pageWorks[activePage] || Boolean(colorworkRequest)} onClick={() => setColorworkDialog(true)}><Grid3X3 size={17} /><span>{t('컬러워크')}</span>{activeColorworkGrid && <small>{activeColorworkGrid.columns}×{activeColorworkGrid.rows}</small>}</button>
               {activeColorworkGrid && <>
                 <button type="button" className="viewer-tool compact-tool" aria-label={activeColorworkGrid.visible ? t('컬러워크 숨기기') : t('컬러워크 보이기')} title={activeColorworkGrid.visible ? t('컬러워크 숨기기') : t('컬러워크 보이기')} aria-pressed={activeColorworkGrid.visible} onClick={toggleColorworkVisibility}>{activeColorworkGrid.visible ? <Eye size={16} /> : <EyeOff size={16} />}</button>
@@ -2472,7 +2788,7 @@ export default function Viewer() {
       {thumbnailGroupPopover?.documentId === id && createPortal(<form
         ref={thumbnailGroupPopoverRef}
         className="thumbnail-group-settings-popover"
-        style={{ left: thumbnailGroupPopover.left + 'px', top: thumbnailGroupPopover.top + 'px', maxHeight: 'calc(100vh - 16px)', overflowY: 'auto' }}
+        style={{ left: thumbnailGroupPopover.left + 'px', top: thumbnailGroupPopover.top + 'px', maxHeight: 'calc(var(--viewer-viewport-height, 100dvh) - 16px)', overflowY: 'auto' }}
         role="dialog"
         aria-label={t('그룹 설정')}
         onContextMenu={preventViewerContextMenu}

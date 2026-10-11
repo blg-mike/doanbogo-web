@@ -64,6 +64,11 @@ export function clientPointForPagePosition(rect: Pick<DOMRect, 'left' | 'top' | 
   }
 }
 
+export function pinchPreviewTranslation(centerX: number, centerY: number, pageWidth: number, pageHeight: number, rotation: number, scale: number, pageX: number, pageY: number, targetX: number, targetY: number) {
+  const point = clientPointForPagePosition({ left: centerX - 0.5, top: centerY - 0.5, width: 1, height: 1 }, pageWidth, pageHeight, rotation, scale, pageX, pageY)
+  return { x: targetX - point.x, y: targetY - point.y }
+}
+
 export function scrollOffsetForZoomFocus(scrollOffset: number, pagePointClient: number, pointerClient: number, scrollSize: number, viewportSize: number) {
   const maximum = Math.max(0, scrollSize - viewportSize)
   return clamp(scrollOffset + pagePointClient - pointerClient, 0, maximum)
