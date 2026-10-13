@@ -1,8 +1,8 @@
 import { makeRasterPdf } from './charts'
 import { formatDate, formatNumber, t, translateMessage } from './locales'
 import type { LocaleKey } from './locales'
-import type { KnittingReport, ReportAccessory, ReportMeasurement, ReportModification, ReportNeedle, ReportYarn } from './types'
-import { formatWorkTime } from './workTime'
+import type { DocumentWorkTimeDay, KnittingReport, ReportAccessory, ReportMeasurement, ReportModification, ReportNeedle, ReportYarn } from './types'
+import { formatWorkTime, formatWorkTimeHoursMinutes } from './workTime'
 
 const PAGE_WIDTH = 1240
 const PAGE_HEIGHT = 1754
@@ -69,7 +69,7 @@ function drawImageContain(context: CanvasRenderingContext2D, image: HTMLImageEle
   context.drawImage(image, x + (width - drawWidth) / 2, y + (height - drawHeight) / 2, drawWidth, drawHeight)
 }
 
-export async function exportKnittingReportPdf(report: KnittingReport, totalWorkTimeMs = 0) {
+export async function exportKnittingReportPdf(report: KnittingReport, totalWorkTimeMs = 0, workTimeDays: DocumentWorkTimeDay[] = []) {
   const pages: Page[] = []
   const title = report.fields['project.name']?.trim() || report.title || t('뜨개 프로젝트')
   const values = report.fields
@@ -223,9 +223,15 @@ export async function exportKnittingReportPdf(report: KnittingReport, totalWorkT
 
   function nonEmpty(entries: [string, string][]) { return entries.some(([, value]) => Boolean(value?.trim())) }
 
+  const dailyWorkTimeText = workTimeDays.map((day, index) => {
+    const { hours, minutes } = formatWorkTimeHoursMinutes(day.elapsedMs)
+    const dayLabel = t('{day}일차', { day: formatNumber(index + 1) })
+    const duration = t('{hours}시간 {minutes}분', { hours, minutes })
+    return t('작업일차: {dayLabel} · {duration}', { dayLabel, duration })
+  }).join('\n')
   const projectPairs: [string, string][] = [
     ['뜨개 종류', reportFieldValue('project.craft', values['project.craft'])], ['상태', reportFieldValue('project.status', values['project.status'])], ['CO (시작일)', values['project.co']],
-    ['FO (완성일)', values['project.fo']], ['누적 작업시간', formatWorkTime(totalWorkTimeMs)], ['작업시간 메모', values['project.workTime']], ['만든 대상', values['project.recipient']], ['메모', values['project.memo']],
+    ['FO (완성일)', values['project.fo']], ['누적 작업시간', formatWorkTime(totalWorkTimeMs)], ['일별 타이머 기록', dailyWorkTimeText], ['작업시간 메모', values['project.workTime']], ['만든 대상', values['project.recipient']], ['메모', values['project.memo']],
   ]
   if (nonEmpty(projectPairs) || report.representativePhoto || title) {
     drawSection('01', '프로젝트 정보')

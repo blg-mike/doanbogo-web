@@ -2,21 +2,22 @@ import { formatNumber, t, translateMessage } from './locales/index'
 import { useCallback, useEffect, useMemo, useRef, useState, type DragEvent as ReactDragEvent, type FormEvent as ReactFormEvent, type MouseEvent as ReactMouseEvent, type PointerEvent as ReactPointerEvent, type ReactNode, type UIEvent as ReactUIEvent } from 'react'
 import type { PDFDocumentProxy } from 'pdfjs-dist'
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
-import { ArrowLeft, Bookmark, Check, ChevronDown, ChevronLeft, ChevronRight, ChevronUp, Columns2, Eraser, Eye, EyeClosed, EyeOff, Files, Grid3X3, GripVertical, Highlighter, Maximize2, Minus, MousePointer2, Pencil, Plus, Redo2, RotateCwSquare, ScanLine, Settings2, Square, Tally5, Type, Undo2, X } from 'lucide-react'
+import { ArrowLeft, Bookmark, Check, ChevronDown, ChevronLeft, ChevronRight, ChevronUp, Columns2, Eraser, Eye, EyeClosed, EyeOff, Files, Grid3X3, GripVertical, Highlighter, Maximize2, Minus, MousePointer2, Pencil, Plus, Redo2, RefreshCw, ScanLine, Settings2, SlidersHorizontal, Square, Type, Undo2, X } from 'lucide-react'
 import { createPortal } from 'react-dom'
 import BrandLoading from './BrandLoading'
 import yyLogo from './assets/yy-logo.png'
 import { cancelThumbnailRenders, PdfPage, PdfThumbnail, setThumbnailRenderingPaused, waitForThumbnailQueueIdle } from './PdfPage'
-import { getDocument, getPageRecognition, getPageWork, getPageWorks, getPages, getViewer, markOpened, renameDocument, savePageWork, saveViewer, saveViewerAndPageWorks, setPageFlag } from './storage'
+import { getDocument, getPageRecognition, getPageWork, getPageWorks, getPages, getPreference, getViewer, markOpened, renameDocument, savePageWork, savePreference, saveViewer, saveViewerAndPageWorks, setPageFlag } from './storage'
 import { pdfPageRenderQueue } from './pdfPageRenderQueue'
 import { openPdf, pdfErrorMessage } from './pdf'
 import { openPhotoDocument } from './photoDocument'
 import KnittingReport from './KnittingReport'
-import type { AnnotationSettings, AnnotationStyle, AnnotationTool, ColorworkCreateRequest, ColorworkSettings, CounterHistoryEntry, CounterSnapshot, CounterTimeLap, DocumentRecord, PageRecord, PageRotation, PageWorkRecord, PaneId, PaneSnapshot, ProgressGuide, ProgressSettings, ThumbnailGroup, ThumbnailRailOrderItem, ViewerSnapshot } from './types'
+import type { AnnotationSettings, AnnotationStyle, AnnotationTool, ColorworkCreateRequest, ColorworkSettings, CounterHistoryEntry, CounterSnapshot, CounterTimeLap, CounterTimerLinkMode, DocumentRecord, DocumentWorkTimeDay, PageRecord, PageRotation, PageWorkRecord, PaneId, PaneSnapshot, ProgressGuide, ProgressSettings, ThumbnailGroup, ThumbnailRailOrderItem, ViewerSnapshot } from './types'
 import { defaultColorworkSettings, getColorworkDimensions, resizeColorworkGrid } from './colorwork'
-import { MAX_COUNTER_HISTORY, MAX_COUNTER_ROW, advanceLinkedCounters, counterAlertState, counterSideForRow, createCounter, findCounterRewindCheckpoint, normalizeCounterSnapshots, progressGuideForCounter, reanchorProgressGuideForCounter, restoreCounterGroup, setCounterGroupRow } from './smartCounter'
+import { MAX_COUNTER_HISTORY, MAX_COUNTER_ROW, advanceLinkedCounters, counterAlertState, counterSideForRow, counterTimeLapTiming, createCounter, findCounterRewindCheckpoint, nextPatternAlertRow, normalizeCounterSnapshots, progressGuideForCounter, reanchorProgressGuideForCounter, restoreCounterGroup, setCounterGroupRow } from './smartCounter'
 import CounterPanel from './CounterPanel'
-import DocumentWorkTimer, { type DocumentTimerClock } from './DocumentWorkTimer'
+import DocumentWorkTimer, { type DocumentTimerClock, type DocumentWorkTimeTotals } from './DocumentWorkTimer'
+import { isCounterTimerLinkMode, resolveCounterTimerAction, type CounterTimerChoice } from './timerCounterLink'
 import type { PdfQrLink } from './qr'
 import { withRecentPdfLinks } from './pdfRecognitionState'
 import { applyColorworkCellChanges, type ColorworkCellChange } from './colorworkHistory'
@@ -31,6 +32,7 @@ import { ANNOTATION_COLOR_PRESETS, DESIGN_SYSTEM_COLORS, FUNCTIONAL_COLOR_PRESET
 import { addedLimitedAnnotations, applyLimitedAnnotationAdditions, exceededAnnotationLimit, isAnnotationLimitReached, PAGE_ANNOTATION_LIMITS, type LimitedAnnotationKind } from './annotationLimits'
 import { useDismissiblePopover } from './useDismissiblePopover'
 import { getRequiredPageWorkPages, loadPageWorkWithTimeout, PageWorkLoadTimeoutError } from './pageWorkLoading'
+import { normalizeWorkTimeDays } from './workTime'
 
 type Size = { width: number; height: number }
 type WorkAction = { before?: PageWorkRecord; after?: PageWorkRecord; cellChanges?: ColorworkCellChange[] }
@@ -242,8 +244,10 @@ export default function Viewer() {
   const areaRef = useRef<HTMLDivElement>(null)
   const viewerShellRef = useRef<HTMLElement>(null)
   const timerClockRef = useRef<DocumentTimerClock | null>(null)
-  const lapBaselineRef = useRef<{ sessionId: string; elapsedMs: number } | null>(null)
-  const fallbackTimerSessionIdRef = useRef('')
+  const counterTimerModeRef = useRef<CounterTimerLinkMode>('ask-once')
+  const counterTimerChoiceRef = useRef<CounterTimerChoice>(null)
+  const counterTimerPromptLockRef = useRef(false)
+  const counterTimeLapSessionId = useMemo(() => `${crypto.randomUUID()}:${id.slice(0, 8)}`, [id])
   const thumbnailGroupSavePromiseRef = useRef<Promise<boolean> | null>(null)
   const thumbnailRailRef = useRef<HTMLDivElement>(null)
   const thumbnailGroupListRef = useRef<HTMLDivElement>(null)
@@ -285,6 +289,13 @@ export default function Viewer() {
   const [documentName, setDocumentName] = useState('')
   const [documentKind, setDocumentKind] = useState<'pdf' | 'photos'>('pdf')
   const [documentWorkTimeMs, setDocumentWorkTimeMs] = useState(0)
+  const [todayWorkDate, setTodayWorkDate] = useState('')
+  const [todayWorkTimeMs, setTodayWorkTimeMs] = useState(0)
+  const [documentWorkTimeDays, setDocumentWorkTimeDays] = useState<DocumentWorkTimeDay[]>([])
+  const [counterTimerMode, setCounterTimerMode] = useState<CounterTimerLinkMode>('ask-once')
+  const [counterTimerPromptOpen, setCounterTimerPromptOpen] = useState(false)
+  const [counterTimerPromptSaving, setCounterTimerPromptSaving] = useState(false)
+  const [counterTimerPromptError, setCounterTimerPromptError] = useState('')
   const [timerPortalHost, setTimerPortalHost] = useState<HTMLDivElement | null>(null)
   const [timerBarState, setTimerBarState] = useState<{ documentId: string; left: number | null; top: number }>(() => ({ documentId: id, left: null, top: 12 }))
   if (timerBarState.documentId !== id) setTimerBarState({ documentId: id, left: null, top: 12 })
@@ -300,10 +311,18 @@ export default function Viewer() {
   const displayDocumentName = documentKind === 'photos' ? documentName : documentName.replace(/\.pdf$/i, '')
   const onTimerUnsavedChange = useCallback((unsaved: boolean) => setTimerHasUnsaved(unsaved), [])
   const onTimerSavingChange = useCallback((saving: boolean) => setTimerSaving(saving), [])
-  const onTimerTotalChange = useCallback((total: number) => setDocumentWorkTimeMs(total), [])
+  const onTimerWorkTimeChange = useCallback((totals: DocumentWorkTimeTotals) => {
+    setDocumentWorkTimeMs(totals.totalWorkTimeMs)
+    setTodayWorkDate(totals.todayWorkDate)
+    setTodayWorkTimeMs(totals.todayWorkTimeMs)
+    setDocumentWorkTimeDays(totals.workTimeDays)
+  }, [])
+  const onTimerTodayWorkTimeChange = useCallback((date: string, elapsedMs: number) => {
+    setTodayWorkDate(date)
+    setTodayWorkTimeMs(elapsedMs)
+  }, [])
   const onTimerClockChange = useCallback((clock: DocumentTimerClock | null) => {
     timerClockRef.current = clock
-    if (clock) lapBaselineRef.current = { sessionId: clock.sessionId, elapsedMs: 0 }
   }, [])
   const [viewerExitSaving, setViewerExitSaving] = useState(false)
   const [viewerExitError, setViewerExitError] = useState('')
@@ -354,6 +373,13 @@ export default function Viewer() {
   const mainCounterBases = counters.filter((counter) => counter.kind === 'simple' && counter.unit === 'row' && !counter.linkedToId)
   const mainCounter = mainCounterBases.find((counter) => counter.id === snapshot?.counterMainId) ?? mainCounterBases[0]
   const mainCounterCanStepBack = Boolean(snapshot && mainCounter && mainCounter.value > 1 && findCounterRewindCheckpoint(snapshot.counterHistory ?? [], counters, mainCounter.id, mainCounter.value - 1))
+  const auxiliaryCounters = mainCounter ? counters.filter((counter) => counter.linkedToId === mainCounter.id) : []
+  const [counterDetailsUi, setCounterDetailsUi] = useState(() => ({ documentId: id, expanded: false }))
+  const counterDetailsExpanded = counterDetailsUi.documentId === id && counterDetailsUi.expanded
+  const setCounterDetailsExpanded = (next: boolean | ((expanded: boolean) => boolean)) => setCounterDetailsUi((current) => ({
+    documentId: id,
+    expanded: typeof next === 'function' ? next(current.documentId === id && current.expanded) : next,
+  }))
   const [counterRowEditing, setCounterRowEditing] = useState(false)
   const [counterRowDraft, setCounterRowDraft] = useState('1')
   const counterRowInputRef = useRef<HTMLInputElement>(null)
@@ -382,8 +408,9 @@ export default function Viewer() {
   const [thumbnailGroupDraft, setThumbnailGroupDraft] = useState('')
   const [thumbnailGroupSaving, setThumbnailGroupSaving] = useState(false)
   const [thumbnailGroupError, setThumbnailGroupError] = useState('')
-  const [thumbnailGroupPopover, setThumbnailGroupPopover] = useState<{ documentId: string; groupId: string; left: number; top: number; mode: 'menu' | 'rename' | 'order' } | null>(null)
+  const [thumbnailGroupPopover, setThumbnailGroupPopover] = useState<{ documentId: string; groupId: string; left: number; top: number; mode: 'menu' | 'rename' | 'order' | 'rail-order' } | null>(null)
   const [thumbnailGroupOrderDraft, setThumbnailGroupOrderDraft] = useState<string[]>([])
+  const [thumbnailRailOrderDraft, setThumbnailRailOrderDraft] = useState<ThumbnailRailOrderItem[]>([])
   const thumbnailGroupPopoverRef = useRef<HTMLFormElement>(null)
   const [thumbnailCollapsed, setThumbnailCollapsed] = useState(() => tabletResourcePolicy)
   const [miniBarState, setMiniBarState] = useState(() => ({ documentId: id, open: false }))
@@ -662,6 +689,12 @@ export default function Viewer() {
     void (async () => {
       const record = await getDocument(id)
       if (!record) throw new Error('이 PDF를 찾을 수 없습니다. 도안 목록에서 다시 열어 주세요.')
+      const [savedTimerMode, savedTimerChoice] = await Promise.all([getPreference('counterTimerLinkMode'), getPreference('counterTimerAskOnceChoice')])
+      const nextTimerMode = isCounterTimerLinkMode(savedTimerMode) ? savedTimerMode : 'ask-once'
+      const nextTimerChoice: CounterTimerChoice = savedTimerChoice === 'start' || savedTimerChoice === 'skip' ? savedTimerChoice : null
+      counterTimerModeRef.current = nextTimerMode
+      counterTimerChoiceRef.current = nextTimerChoice
+      setCounterTimerMode(nextTimerMode)
       setDocumentKind(record.kind === 'photos' ? 'photos' : 'pdf')
       const storedSnapshot = await getViewer(id, record.pageCount)
       let restored = initializedDocumentRef.current === id && snapshotRef.current ? snapshotRef.current : storedSnapshot
@@ -710,6 +743,9 @@ export default function Viewer() {
       setDocumentName(record.fileName)
       setDocumentKind(record.kind === 'photos' ? 'photos' : 'pdf')
       setDocumentWorkTimeMs(record.totalWorkTimeMs ?? 0)
+      setTodayWorkDate(record.todayWorkDate ?? '')
+      setTodayWorkTimeMs(record.todayWorkTimeMs ?? 0)
+      setDocumentWorkTimeDays(normalizeWorkTimeDays(record.workTimeDays, record.todayWorkDate, record.todayWorkTimeMs))
       setSnapshot(restored)
       snapshotRef.current = restored
       setPdf(opened.document)
@@ -1222,12 +1258,6 @@ export default function Viewer() {
             return next
           })
         }
-        const activeSessionId = timerClockRef.current?.sessionId
-        if (lapAction && activeSessionId === lapAction.sessionId) lapBaselineRef.current = { sessionId: lapAction.sessionId, elapsedMs: lapAction.elapsedMs }
-        if (undoneTimeLap && activeSessionId === undoneTimeLap.sessionId) {
-          const previousLap = counterTimeLaps.filter((lap) => lap.sessionId === undoneTimeLap.sessionId).at(-1)
-          lapBaselineRef.current = { sessionId: undoneTimeLap.sessionId, elapsedMs: previousLap?.elapsedMs ?? 0 }
-        }
         setSuspendError((error) => error.startsWith('카운터') ? '' : error)
         if (counterActionRetryRef.current === retryAction) counterActionRetryRef.current = null
         return true
@@ -1242,6 +1272,46 @@ export default function Viewer() {
     counterActionRetryRef.current = retryAction
     counterActionQueueRef.current = operation.then(() => undefined, () => undefined)
     return operation
+  }
+
+  function handleCounterTimerInteraction() {
+    const clock = timerClockRef.current
+    if (clock?.isRunning()) return
+    const action = resolveCounterTimerAction(counterTimerModeRef.current, counterTimerChoiceRef.current)
+    if (action === 'start') {
+      clock?.startIfNotStartedToday()
+      return
+    }
+    if (action === 'prompt' && !counterTimerPromptLockRef.current) {
+      counterTimerPromptLockRef.current = true
+      setCounterTimerPromptError('')
+      setCounterTimerPromptOpen(true)
+    }
+  }
+
+  async function changeCounterTimerLinkMode(mode: CounterTimerLinkMode) {
+    if (mode === 'ask-once') await savePreference('counterTimerAskOnceChoice', '')
+    await savePreference('counterTimerLinkMode', mode)
+    counterTimerModeRef.current = mode
+    if (mode === 'ask-once') counterTimerChoiceRef.current = null
+    setCounterTimerMode(mode)
+  }
+
+  async function chooseCounterTimerPrompt(choice: Exclude<CounterTimerChoice, null>) {
+    if (counterTimerPromptSaving) return
+    setCounterTimerPromptSaving(true)
+    setCounterTimerPromptError('')
+    try {
+      await savePreference('counterTimerAskOnceChoice', choice)
+      counterTimerChoiceRef.current = choice
+      counterTimerPromptLockRef.current = false
+      setCounterTimerPromptOpen(false)
+      if (choice === 'start') timerClockRef.current?.startIfNotStartedToday()
+    } catch {
+      setCounterTimerPromptError(t('타이머 연동 설정을 저장하지 못했습니다. 다시 시도해 주세요.'))
+    } finally {
+      setCounterTimerPromptSaving(false)
+    }
   }
 
   function updateCounterPanel(nextCounters: CounterSnapshot[], label: string) {
@@ -1264,6 +1334,7 @@ export default function Viewer() {
       pushSnapshot({ ...current, counterPanelCollapsed: label.slice(6) === 'true' }, true)
       return
     }
+    if (label.endsWith(' 진행') || label.endsWith(' 감소')) handleCounterTimerInteraction()
     commitCounterTransaction(nextCounters, label, 0, undefined, true, undefined, undefined, undefined, counterGuideCorrection(current, nextCounters))
   }
 
@@ -1344,12 +1415,10 @@ export default function Viewer() {
   }
 
   function createCounterTimeLap(counterId: string, rowDelta: -1 | 1, rowNumber: number): CounterTimeLapAction {
-    const clock = timerClockRef.current
-    if (!clock && !fallbackTimerSessionIdRef.current) fallbackTimerSessionIdRef.current = crypto.randomUUID()
-    const sessionId = clock?.sessionId ?? fallbackTimerSessionIdRef.current
-    const elapsedMs = Math.max(0, Math.floor(clock?.elapsedNow() ?? 0))
-    const baseline = lapBaselineRef.current?.sessionId === sessionId ? lapBaselineRef.current.elapsedMs : 0
-    return { id: crypto.randomUUID(), counterId, sessionId, elapsedMs, durationMs: Math.max(0, elapsedMs - baseline), rowDelta, rowNumber, recordedAt: Date.now() }
+    const sessionId = counterTimeLapSessionId
+    const recordedAt = Date.now()
+    const timing = counterTimeLapTiming(snapshotRef.current?.counterTimeLaps ?? [], counterId, sessionId, recordedAt)
+    return { id: crypto.randomUUID(), counterId, sessionId, ...timing, rowDelta, rowNumber, recordedAt }
   }
 
   function beginCounterRowEdit() {
@@ -1382,6 +1451,8 @@ export default function Viewer() {
     const base = currentCounters.find((counter) => counter.id === counterId)
     if (!base || base.kind !== 'simple' || base.unit !== 'row' || base.linkedToId || base.goalCompleted || base.value >= MAX_COUNTER_ROW && base.goalRow !== base.value) return
     if (!acquireCounterActionLock()) return
+    handleCounterTimerInteraction()
+    const alertToAcknowledge = counterAlertState(currentCounters, counterId, current.counterPreviewEnabled === true).key
     const completingGoal = Boolean(base.goalRow && base.value === base.goalRow)
     const advanced = advanceLinkedCounters(currentCounters, counterId, base.value)
     const nextCounters = completingGoal
@@ -1397,7 +1468,7 @@ export default function Viewer() {
     const autoPanY = linkedGuide && linkedCounter ? guidePositionForRotation(linkedGuide, linkedRow, activeRotation) : undefined
     const primaryGuide = (activeWork?.horizontalGuides ?? []).find((guide) => guide.role === 'primary' && guide.linkedCounterId === base.id)
     const label = base.name + ' · ' + base.value + (completingGoal ? '단 목표 완료' : '단 완료')
-    void commitCounterTransaction(nextCounters, label, base.value, undefined, true, autoPanY, base.id, undefined, primaryGuide ? { kind: 'advance', pageNumber: activePage, guideId: primaryGuide.id } : undefined, lapAction).finally(releaseCounterActionLock)
+    void commitCounterTransaction(nextCounters, label, base.value, undefined, true, autoPanY, base.id, { counterAlertAcknowledged: alertToAcknowledge }, primaryGuide ? { kind: 'advance', pageNumber: activePage, guideId: primaryGuide.id } : undefined, lapAction).finally(releaseCounterActionLock)
   }
 
   function setCounterValue(counterId: string, value: number) {
@@ -1423,6 +1494,7 @@ export default function Viewer() {
     if (beforeRow === nextRow) return
     const edited = next.find((counter) => counter.id === counterId)
     if (!acquireCounterActionLock()) return
+    handleCounterTimerInteraction()
     void commitCounterTransaction(next, (edited?.name ?? '카운터') + ' 숫자 보정', edited?.kind === 'simple' ? edited.value : edited?.currentRow ?? 0, undefined, true, undefined, undefined, undefined, counterGuideCorrection(current, next)).finally(releaseCounterActionLock)
   }
 
@@ -1431,6 +1503,7 @@ export default function Viewer() {
     const history = current?.counterHistory ?? []
     const latest = history.at(-1)
     if (!current || !latest || !acquireCounterActionLock()) return
+    handleCounterTimerInteraction()
     void commitCounterTransaction(latest.counters, latest.label + ' 되돌리기', latest.actualRow, latest.guides, false).finally(releaseCounterActionLock)
   }
 
@@ -1449,6 +1522,7 @@ export default function Viewer() {
       verticalGuides: item.verticalGuides.filter((guide) => guide.linkedCounterId && groupIds.has(guide.linkedCounterId)),
     })).filter((item) => item.horizontalGuides.length || item.verticalGuides.length)
     if (!acquireCounterActionLock()) return
+    handleCounterTimerInteraction()
     const lapAction = recordLap ? createCounterTimeLap(baseId, -1, next.find((counter) => counter.id === baseId)?.value ?? targetRow) : undefined
     const operation = commitCounterTransaction(next, '단 되돌아가기', targetRow, restoreGuides, true, undefined, baseId, undefined, undefined, lapAction)
     void operation.finally(releaseCounterActionLock)
@@ -2340,6 +2414,19 @@ export default function Viewer() {
     setThumbnailGroupOrderDraft(reorderThumbnailGroups(draftGroups, groupId, direction).map((group) => group.id))
   }
 
+  async function saveThumbnailRailOrder() {
+    if (!thumbnailGroupPopover || thumbnailGroupSaving) return
+    if (await saveThumbnailGroups(thumbnailGroups, thumbnailRailOrderDraft)) setThumbnailGroupPopover(null)
+  }
+
+  function moveThumbnailRailGroup(groupId: string, direction: -1 | 1) {
+    const sourceKey = 'group:' + groupId
+    const index = thumbnailRailOrderDraft.findIndex((item) => thumbnailRailOrderKey(item) === sourceKey)
+    const target = thumbnailRailOrderDraft[index + direction]
+    if (index < 0 || !target) return
+    setThumbnailRailOrderDraft(moveThumbnailRailItem(thumbnailRailOrderDraft, sourceKey, thumbnailRailOrderKey(target), direction < 0 ? 'before' : 'after'))
+  }
+
   async function ungroupThumbnailGroup(groupId: string) {
     const nextGroups = thumbnailGroups.filter((group) => group.id !== groupId)
     if (await saveThumbnailGroups(nextGroups)) {
@@ -2383,11 +2470,13 @@ export default function Viewer() {
     const bounds = event.currentTarget.getBoundingClientRect()
     setThumbnailGroupDraft(group.name)
     setThumbnailGroupOrderDraft(thumbnailGroups.map((item) => item.id))
+    setThumbnailRailOrderDraft(pdf ? normalizeThumbnailRailOrder(snapshotRef.current?.thumbnailRailOrder, pdf.numPages, thumbnailGroups) : [])
     setThumbnailGroupPopover({ documentId: id, groupId, left: clamp(bounds.left, 8, Math.max(8, window.innerWidth - 280)), top: clamp(bounds.bottom + 6, 8, Math.max(8, window.innerHeight - 360)), mode: 'menu' })
   }
 
-  function changeThumbnailGroupPopoverMode(mode: 'menu' | 'rename' | 'order') {
+  function changeThumbnailGroupPopoverMode(mode: 'menu' | 'rename' | 'order' | 'rail-order') {
     setThumbnailGroupError('')
+    if (mode === 'rail-order' && pdf) setThumbnailRailOrderDraft(normalizeThumbnailRailOrder(snapshotRef.current?.thumbnailRailOrder, pdf.numPages, thumbnailGroups))
     setThumbnailGroupPopover((current) => current ? { ...current, mode } : current)
   }
 
@@ -2579,7 +2668,7 @@ export default function Viewer() {
   }
 
   const timerPortalTarget = loadError?.id === id || suspended || loading || loadedId !== id || !pdf || !snapshot ? null : timerPortalHost
-  const timerElement = <DocumentWorkTimer key={id + ':' + timerSessionKey} documentId={id} portalTarget={timerPortalTarget} onTotalWorkTimeChange={onTimerTotalChange} onUnsavedChange={onTimerUnsavedChange} onSavingChange={onTimerSavingChange} onClockChange={onTimerClockChange} />
+  const timerElement = <DocumentWorkTimer key={id + ':' + timerSessionKey} documentId={id} initialTodayWorkDate={todayWorkDate} initialTodayWorkTimeMs={todayWorkTimeMs} portalTarget={timerPortalTarget} onWorkTimeChange={onTimerWorkTimeChange} onTodayWorkTimeChange={onTimerTodayWorkTimeChange} onUnsavedChange={onTimerUnsavedChange} onSavingChange={onTimerSavingChange} onClockChange={onTimerClockChange} />
   const requestReportExit = () => {
     if (timerSaving) return
     if (timerHasUnsaved) {
@@ -2622,13 +2711,13 @@ export default function Viewer() {
       </header>
       <section className={'pdf-work-area' + (reportMode ? ' report-work-area' : '')}>
         <div className={'pdf-document-area ' + (reportMode ? '' : snapshot.split ? (orientation === 'wide' ? 'split-wide' : 'split-tall') : 'single-pane')} ref={areaRef}>
-        {reportMode ? <KnittingReport documentId={id} fileName={documentName} pageCount={pdf.numPages} totalWorkTimeMs={documentWorkTimeMs} onBack={() => setSearchParams({})} /> : snapshot.split ? <>
+        {reportMode ? <KnittingReport documentId={id} fileName={documentName} pageCount={pdf.numPages} totalWorkTimeMs={documentWorkTimeMs} workTimeDays={documentWorkTimeDays} onBack={() => setSearchParams({})} /> : snapshot.split ? <>
           <div className="split-section" style={orientation === 'wide' ? { flex: '0 0 ' + splitBasis(displayedRatio) } : { width: '100%', flex: '0 0 ' + splitBasis(displayedRatio) }}>{renderPane('primary', snapshot.primary, snapshot.activePane === 'primary')}</div>
           <button className={'split-divider ' + orientation} aria-label={t("영역 크기 조정")} onPointerDown={beginDivider} onPointerMove={moveDivider} onPointerUp={finishDivider} onPointerCancel={finishDivider} onLostPointerCapture={finishDivider}><span /></button>
           <div className="split-section split-section-secondary" style={orientation === 'wide' ? { flex: '0 0 ' + splitBasis(1 - displayedRatio) } : { width: '100%', flex: '0 0 ' + splitBasis(1 - displayedRatio) }}>{renderPane('secondary', snapshot.secondary, snapshot.activePane === 'secondary')}</div>
         </> : renderPane(snapshot.activePane, snapshot[snapshot.activePane], true)}
         </div>
-        {!reportMode && counterPanelVisible && <CounterPanel snapshot={snapshot} counters={counters} onChange={updateCounterPanel} onUndo={undoCounterAction} onRewind={rewindCounter} onCounterValue={setCounterValue} onSettingsSave={saveCounterSettings} onSnapshotUpdate={updateCounterSnapshot} onClose={() => setSavedCounterSession({ documentId: id, visible: false })} />}
+        {!reportMode && counterPanelVisible && <CounterPanel snapshot={snapshot} counters={counters} timerLinkMode={counterTimerMode} onChange={updateCounterPanel} onUndo={undoCounterAction} onRewind={rewindCounter} onCounterValue={setCounterValue} onSettingsSave={saveCounterSettings} onTimerLinkModeChange={changeCounterTimerLinkMode} onSnapshotUpdate={updateCounterSnapshot} onClose={() => setSavedCounterSession({ documentId: id, visible: false })} />}
       </section>
       <section className={'viewer-footer' + (thumbnailCollapsed ? ' thumbnail-collapsed' : '')}>
         <div id={thumbnailContentId} className="thumbnail-content" hidden={thumbnailCollapsed}>
@@ -2702,7 +2791,7 @@ export default function Viewer() {
             <button type="button" className="viewer-page-control-button" aria-label={t("확대")} title={t("25% 확대")} disabled={activeZoom >= 5} onClick={() => changePane(snapshot.activePane, (pane) => ({ ...pane, zoom: Math.min(5, Math.round((pane.zoom + 0.25) * 100) / 100) }), true)}><Plus size={17} /></button>
             <button type="button" className="viewer-page-control-button" aria-label={t("화면 맞춤")} title={t("100% 확대와 페이지 중앙으로 맞춤")} onClick={() => changePane(snapshot.activePane, (pane) => ({ ...pane, zoom: 1, centerX: 0.5, centerY: 0.5 }), true)}><Maximize2 size={16} /></button>
           </div>
-          <button type="button" className="viewer-page-control-button" aria-label={t('시계 방향 90도 회전')} title={t('90도 회전 · 현재 {angle}도', { angle: activeRotation })} disabled={!pageWorks[activePage]} onClick={() => rotatePage(snapshot.activePane, activePage)}><RotateCwSquare size={17} /></button>
+          <button type="button" className="viewer-page-control-button" aria-label={t('시계 방향 90도 회전')} title={t('90도 회전 · 현재 {angle}도', { angle: activeRotation })} disabled={!pageWorks[activePage]} onClick={() => rotatePage(snapshot.activePane, activePage)}><RefreshCw size={17} /></button>
           <button
             type="button"
             className="thumbnail-accordion-button"
@@ -2724,7 +2813,7 @@ export default function Viewer() {
         </div>}
       </section>
       <div className="viewer-floating-layer">
-        <div className={'viewer-floating-bar viewer-timer-bar' + (timerBarPosition.left === null ? '' : ' positioned')} style={timerBarPosition.left === null ? undefined : { left: timerBarPosition.left, top: timerBarPosition.top, right: 'auto' }} role="group" aria-label={`${t('카운터')} · ${t('작업 타이머')}`}>
+        <div className={'viewer-floating-bar viewer-timer-bar' + (counterDetailsExpanded ? ' counter-details-expanded' : '') + (timerBarPosition.left === null ? '' : ' positioned')} style={timerBarPosition.left === null ? undefined : { left: timerBarPosition.left, top: timerBarPosition.top, right: 'auto' }} role="group" aria-label={`${t('카운터')} · ${t('작업 타이머')}`}>
           <button type="button" className="viewer-floating-drag-handle" aria-label={t('작업 타이머 이동')} title={t('작업 타이머 이동')} onPointerDown={beginTimerBarDrag} onPointerMove={moveTimerBarDrag} onPointerUp={finishTimerBarDrag} onPointerCancel={finishTimerBarDrag} onLostPointerCapture={finishTimerBarDrag}><GripVertical size={17} /></button>
           {!reportMode && <div className="viewer-counter-tools" role="group" aria-label={t('카운터')}>
             <button type="button" className="viewer-mini-counter-step" aria-label={t('이전 단으로 되돌리기')} title={mainCounterCanStepBack ? t('이전 단으로 되돌리기') : t('정확한 복원 이력이 없습니다')} disabled={!mainCounterCanStepBack || counterActionSaving} onClick={() => { if (mainCounter && mainCounter.value > 1) rewindCounter(mainCounter.id, mainCounter.value - 1, true) }}>−</button>
@@ -2735,8 +2824,20 @@ export default function Viewer() {
               }} />
               : <button type="button" className="viewer-mini-counter-row" aria-label={t('현재 단 입력')} title={t('현재 단 입력')} disabled={counterActionSaving} onClick={beginCounterRowEdit}><strong>{formatNumber(mainCounter.value)}</strong><span>{t('단')}</span><small>{counterSideForRow(mainCounter, mainCounter.value).toUpperCase()}</small></button>)}
             <button type="button" className="viewer-mini-counter-step" aria-label={t('현재 단 완료 후 다음 단으로 이동')} disabled={!mainCounter || counterActionSaving || mainCounter.goalCompleted === true || mainCounter.value >= MAX_COUNTER_ROW && mainCounter.goalRow !== mainCounter.value} onClick={() => { if (mainCounter) advanceCounterGroup(mainCounter.id) }}>+</button>
-            <button type="button" className={'viewer-mini-lap-toggle' + (counterPanelVisible ? ' active' : '')} aria-label={counterAlertPending ? t('카운터 · 확인할 알림 있음') : t('타임랩')} title={t('타임랩')} aria-pressed={counterPanelVisible} onClick={() => setSavedCounterSession({ documentId: id, visible: !counterPanelVisible })}><Tally5 size={16} /><span>{t('타임랩')}</span>{counterAlertPending && <i className="counter-notification-dot" aria-hidden="true" />}</button>
+            <button type="button" className={'viewer-counter-details-toggle' + (counterDetailsExpanded ? ' active' : '')} aria-label={counterDetailsExpanded ? t('보조 카운터 정보 접기') : t('보조 카운터 정보 펼치기')} title={counterDetailsExpanded ? t('보조 카운터 정보 접기') : t('보조 카운터 정보 펼치기')} aria-expanded={counterDetailsExpanded} aria-controls={'viewer-counter-details-' + id.replace(/[^a-zA-Z0-9_-]/g, '-')} onClick={() => setCounterDetailsExpanded((expanded) => !expanded)}>{counterDetailsExpanded ? <ChevronUp size={16} /> : <ChevronDown size={16} />}</button>
+            <button type="button" className={'viewer-mini-lap-toggle' + (counterPanelVisible ? ' active' : '')} aria-label={counterAlertPending ? t('카운터 · 확인할 알림 있음') : t('타임랩')} title={t('타임랩')} aria-pressed={counterPanelVisible} onClick={() => setSavedCounterSession({ documentId: id, visible: !counterPanelVisible })}><SlidersHorizontal size={16} />{counterAlertPending && <i className="counter-notification-dot" aria-hidden="true" />}</button>
           </div>}
+          {!reportMode && counterDetailsExpanded && <section id={'viewer-counter-details-' + id.replace(/[^a-zA-Z0-9_-]/g, '-')} className="viewer-counter-details" aria-label={t('보조 카운터 정보')}>
+            {auxiliaryCounters.length ? auxiliaryCounters.map((counter) => <div className="viewer-counter-detail-item" key={counter.id}>
+              <span className="viewer-counter-detail-color" style={{ background: counter.color }} />
+              <strong>{counter.name}</strong>
+              <span>{counter.kind === 'pattern'
+                ? t('무늬 {current} / {total}단 · 다음 {next}단', { current: formatNumber(counter.patternRow ?? 1), total: formatNumber(counter.repeatLength ?? 1), next: formatNumber(nextPatternAlertRow(counter, mainCounter?.value ?? 1) ?? 1) })
+                : counter.kind === 'task'
+                  ? t('{task} {completed} / {total}회 · 다음 {row}단', { task: t(counter.taskKind === 'increase' ? '늘림' : '줄임'), completed: formatNumber(counter.completedCount ?? 0), total: formatNumber(counter.total ?? 0), row: formatNumber(counter.nextTaskRow ?? counter.firstTaskRow ?? 1) })
+                  : formatNumber(counter.value) + t(counter.unit === 'stitch' ? '코' : counter.unit === 'round' ? '회' : '단')}</span>
+            </div>) : <p>{t('연결된 보조 카운터가 없습니다.')}</p>}
+          </section>}
           {!reportMode && <span className="viewer-timer-divider" aria-hidden="true" />}
           <div className="viewer-timer-portal-host" ref={setTimerPortalHost} />
         </div>
@@ -2796,12 +2897,14 @@ export default function Viewer() {
           event.preventDefault()
           if (thumbnailGroupPopover.mode === 'rename') void renameThumbnailGroup(thumbnailGroupPopover.groupId, thumbnailGroupDraft)
           if (thumbnailGroupPopover.mode === 'order') void saveThumbnailGroupOrder()
+          if (thumbnailGroupPopover.mode === 'rail-order') void saveThumbnailRailOrder()
         }}
       >
         <strong>{thumbnailGroups.find((group) => group.id === thumbnailGroupPopover.groupId)?.name}</strong>
         {thumbnailGroupPopover.mode === 'menu' && <div className="thumbnail-label-menu" role="group">
           <button type="button" onClick={() => changeThumbnailGroupPopoverMode('rename')}>{t('이름 바꾸기')}</button>
           <button type="button" onClick={() => changeThumbnailGroupPopoverMode('order')}>{t('순서 바꾸기')}</button>
+          <button type="button" onClick={() => changeThumbnailGroupPopoverMode('rail-order')}>{t('썸네일 위치 이동')}</button>
           <button type="button" className="thumbnail-group-ungroup" disabled={thumbnailGroupSaving} onClick={() => void ungroupThumbnailGroup(thumbnailGroupPopover.groupId)}>{t('라벨 해지하기')}</button>
         </div>}
         {thumbnailGroupPopover.mode === 'rename' && <>
@@ -2830,6 +2933,23 @@ export default function Viewer() {
             <button type="submit" className="primary-button" disabled={thumbnailGroupSaving}>{t('저장')}</button>
           </div>
         </>}
+        {thumbnailGroupPopover.mode === 'rail-order' && (() => {
+          const index = thumbnailRailOrderDraft.findIndex((item) => item.type === 'group' && item.groupId === thumbnailGroupPopover.groupId)
+          return <>
+            <div className="thumbnail-rail-position-controls" role="group" aria-label={t('썸네일 위치')}>
+              <span>{t('폴더 위치')} {index < 0 ? '—' : formatNumber(index + 1) + ' / ' + formatNumber(thumbnailRailOrderDraft.length)}</span>
+              <div>
+                <button type="button" className="icon-button" aria-label={t('왼쪽으로 이동')} title={t('왼쪽으로 이동')} disabled={thumbnailGroupSaving || index <= 0} onClick={() => moveThumbnailRailGroup(thumbnailGroupPopover.groupId, -1)}><ChevronLeft size={17} /></button>
+                <button type="button" className="icon-button" aria-label={t('오른쪽으로 이동')} title={t('오른쪽으로 이동')} disabled={thumbnailGroupSaving || index < 0 || index >= thumbnailRailOrderDraft.length - 1} onClick={() => moveThumbnailRailGroup(thumbnailGroupPopover.groupId, 1)}><ChevronRight size={17} /></button>
+              </div>
+            </div>
+            <p className="thumbnail-rail-position-help">{t('페이지와 폴더 사이에서 위치를 조정할 수 있습니다.')}</p>
+            <div className="thumbnail-group-popover-actions">
+              <button type="button" className="secondary-button" disabled={thumbnailGroupSaving} onClick={() => changeThumbnailGroupPopoverMode('menu')}>{t('취소')}</button>
+              <button type="button" className="primary-button" disabled={thumbnailGroupSaving || index < 0} onClick={() => void saveThumbnailRailOrder()}>{t('저장')}</button>
+            </div>
+          </>
+        })()}
         {thumbnailGroupError && <span role="alert">{thumbnailGroupError}</span>}
       </form>, document.body)}
       {thumbnailGroupDialog && <div className="modal-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) setThumbnailGroupDialog(false) }}>
@@ -2843,6 +2963,7 @@ export default function Viewer() {
           </div>
         </form>
       </div>}
+      {counterTimerPromptOpen && <div className="modal-backdrop counter-modal-backdrop" role="presentation"><section className="modal-card counter-timer-link-prompt" role="alertdialog" aria-modal="true" aria-labelledby="counter-timer-prompt-title"><div className="modal-heading"><h2 id="counter-timer-prompt-title">{t('타이머도 함께 시작할까요?')}</h2></div><p>{t('처음 카운터를 조작할 때 타이머 시작 여부를 묻고 선택을 기억합니다.')}</p>{counterTimerPromptError && <p className="counter-storage-error" role="alert">{counterTimerPromptError}</p>}<div className="modal-actions"><button type="button" className="secondary-button" disabled={counterTimerPromptSaving} onClick={() => void chooseCounterTimerPrompt('skip')}>{t('아니요, 기억')}</button><button type="button" className="primary-button" disabled={counterTimerPromptSaving} onClick={() => void chooseCounterTimerPrompt('start')}>{t('예, 시작하고 기억')}</button></div></section></div>}
       {exitPromptOpen && <div className="modal-backdrop" role="presentation"><section className="modal-card" role="alertdialog" aria-modal="true" aria-labelledby="timer-exit-title" aria-describedby="timer-exit-message"><div className="modal-heading"><h2 id="timer-exit-title">{t('저장되지 않은 작업시간')}</h2></div><p id="timer-exit-message" className="timer-exit-message">{t('일시정지를 누르지 않아 마지막 저장 이후 측정한 시간은 누적 작업시간에 저장되지 않습니다.')}</p><div className="modal-actions"><button type="button" className="secondary-button" onClick={() => setExitPromptOpen(false)}>{t('계속 작업')}</button><button type="button" className="primary-button" onClick={() => { setExitPromptOpen(false); if (exitPromptTarget === 'report') { setTimerHasUnsaved(false); setTimerSessionKey((key) => key + 1); setSearchParams({ report: '1' }) } else navigate('/') }}>{t('나가기')}</button></div></section></div>}
       {viewerExitSaving && <div className="modal-backdrop viewer-exit-modal" role="presentation"><section className="modal-card" role="alertdialog" aria-modal="true" aria-live="polite"><div className="modal-heading"><h2>{t('저장하는 중…')}</h2></div><p>{t('저장하고 나가기')}</p></section></div>}
       {viewerExitError && <div className="modal-backdrop viewer-exit-modal" role="presentation"><section className="modal-card" role="alertdialog" aria-modal="true" aria-labelledby="viewer-exit-error-title"><div className="modal-heading"><h2 id="viewer-exit-error-title">{t('저장 오류')}</h2></div><p role="alert">{viewerExitError}</p><div className="modal-actions"><button type="button" className="secondary-button" onClick={() => setViewerExitError('')}>{t('계속 작업')}</button><button type="button" className="primary-button" onClick={() => void requestViewerExit()}>{t('다시 시도')}</button></div></section></div>}

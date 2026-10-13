@@ -364,3 +364,31 @@ Object.assign(extendedTranslations.de, reportDeleteTranslations.de)
 Object.assign(extendedTranslations.da, reportDeleteTranslations.da)
 Object.assign(extendedTranslations.nb, reportDeleteTranslations.nb)
 Object.assign(extendedTranslations.fi, reportDeleteTranslations.fi)
+const dailyWorkTimeTranslations = {
+  en: { '일별 타이머 기록': 'Daily timer log', '아직 저장된 일별 타이머 기록이 없습니다.': 'Daily timer records will appear here after you save work time.', '{day}일차': 'Day {day}', '{hours}시간 {minutes}분': '{hours} hr {minutes} min', '작업일차: {dayLabel} · {duration}': 'Workday: {dayLabel} · {duration}' },
+  ja: { '일별 타이머 기록': '日別タイマー記録', '아직 저장된 일별 타이머 기록이 없습니다.': '作業時間を保存すると、日ごとの記録がここに表示されます。', '{day}일차': '{day}日目', '{hours}시간 {minutes}분': '{hours}時間 {minutes}分', '작업일차: {dayLabel} · {duration}': '作業日: {dayLabel} · {duration}' },
+  de: { '일별 타이머 기록': 'Tägliches Timerprotokoll', '아직 저장된 일별 타이머 기록이 없습니다.': 'Gespeicherte Tageszeiten erscheinen hier.', '{day}일차': 'Tag {day}', '{hours}시간 {minutes}분': '{hours} Std. {minutes} Min.', '작업일차: {dayLabel} · {duration}': 'Arbeitstag: {dayLabel} · {duration}' },
+  da: { '일별 타이머 기록': 'Daglig timerlog', '아직 저장된 일별 타이머 기록이 없습니다.': 'Gemte daglige tider vises her.', '{day}일차': 'Dag {day}', '{hours}시간 {minutes}분': '{hours} t {minutes} min', '작업일차: {dayLabel} · {duration}': 'Arbejdsdag: {dayLabel} · {duration}' },
+  nb: { '일별 타이머 기록': 'Daglig timerlogg', '아직 저장된 일별 타이머 기록이 없습니다.': 'Lagrede daglige tider vises her.', '{day}일차': 'Dag {day}', '{hours}시간 {minutes}분': '{hours} t {minutes} min', '작업일차: {dayLabel} · {duration}': 'Arbeidsdag: {dayLabel} · {duration}' },
+  fi: { '일별 타이머 기록': 'Päivittäinen ajastinloki', '아직 저장된 일별 타이머 기록이 없습니다.': 'Tallennetut päivittäiset ajat näkyvät tässä.', '{day}일차': '{day}. päivä', '{hours}시간 {minutes}분': '{hours} h {minutes} min', '작업일차: {dayLabel} · {duration}': 'Työpäivä: {dayLabel} · {duration}' },
+} satisfies Record<'en' | 'ja' | 'de' | 'da' | 'nb' | 'fi', Record<string, string>>
+Object.assign(extendedTranslations.en, dailyWorkTimeTranslations.en)
+Object.assign(extendedTranslations.ja, dailyWorkTimeTranslations.ja)
+Object.assign(extendedTranslations.de, dailyWorkTimeTranslations.de)
+Object.assign(extendedTranslations.da, dailyWorkTimeTranslations.da)
+Object.assign(extendedTranslations.nb, dailyWorkTimeTranslations.nb)
+Object.assign(extendedTranslations.fi, dailyWorkTimeTranslations.fi)
+const thumbnailRailPositionTranslations = {
+  en: { '썸네일 위치 이동': 'Move folder position', '썸네일 위치': 'Thumbnail position', '폴더 위치': 'Folder position', '왼쪽으로 이동': 'Move left', '오른쪽으로 이동': 'Move right', '페이지와 폴더 사이에서 위치를 조정할 수 있습니다.': 'Move this folder among pages and other folders.' },
+  ja: { '썸네일 위치 이동': 'フォルダーの位置を移動', '썸네일 위치': 'サムネイルの位置', '폴더 위치': 'フォルダーの位置', '왼쪽으로 이동': '左へ移動', '오른쪽으로 이동': '右へ移動', '페이지와 폴더 사이에서 위치를 조정할 수 있습니다.': 'ページや他のフォルダーの間で位置を変更できます。' },
+  de: { '썸네일 위치 이동': 'Ordnerposition verschieben', '썸네일 위치': 'Miniaturansichtsposition', '폴더 위치': 'Ordnerposition', '왼쪽으로 이동': 'Nach links verschieben', '오른쪽으로 이동': 'Nach rechts verschieben', '페이지와 폴더 사이에서 위치를 조정할 수 있습니다.': 'Der Ordner kann zwischen Seiten und anderen Ordnern verschoben werden.' },
+  da: { '썸네일 위치 이동': 'Flyt mappeplacering', '썸네일 위치': 'Miniatureplacering', '폴더 위치': 'Mappeplacering', '왼쪽으로 이동': 'Flyt til venstre', '오른쪽으로 이동': 'Flyt til højre', '페이지와 폴더 사이에서 위치를 조정할 수 있습니다.': 'Flyt mappen mellem sider og andre mapper.' },
+  nb: { '썸네일 위치 이동': 'Flytt mappeplassering', '썸네일 위치': 'Miniatyrplassering', '폴더 위치': 'Mappeplassering', '왼쪽으로 이동': 'Flytt til venstre', '오른쪽으로 이동': 'Flytt til høyre', '페이지와 폴더 사이에서 위치를 조정할 수 있습니다.': 'Flytt mappen mellom sider og andre mapper.' },
+  fi: { '썸네일 위치 이동': 'Siirrä kansion sijaintia', '썸네일 위치': 'Esikatselun sijainti', '폴더 위치': 'Kansion sijainti', '왼쪽으로 이동': 'Siirrä vasemmalle', '오른쪽으로 이동': 'Siirrä oikealle', '페이지와 폴더 사이에서 위치를 조정할 수 있습니다.': 'Siirrä kansio sivujen ja muiden kansioiden väliin.' },
+} satisfies Record<'en' | 'ja' | 'de' | 'da' | 'nb' | 'fi', Record<string, string>>
+Object.assign(extendedTranslations.en, thumbnailRailPositionTranslations.en)
+Object.assign(extendedTranslations.ja, thumbnailRailPositionTranslations.ja)
+Object.assign(extendedTranslations.de, thumbnailRailPositionTranslations.de)
+Object.assign(extendedTranslations.da, thumbnailRailPositionTranslations.da)
+Object.assign(extendedTranslations.nb, thumbnailRailPositionTranslations.nb)
+Object.assign(extendedTranslations.fi, thumbnailRailPositionTranslations.fi)

@@ -2,7 +2,7 @@ import { formatNumber, t, translateMessage } from './locales/index'
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, type DragEvent as ReactDragEvent, type MouseEvent as ReactMouseEvent, type PointerEvent as ReactPointerEvent, type RefObject } from 'react'
 import { createPortal } from 'react-dom'
 import type { PDFDocumentProxy, PDFPageProxy, RenderTask } from 'pdfjs-dist'
-import { Trash2 } from 'lucide-react'
+import { Bookmark, Check, Trash2 } from 'lucide-react'
 import BrandLoading from './BrandLoading'
 import { ColorPresetButtons } from './ColorPresetButtons'
 import { ANNOTATION_COLOR_PRESETS } from './designTokens'
@@ -324,8 +324,8 @@ export function PdfThumbnail({ pdf, pageNumber, active, bookmarked, selected, dr
       <span className="page-thumbnail-image">
         <canvas ref={setCanvas} width={0} height={0} aria-hidden="true" />
         {(!ready || !visible) && <span className="thumbnail-placeholder">{pageNumber}</span>}
-        {selected && <span className="thumbnail-selection-mark">✓</span>}
-        {bookmarked && <span className="thumbnail-bookmark">★</span>}
+        {selected && <span className="thumbnail-selection-mark" aria-hidden="true"><Check size={11} strokeWidth={3} /></span>}
+        {bookmarked && <span className="thumbnail-bookmark" aria-hidden="true"><Bookmark size={14} fill="currentColor" /></span>}
       </span>
       <span className="page-thumbnail-number">{pageNumber}</span>
       <span ref={observerTargetRef} className="thumbnail-observer" aria-hidden="true" />
@@ -1038,12 +1038,7 @@ export function PdfPage({ pdf, page, paneId, pane, splitView, rotation, active, 
     setRegionPopoverOpen(true)
     setSelectedNoteId(null)
     setEditingNoteId(null)
-    if (kind !== 'move' || selectedRegionId === region.id) beginRegionTransform(event, region, kind)
-    else {
-      event.preventDefault()
-      onActivate()
-      event.currentTarget.focus()
-    }
+    beginRegionTransform(event, region, kind)
   }
 
   function moveRegionTransform(event: ReactPointerEvent<SVGSVGElement>) {
@@ -2163,6 +2158,7 @@ export function PdfPage({ pdf, page, paneId, pane, splitView, rotation, active, 
                 fill={regionPreview.color}
                 fillOpacity={regionPreview.opacity}
                 stroke={regionPreview.color}
+                strokeWidth={0.5}
                 strokeDasharray="6 4"
                 style={{ pointerEvents: 'none' }}
               />}
@@ -2178,7 +2174,7 @@ export function PdfPage({ pdf, page, paneId, pane, splitView, rotation, active, 
                 height={selectedRegion.height * pageSize.height}
                 fill="transparent"
                 stroke="var(--color-primary)"
-                strokeWidth={cssSize ? pageSize.width / Math.max(cssSize.width, 1) * 1.5 : 1}
+                strokeWidth={cssSize ? pageSize.width / Math.max(cssSize.width, 1) * 0.75 : 0.75}
                 strokeDasharray={cssSize ? pageSize.width / Math.max(cssSize.width, 1) * 4 + ' ' + pageSize.width / Math.max(cssSize.width, 1) * 3 : undefined}
                 style={{ pointerEvents: 'none' }}
               />}

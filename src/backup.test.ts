@@ -6,6 +6,7 @@ import { createCounter, isLegacyCounterSnapshots } from './smartCounter'
 import { addDocument, addDocumentWorkTime, createPhotoFolder, deleteChart, deleteDocument, duplicateDocument, getChart, getHomeProject, getKnittingReport, getKnittingReports, getPageWork, getPages, getPhotoPages, getPreference, getViewer, importWorkspaceData, listCharts, listDocuments, saveChart, saveHomeProject, saveKnittingReport, savePageWork, savePreference, saveViewer, setPageFlag } from './storage'
 import { createKnittingChart, makeRasterPdf } from './charts'
 import type { DocumentRecord, KnittingReport } from './types'
+import { localWorkDateKey } from './workTime'
 
 describe('portable workspace backup', () => {
   it('migrates a legacy one-report-per-document database to report ids', async () => {
@@ -73,16 +74,42 @@ describe('portable workspace backup', () => {
     const backup = await createWorkspaceBackup()
     const restored = await readWorkspaceBackup(new File([backup], 'timer.doanbogo'))
     expect(restored.documents.find((item) => item.id === id)?.totalWorkTimeMs).toBe(3_723_000)
+    expect(restored.documents.find((item) => item.id === id)).toMatchObject({ todayWorkTimeMs: 3_723_000 })
+    expect(restored.documents.find((item) => item.id === id)?.workTimeDays).toEqual([{ date: localWorkDateKey(), elapsedMs: 3_723_000 }])
     expect(restored.homeProjects?.find((item) => item.entityId === id)?.totalWorkTimeMs).toBe(3_723_000)
+    expect(restored.homeProjects?.find((item) => item.entityId === id)?.todayWorkTimeMs).toBe(3_723_000)
+    expect(restored.homeProjects?.find((item) => item.entityId === id)?.workTimeDays).toEqual([{ date: localWorkDateKey(), elapsedMs: 3_723_000 }])
+
+    const legacyHistoryFiles = unzipSync(new Uint8Array(await backup.arrayBuffer()))
+    const legacyHistoryManifest = JSON.parse(strFromU8(legacyHistoryFiles['manifest.json'])) as { documents: Record<string, unknown>[]; homeProjects: Record<string, unknown>[] }
+    delete legacyHistoryManifest.documents.find((item) => item.id === id)!.workTimeDays
+    delete legacyHistoryManifest.homeProjects.find((item) => item.entityId === id)!.workTimeDays
+    legacyHistoryFiles['manifest.json'] = strToU8(JSON.stringify(legacyHistoryManifest))
+    const legacyHistory = await readWorkspaceBackup(new File([zipSync(legacyHistoryFiles, { level: 0 })], 'legacy-daily-timer.doanbogo'))
+    expect(legacyHistory.documents.find((item) => item.id === id)?.workTimeDays).toEqual([{ date: localWorkDateKey(), elapsedMs: 3_723_000 }])
 
     const files = unzipSync(new Uint8Array(await backup.arrayBuffer()))
     const manifest = JSON.parse(strFromU8(files['manifest.json'])) as { documents: Record<string, unknown>[]; homeProjects: Record<string, unknown>[] }
+    const invalidFiles = unzipSync(new Uint8Array(await backup.arrayBuffer()))
+    const invalidManifest = JSON.parse(strFromU8(invalidFiles['manifest.json'])) as { documents: Record<string, unknown>[] }
+    invalidManifest.documents.find((item) => item.id === id)!.workTimeDays = [{ date: '2026-02-30', elapsedMs: 1_000 }]
+    invalidFiles['manifest.json'] = strToU8(JSON.stringify(invalidManifest))
+    await expect(readWorkspaceBackup(new File([zipSync(invalidFiles, { level: 0 })], 'invalid-daily-timer.doanbogo'))).rejects.toThrow()
+
     delete manifest.documents.find((item) => item.id === id)!.totalWorkTimeMs
     delete manifest.homeProjects.find((item) => item.entityId === id)!.totalWorkTimeMs
+    delete manifest.documents.find((item) => item.id === id)!.todayWorkDate
+    delete manifest.documents.find((item) => item.id === id)!.todayWorkTimeMs
+    delete manifest.documents.find((item) => item.id === id)!.workTimeDays
+    delete manifest.homeProjects.find((item) => item.entityId === id)!.todayWorkDate
+    delete manifest.homeProjects.find((item) => item.entityId === id)!.todayWorkTimeMs
+    delete manifest.homeProjects.find((item) => item.entityId === id)!.workTimeDays
     files['manifest.json'] = strToU8(JSON.stringify(manifest))
     const withoutTimerFields = await readWorkspaceBackup(new File([zipSync(files, { level: 0 })], 'older-timer.doanbogo'))
     expect(withoutTimerFields.documents.find((item) => item.id === id)?.totalWorkTimeMs).toBe(0)
+    expect(withoutTimerFields.documents.find((item) => item.id === id)?.todayWorkTimeMs).toBeUndefined()
     expect(withoutTimerFields.homeProjects?.find((item) => item.entityId === id)?.totalWorkTimeMs).toBe(0)
+    expect(withoutTimerFields.homeProjects?.find((item) => item.entityId === id)?.todayWorkTimeMs).toBe(0)
 
     await deleteDocument(id)
   })
@@ -344,6 +371,8 @@ describe('portable workspace backup', () => {
     })
     await savePreference('view', 'list')
     await savePreference('language', 'ja')
+    await savePreference('counterTimerLinkMode', 'ask-once')
+    await savePreference('counterTimerAskOnceChoice', 'start')
     const chart = createKnittingChart(2, 3, 'in', 18, 24)
     chart.title = '작은 색상 차트'
     chart.cells[0] = '#e34b4b'
@@ -413,12 +442,16 @@ describe('portable workspace backup', () => {
     expect(restored.pageWork[0].colorworkGrid?.cells[0]).toEqual({ color: '#f1c40f', opacity: 0.25 })
     expect(restored.preferences).toContainEqual({ key: 'view', value: 'list' })
     expect(restored.preferences).toContainEqual({ key: 'language', value: 'ja' })
+    expect(restored.preferences).toContainEqual({ key: 'counterTimerLinkMode', value: 'ask-once' })
+    expect(restored.preferences).toContainEqual({ key: 'counterTimerAskOnceChoice', value: 'start' })
     expect(restored.charts).toEqual([expect.objectContaining({ id: chart.id, title: chart.title, cells: ['#e34b4b', null, null, null, null, null] })])
     expect(restored.homeProjects).toContainEqual(expect.objectContaining({ key: 'document:' + original.id, status: 'paused', archivedAt }))
     expect(restored.knittingReports.filter((item) => item.documentId === original.id)).toEqual([savedReport])
 
     expect(await importWorkspaceData(restored)).toBe(2)
     expect(await getPreference('language')).toBe('ja')
+    expect(await getPreference('counterTimerLinkMode')).toBe('ask-once')
+    expect(await getPreference('counterTimerAskOnceChoice')).toBe('start')
     const imported = (await listDocuments('name')).find((item) => item.id !== original.id)
     expect(imported?.id).toBeTruthy()
     expect(await getHomeProject('document', imported!.id)).toMatchObject({ status: 'paused', archivedAt })

@@ -152,6 +152,11 @@ export interface PageWorkRecord {
 
 export type PageRotation = 0 | 90 | 180 | 270
 
+export interface DocumentWorkTimeDay {
+  date: string
+  elapsedMs: number
+}
+
 export interface DocumentRecord {
   id: string
   kind?: 'pdf' | 'photos'
@@ -162,6 +167,9 @@ export interface DocumentRecord {
   lastOpenedAt: number | null
   tags: string[]
   totalWorkTimeMs?: number
+  todayWorkDate?: string
+  todayWorkTimeMs?: number
+  workTimeDays?: DocumentWorkTimeDay[]
   pdf: Blob | null
   cover: Blob | null
 }
@@ -185,7 +193,12 @@ export interface HomeProject {
   lastWorkedAt: number | null
   createdAt: number
   totalWorkTimeMs?: number
+  todayWorkDate?: string
+  todayWorkTimeMs?: number
+  workTimeDays?: DocumentWorkTimeDay[]
 }
+
+export type CounterTimerLinkMode = 'auto' | 'ask-once' | 'independent'
 
 export interface PhotoPageRecord {
   documentId: string

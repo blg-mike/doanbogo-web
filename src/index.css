@@ -1,5 +1,6 @@
 :root {
   font-family: "Noto Sans KR", "Segoe UI", system-ui, sans-serif;
+  font-size: 16px;
   color: var(--color-text);
   background: var(--color-background);
   font-synthesis: none;
@@ -31,12 +32,26 @@
   --color-warning-soft: #F6EEDC;
   --color-progress: #D46A4C;
   --color-focus-ring: rgba(75, 99, 52, .3);
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 24px;
+  --space-6: 32px;
+  --control-height: 44px;
+  --control-radius: 8px;
+  --motion-ui: 150ms;
 }
 * { box-sizing: border-box; }
 html, body, #root { width: 100%; min-width: 320px; min-height: 100%; margin: 0; }
+html { -webkit-tap-highlight-color: transparent; }
 body { min-height: 100vh; }
-button, input, select { font: inherit; }
+button, input, select, textarea { font: inherit; }
 button { color: inherit; }
-button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible { outline: 3px solid var(--color-focus-ring); outline-offset: 2px; }
+button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible { outline: 3px solid var(--color-focus-ring); outline-offset: 2px; }
 button:disabled { cursor: not-allowed !important; opacity: .42; }
+@media (any-pointer: coarse) {
+  input:not([type="checkbox"]):not([type="radio"]):not([type="color"]), select, textarea { font-size: max(16px, 1em); }
+  button, a { touch-action: manipulation; }
+}
 ::selection { background: var(--color-primary-soft); }

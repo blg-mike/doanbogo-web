@@ -76,11 +76,27 @@ describe('local document storage', () => {
     const document = makeDocument(crypto.randomUUID(), 'Timer.pdf', Date.now())
     await addDocument(document)
 
-    await Promise.all([addDocumentWorkTime(document.id, 30_000), addDocumentWorkTime(document.id, 20_000)])
+    await Promise.all([addDocumentWorkTime(document.id, 30_000, '2026-10-13'), addDocumentWorkTime(document.id, 20_000, '2026-10-13')])
 
     expect((await listDocuments()).find((item) => item.id === document.id)?.totalWorkTimeMs).toBe(50_000)
-    expect((await getHomeProject('document', document.id))?.totalWorkTimeMs).toBe(50_000)
+    expect((await listDocuments()).find((item) => item.id === document.id)).toMatchObject({ todayWorkDate: '2026-10-13', todayWorkTimeMs: 50_000 })
+    expect((await listDocuments()).find((item) => item.id === document.id)?.workTimeDays).toEqual([{ date: '2026-10-13', elapsedMs: 50_000 }])
+    expect(await getHomeProject('document', document.id)).toMatchObject({ totalWorkTimeMs: 50_000, todayWorkDate: '2026-10-13', todayWorkTimeMs: 50_000 })
+    expect((await getHomeProject('document', document.id))?.workTimeDays).toEqual([{ date: '2026-10-13', elapsedMs: 50_000 }])
+    await addDocumentWorkTime(document.id, 10_000, '2026-10-14')
+    expect((await listDocuments()).find((item) => item.id === document.id)).toMatchObject({ totalWorkTimeMs: 60_000, todayWorkDate: '2026-10-14', todayWorkTimeMs: 10_000 })
+    expect((await listDocuments()).find((item) => item.id === document.id)?.workTimeDays).toEqual([{ date: '2026-10-13', elapsedMs: 50_000 }, { date: '2026-10-14', elapsedMs: 10_000 }])
+    expect((await getHomeProject('document', document.id))).toMatchObject({ totalWorkTimeMs: 60_000, todayWorkDate: '2026-10-14', todayWorkTimeMs: 10_000 })
     await deleteDocument(document.id)
+
+    const legacyDocument = { ...makeDocument(crypto.randomUUID(), 'Legacy timer.pdf', Date.now()), todayWorkDate: '2026-10-12', todayWorkTimeMs: 120_000 }
+    await addDocument(legacyDocument)
+    await addDocumentWorkTime(legacyDocument.id, 1_000, '2026-10-13')
+    expect((await listDocuments()).find((item) => item.id === legacyDocument.id)?.workTimeDays).toEqual([
+      { date: '2026-10-12', elapsedMs: 120_000 },
+      { date: '2026-10-13', elapsedMs: 1_000 },
+    ])
+    await deleteDocument(legacyDocument.id)
   })
 
   it('searches by filename and tag and keeps the selected ordering', async () => {

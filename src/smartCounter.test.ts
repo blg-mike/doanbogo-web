@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { advanceLinkedCounters, counterAlertState, counterSideForRow, createCounter, createDefaultCounters, findCounterRewindCheckpoint, guidePositionForRow, isCounterSnapshots, isCurrentCounterSnapshots, isLegacyCounterSnapshots, maxCountersForType, nextPatternAlertRow, normalizeCounterSnapshots, normalizeCounterTimeLaps, patternRowAfterCompletion, progressGuideForCounter, reanchorProgressGuideForCounter, restoreCounterGroup, setCounterGroupRow, shouldPlayCounterTaskSound, taskSchedule } from './smartCounter'
+import { advanceLinkedCounters, counterAlertState, counterSideForRow, counterTimeLapTiming, createCounter, createDefaultCounters, findCounterRewindCheckpoint, guidePositionForRow, isCounterSnapshots, isCurrentCounterSnapshots, isLegacyCounterSnapshots, maxCountersForType, nextPatternAlertRow, normalizeCounterSnapshots, normalizeCounterTimeLaps, patternRowAfterCompletion, progressGuideForCounter, reanchorProgressGuideForCounter, restoreCounterGroup, setCounterGroupRow, shouldPlayCounterTaskSound, taskSchedule } from './smartCounter'
+import type { CounterSnapshot, ProgressGuide } from './types'
 
 describe('counter model', () => {
   it('starts with no counters and enforces each type limit in the model', () => {
@@ -31,6 +32,18 @@ describe('counter model', () => {
     expect(normalizeCounterTimeLaps([{ ...legacyLap, rowNumber: 13 }])[0].rowNumber).toBe(13)
     expect(normalizeCounterTimeLaps([{ ...legacyLap, rowNumber: 0 }])).toEqual([])
     expect(normalizeCounterTimeLaps([legacyLap], [{ ...history[0], counters: [{ ...counter, goalRow: 12 }] }])[0].rowNumber).toBe(12)
+  })
+
+  it('measures lap intervals independently of the work timer within the viewer session', () => {
+    const laps = [
+      { id: 'old-session', counterId: 'body', sessionId: 'old', historyEntryId: 'history-1', elapsedMs: 90_000, durationMs: 90_000, rowDelta: 1 as const, recordedAt: 1_000 },
+      { id: 'baseline', counterId: 'body', sessionId: 'viewer', historyEntryId: 'history-2', elapsedMs: 0, durationMs: 0, rowDelta: 1 as const, recordedAt: 10_000 },
+      { id: 'other-counter', counterId: 'sleeve', sessionId: 'viewer', historyEntryId: 'history-3', elapsedMs: 5_000, durationMs: 5_000, rowDelta: 1 as const, recordedAt: 15_000 },
+    ]
+
+    expect(counterTimeLapTiming(laps, 'body', 'viewer', 40_000)).toEqual({ elapsedMs: 30_000, durationMs: 30_000 })
+    expect(counterTimeLapTiming(laps, 'sleeve', 'viewer', 20_000)).toEqual({ elapsedMs: 10_000, durationMs: 5_000 })
+    expect(counterTimeLapTiming([], 'body', 'viewer', 50_000)).toEqual({ elapsedMs: 0, durationMs: 0 })
   })
 
   it('migrates old repeat and task data without losing counts or work records', () => {
@@ -102,6 +115,30 @@ describe('counter model', () => {
     expect(first.markerProgress).toBeUndefined()
   })
 
+  it('moves a linked progress guide exactly one row for each main counter increment', () => {
+    let counters: CounterSnapshot[] = [{ ...createCounter('simple'), id: 'base', value: 24, unit: 'row' }]
+    let guide: ProgressGuide = { id: 'guide', role: 'primary', position: 0.2, linkedCounterId: 'base', rowSpacing: 0.018, rowSpacingStartRow: 24, rowSpacingDirection: 'down' }
+    for (let step = 0; step < 6; step += 1) {
+      const previousRow = counters[0].value
+      counters = advanceLinkedCounters(counters, 'base', previousRow)
+      const nextGuide = progressGuideForCounter(guide, counters[0], previousRow)
+      expect(nextGuide.position - guide.position).toBeCloseTo(0.018)
+      expect(counters[0].value).toBe(previousRow + 1)
+      guide = nextGuide
+    }
+  })
+
+  it.each([0, 90, 180, 270] as const)('advances the calibrated %i-degree guide by one interval even when its saved row anchor is stale', (rotation) => {
+    const base = { ...createCounter('simple'), id: 'base', value: 24, unit: 'row' as const }
+    const guide: ProgressGuide = {
+      id: 'guide', role: 'primary', linkedCounterId: 'base', position: 0.2, rowSpacing: 0.018, rowSpacingStartRow: 20, rowSpacingDirection: 'down',
+      rotationPositions: { [rotation]: { position: 0.3, rowSpacing: 0.021, rowSpacingStartRow: 20, rowSpacingDirection: 'up' } },
+    }
+    const next = progressGuideForCounter(guide, { ...base, value: 25 }, 24)
+    expect(next.position - guide.position).toBeCloseTo(0.018)
+    expect(next.rotationPositions?.[String(rotation) as '0' | '90' | '180' | '270']?.position).toBeCloseTo(0.279)
+  })
+
   it('keeps the line in place after a direct counter correction and moves one spacing next', () => {
     const guide = { id: 'guide', role: 'primary' as const, position: 0.4, linkedCounterId: 'base', rowSpacing: 0.05, rowSpacingStartRow: 42, rowSpacingDirection: 'down' as const, markerProgress: 0.6 }
     const corrected = reanchorProgressGuideForCounter(guide, 42, 68)
@@ -131,6 +168,21 @@ describe('counter model', () => {
     expect(shouldPlayCounterTaskSound(history, '몸판', 25, 'entry-2', 24)).toBe(false)
     expect(shouldPlayCounterTaskSound(history, '소매', 25, 'entry-1', 24)).toBe(false)
     expect(shouldPlayCounterTaskSound({ ...history, label: '단 되돌아가기' }, '몸판', 25, 'entry-1', 24)).toBe(false)
+  })
+
+  it('acknowledges the due auxiliary alert on the next row action while keeping later alerts distinct', () => {
+    const base = { ...createCounter('simple'), id: 'base', value: 5, unit: 'row' as const }
+    const pattern = { ...createCounter('pattern'), id: 'pattern', linkedToId: 'base', currentRow: 5, patternRow: 5, startRow: 1, repeatLength: 5 }
+    const task = { ...createCounter('task'), id: 'task', linkedToId: 'base', currentRow: 5, firstTaskRow: 6, nextTaskRow: 6, interval: 4, total: 2, completedCount: 0 }
+    const before = [base, pattern, task]
+    const firstStep = advanceLinkedCounters(before, 'base', base.value)
+    const due = counterAlertState(firstStep, 'base')
+    expect(due.messages).toHaveLength(2)
+
+    const secondStep = advanceLinkedCounters(firstStep, 'base', firstStep[0].value)
+    const nextAlert = counterAlertState(secondStep, 'base')
+    expect(nextAlert.messages).toEqual([])
+    expect(nextAlert.key).not.toBe(due.key)
   })
 
   it('restores only one linked group and recalculates dependent pattern and task state', () => {

@@ -726,3 +726,12 @@ The product should feel calm enough to remain open beside the user for a long kn
 The pattern is always the visual priority.
 
 The interface should support the work, not compete with it.
+
+
+## 4. Shared interaction polish (2026-10-13)
+
+Keep the established semantic colors and page composition. Use the shared 4, 8, 12, 16, 24, and 32px spacing rhythm, 44px minimum touch targets, 16px text-entry sizing on coarse-pointer devices, visible keyboard focus, and existing lucide-react SVG icons for function controls. Preserve desktop density where larger targets are unnecessary. Touch devices must not retain hover-only visual states.
+
+Animate only the entrance of menus, popovers, and dialogs with a short opacity/transform transition (about 150ms); honor prefers-reduced-motion. Do not animate frequent counter changes, page navigation, zoom, thumbnail collapse, or layout dimensions. Keep PDF work surfaces neutral and retain existing brand and semantic color tokens.
+
+Verification on 2026-10-13: automated checks and builds passed; browser checks covered Home, Chart editor, Viewer at four viewport sizes, language switching, and portable HTTP entry. Physical tablet/touch testing and all locale/screen combinations remain separate validation work.

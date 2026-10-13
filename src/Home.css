@@ -45,7 +45,6 @@
 .home-project-card > strong { overflow: hidden; padding: 8px 9px 1px; color: var(--color-text); font-size: 11px; text-overflow: ellipsis; white-space: nowrap; }
 .home-project-card > small { overflow: hidden; padding: 1px 9px 0; color: var(--color-text-muted); font-size: 9px; text-overflow: ellipsis; white-space: nowrap; }
 .home-project-add { min-width: 0; min-height: 100px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; border: 1px dashed var(--color-border); border-radius: 10px; color: var(--color-text-secondary); background: rgba(255,255,255,.5); font-size: 10px; cursor: pointer; }
-.home-project-add b { font-size: 22px; font-weight: 400; }
 .home-report-grid { display: grid; grid-template-columns: repeat(4,minmax(0,1fr)); gap: 10px; }
 .home-report-card { min-width: 0; min-height: 78px; display: grid; grid-template-columns: 76px minmax(0,1fr); gap: 10px; padding: 7px; border: 1px solid var(--color-border); border-radius: 9px; color: inherit; background: #fff; text-align: left; cursor: pointer; }
 .home-report-cover { overflow: hidden; border-radius: 6px; background: var(--color-surface-subtle); }
@@ -183,3 +182,30 @@
 .reports-page .report-list .home-report-info small { color: var(--color-text-secondary); font-size: 11px; }
 .reports-page .report-list .home-report-info b { min-height: 32px; display: inline-flex; align-items: center; margin-top: 2px; color: var(--color-secondary); font-size: 11px; }
 .reports-page .collection-empty { color: var(--color-text-secondary); }
+
+/* Keep project and report summaries readable without changing their layout. */
+.app-sidebar > small, .home-eyebrow, .home-search kbd, .home-project-cover i { font-size: 11px; }
+.home-view-all { min-height: 44px; font-size: 13px; }
+.home-updated, .home-recent-info small, .home-project-card > small, .home-report-info small,
+.home-search-results > button small, .home-search-results > p,
+.reports-page .report-list .home-report-info small { font-size: 12px; }
+.home-resume-button, .home-new-button { min-height: 44px; font-size: 13px; }
+.home-project-card > strong, .home-report-info strong { font-size: 14px; }
+.home-report-info b, .reports-page .report-list .home-report-info b { font-size: 12px; }
+.collection-toolbar button, .project-actions button, .project-filter-tabs button { min-height: 44px; font-size: 13px; }
+.project-detail-edit label { font-size: 12px; }
+.project-detail-edit input { min-height: 44px; font-size: 14px; }
+.project-detail-edit .detail-save-button { min-height: 44px; font-size: 13px; }
+.new-project-options small { font-size: 12px; }
+
+@media (hover: none), (pointer: coarse) {
+  .home-project-card:hover, .home-report-card:hover,
+  .reports-page .report-list .home-report-card:hover { border-color: var(--color-border); box-shadow: none; }
+}
+
+@media (any-pointer: coarse) {
+  .app-sidebar nav a, .app-sidebar-settings { min-height: 44px; }
+  .app-mobile-nav a { min-height: 44px; font-size: 11px; }
+  .home-mobile-search { width: 44px; height: 44px; }
+  .home-search-overlay header button { width: 44px; height: 44px; }
+}

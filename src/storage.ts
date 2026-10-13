@@ -1,5 +1,6 @@
 import { openDB, type DBSchema, type IDBPDatabase } from 'idb'
-import type { ChartDocument, CounterHistoryEntry, DocumentRecord, HomeProject, KnittingReport, PageRecognitionRecord, PageRecord, PageWorkRecord, PhotoPageRecord, PaneSnapshot, PreferenceRecord, ProgressGuide, SortMode, ViewerSnapshot } from './types'
+import type { ChartDocument, CounterHistoryEntry, DocumentRecord, DocumentWorkTimeDay, HomeProject, KnittingReport, PageRecognitionRecord, PageRecord, PageWorkRecord, PhotoPageRecord, PaneSnapshot, PreferenceRecord, ProgressGuide, SortMode, ViewerSnapshot } from './types'
+import { isWorkDateKey, localWorkDateKey, normalizeWorkTimeDays } from './workTime'
 import { MAX_COUNTER_HISTORY, normalizeCounterSnapshots, normalizeCounterTimeLaps } from './smartCounter'
 import { normalizeThumbnailGroups, normalizeThumbnailRailOrder, normalizeVisiblePageRecord } from './pageManagement'
 
@@ -320,7 +321,7 @@ export async function addDocument(record: DocumentRecord) {
 }
 
 function documentProject(record: DocumentRecord): HomeProject {
-  return { key: 'document:' + record.id, entityId: record.id, kind: 'document', title: record.fileName.replace(/\.pdf$/i, ''), fileName: record.fileName, documentKind: record.kind ?? 'pdf', pageCount: record.pageCount, cover: record.cover, tags: record.tags ?? [], status: 'active', archivedAt: null, deletedAt: null, lastWorkedAt: record.lastOpenedAt ?? null, createdAt: record.createdAt, totalWorkTimeMs: record.totalWorkTimeMs ?? 0 }
+  return { key: 'document:' + record.id, entityId: record.id, kind: 'document', title: record.fileName.replace(/\.pdf$/i, ''), fileName: record.fileName, documentKind: record.kind ?? 'pdf', pageCount: record.pageCount, cover: record.cover, tags: record.tags ?? [], status: 'active', archivedAt: null, deletedAt: null, lastWorkedAt: record.lastOpenedAt ?? null, createdAt: record.createdAt, totalWorkTimeMs: record.totalWorkTimeMs ?? 0, todayWorkDate: record.todayWorkDate, todayWorkTimeMs: record.todayWorkTimeMs ?? 0, workTimeDays: record.workTimeDays }
 }
 
 function chartProject(record: ChartDocument): HomeProject {
@@ -341,12 +342,13 @@ export async function saveHomeProject(project: HomeProject) {
   return project
 }
 
-export async function addDocumentWorkTime(id: string, elapsedMs: number) {
+export async function addDocumentWorkTime(id: string, elapsedMs: number, workDate = localWorkDateKey()) {
   if (!Number.isSafeInteger(elapsedMs) || elapsedMs < 0) throw new Error('작업시간 값이 올바르지 않습니다.')
+  if (!isWorkDateKey(workDate)) throw new Error('작업 날짜가 올바르지 않습니다.')
   if (elapsedMs === 0) {
     const document = await getDocument(id)
     if (!document) throw new Error('도안을 찾을 수 없습니다.')
-    return document.totalWorkTimeMs ?? 0
+    return { totalWorkTimeMs: document.totalWorkTimeMs ?? 0, todayWorkDate: workDate, todayWorkTimeMs: document.todayWorkDate === workDate ? document.todayWorkTimeMs ?? 0 : 0, workTimeDays: normalizeWorkTimeDays(document.workTimeDays, document.todayWorkDate, document.todayWorkTimeMs) }
   }
   return access(async (db) => {
     const tx = db.transaction(['documents', 'homeProjects'], 'readwrite')
@@ -354,21 +356,35 @@ export async function addDocumentWorkTime(id: string, elapsedMs: number) {
     if (!document) throw new Error('도안을 찾을 수 없습니다.')
     const project = await tx.objectStore('homeProjects').get('document:' + id)
     const totalWorkTimeMs = (document.totalWorkTimeMs ?? project?.totalWorkTimeMs ?? 0) + elapsedMs
+    const workTimeDays = addWorkTimeDay(document.workTimeDays ?? project?.workTimeDays, document.todayWorkDate ?? project?.todayWorkDate, document.todayWorkTimeMs ?? project?.todayWorkTimeMs, workDate, elapsedMs)
+    const todayWorkTimeMs = workTimeDays.find((day) => day.date === workDate)?.elapsedMs ?? elapsedMs
     if (!Number.isSafeInteger(totalWorkTimeMs)) throw new Error('누적 작업시간이 너무 큽니다.')
-    await tx.objectStore('documents').put({ ...document, totalWorkTimeMs })
-    await tx.objectStore('homeProjects').put({ ...(project ?? documentProject(document)), totalWorkTimeMs })
+    if (!Number.isSafeInteger(todayWorkTimeMs)) throw new Error('오늘 작업시간이 너무 큽니다.')
+    await tx.objectStore('documents').put({ ...document, totalWorkTimeMs, todayWorkDate: workDate, todayWorkTimeMs, workTimeDays })
+    await tx.objectStore('homeProjects').put({ ...(project ?? documentProject(document)), totalWorkTimeMs, todayWorkDate: workDate, todayWorkTimeMs, workTimeDays })
     await tx.done
-    return totalWorkTimeMs
+    return { totalWorkTimeMs, todayWorkDate: workDate, todayWorkTimeMs, workTimeDays }
   }, () => {
     const document = temporary.documents.get(id)
     if (!document) throw new Error('도안을 찾을 수 없습니다.')
     const project = temporary.homeProjects.get('document:' + id)
     const totalWorkTimeMs = (document.totalWorkTimeMs ?? project?.totalWorkTimeMs ?? 0) + elapsedMs
+    const workTimeDays = addWorkTimeDay(document.workTimeDays ?? project?.workTimeDays, document.todayWorkDate ?? project?.todayWorkDate, document.todayWorkTimeMs ?? project?.todayWorkTimeMs, workDate, elapsedMs)
+    const todayWorkTimeMs = workTimeDays.find((day) => day.date === workDate)?.elapsedMs ?? elapsedMs
     if (!Number.isSafeInteger(totalWorkTimeMs)) throw new Error('누적 작업시간이 너무 큽니다.')
-    temporary.documents.set(id, { ...document, totalWorkTimeMs })
-    temporary.homeProjects.set('document:' + id, { ...(project ?? documentProject(document)), totalWorkTimeMs })
-    return totalWorkTimeMs
+    if (!Number.isSafeInteger(todayWorkTimeMs)) throw new Error('오늘 작업시간이 너무 큽니다.')
+    temporary.documents.set(id, { ...document, totalWorkTimeMs, todayWorkDate: workDate, todayWorkTimeMs, workTimeDays })
+    temporary.homeProjects.set('document:' + id, { ...(project ?? documentProject(document)), totalWorkTimeMs, todayWorkDate: workDate, todayWorkTimeMs, workTimeDays })
+    return { totalWorkTimeMs, todayWorkDate: workDate, todayWorkTimeMs, workTimeDays }
   })
+}
+
+function addWorkTimeDay(days: DocumentWorkTimeDay[] | undefined, todayDate: string | undefined, todayWorkTimeMs: number | undefined, workDate: string, elapsedMs: number) {
+  const normalized = normalizeWorkTimeDays(days, todayDate, todayWorkTimeMs)
+  const current = normalized.find((day) => day.date === workDate)?.elapsedMs ?? 0
+  const updated = current + elapsedMs
+  if (!Number.isSafeInteger(updated)) throw new Error('오늘 작업시간이 너무 큽니다.')
+  return normalizeWorkTimeDays([...normalized.filter((day) => day.date !== workDate), { date: workDate, elapsedMs: updated }])
 }
 
 export async function listHomeReports() {
@@ -665,6 +681,8 @@ export async function duplicateDocument(id: string) {
       lastOpenedAt: null,
       tags: [],
       totalWorkTimeMs: 0,
+      todayWorkDate: undefined,
+      todayWorkTimeMs: 0,
     }
     await addDocument(copy)
   }
@@ -976,7 +994,7 @@ export async function importWorkspaceData(incoming: WorkspaceData) {
     ...documents.map((item, index) => {
       const originalId = incoming.documents[index].id
       const saved = savedProjectByKey.get('document:' + originalId)
-      return saved ? { ...saved, key: 'document:' + item.id, entityId: item.id, cover: item.cover, fileName: item.fileName, totalWorkTimeMs: item.totalWorkTimeMs ?? saved.totalWorkTimeMs ?? 0 } : documentProject(item)
+      return saved ? { ...saved, key: 'document:' + item.id, entityId: item.id, cover: item.cover, fileName: item.fileName, totalWorkTimeMs: item.totalWorkTimeMs ?? saved.totalWorkTimeMs ?? 0, todayWorkDate: item.todayWorkDate ?? saved.todayWorkDate, todayWorkTimeMs: item.todayWorkTimeMs ?? saved.todayWorkTimeMs ?? 0, workTimeDays: item.workTimeDays ?? saved.workTimeDays } : documentProject(item)
     }),
     ...charts.map((item, index) => {
       const originalId = incoming.charts[index].id

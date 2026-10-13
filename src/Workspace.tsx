@@ -422,7 +422,7 @@ export default function Workspace() {
         </div>
         {notice && <div className="notice" role="status"><span>{notice}</span>{undoProject && <button className="notice-undo" onClick={() => void saveHomeProject({ ...undoProject, deletedAt: null }).then(() => { setUndoProject(null); setNotice(t('프로젝트를 복구했습니다.')); void refresh() })}>{t("실행 취소")}</button>}<button aria-label={t("알림 닫기")} onClick={() => { setNotice(''); setUndoProject(null) }}><X size={16} /></button></div>}
         {documents.length === 0 ? (
-          <section className="empty-state"><div className="empty-icon"><FilePlus2 size={27} /></div><h2>{query ? t('검색 결과가 없습니다') : t('아직 도안이 없습니다')}</h2><p>{query ? t('이름이나 태그를 바꿔서 다시 검색해 보세요.') : t('PDF 또는 사진을 추가해 이곳에 모아 둘 수 있어요.')}</p>{!query && <div className="empty-actions"><button className="primary-button" onClick={() => fileInput.current?.click()}><FilePlus2 size={18} />{t("첫 PDF 추가하기")}</button><button className="secondary-button" onClick={startPhotoFolder}><Images size={18} />{t("사진 추가")}</button></div>}</section>
+          <section className="empty-state"><div className="empty-icon"><FilePlus2 size={27} /></div><h2>{query ? t('검색 결과가 없습니다') : t('아직 도안이 없습니다')}</h2><p>{query ? t('이름이나 태그를 바꿔서 다시 검색해 보세요.') : t('PDF 또는 사진을 추가해 이곳에 모아 둘 수 있어요.')}</p>{!query && <div className="empty-actions"><button className="primary-button" onClick={() => fileInput.current?.click()}><FilePlus2 size={18} />{t("PDF 추가")}</button><button className="secondary-button" onClick={startPhotoFolder}><Images size={18} />{t("사진 추가")}</button></div>}</section>
         ) : (
           <section className={view === 'cover' ? 'document-grid' : 'document-list'} aria-label={t("도안 목록")}>
             {documents.map((item) => item.type === 'document' ? (

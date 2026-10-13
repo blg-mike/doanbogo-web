@@ -43,6 +43,11 @@
 .knitting-report-editor .report-photo-section header p { color: var(--color-text-secondary); }
 .knitting-report-editor .report-facts { color: var(--color-text-secondary); }
 .knitting-report-editor .report-facts svg { color: var(--color-secondary); }
+.knitting-report-editor .report-worktime-history { border-color: var(--color-border); border-radius: 12px; background: var(--color-surface-subtle); }
+.knitting-report-editor .report-worktime-history > header { color: var(--color-secondary); }
+.knitting-report-editor .report-worktime-history h2 { color: var(--color-text); }
+.knitting-report-editor .report-worktime-history li { border-color: var(--color-border); border-radius: 9px; background: var(--color-surface); color: var(--color-text-secondary); }
+.knitting-report-editor .report-worktime-history > p { color: var(--color-text-secondary); }
 .knitting-report-editor .report-status-badge { color: var(--color-secondary); background: var(--color-secondary-soft); }
 .knitting-report-editor .report-status-badge.status-완료,
 .knitting-report-editor .report-status-badge.status-완성 { color: var(--color-tertiary); background: var(--color-tertiary-soft); }
@@ -230,3 +235,37 @@ body:has(.knitting-report-editor) .pwa-notice { border-color: var(--color-border
 body:has(.knitting-report-editor) .pwa-notice-icon { color: var(--color-tertiary); background: var(--color-tertiary-soft); }
 body:has(.knitting-report-editor) .pwa-dismiss-button { width: 44px; height: 44px; border-radius: 8px; color: var(--color-secondary); }
 body:has(.knitting-report-editor) .pwa-dismiss-button:focus-visible { outline: 3px solid var(--color-focus-ring); outline-offset: 2px; }
+
+/* Report metadata stays secondary but remains legible at tablet distance. */
+.knitting-report-editor .report-summary-copy small,
+.knitting-report-editor .report-personal-card small,
+.knitting-report-editor .report-cover-dates,
+.knitting-report-editor .report-field-hint,
+.knitting-report-editor .report-detail-hint,
+.knitting-report-editor .report-empty-hint,
+.knitting-report-editor .report-candidate-card > small,
+.knitting-report-editor .report-candidate-values > span { font-size: 12px; }
+.knitting-report-editor .report-photo-label input,
+.knitting-report-editor .report-photo-date input,
+.knitting-report-editor .report-photo-tile > input { font-size: 12px; }
+.knitting-report-editor .report-summary-card,
+.knitting-report-editor .report-personal-card { transition: border-color var(--motion-ui) ease, background-color var(--motion-ui) ease; }
+
+@media (hover: none), (pointer: coarse) {
+  .knitting-report-editor .report-appbar-back:hover,
+  .knitting-report-editor .report-more-trigger:hover,
+  .knitting-report-editor .report-photo-tools button:hover:not(:disabled),
+  .knitting-report-editor .report-nav-back:hover,
+  .knitting-report-editor .report-nav-list button:hover:not(:disabled),
+  .knitting-report-editor .report-cover-dates button:hover,
+  .knitting-report-editor .report-photo-lightbox section > button:hover { color: var(--color-secondary); background: transparent; }
+  .knitting-report-editor .report-appbar-share:hover:not(:disabled) { background: var(--color-primary); }
+  .knitting-report-editor .report-appbar-edit:hover:not(:disabled),
+  .knitting-report-editor .report-add-button:hover:not(:disabled),
+  .knitting-report-editor .report-photo-button:hover { border-color: var(--color-border); background: var(--color-surface-subtle); }
+  .knitting-report-editor .report-more-menu > button:hover:not(:disabled),
+  .knitting-report-editor .report-title-edit-trigger:hover:not(:disabled),
+  .knitting-report-editor .report-title-action:hover:not(:disabled) { color: var(--color-secondary); background: var(--color-surface); }
+  .knitting-report-editor .report-summary-card:hover { border-color: var(--color-border); background: var(--color-surface); }
+  .knitting-report-editor .report-personal-card:hover:not(.open) { border-color: var(--color-border); color: var(--color-text); background: var(--color-surface-subtle); }
+}

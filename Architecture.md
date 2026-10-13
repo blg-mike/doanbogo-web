@@ -1916,3 +1916,24 @@ Viewer viewport locking uses 100dvh, min-height: 0, and overflow: hidden on the 
 CounterTimeLap.rowNumber is optional in stored and backup records without a version bump. New laps store the resulting counter row; old laps derive a row only from a matching history entry and otherwise display the localized missing-row label. The auxiliary counter editor is treated as inside its parent dialog; child Escape, save/cancel draft, and focus restoration leave the parent dialog state intact.
 
 Verification on 2026-10-11: typecheck, 31 test files / 177 tests, design-system check, general build, and portable build passed. Lint exits successfully with existing PdfPage.tsx ref warnings; the general build reports the existing large PDF.js chunk warning. portable/index.html is 8,282.28 kB. Local browser flows covered report delete/routing, Move-tool accordion behavior, four viewport sizes, counter row display, and nested counter editing. Portable HTTP smoke covered app/viewer load, non-Move tool selection, Move tool arming, and collapse after a PDF pointer action with 0 browser page errors. Physical tablet and two-finger pinch remain unverified.
+
+### 2026-10-13 UI polish and runtime boundary
+The UI pass changes CSS presentation and replaces a few function glyphs with existing lucide-react SVG components. It adds shared spacing/control/motion tokens and restrained surface-entry transitions with reduced-motion support. It does not change PDF rendering, persistence, backup formats, counter calculations, APIs, or data types. Source and portable builds include the same styling and icons.
+
+Verification: typecheck, lint, 31 test files / 177 tests, design-system check, general build, and portable build passed. Lint retains existing PdfPage.tsx ref/state warnings; the general build retains the existing large PDF.js chunk warning. Browser checks covered Home, Chart editor, Viewer, 390×844 / 1024×768 / 768×1024 / 1440×900 layout, and seven language switches on Settings. Portable HTTP smoke covered Home and Viewer entry. Physical tablet/touch input, long-title stress cases, and all seven locales across every screen remain unverified.
+
+## 2026-10-13 타이머 일일 누적과 카운터 연동
+타이머는 도안별 오늘 작업시간을 표시하고 Viewer 재진입·페이지 이동 후에도 같은 날짜의 누적을 이어간다. 날짜가 바뀌면 새 일일 누적으로 전환하며 기존 전체 누적 작업시간은 유지한다. 카운터 설정에서 자동 시작, 처음 한 번 확인(기본 추천), 연동하지 않음을 선택한다. 기본 확인의 예/아니요 응답은 preferences에 기억하고 기존 백업에 포함한다. 오늘 작업시간은 문서와 홈 프로젝트 요약에 저장하며 IndexedDB 및 .doanbogo 버전은 올리지 않는다.
+
+## 2026-10-13 보고서 일별 타이머 기록
+저장된 타이머 누적을 날짜별 `workTimeDays`로 문서와 홈 프로젝트 요약에 함께 보존한다. 보고서 화면과 PDF 내보내기에 날짜순 작업일차와 `00시간 20분` 형식의 일별 시간을 표시한다. 기존 오늘 누적 필드는 첫 기록으로 이어 붙이며, 기능 적용 이전 과거 날짜의 상세 시간은 복원하지 않는다. 기존 IndexedDB와 `.doanbogo` v14 구조에 선택 필드만 추가하고 버전은 올리지 않는다. 일별 타이머 문구는 7개 locale을 지원한다.
+검증(2026-10-13): 타입 검사·전체 테스트(32개 파일/182개 테스트)·디자인 시스템 검사·일반 및 portable 빌드 통과. 린트는 종료 코드 0이며 기존 PdfPage.tsx ref/state 경고가 남는다. Playwright 로컬 HTTP에서 390×844·1440×900 보고서 화면, 날짜순 작업일차·시간, PDF 다운로드, 브라우저 오류 0건을 확인했다. 실제 태블릿은 미검증이다. portable/index.html은 8,315.25 kB, homepage.html은 1,007.5 KiB이며 일반 빌드는 기존 PDF.js 대형 청크 경고가 있다.
+
+## 2026-10-13 타임랩 독립 측정·썸네일 폴더 위치 이동
+Viewer 썸네일 폴더의 `썸네일 위치 이동` 메뉴에서 좌우 버튼으로 폴더를 페이지·다른 폴더 사이에서 한 칸씩 옮기고 저장할 수 있다. 기존 450ms 길게 누르기 드래그는 유지한다. 이름 목록 순서(`thumbnailGroups`)와 페이지 레일 위치(`thumbnailRailOrder`)는 별도로 관리하며, 기존 ViewerSnapshot 저장·백업 경로를 재사용해 DB·백업 버전은 바꾸지 않는다.
+타임랩은 문서별 Viewer 세션에서 같은 카운터의 연속 기록 시각 차이를 누적한다. 첫 기록은 기준점(00:00:00)이며 작업 타이머의 시작·정지와 독립적으로 측정한다. 문서 전환 또는 Viewer 재진입은 새 타임랩 세션을 시작하며 다른 카운터·이전 세션 기록은 섞지 않는다. 저장 구조와 작업 타이머 누적은 변경하지 않는다.
+검증(2026-10-13): 타입 검사, 전체 테스트(32개 파일·183개 테스트), 디자인 시스템 검사, 일반 빌드, portable 빌드 통과. 린트는 종료 코드 0이며 기존 `PdfPage.tsx` ref/state 경고가 남는다. 로컬 HTTP Playwright에서 3페이지 임시 PDF로 폴더 위치 4/4→2/4 이동과 새로고침 복원을 확인했다. 타이머 시작 제안을 거절해 정지한 상태에서 1.8초 뒤 다음 타임랩이 00:00:02로 기록됐고 브라우저 오류는 0건이다. 실제 태블릿 조작은 미검증이다. portable HTML은 8,319.94 kB이며 일반 빌드에는 기존 PDF.js 대형 청크 경고가 있다.
+## 2026-10-13 진행선·보조 카운터와 업로드 경로
+진행선 갱신은 카운터 트랜잭션의 직전/다음 행 차이를 사용한다. 행 간격이 직접 설정된 기본 진행선과 회전별 위치는 이 차이에 행 간격을 곱해 갱신하며, 차트 영역 연결은 기존 행 매핑을 유지한다. `counterAlertAcknowledged`는 다음 행 조작 시점의 알림 키를 스냅샷에 기록해 현재 알림을 닫고 다른 조건의 후속 알림은 별도로 판별한다. 보조 카운터 UI 상태는 문서 세션에만 두고 저장 데이터 모델은 기존 카운터 스냅샷을 사용한다.
+PDF 가져오기는 기존 `<input type="file" accept="application/pdf,.pdf">`를 통해 선택된 `FileList`를 검사한 뒤 IndexedDB `addDocument` 경로로 저장한다. Google Drive가 태블릿 OS 파일 제공자로 노출되는 경우 브라우저에 파일을 반환하고, 앱은 로컬 선택과 동일하게 처리한다. Drive OAuth/API/동기화 코드는 없으며 물리 태블릿의 OS 제공자 선택은 검증하지 않았다.
+검증(2026-10-13): 타입 검사, 32개 테스트 파일·189개 테스트, 디자인 시스템 검사, 일반 및 portable 빌드 통과. 린트는 성공했으며 PdfPage.tsx 기존 ref/state 경고와 PDF.js 대형 청크 경고가 남는다. portable 단일 HTML은 8,336.65 kB다.

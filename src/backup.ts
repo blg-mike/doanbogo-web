@@ -1,8 +1,9 @@
 import { strFromU8, strToU8, unzipSync, zipSync } from 'fflate'
-import type { AnnotationRecord, ChartDocument, ColorworkGrid, CounterHistoryEntry, CounterTimeLap, DocumentRecord, HomeProject, KnittingReport, PageRecord, PageWorkRecord, PhotoPageRecord, PreferenceRecord, RegionHighlight, ReportTimelinePhoto, ViewerSnapshot } from './types'
+import type { AnnotationRecord, ChartDocument, ColorworkGrid, CounterHistoryEntry, CounterTimeLap, DocumentRecord, DocumentWorkTimeDay, HomeProject, KnittingReport, PageRecord, PageWorkRecord, PhotoPageRecord, PreferenceRecord, RegionHighlight, ReportTimelinePhoto, ViewerSnapshot } from './types'
 import { normalizePageWork, readWorkspaceData, type WorkspaceData } from './storage'
 import { normalizeVisiblePageRecord } from './pageManagement'
 import { createDefaultCounters, isCurrentCounterSnapshots, isLegacyCounterSnapshots, normalizeCounterSnapshots, normalizeCounterTimeLaps, MAX_COUNTER_HISTORY } from './smartCounter'
+import { isWorkDateKey, normalizeWorkTimeDays } from './workTime'
 
 interface BackupDocument extends Omit<DocumentRecord, 'pdf' | 'cover'> {
   pdfPath: string | null
@@ -36,6 +37,16 @@ function isObject(value: unknown): value is Record<string, unknown> {
 
 function isStringArray(value: unknown): value is string[] {
   return Array.isArray(value) && value.every((item) => typeof item === 'string')
+}
+
+function isDocumentWorkTimeDays(value: unknown): value is DocumentWorkTimeDay[] {
+  if (!Array.isArray(value) || value.length > 10_000) return false
+  const dates = new Set<string>()
+  return value.every((day) => {
+    if (!isObject(day) || !isWorkDateKey(day.date) || dates.has(day.date) || !Number.isSafeInteger(day.elapsedMs) || (day.elapsedMs as number) < 0) return false
+    dates.add(day.date)
+    return true
+  })
 }
 
 function isThumbnailGroups(value: unknown, pageCount: number) {
@@ -361,13 +372,16 @@ export async function readWorkspaceBackup(file: File): Promise<WorkspaceData> {
   const ids = new Set<string>()
   const documents: DocumentRecord[] = manifest.documents.map((entry, index) => {
     if (!isObject(entry)) throw new Error('작업 파일에 올바르지 않은 도안 정보가 있습니다.')
-    const { id, fileName, size, pageCount, createdAt, lastOpenedAt, tags, pdfPath, coverPath, totalWorkTimeMs } = entry
+    const { id, fileName, size, pageCount, createdAt, lastOpenedAt, tags, pdfPath, coverPath, totalWorkTimeMs, todayWorkDate, todayWorkTimeMs, workTimeDays } = entry
     const photoFolder = (manifest.version as number) >= 13 && entry.kind === 'photos'
     if (typeof id !== 'string' || !id || ids.has(id) || typeof fileName !== 'string' || !fileName ||
       !Number.isSafeInteger(size) || (size as number) < 0 || !Number.isSafeInteger(pageCount) || (pageCount as number) < 1 ||
       typeof createdAt !== 'number' || !Number.isFinite(createdAt) ||
       !(lastOpenedAt === null || (typeof lastOpenedAt === 'number' && Number.isFinite(lastOpenedAt))) || !isStringArray(tags) ||
       (totalWorkTimeMs !== undefined && (!Number.isSafeInteger(totalWorkTimeMs) || (totalWorkTimeMs as number) < 0)) ||
+      (todayWorkDate !== undefined && !isWorkDateKey(todayWorkDate)) ||
+      (todayWorkTimeMs !== undefined && (!Number.isSafeInteger(todayWorkTimeMs) || (todayWorkTimeMs as number) < 0)) ||
+      (workTimeDays !== undefined && !isDocumentWorkTimeDays(workTimeDays)) ||
       (entry.kind !== undefined && entry.kind !== 'pdf' && entry.kind !== 'photos')) {
       throw new Error('작업 파일에 올바르지 않은 도안 정보가 있습니다.')
     }
@@ -392,6 +406,7 @@ export async function readWorkspaceBackup(file: File): Promise<WorkspaceData> {
       if (!Object.hasOwn(files, expectedCoverPath)) throw new Error('작업 파일에서 표지 이미지를 찾을 수 없습니다.')
       cover = new Blob([archiveBytes(files[expectedCoverPath])], { type: 'image/jpeg' })
     }
+    const normalizedWorkTimeDays = normalizeWorkTimeDays(workTimeDays as DocumentWorkTimeDay[] | undefined, todayWorkDate as string | undefined, todayWorkTimeMs as number | undefined)
     return {
       id,
       kind: photoFolder ? 'photos' : 'pdf',
@@ -402,6 +417,9 @@ export async function readWorkspaceBackup(file: File): Promise<WorkspaceData> {
       lastOpenedAt,
       tags,
       totalWorkTimeMs: typeof totalWorkTimeMs === 'number' ? totalWorkTimeMs : 0,
+      ...(typeof todayWorkDate === 'string' ? { todayWorkDate } : {}),
+      ...(typeof todayWorkTimeMs === 'number' ? { todayWorkTimeMs } : {}),
+      ...(normalizedWorkTimeDays.length ? { workTimeDays: normalizedWorkTimeDays } : {}),
       pdf: pdfBlob,
       cover,
     }
@@ -576,18 +594,22 @@ export async function readWorkspaceBackup(file: File): Promise<WorkspaceData> {
       !(entry.lastWorkedAt === null || typeof entry.lastWorkedAt === 'number' && Number.isFinite(entry.lastWorkedAt)) ||
       !Number.isFinite(entry.createdAt) || !isStringArray(entry.tags) ||
       (entry.totalWorkTimeMs !== undefined && (!Number.isSafeInteger(entry.totalWorkTimeMs) || (entry.totalWorkTimeMs as number) < 0)) ||
+      (entry.todayWorkDate !== undefined && !isWorkDateKey(entry.todayWorkDate)) ||
+      (entry.todayWorkTimeMs !== undefined && (!Number.isSafeInteger(entry.todayWorkTimeMs) || (entry.todayWorkTimeMs as number) < 0)) ||
+      (entry.workTimeDays !== undefined && !isDocumentWorkTimeDays(entry.workTimeDays)) ||
       (entry.kind === 'document' && !documentById.has(entry.entityId)) || (entry.kind === 'chart' && !chartById.has(entry.entityId))) {
       throw new Error('작업 파일에 올바르지 않은 프로젝트 상태가 있습니다.')
     }
     const document = entry.kind === 'document' ? documentById.get(entry.entityId) : undefined
-    return { ...entry, cover: document?.cover ?? null } as unknown as HomeProject
+    const workTimeDays = normalizeWorkTimeDays(entry.workTimeDays as DocumentWorkTimeDay[] | undefined, entry.todayWorkDate as string | undefined, entry.todayWorkTimeMs as number | undefined)
+    return { ...entry, cover: document?.cover ?? null, ...(workTimeDays.length ? { workTimeDays } : {}) } as unknown as HomeProject
   })
   const projectByKey = new Map(storedProjects.map((project) => [project.key, project]))
   const homeProjects = [
     ...documents.map((item): HomeProject => {
       const saved = projectByKey.get('document:' + item.id)
-      return saved ? { ...saved, fileName: item.fileName, documentKind: item.kind ?? 'pdf', pageCount: item.pageCount, cover: item.cover, totalWorkTimeMs: item.totalWorkTimeMs ?? saved.totalWorkTimeMs ?? 0 } :
-        { key: 'document:' + item.id, entityId: item.id, kind: 'document', title: item.fileName.replace(/\.pdf$/i, ''), fileName: item.fileName, documentKind: item.kind ?? 'pdf', pageCount: item.pageCount, cover: item.cover, tags: item.tags, status: 'active', archivedAt: null, deletedAt: null, lastWorkedAt: item.lastOpenedAt, createdAt: item.createdAt, totalWorkTimeMs: item.totalWorkTimeMs ?? 0 }
+      return saved ? { ...saved, fileName: item.fileName, documentKind: item.kind ?? 'pdf', pageCount: item.pageCount, cover: item.cover, totalWorkTimeMs: item.totalWorkTimeMs ?? saved.totalWorkTimeMs ?? 0, todayWorkDate: item.todayWorkDate ?? saved.todayWorkDate, todayWorkTimeMs: item.todayWorkTimeMs ?? saved.todayWorkTimeMs ?? 0, workTimeDays: item.workTimeDays ?? saved.workTimeDays } :
+        { key: 'document:' + item.id, entityId: item.id, kind: 'document', title: item.fileName.replace(/\.pdf$/i, ''), fileName: item.fileName, documentKind: item.kind ?? 'pdf', pageCount: item.pageCount, cover: item.cover, tags: item.tags, status: 'active', archivedAt: null, deletedAt: null, lastWorkedAt: item.lastOpenedAt, createdAt: item.createdAt, totalWorkTimeMs: item.totalWorkTimeMs ?? 0, todayWorkDate: item.todayWorkDate, todayWorkTimeMs: item.todayWorkTimeMs ?? 0, workTimeDays: item.workTimeDays }
     }),
     ...charts.map((item): HomeProject => {
       const saved = projectByKey.get('chart:' + item.id)

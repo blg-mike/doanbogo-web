@@ -182,3 +182,39 @@
   .chart-canvas-viewport { padding: 9px; }
   .chart-zoom-controls { right: 9px; bottom: 8px; }
 }
+
+/* Clear hierarchy for chart controls; the grid itself keeps its existing scale. */
+.chart-eyebrow, .chart-choice small, .chart-hint, .chart-number-grid label, .chart-unit-field,
+.chart-size-result, .chart-grid-size, .chart-object-color label { font-size: 12px; }
+.chart-tool-heading, .chart-save-state, .chart-export-menu button, .chart-symbol-option span,
+.chart-layer-heading strong, .chart-grid-size small { font-size: 11px; }
+.chart-number-grid label span, .chart-size-note, .chart-fixed-choices span, .chart-fixed-choices b { font-size: 11px; }
+.chart-zoom-controls span { min-width: 48px; font-size: 12px; font-variant-numeric: tabular-nums; }
+.chart-icon-button, .chart-tool-button { border-radius: var(--control-radius); }
+.chart-icon-button:focus-visible, .chart-tool-button:focus-visible, .chart-selection-tools button:focus-visible { outline: 3px solid var(--color-focus-ring); outline-offset: 2px; }
+.chart-create-button, .chart-next { min-height: 44px; border-radius: var(--control-radius); }
+.craft-card { transition: border-color var(--motion-ui) ease, box-shadow var(--motion-ui) ease; }
+.craft-card:hover { transform: none; }
+
+@media (hover: none), (pointer: coarse) {
+  .craft-card:hover { border-color: var(--color-border); box-shadow: none; }
+  .chart-tool-button:hover, .chart-icon-button:hover:not(:disabled), .chart-zoom-controls button:hover,
+  .chart-selection-tools button:hover, .chart-layer-row button:hover:not(:disabled), .chart-freeform-toolbar button:hover:not(:disabled) { color: inherit; background: transparent; }
+  .chart-symbol-option:hover:not(.active), .chart-export-menu button:hover { border-color: var(--color-divider); color: #69778b; background: #fff; }
+}
+
+@media (any-pointer: coarse) {
+  .chart-icon-button, .chart-tool-button, .chart-zoom-controls button { width: 44px; height: 44px; min-width: 44px; min-height: 44px; }
+  .chart-selection-tools button, .chart-freeform-toolbar button { min-height: 44px; }
+  .chart-freeform-toolbar button { min-width: 44px; }
+  .chart-swatch-wrap, .chart-add-swatch { width: 44px; height: 44px; display: grid; place-items: center; }
+  .chart-swatch { width: 32px; height: 32px; }
+  .chart-palette { grid-template-columns: repeat(3, 44px); gap: 7px; }
+  .chart-layer-row { grid-template-columns: 18px minmax(0,1fr) 44px 44px 44px; }
+  .chart-layer-row > input:not([type="checkbox"]) { min-height: 36px; font-size: 13px; }
+  .chart-layer-row button { width: 44px; min-height: 44px; font-size: 13px; }
+}
+
+@media (any-pointer: coarse) and (max-width: 800px) {
+  .chart-palette { grid-template-columns: repeat(2, 44px); }
+}

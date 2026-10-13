@@ -40,6 +40,19 @@ export function normalizeCounterTimeLaps(value: unknown, history: CounterHistory
   return laps
 }
 
+export function counterTimeLapTiming(laps: readonly CounterTimeLap[], counterId: string, sessionId: string, recordedAt: number) {
+  let previous: CounterTimeLap | undefined
+  for (let index = laps.length - 1; index >= 0; index -= 1) {
+    const lap = laps[index]
+    if (lap.counterId === counterId && lap.sessionId === sessionId) {
+      previous = lap
+      break
+    }
+  }
+  const durationMs = previous ? Math.max(0, Math.floor(recordedAt) - previous.recordedAt) : 0
+  return { elapsedMs: (previous?.elapsedMs ?? 0) + durationMs, durationMs }
+}
+
 type LegacyCounter = {
   mode?: unknown
   value?: unknown
@@ -432,14 +445,19 @@ export function guidePositionForRow(guide: ProgressGuide, row: number) {
 
 export function progressGuideForCounter(guide: ProgressGuide, counter: CounterSnapshot, previousRow?: number): ProgressGuide {
   const row = counter.kind === 'simple' ? counter.value : counter.currentRow ?? 1
-  const position = guidePositionForRow(guide, row)
+  const rowDelta = previousRow === undefined ? undefined : row - previousRow
+  const advanceCalibratedGuide = (target: ProgressGuide) => {
+    if (rowDelta === undefined || target.chartRegion || target.rowSpacing === undefined || !target.rowSpacingDirection) return guidePositionForRow(target, row)
+    return Math.min(1, Math.max(0, target.position + rowDelta * target.rowSpacing * (target.rowSpacingDirection === 'down' ? 1 : -1)))
+  }
+  const position = advanceCalibratedGuide(guide)
   const rotationPositions = guide.rotationPositions ? { ...guide.rotationPositions } : undefined
   if (rotationPositions) {
     for (const key of Object.keys(rotationPositions) as ('0' | '90' | '180' | '270')[]) {
       const entry = rotationPositions[key]
       if (entry) {
         const oriented = { ...guide, ...entry }
-        const position = guidePositionForRow(oriented, row)
+        const position = advanceCalibratedGuide(oriented)
         rotationPositions[key] = { ...entry, position, ...(entry.rowSpacingStartRow === undefined ? {} : { rowSpacingStartRow: row - (guide.counterRowOffset ?? 0) }) }
       }
     }
