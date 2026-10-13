@@ -416,7 +416,6 @@ export default function Workspace() {
           <input ref={backupInput} type="file" accept=".doanbogo,application/zip" hidden onChange={(event) => void importWorkspace(event.currentTarget.files?.[0])} />
           <button className="primary-button" onClick={() => fileInput.current?.click()} disabled={loading}><FilePlus2 size={18} />{loading ? t('추가 중…') : t('PDF 추가')}</button>
           <button className="secondary-button" onClick={startPhotoFolder} disabled={loading}><Images size={18} />{t("사진 추가")}</button>
-          <button className="secondary-button" onClick={() => navigate('/charts/new')} disabled={loading}><Grid3X3 size={18} />{t("차트 만들기")}</button>
           <label className="sort-select"><SlidersHorizontal size={16} /><span className="sr-only">{t("정렬")}</span><select value={sort} onChange={(event) => void changeSort(event.target.value as SortMode)}>{Object.entries(sortLabels).map(([value, label]) => <option key={value} value={value}>{t(label)}</option>)}</select></label>
           <div className="view-toggle" aria-label={t("보기 방식")}><button className={view === 'cover' ? 'active' : ''} aria-label={t("표지 보기")} onClick={() => void changeView('cover')}><Grid2X2 size={17} /></button><button className={view === 'list' ? 'active' : ''} aria-label={t("목록 보기")} onClick={() => void changeView('list')}><List size={18} /></button></div>
         </div>

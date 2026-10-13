@@ -2,10 +2,9 @@ const messages = {
   ko: {
     pageTitle: '도안보고 | 뜨개 도안을 보며 이어서 뜨기',
     description: '도안보고에서 PDF 뜨개도안을 열고, 진행선과 단수 카운터로 지금 뜨는 위치를 기록하세요. 작업 내용은 내 브라우저에 저장됩니다.',
-    skip: '본문으로 건너뛰기', navFeatures: '기능', navHow: '사용 방법', navFaq: '자주 묻는 질문', languageLabel: '언어 선택', languageAuto: '기기 언어', menuOpen: '메뉴 열기', start: '지금 시작하기',
-    heroKicker: 'PDF 뜨개도안 작업 도구', heroTitle: '도안은 편하게,\n뜨개는 더 즐겁게.', heroBody: 'PDF 도안을 보며 지금 뜨는 단을 표시하세요. 진행선과 단수 카운터, 메모까지 한곳에 모아두고 다음에도 이어서 뜰 수 있어요.', startNow: '도안보고 시작하기', seeFeatures: '기능 살펴보기', trialNote: '계정 없이 브라우저에서 바로 시작할 수 있어요.', viewerAlt: '도안보고 PDF 뷰어에서 실제 뜨개 차트와 진행선, 페이지 도구를 확인하는 화면', screenCaption: '내 도안 위에서 현재 작업 위치를 확인합니다.', figureNote: '도안보고 PDF 뷰어 · 직접 만든 뜨개 차트로 촬영',
-    benefitPdfTitle: 'PDF 도안 보기', benefitPdfBody: '페이지를 넘기고 원하는 만큼 확대해요.', benefitProgressTitle: '진행선과 단수 카운터', benefitProgressBody: '지금 뜨는 위치와 단수를 기록해요.', benefitNotesTitle: '메모와 북마크', benefitNotesBody: '필요한 페이지와 중요한 부분에 표시해요.', benefitProjectsTitle: '프로젝트 기록', benefitProjectsBody: '작업 시간을 기록하고 다음에 이어가요.',
-    problemKicker: '뜨개 중간에 멈춰도, 다시 찾느라 헤매지 않게', problemTitle: '지금 뜨는 곳을\n기억에만 맡기지 마세요.', problemLead: '도안에 표시하고 단수를 세고 작업을 기록해, 다음 뜨개 시간에 바로 이어갑니다.', problemOneQ: '몇 단까지 떴는지 헷갈릴 때', problemOneA: '차트 위 진행선과 단수 카운터로 현재 위치를 표시하세요.', problemTwoQ: '여러 페이지 도안을 오갈 때', problemTwoA: '페이지와 확대를 조절하며 같은 파일 안에서 살펴보세요.', problemThreeQ: '다음에 작업을 이어갈 때', problemThreeA: '프로젝트에 남긴 작업 상태와 시간을 보고 이어서 시작하세요.',
+    skip: '본문으로 건너뛰기', navFeatures: '기능', navHow: '사용 방법', navFaq: '자주 묻는 질문', languageLabel: '언어 선택', languageAuto: '기기 언어', menuOpen: '메뉴 열기', menuClose: '메뉴 닫기', start: '지금 시작하기',
+    heroKicker: 'PDF 뜨개도안 작업 도구', heroTitle: '도안은 편하게,\n뜨개는 더 즐겁게.', heroBody: 'PDF 도안을 보며 지금 뜨는 단을 표시하세요. 진행선과 단수 카운터, 메모까지 한곳에 모아두고 다음에도 이어서 뜰 수 있어요.', startNow: '도안보고 시작하기', seeFeatures: '기능 살펴보기', trialNote: '계정 없이 브라우저에서 바로 시작할 수 있어요.', viewerAlt: '도안보고 PDF 뷰어에서 실제 뜨개 차트와 진행선, 페이지 도구를 확인하는 화면', figureNote: '도안보고 PDF 뷰어 · 직접 만든 뜨개 차트로 촬영',
+
     featureKicker: '작업에 필요한 것만, 도안 곁에', featureTitle: '종이 도안 보듯 자연스럽게,\n작업 기록은 빠짐없이.', featureLead: '익숙한 PDF 도안에 작업 위치와 기록을 더해, 실과 바늘에 집중할 수 있도록 돕습니다.', featureImageLabel: 'PDF 도안 · 1 / 3 페이지', progressLabel: '현재 작업 위치', featurePdfTitle: '원본 도안을 그대로 보고', featurePdfBody: '가지고 있는 PDF를 열어 페이지를 살펴보고 확대해요. 도안 파일 자체는 그대로 둡니다.', featureCounterTitle: '진행선과 단수를 기록하고', featureCounterBody: '차트에서 현재 뜨는 위치를 표시하고 단수를 세세요. 연결한 진행선은 카운터에 맞춰 움직입니다.', featureNotesTitle: '메모와 프로젝트를 남겨두세요', featureNotesBody: '중요한 페이지를 북마크하고 도안에 메모하세요. 작업 시간과 상태는 프로젝트 기록에서 볼 수 있습니다.', allProjects: '프로젝트 화면 열기',
     howKicker: '도안이 준비되어 있다면', howTitle: '세 가지 동작으로\n다음 단을 시작해요.', howLead: '도안을 불러오고, 현재 위치를 표시한 뒤, 다음에 이어서 뜰 수 있도록 저장하세요.', stepOneTitle: 'PDF 도안 불러오기', stepOneBody: '브라우저에서 가지고 있는 도안을 엽니다.', stepTwoTitle: '위치와 단수 표시하기', stepTwoBody: '진행선과 카운터로 작업 위치를 기록합니다.', stepThreeTitle: '기록하고 이어서 뜨기', stepThreeBody: '메모를 저장하고 다음에 같은 도안으로 돌아옵니다.', choosePattern: '도안 선택하기',
     recordKicker: '다시 도안을 펼치는 날에도', recordTitle: '마지막으로 뜬 곳부터\n차분히 이어가세요.', recordBody: '페이지 위 작업 표시와 프로젝트 기록을 남기면, 다음 뜨개 시간에 필요한 내용을 다시 확인할 수 있어요.', recordLocalNote: '작업 데이터는 이 브라우저에 저장됩니다.',
@@ -15,10 +14,9 @@ const messages = {
   en: {
     pageTitle: 'Doanbogo | Pick up your knitting where you left off',
     description: 'Open a knitting pattern PDF, mark your place with a progress line and row counter, and keep project notes in your browser.',
-    skip: 'Skip to content', navFeatures: 'Features', navHow: 'How it works', navFaq: 'FAQ', languageLabel: 'Choose language', languageAuto: 'Device language', menuOpen: 'Open menu', start: 'Open Doanbogo',
-    heroKicker: 'A workspace for knitting patterns', heroTitle: 'Stay with your pattern.\nPick up your knitting.', heroBody: 'Open a pattern PDF and mark the row you are working on. Keep your progress line, row counter, and notes nearby so it is easy to continue next time.', startNow: 'Open Doanbogo', seeFeatures: 'See how it works', trialNote: 'Start in your browser. No account needed.', viewerAlt: 'Actual Doanbogo PDF viewer showing a knitting chart, progress line, and page tools', screenCaption: 'See your place right on the pattern.', figureNote: 'Doanbogo PDF viewer · photographed with an original sample chart',
-    benefitPdfTitle: 'Read a PDF pattern', benefitPdfBody: 'Turn pages and zoom in when you need to.', benefitProgressTitle: 'Progress line and row counter', benefitProgressBody: 'Keep track of your place and row.', benefitNotesTitle: 'Notes and bookmarks', benefitNotesBody: 'Mark a page or a detail to find again.', benefitProjectsTitle: 'Project records', benefitProjectsBody: 'Log your work and pick it up later.',
-    problemKicker: 'When a knitting session has to stop', problemTitle: 'Keep your place\nout of your memory.', problemLead: 'Mark the pattern, count your rows, and leave a record for your next knitting session.', problemOneQ: 'Lost track of the row you are on?', problemOneA: 'Mark your place on the chart with a progress line and row counter.', problemTwoQ: 'Moving between pattern pages?', problemTwoA: 'Browse pages and adjust the zoom within the same file.', problemThreeQ: 'Coming back to a project later?', problemThreeA: 'Check its saved status and work time before you pick it up.',
+    skip: 'Skip to content', navFeatures: 'Features', navHow: 'How it works', navFaq: 'FAQ', languageLabel: 'Choose language', languageAuto: 'Device language', menuOpen: 'Open menu', menuClose: 'Close menu', start: 'Open Doanbogo',
+    heroKicker: 'A workspace for knitting patterns', heroTitle: 'Stay with your pattern.\nPick up your knitting.', heroBody: 'Open a pattern PDF and mark the row you are working on. Keep your progress line, row counter, and notes nearby so it is easy to continue next time.', startNow: 'Open Doanbogo', seeFeatures: 'See how it works', trialNote: 'Start in your browser. No account needed.', viewerAlt: 'Actual Doanbogo PDF viewer showing a knitting chart, progress line, and page tools', figureNote: 'Doanbogo PDF viewer · photographed with an original sample chart',
+
     featureKicker: 'A few useful tools, right beside your pattern', featureTitle: 'Read the pattern as it is.\nKeep the work in view.', featureLead: 'Add a place to pick up and a record of your work to the PDF you already use.', featureImageLabel: 'Pattern PDF · page 1 of 3', progressLabel: 'Current place', featurePdfTitle: 'Read the original pattern', featurePdfBody: 'Open the PDF you already have, browse its pages, and zoom in. Your pattern file stays as it is.', featureCounterTitle: 'Mark a row and count along', featureCounterBody: 'Set your place on the chart and count rows as you knit. A linked progress line moves with its counter.', featureNotesTitle: 'Leave a note for later', featureNotesBody: 'Bookmark a page or add a note to the pattern. Find your work time and project status in its record.', allProjects: 'Open projects',
     howKicker: 'Once you have a pattern ready', howTitle: 'Three small steps\nto the next row.', howLead: 'Open a pattern, mark your place, and save what you need to continue later.', stepOneTitle: 'Open a pattern PDF', stepOneBody: 'Choose a pattern from your device.', stepTwoTitle: 'Mark your place and row', stepTwoBody: 'Record your progress line and counter.', stepThreeTitle: 'Save and pick it up later', stepThreeBody: 'Keep a note and return to the same pattern.', choosePattern: 'Choose a pattern',
     recordKicker: 'The next time you open your pattern', recordTitle: 'Start again where\nyou left off.', recordBody: 'Keep a marker on the page and a record with your project, so you can see what you need for the next knitting session.', recordLocalNote: 'Your work is stored in this browser.',
@@ -28,10 +26,9 @@ const messages = {
   ja: {
     pageTitle: 'ドアンボゴ | 編み図を見ながら続きを編む',
     description: '編み図PDFを開き、進行線と段数カウンターで今編んでいる位置を記録。作業メモはブラウザーに保存できます。',
-    skip: '本文へ移動', navFeatures: '機能', navHow: '使い方', navFaq: 'よくある質問', languageLabel: '言語を選択', languageAuto: '端末の言語', menuOpen: 'メニューを開く', start: 'ドアンボゴを開く',
-    heroKicker: '編み図を見ながら作業するツール', heroTitle: '編み図は見やすく、\n編み物はもっと楽しく。', heroBody: 'PDFの編み図に、今編んでいる段を表示できます。進行線や段数カウンター、メモをまとめておけば、次回も続きを編みやすくなります。', startNow: 'ドアンボゴを開く', seeFeatures: '機能を見る', trialNote: 'アカウント登録なしでブラウザーから始められます。', viewerAlt: '編み図と進行線、ページ操作を表示したドアンボゴのPDFビューア画面', screenCaption: '編み図の上で、今編んでいる場所を確認。', figureNote: 'ドアンボゴ PDFビューア · オリジナルのサンプル編み図を使用',
-    benefitPdfTitle: 'PDFの編み図を見る', benefitPdfBody: 'ページをめくり、必要なだけ拡大。', benefitProgressTitle: '進行線と段数カウンター', benefitProgressBody: '今の位置と段数を記録。', benefitNotesTitle: 'メモとブックマーク', benefitNotesBody: 'ページや大切な部分に印を付ける。', benefitProjectsTitle: 'プロジェクトの記録', benefitProjectsBody: '作業時間を残して、続きを編む。',
-    problemKicker: '編み物を途中で中断するときも', problemTitle: '今編んでいる場所を\n記憶だけに頼らない。', problemLead: '編み図に印を付けて段数を数え、次回の作業に必要な記録を残します。', problemOneQ: '何段目か分からなくなったら', problemOneA: '進行線と段数カウンターで編み図に現在地を表示。', problemTwoQ: '複数ページの編み図を見るとき', problemTwoA: '同じファイルの中でページ移動と拡大ができます。', problemThreeQ: '次回、作業を再開するとき', problemThreeA: 'プロジェクトの作業状況と時間を確認して続きを始められます。',
+    skip: '本文へ移動', navFeatures: '機能', navHow: '使い方', navFaq: 'よくある質問', languageLabel: '言語を選択', languageAuto: '端末の言語', menuOpen: 'メニューを開く', menuClose: 'メニューを閉じる', start: 'ドアンボゴを開く',
+    heroKicker: '編み図を見ながら作業するツール', heroTitle: '編み図は見やすく、\n編み物はもっと楽しく。', heroBody: 'PDFの編み図に、今編んでいる段を表示できます。進行線や段数カウンター、メモをまとめておけば、次回も続きを編みやすくなります。', startNow: 'ドアンボゴを開く', seeFeatures: '機能を見る', trialNote: 'アカウント登録なしでブラウザーから始められます。', viewerAlt: '編み図と進行線、ページ操作を表示したドアンボゴのPDFビューア画面', figureNote: 'ドアンボゴ PDFビューア · オリジナルのサンプル編み図を使用',
+
     featureKicker: '編み図のそばに、作業に必要な道具を', featureTitle: '編み図はいつものまま。\n作業記録はひとまとめに。', featureLead: 'いつものPDF編み図に作業位置や記録を添えて、糸と針に集中できます。', featureImageLabel: '編み図PDF · 全3ページの1ページ目', progressLabel: '現在の作業位置', featurePdfTitle: '元の編み図をそのまま見る', featurePdfBody: '手元のPDFを開いてページをめくり、拡大して確認できます。編み図ファイル自体は変更しません。', featureCounterTitle: '進行線と段数を記録', featureCounterBody: '編み図に現在地を表示して段数を数えます。連動させた進行線はカウンターに合わせて動きます。', featureNotesTitle: 'メモを残してプロジェクトを管理', featureNotesBody: '大切なページをブックマークして編み図にメモを追加。作業時間や状況もプロジェクトで確認できます。', allProjects: 'プロジェクトを開く',
     howKicker: '編み図を用意したら', howTitle: '3つの手順で\n次の段へ。', howLead: '編み図を開いて現在地を記録し、次回も続きを編めるように保存します。', stepOneTitle: 'PDF編み図を開く', stepOneBody: '端末にある編み図を選びます。', stepTwoTitle: '位置と段数を記録', stepTwoBody: '進行線とカウンターで現在地を記録。', stepThreeTitle: '記録して続きを編む', stepThreeBody: 'メモを残して、次回同じ編み図へ戻ります。', choosePattern: '編み図を選ぶ',
     recordKicker: '編み図を開き直すときも', recordTitle: '最後に編んだところから\n落ち着いて再開。', recordBody: 'ページに位置を表示してプロジェクトに記録を残せば、次の編み物に必要なことを見返せます。', recordLocalNote: '作業データはこのブラウザーに保存されます。',
@@ -41,10 +38,9 @@ const messages = {
   de: {
     pageTitle: 'Doanbogo | Strickmuster öffnen und später weiterstricken',
     description: 'Öffne dein Strickmuster als PDF, markiere die aktuelle Reihe und notiere deinen Fortschritt im Browser.',
-    skip: 'Zum Inhalt springen', navFeatures: 'Funktionen', navHow: 'So funktioniert’s', navFaq: 'Häufige Fragen', languageLabel: 'Sprache wählen', languageAuto: 'Gerätesprache', menuOpen: 'Menü öffnen', start: 'Doanbogo öffnen',
-    heroKicker: 'Ein Arbeitsbereich für Strickmuster', heroTitle: 'Das Muster im Blick.\nReihe für Reihe weiter.', heroBody: 'Öffne ein PDF und markiere die Reihe, an der du gerade arbeitest. Fortschrittslinie, Reihenzähler und Notizen bleiben zusammen, damit du später leichter weiterstrickst.', startNow: 'Doanbogo öffnen', seeFeatures: 'Funktionen ansehen', trialNote: 'Direkt im Browser starten. Kein Konto nötig.', viewerAlt: 'Echte Doanbogo-PDF-Ansicht mit Strickdiagramm, Fortschrittslinie und Seitenwerkzeugen', screenCaption: 'Deine aktuelle Stelle direkt im Muster.', figureNote: 'Doanbogo PDF-Ansicht · mit einem eigenen Strickdiagramm fotografiert',
-    benefitPdfTitle: 'Strickmuster als PDF', benefitPdfBody: 'Seiten wechseln und passend vergrößern.', benefitProgressTitle: 'Linie und Reihenzähler', benefitProgressBody: 'Arbeitsstelle und Reihe festhalten.', benefitNotesTitle: 'Notizen und Lesezeichen', benefitNotesBody: 'Wichtige Seiten und Stellen markieren.', benefitProjectsTitle: 'Projektübersicht', benefitProjectsBody: 'Arbeitszeit notieren und später fortsetzen.',
-    problemKicker: 'Wenn eine Strickrunde unterbrochen wird', problemTitle: 'Behalte deine Stelle\nnicht nur im Kopf.', problemLead: 'Markiere das Muster, zähle die Reihen und halte fest, wo du weitermachen möchtest.', problemOneQ: 'Du weißt nicht mehr, welche Reihe dran ist?', problemOneA: 'Markiere deine Stelle im Diagramm mit Linie und Reihenzähler.', problemTwoQ: 'Du wechselst zwischen mehreren Seiten?', problemTwoA: 'Blättere und ändere den Zoom, ohne das PDF zu wechseln.', problemThreeQ: 'Du möchtest später am Projekt weiterarbeiten?', problemThreeA: 'Sieh den gespeicherten Arbeitsstand und die Arbeitszeit nach.',
+    skip: 'Zum Inhalt springen', navFeatures: 'Funktionen', navHow: 'So funktioniert’s', navFaq: 'Häufige Fragen', languageLabel: 'Sprache wählen', languageAuto: 'Gerätesprache', menuOpen: 'Menü öffnen', menuClose: 'Menü schließen', start: 'Doanbogo öffnen',
+    heroKicker: 'Ein Arbeitsbereich für Strickmuster', heroTitle: 'Das Muster im Blick.\nReihe für Reihe weiter.', heroBody: 'Öffne ein PDF und markiere die Reihe, an der du gerade arbeitest. Fortschrittslinie, Reihenzähler und Notizen bleiben zusammen, damit du später leichter weiterstrickst.', startNow: 'Doanbogo öffnen', seeFeatures: 'Funktionen ansehen', trialNote: 'Direkt im Browser starten. Kein Konto nötig.', viewerAlt: 'Echte Doanbogo-PDF-Ansicht mit Strickdiagramm, Fortschrittslinie und Seitenwerkzeugen', figureNote: 'Doanbogo PDF-Ansicht · mit einem eigenen Strickdiagramm fotografiert',
+
     featureKicker: 'Nützliche Werkzeuge direkt beim Muster', featureTitle: 'Das Muster bleibt vertraut.\nDeine Arbeit bleibt im Blick.', featureLead: 'Ergänze das PDF, das du schon nutzt, um deinen Arbeitsstand und deine Notizen.', featureImageLabel: 'Strickmuster-PDF · Seite 1 von 3', progressLabel: 'Aktuelle Stelle', featurePdfTitle: 'Das ursprüngliche Muster ansehen', featurePdfBody: 'Öffne dein PDF, blättere durch die Seiten und vergrößere die Ansicht. Die Musterdatei bleibt unverändert.', featureCounterTitle: 'Reihe markieren und mitzählen', featureCounterBody: 'Markiere deine Stelle im Diagramm und zähle die Reihen. Eine verknüpfte Fortschrittslinie bewegt sich mit dem Zähler.', featureNotesTitle: 'Notizen und Projekte festhalten', featureNotesBody: 'Setze Lesezeichen und notiere etwas direkt im Muster. Arbeitszeit und Status findest du in deinem Projekt.', allProjects: 'Projekte öffnen',
     howKicker: 'Wenn dein Muster bereitliegt', howTitle: 'Drei Schritte\nbis zur nächsten Reihe.', howLead: 'Öffne das Muster, markiere deine Stelle und speichere, was du später brauchst.', stepOneTitle: 'PDF-Muster öffnen', stepOneBody: 'Wähle ein Muster von deinem Gerät aus.', stepTwoTitle: 'Stelle und Reihe markieren', stepTwoBody: 'Halte Linie und Zähler fest.', stepThreeTitle: 'Speichern und weiterstricken', stepThreeBody: 'Notiere etwas und kehre zum Muster zurück.', choosePattern: 'Muster auswählen',
     recordKicker: 'Auch wenn du das Muster später wieder öffnest', recordTitle: 'Mach dort weiter,\nwo du aufgehört hast.', recordBody: 'Setze eine Markierung auf die Seite und speichere den Arbeitsstand im Projekt, damit du beim nächsten Mal gleich loslegen kannst.', recordLocalNote: 'Deine Arbeit wird in diesem Browser gespeichert.',
@@ -54,10 +50,9 @@ const messages = {
   da: {
     pageTitle: 'Doanbogo | Find tilbage til dit strikketøj',
     description: 'Åbn en strikkeopskrift som PDF, markér rækken, du er nået til, og gem dine arbejdsnoter i browseren.',
-    skip: 'Gå til indhold', navFeatures: 'Funktioner', navHow: 'Sådan virker det', navFaq: 'Ofte stillede spørgsmål', languageLabel: 'Vælg sprog', languageAuto: 'Enhedens sprog', menuOpen: 'Åbn menu', start: 'Åbn Doanbogo',
-    heroKicker: 'Et arbejdsrum til strikkeopskrifter', heroTitle: 'Hold styr på opskriften.\nStrik videre i dit tempo.', heroBody: 'Åbn en PDF-opskrift, og markér den række, du er i gang med. Saml fremgangslinje, rækketæller og noter, så det er nemmere at fortsætte næste gang.', startNow: 'Åbn Doanbogo', seeFeatures: 'Se funktionerne', trialNote: 'Start i browseren. Du behøver ingen konto.', viewerAlt: 'Doanbogos faktiske PDF-visning med strikkediagram, fremgangslinje og sideværktøjer', screenCaption: 'Se din placering direkte på opskriften.', figureNote: 'Doanbogo PDF-visning · fotograferet med et originalt strikkediagram',
-    benefitPdfTitle: 'Læs en PDF-opskrift', benefitPdfBody: 'Skift side, og zoom ind efter behov.', benefitProgressTitle: 'Fremgangslinje og rækketæller', benefitProgressBody: 'Hold styr på placering og række.', benefitNotesTitle: 'Noter og bogmærker', benefitNotesBody: 'Markér en side eller en vigtig detalje.', benefitProjectsTitle: 'Projektoversigt', benefitProjectsBody: 'Notér arbejdstid, og fortsæt senere.',
-    problemKicker: 'Når strikketiden bliver afbrudt', problemTitle: 'Lad ikke rækken\nblive i hukommelsen.', problemLead: 'Markér opskriften, tæl rækkerne, og gem det, du skal bruge næste gang.', problemOneQ: 'Kan du ikke huske, hvilken række du er på?', problemOneA: 'Markér din placering i diagrammet med en fremgangslinje og tæller.', problemTwoQ: 'Skifter du mellem flere opskriftssider?', problemTwoA: 'Gå mellem siderne, og justér zoom i den samme fil.', problemThreeQ: 'Skal du fortsætte med projektet senere?', problemThreeA: 'Se projektets gemte status og arbejdstid, før du går i gang igen.',
+    skip: 'Gå til indhold', navFeatures: 'Funktioner', navHow: 'Sådan virker det', navFaq: 'Ofte stillede spørgsmål', languageLabel: 'Vælg sprog', languageAuto: 'Enhedens sprog', menuOpen: 'Åbn menu', menuClose: 'Luk menu', start: 'Åbn Doanbogo',
+    heroKicker: 'Et arbejdsrum til strikkeopskrifter', heroTitle: 'Hold styr på opskriften.\nStrik videre i dit tempo.', heroBody: 'Åbn en PDF-opskrift, og markér den række, du er i gang med. Saml fremgangslinje, rækketæller og noter, så det er nemmere at fortsætte næste gang.', startNow: 'Åbn Doanbogo', seeFeatures: 'Se funktionerne', trialNote: 'Start i browseren. Du behøver ingen konto.', viewerAlt: 'Doanbogos faktiske PDF-visning med strikkediagram, fremgangslinje og sideværktøjer', figureNote: 'Doanbogo PDF-visning · fotograferet med et originalt strikkediagram',
+
     featureKicker: 'Nyttige værktøjer lige ved opskriften', featureTitle: 'Læs opskriften, som den er.\nBehold styr på arbejdet.', featureLead: 'Føj din placering og dine noter til den PDF, du allerede bruger.', featureImageLabel: 'PDF-opskrift · side 1 af 3', progressLabel: 'Nuværende placering', featurePdfTitle: 'Se den oprindelige opskrift', featurePdfBody: 'Åbn din PDF, gå mellem siderne, og zoom ind. Selve opskriftsfilen forbliver uændret.', featureCounterTitle: 'Markér rækken, og tæl med', featureCounterBody: 'Markér din placering i diagrammet, og tæl rækkerne. En tilknyttet fremgangslinje følger tælleren.', featureNotesTitle: 'Gem noter og projekter', featureNotesBody: 'Bogmærk en side, eller skriv en note på opskriften. Se arbejdstid og status i projektoversigten.', allProjects: 'Åbn projekter',
     howKicker: 'Når du har en opskrift klar', howTitle: 'Tre enkle trin\ntil næste række.', howLead: 'Åbn opskriften, markér din placering, og gem det, du skal bruge næste gang.', stepOneTitle: 'Åbn en PDF-opskrift', stepOneBody: 'Vælg en opskrift fra din enhed.', stepTwoTitle: 'Markér placering og række', stepTwoBody: 'Gem din linje og tæller.', stepThreeTitle: 'Gem og strik videre senere', stepThreeBody: 'Skriv en note, og vend tilbage til samme opskrift.', choosePattern: 'Vælg en opskrift',
     recordKicker: 'Næste gang du åbner opskriften', recordTitle: 'Begynd dér, hvor\ndu slap.', recordBody: 'Efterlad en markering på siden og en status i projektet, så du ved, hvor du skal begynde næste gang.', recordLocalNote: 'Arbejdsdata gemmes i denne browser.',
@@ -67,10 +62,9 @@ const messages = {
   nb: {
     pageTitle: 'Doanbogo | Finn tilbake til strikketøyet',
     description: 'Åpne en strikkeoppskrift som PDF, marker raden du holder på med, og lagre arbeidsnotatene i nettleseren.',
-    skip: 'Gå til innhold', navFeatures: 'Funksjoner', navHow: 'Slik fungerer det', navFaq: 'Vanlige spørsmål', languageLabel: 'Velg språk', languageAuto: 'Enhetens språk', menuOpen: 'Åpne meny', start: 'Åpne Doanbogo',
-    heroKicker: 'Et arbeidsrom for strikkeoppskrifter', heroTitle: 'Ha oppskriften nær.\nStrikk videre i ditt tempo.', heroBody: 'Åpne en PDF-oppskrift og marker raden du holder på med. Samle fremdriftslinje, radteller og notater, så er det enkelt å fortsette neste gang.', startNow: 'Åpne Doanbogo', seeFeatures: 'Se funksjonene', trialNote: 'Start i nettleseren. Du trenger ingen konto.', viewerAlt: 'Doanbogos faktiske PDF-visning med strikkediagram, fremdriftslinje og sideverktøy', screenCaption: 'Se hvor du er, rett på oppskriften.', figureNote: 'Doanbogo PDF-visning · fotografert med et eget strikkediagram',
-    benefitPdfTitle: 'Les PDF-oppskrifter', benefitPdfBody: 'Bytt side, og zoom inn ved behov.', benefitProgressTitle: 'Fremdriftslinje og radteller', benefitProgressBody: 'Hold oversikt over plassering og rad.', benefitNotesTitle: 'Notater og bokmerker', benefitNotesBody: 'Marker en side eller en viktig detalj.', benefitProjectsTitle: 'Prosjektoversikt', benefitProjectsBody: 'Noter arbeidstid, og fortsett senere.',
-    problemKicker: 'Når strikketiden blir avbrutt', problemTitle: 'Ikke la raden\nbli værende i minnet.', problemLead: 'Marker oppskriften, tell radene og lagre det du trenger til neste gang.', problemOneQ: 'Usikker på hvilken rad du er på?', problemOneA: 'Marker plasseringen i diagrammet med en fremdriftslinje og teller.', problemTwoQ: 'Bytter du mellom flere oppskriftssider?', problemTwoA: 'Gå mellom sidene og juster zoomen i den samme filen.', problemThreeQ: 'Skal du fortsette prosjektet senere?', problemThreeA: 'Se prosjektets lagrede status og arbeidstid før du fortsetter.',
+    skip: 'Gå til innhold', navFeatures: 'Funksjoner', navHow: 'Slik fungerer det', navFaq: 'Vanlige spørsmål', languageLabel: 'Velg språk', languageAuto: 'Enhetens språk', menuOpen: 'Åpne meny', menuClose: 'Lukk meny', start: 'Åpne Doanbogo',
+    heroKicker: 'Et arbeidsrom for strikkeoppskrifter', heroTitle: 'Ha oppskriften nær.\nStrikk videre i ditt tempo.', heroBody: 'Åpne en PDF-oppskrift og marker raden du holder på med. Samle fremdriftslinje, radteller og notater, så er det enkelt å fortsette neste gang.', startNow: 'Åpne Doanbogo', seeFeatures: 'Se funksjonene', trialNote: 'Start i nettleseren. Du trenger ingen konto.', viewerAlt: 'Doanbogos faktiske PDF-visning med strikkediagram, fremdriftslinje og sideverktøy', figureNote: 'Doanbogo PDF-visning · fotografert med et eget strikkediagram',
+
     featureKicker: 'Nyttige verktøy rett ved oppskriften', featureTitle: 'Les oppskriften som før.\nHold oversikt over arbeidet.', featureLead: 'Legg til arbeidssted og notater i PDF-en du allerede bruker.', featureImageLabel: 'PDF-oppskrift · side 1 av 3', progressLabel: 'Nåværende plassering', featurePdfTitle: 'Se originaloppskriften', featurePdfBody: 'Åpne PDF-en, bla mellom sidene og zoom inn. Selve oppskriftsfilen forblir uendret.', featureCounterTitle: 'Marker raden og tell videre', featureCounterBody: 'Marker plasseringen i diagrammet og tell radene. En tilkoblet fremdriftslinje følger telleren.', featureNotesTitle: 'Ta vare på notater og prosjekter', featureNotesBody: 'Bokmerk en side eller skriv et notat på oppskriften. Finn arbeidstid og status i prosjektoversikten.', allProjects: 'Åpne prosjekter',
     howKicker: 'Når oppskriften er klar', howTitle: 'Tre små trinn\ntil neste rad.', howLead: 'Åpne oppskriften, marker plasseringen og lagre det du trenger til neste gang.', stepOneTitle: 'Åpne en PDF-oppskrift', stepOneBody: 'Velg en oppskrift fra enheten din.', stepTwoTitle: 'Marker plassering og rad', stepTwoBody: 'Lagre fremdriftslinjen og telleren.', stepThreeTitle: 'Lagre og fortsett senere', stepThreeBody: 'Skriv et notat og gå tilbake til samme oppskrift.', choosePattern: 'Velg en oppskrift',
     recordKicker: 'Neste gang du åpner oppskriften', recordTitle: 'Begynn der du\nslapp sist.', recordBody: 'Legg igjen et merke på siden og en status i prosjektet, så vet du hvor du skal begynne neste gang.', recordLocalNote: 'Arbeidsdata lagres i denne nettleseren.',
@@ -80,10 +74,9 @@ const messages = {
   fi: {
     pageTitle: 'Doanbogo | Jatka neulomista siitä, mihin jäit',
     description: 'Avaa neuleohje PDF-tiedostona, merkitse nykyinen kerros ja tallenna työmuistiinpanot selaimeen.',
-    skip: 'Siirry sisältöön', navFeatures: 'Ominaisuudet', navHow: 'Käyttöohje', navFaq: 'Usein kysyttyä', languageLabel: 'Valitse kieli', languageAuto: 'Laitteen kieli', menuOpen: 'Avaa valikko', start: 'Avaa Doanbogo',
-    heroKicker: 'Työtila neuleohjeille', heroTitle: 'Pidä ohje käden ulottuvilla.\nJatka neulomista.', heroBody: 'Avaa PDF-neuleohje ja merkitse, millä kerroksella olet. Kun edistymisviiva, kerroslaskuri ja muistiinpanot ovat yhdessä paikassa, työ jatkuu helpommin seuraavalla kerralla.', startNow: 'Avaa Doanbogo', seeFeatures: 'Katso ominaisuudet', trialNote: 'Aloita selaimessa ilman käyttäjätiliä.', viewerAlt: 'Doanbogon PDF-näkymä, jossa näkyvät neulekaavio, edistymisviiva ja sivun työkalut', screenCaption: 'Näet työskentelykohdan suoraan ohjeessa.', figureNote: 'Doanbogo PDF-näkymä · kuvattu omalla neulekaaviolla',
-    benefitPdfTitle: 'Lue PDF-neuleohjetta', benefitPdfBody: 'Vaihda sivua ja suurenna näkymää.', benefitProgressTitle: 'Edistymisviiva ja kerroslaskuri', benefitProgressBody: 'Pidä paikka ja kerros tallessa.', benefitNotesTitle: 'Muistiinpanot ja kirjanmerkit', benefitNotesBody: 'Merkitse sivu tai tärkeä kohta.', benefitProjectsTitle: 'Projektitiedot', benefitProjectsBody: 'Kirjaa työaika ja jatka myöhemmin.',
-    problemKicker: 'Kun neulontahetkeen tulee tauko', problemTitle: 'Älä jätä kerrosta\nmuistin varaan.', problemLead: 'Merkitse ohjeeseen työkohtasi, laske kerrokset ja tallenna seuraavaa neulontahetkeä varten.', problemOneQ: 'Et muista, millä kerroksella olet?', problemOneA: 'Merkitse paikka kaavioon edistymisviivalla ja kerroslaskurilla.', problemTwoQ: 'Vaihdatko useiden ohjesivujen välillä?', problemTwoA: 'Selaa sivuja ja muuta suurennusta samassa tiedostossa.', problemThreeQ: 'Jatkatko projektia myöhemmin?', problemThreeA: 'Tarkista tallennettu tila ja työaika ennen jatkamista.',
+    skip: 'Siirry sisältöön', navFeatures: 'Ominaisuudet', navHow: 'Käyttöohje', navFaq: 'Usein kysyttyä', languageLabel: 'Valitse kieli', languageAuto: 'Laitteen kieli', menuOpen: 'Avaa valikko', menuClose: 'Sulje valikko', start: 'Avaa Doanbogo',
+    heroKicker: 'Työtila neuleohjeille', heroTitle: 'Pidä ohje käden ulottuvilla.\nJatka neulomista.', heroBody: 'Avaa PDF-neuleohje ja merkitse, millä kerroksella olet. Kun edistymisviiva, kerroslaskuri ja muistiinpanot ovat yhdessä paikassa, työ jatkuu helpommin seuraavalla kerralla.', startNow: 'Avaa Doanbogo', seeFeatures: 'Katso ominaisuudet', trialNote: 'Aloita selaimessa ilman käyttäjätiliä.', viewerAlt: 'Doanbogon PDF-näkymä, jossa näkyvät neulekaavio, edistymisviiva ja sivun työkalut', figureNote: 'Doanbogo PDF-näkymä · kuvattu omalla neulekaaviolla',
+
     featureKicker: 'Tarpeelliset työkalut aivan ohjeen vieressä', featureTitle: 'Lue tuttu ohje.\nPidä työsi tallessa.', featureLead: 'Lisää työkohtasi ja muistiinpanosi PDF-ohjeeseen, jota jo käytät.', featureImageLabel: 'PDF-neuleohje · sivu 1/3', progressLabel: 'Nykyinen työkohta', featurePdfTitle: 'Katso alkuperäistä ohjetta', featurePdfBody: 'Avaa PDF, selaa sivuja ja suurenna näkymää. Ohjetiedostoa ei muuteta.', featureCounterTitle: 'Merkitse kerros ja laske eteenpäin', featureCounterBody: 'Merkitse työkohtasi kaavioon ja laske kerrokset. Laskuriin yhdistetty edistymisviiva liikkuu laskurin mukana.', featureNotesTitle: 'Tallenna muistiinpanot ja projektit', featureNotesBody: 'Merkitse sivu kirjanmerkiksi tai lisää ohjeeseen muistiinpano. Projektista näet työajan ja tilan.', allProjects: 'Avaa projektit',
     howKicker: 'Kun neuleohje on valmiina', howTitle: 'Kolme helppoa askelta\nseuraavaan kerrokseen.', howLead: 'Avaa ohje, merkitse työkohta ja tallenna tarvittavat asiat seuraavaa kertaa varten.', stepOneTitle: 'Avaa PDF-neuleohje', stepOneBody: 'Valitse ohje omalta laitteeltasi.', stepTwoTitle: 'Merkitse paikka ja kerros', stepTwoBody: 'Tallenna edistymisviiva ja laskuri.', stepThreeTitle: 'Tallenna ja jatka myöhemmin', stepThreeBody: 'Kirjoita muistiinpano ja palaa samaan ohjeeseen.', choosePattern: 'Valitse neuleohje',
     recordKicker: 'Kun avaat neuleohjeen uudelleen', recordTitle: 'Jatka siitä,\nmihin viimeksi jäit.', recordBody: 'Jätä sivulle merkintä ja tallenna projektin tila, niin löydät seuraavalla kerralla oikean kohdan.', recordLocalNote: 'Työtiedot tallennetaan tähän selaimeen.',
@@ -125,7 +118,7 @@ function applyLanguage(preference) {
 
   for (const element of document.querySelectorAll('[data-i18n]')) {
     const message = dictionary[element.dataset.i18n]
-    if (typeof message === 'string') element.textContent = message
+    if (typeof message === 'string') element.textContent = message.replace(/\n/g, ' ')
   }
   for (const element of document.querySelectorAll('[data-i18n-alt]')) {
     const message = dictionary[element.dataset.i18nAlt]
@@ -136,6 +129,8 @@ function applyLanguage(preference) {
     if (typeof message === 'string') element.setAttribute('aria-label', message)
   }
   for (const select of document.querySelectorAll('.language-picker select')) select.value = preference
+  const toggle = document.querySelector('.menu-toggle')
+  toggle.setAttribute('aria-label', toggle.getAttribute('aria-expanded') === 'true' ? dictionary.menuClose : dictionary.menuOpen)
 }
 
 let preference = savedPreference()
@@ -150,21 +145,43 @@ document.querySelectorAll('.language-picker select').forEach((select) => {
 
 const menuButton = document.querySelector('.menu-toggle')
 const mobileMenu = document.getElementById('mobile-menu')
-function closeMenu(returnFocus = false) {
-  menuButton.setAttribute('aria-expanded', 'false')
-  mobileMenu.hidden = true
-  if (returnFocus) menuButton.focus()
-}
-menuButton.addEventListener('click', () => {
-  const opening = menuButton.getAttribute('aria-expanded') !== 'true'
+let menuCloseTimer
+const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)')
+const mobileLayout = window.matchMedia('(max-width: 960px)')
+function setMenu(opening, instant = false, returnFocus = false) {
+  clearTimeout(menuCloseTimer)
+  mobileMenu.toggleAttribute('data-instant', instant || reducedMotion.matches)
+  if (!opening && (returnFocus || mobileMenu.contains(document.activeElement))) {
+    if (mobileLayout.matches) menuButton.focus()
+    else document.querySelector('.brand').focus()
+  }
   menuButton.setAttribute('aria-expanded', String(opening))
-  mobileMenu.hidden = !opening
+  const locale = document.documentElement.lang
+  menuButton.setAttribute('aria-label', messages[locale][opening ? 'menuClose' : 'menuOpen'])
+  mobileMenu.inert = !opening
+  mobileMenu.setAttribute('aria-hidden', String(!opening))
+  if (opening) {
+    mobileMenu.hidden = false
+    // Establish the starting style once; CSS transitions then handle interruption.
+    mobileMenu.getBoundingClientRect()
+    mobileMenu.classList.add('is-open')
+  } else {
+    mobileMenu.classList.remove('is-open')
+    if (instant || reducedMotion.matches) mobileMenu.hidden = true
+    else menuCloseTimer = setTimeout(() => { mobileMenu.hidden = true }, 180)
+  }
+}
+menuButton.addEventListener('click', (event) => {
+  setMenu(menuButton.getAttribute('aria-expanded') !== 'true', event.detail === 0)
 })
 mobileMenu.addEventListener('click', (event) => {
-  if (event.target.closest('a')) closeMenu()
+  if (event.target.closest('a')) setMenu(false, event.detail === 0)
 })
 document.addEventListener('keydown', (event) => {
-  if (event.key === 'Escape' && menuButton.getAttribute('aria-expanded') === 'true') closeMenu(true)
+  if (event.key === 'Escape' && menuButton.getAttribute('aria-expanded') === 'true') setMenu(false, true, true)
+})
+mobileLayout.addEventListener('change', () => {
+  if (!mobileLayout.matches) setMenu(false, true, true)
 })
 document.getElementById('year').textContent = String(new Date().getFullYear())
 

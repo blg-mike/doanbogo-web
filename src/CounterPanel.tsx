@@ -1,5 +1,6 @@
 import { formatNumber, t, type LocaleKey } from './locales/index'
 import { useEffect, useLayoutEffect, useRef, useState, type FormEvent, type PointerEvent as ReactPointerEvent, type Ref } from 'react'
+import { createPortal } from 'react-dom'
 import { ArrowDownUp, Bell, Check, ChevronDown, ChevronRight, ChevronUp, Hash, Pin, PinOff, Plus, Repeat2, RotateCcw, Settings, Settings2, Trash2, Vibrate, Volume2, X } from 'lucide-react'
 import type { CounterKind, CounterSnapshot, CounterTaskKind, CounterTimerLinkMode, CounterUnit, ViewerSnapshot } from './types'
 import { MAX_COUNTER_ROW, MAX_COUNTERS_PER_TYPE, counterAlertState, createCounter, counterTaskProgress, findCounterRewindCheckpoint, maxCountersForType, nextPatternAlertRow, patternRowAfterCompletion, taskSchedule } from './smartCounter'
@@ -58,10 +59,11 @@ function advanceStandalone(counter: CounterSnapshot): CounterSnapshot {
   }
 }
 
-function CounterEditor({ counter, counters, isNew = false, onClose, onSave }: {
+function CounterEditor({ counter, counters, isNew = false, portal = true, onClose, onSave }: {
   counter: CounterSnapshot
   counters: CounterSnapshot[]
   isNew?: boolean
+  portal?: boolean
   onClose: () => void
   onSave: (updated: CounterSnapshot[], label: string) => void
 }) {
@@ -116,7 +118,7 @@ function CounterEditor({ counter, counters, isNew = false, onClose, onSave }: {
     set('instructions', [...(draft.instructions ?? []), { id: crypto.randomUUID(), row: 1, message: '' }])
   }
 
-  return <div className="modal-backdrop counter-modal-backdrop" role="presentation" onKeyDownCapture={(event) => { if (event.key === 'Escape') { event.preventDefault(); event.stopPropagation(); onClose() } }} onMouseDown={(event) => { if (event.target === event.currentTarget) onClose() }}>
+  const dialog = <div className="modal-backdrop counter-modal-backdrop counter-editor-backdrop" role="presentation" onKeyDownCapture={(event) => { if (event.key === 'Escape') { event.preventDefault(); event.stopPropagation(); onClose() } }} onMouseDown={(event) => { if (event.target === event.currentTarget) onClose() }}>
     <form className="modal-card counter-settings-modal counter-editor" role="dialog" aria-modal="true" aria-label={isNew ? t('보조 카운터 추가') : t(kindLabels[counter.kind]) + t(" 설정")} onSubmit={save}>
       <div className="modal-heading"><div><p className="eyebrow">{t('카운터 설정')}</p><h2>{isNew ? t('보조 카운터 추가') : t(kindLabels[counter.kind]) + t(" 설정")}</h2></div><button type="button" className="icon-button" aria-label={t("닫기")} onClick={onClose}><X size={20} /></button></div>
       <div className="counter-settings-body">
@@ -182,6 +184,7 @@ function CounterEditor({ counter, counters, isNew = false, onClose, onSave }: {
       </div>
     </form>
   </div>
+  return portal ? createPortal(dialog, document.body) : dialog
 }
 
 function sideForGoal(goalRow: number, finalSide: 'rs' | 'ws', row: number) {
@@ -302,7 +305,7 @@ function CounterSettings({ snapshot, counters, timerLinkMode, onClose, onSave, o
   }
 
   const activeEditor = workingCounters.find((counter) => counter.id === editingId)
-  return <div ref={dialogRef} className="modal-backdrop counter-modal-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) onClose() }}>
+  return createPortal(<div ref={dialogRef} className="modal-backdrop counter-modal-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) onClose() }}>
     <form className="modal-card counter-settings-modal counter-global-settings" role="dialog" aria-modal="true" aria-label={t("카운터 설정")} onSubmit={save}>
       <div className="modal-heading"><div><p className="eyebrow">{t('카운터 설정')}</p><h2>{t("카운터 설정")}</h2></div><button type="button" className="icon-button" aria-label={t("닫기")} onClick={onClose}><X size={20} /></button></div>
       <div className="counter-settings-body">
@@ -341,8 +344,8 @@ function CounterSettings({ snapshot, counters, timerLinkMode, onClose, onSave, o
         <div className="modal-actions"><button type="button" className="secondary-button" onClick={onClose}>{t("취소")}</button><button type="submit" className="primary-button"><Check size={16} />{t("저장")}</button></div>
       </div>
     </form>
-    {activeEditor && <div className="counter-editor-layer"><CounterEditor counter={activeEditor} counters={workingCounters} onClose={closeEditor} onSave={(next) => { setWorkingCounters(next); closeEditor() }} /></div>}
-  </div>
+    {activeEditor && <div className="counter-editor-layer"><CounterEditor counter={activeEditor} counters={workingCounters} portal={false} onClose={closeEditor} onSave={(next) => { setWorkingCounters(next); closeEditor() }} /></div>}
+  </div>, document.body)
 }
 
 export default function CounterPanel({
@@ -560,6 +563,6 @@ export default function CounterPanel({
     {settingsOpen && <CounterSettings snapshot={snapshot} counters={counters} timerLinkMode={timerLinkMode} onClose={() => setSettingsOpen(false)} onSave={onSettingsSave} onTimerLinkModeChange={onTimerLinkModeChange} dialogRef={settingsDialogRef} />}
     {newCounterDraft && <CounterEditor counter={newCounterDraft} counters={counters} isNew onClose={closeDirectEditor} onSave={(next) => { onChange(next, t(kindLabels[newCounterDraft.kind]) + ' ' + t('추가')); closeDirectEditor() }} />}
     {activeEditor && <CounterEditor counter={activeEditor} counters={counters} onClose={closeDirectEditor} onSave={(next, label) => { onChange(next, label); closeDirectEditor() }} />}
-    {rewindOpen && <div className="modal-backdrop counter-modal-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) setRewindOpen(false) }}><form className="modal-card counter-rewind-dialog" role="dialog" aria-modal="true" aria-label={t("단 되돌리기")} onSubmit={confirmRewind}><div className="modal-heading"><div><p className="eyebrow">{t('단 되돌리기')}</p><h2>{t("단 되돌리기")}</h2></div><button type="button" className="icon-button" aria-label={t("닫기")} onClick={() => setRewindOpen(false)}><X size={20} /></button></div><label className="counter-settings-field">{t("다시 뜰 단")}<select value={rewindRow} onChange={(event) => setRewindRow(event.currentTarget.value)}>{visibleRewindRows.map((row) => <option key={row} value={row}>{row}{t("단")}</option>)}</select></label><p>{t("선택한 단 시점의 ")}{activeBase?.name}{t("과 연동된 카운터·진행선을 복원합니다.")}</p><div className="modal-actions"><button type="button" className="secondary-button" onClick={() => setRewindOpen(false)}>{t("취소")}</button><button type="submit" className="primary-button" disabled={!rewindRow}>{t("적용")}</button></div></form></div>}
+    {rewindOpen && createPortal(<div className="modal-backdrop counter-modal-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) setRewindOpen(false) }}><form className="modal-card counter-rewind-dialog" role="dialog" aria-modal="true" aria-label={t("단 되돌리기")} onSubmit={confirmRewind}><div className="modal-heading"><div><p className="eyebrow">{t('단 되돌리기')}</p><h2>{t("단 되돌리기")}</h2></div><button type="button" className="icon-button" aria-label={t("닫기")} onClick={() => setRewindOpen(false)}><X size={20} /></button></div><label className="counter-settings-field">{t("다시 뜰 단")}<select value={rewindRow} onChange={(event) => setRewindRow(event.currentTarget.value)}>{visibleRewindRows.map((row) => <option key={row} value={row}>{row}{t("단")}</option>)}</select></label><p>{t("선택한 단 시점의 ")}{activeBase?.name}{t("과 연동된 카운터·진행선을 복원합니다.")}</p><div className="modal-actions"><button type="button" className="secondary-button" onClick={() => setRewindOpen(false)}>{t("취소")}</button><button type="submit" className="primary-button" disabled={!rewindRow}>{t("적용")}</button></div></form></div>, document.body)}
   </aside>
 }
