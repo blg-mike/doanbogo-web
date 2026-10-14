@@ -35,23 +35,23 @@ h1, h2, h3, p, figure { margin-top: 0; }
 h1, h2, h3 { color: var(--color-text); font-weight: 650; letter-spacing: -.035em; text-wrap: balance; overflow-wrap: anywhere; }
 p { overflow-wrap: anywhere; text-wrap: pretty; }
 [hidden] { display: none !important; }
-.icon-sprite { display: inline-block; width: 20px; height: 20px; flex: none; background-image: url("./assets/generated-icons.png"); background-repeat: no-repeat; background-size: 500% 400%; }
+.icon-sprite { display: inline-block; width: 25px; height: 20px; flex: none; background-image: url("./assets/generated-icons.png"); background-repeat: no-repeat; background-size: 400% 400%; }
 .icon--pdf { background-position: 0 0; }
-.icon--counter { background-position: 31.25% 0; }
-.icon--bookmark { background-position: 62.5% 0; }
-.icon--folder { background-position: 93.75% 0; }
+.icon--counter { background-position: 33.3333% 0; }
+.icon--bookmark { background-position: 66.6667% 0; }
+.icon--folder { background-position: 100% 0; }
 .icon--import { background-position: 0 33.3333%; }
-.icon--chart { background-position: 31.25% 33.3333%; }
-.icon--memo { background-position: 62.5% 33.3333%; }
-.icon--record { background-position: 93.75% 33.3333%; }
+.icon--chart { background-position: 33.3333% 33.3333%; }
+.icon--memo { background-position: 66.6667% 33.3333%; }
+.icon--record { background-position: 100% 33.3333%; }
 .icon--arrow { background-position: 0 66.6667%; }
-.icon--chevron { background-position: 31.25% 66.6667%; }
-.icon--menu { background-position: 62.5% 66.6667%; }
-.icon--close { background-position: 93.75% 66.6667%; }
+.icon--chevron { background-position: 33.3333% 66.6667%; }
+.icon--menu { background-position: 66.6667% 66.6667%; }
+.icon--close { background-position: 100% 66.6667%; }
 .icon--plus { background-position: 0 100%; }
-.icon--minus { background-position: 31.25% 100%; }
-.icon--external { background-position: 62.5% 100%; }
-.icon--stitch { background-position: 93.75% 100%; }
+.icon--minus { background-position: 33.3333% 100%; }
+.icon--external { background-position: 66.6667% 100%; }
+.icon--stitch { background-position: 100% 100%; }
 ::selection { color: var(--color-text); background: var(--color-primary-soft); }
 :focus-visible { outline: 3px solid var(--color-focus-ring); outline-offset: 4px; }
 .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
@@ -67,9 +67,9 @@ p { overflow-wrap: anywhere; text-wrap: pretty; }
 .header-actions { display: flex; min-width: 0; align-items: center; gap: 16px; }
 .language-picker { position: relative; display: inline-flex; min-width: 0; min-height: 44px; align-items: center; color: var(--color-text-secondary); }
 .language-picker select { width: 184px; max-width: 100%; height: 44px; padding: 0 28px 0 10px; appearance: none; border: 1px solid var(--color-border); border-radius: 6px; color: inherit; background: transparent; font-size: 16px; cursor: pointer; }
-.language-picker .icon-sprite { position: absolute; right: 10px; width: 16px; height: 16px; pointer-events: none; }
+.language-picker .icon-sprite { position: absolute; right: 10px; width: 20px; height: 16px; pointer-events: none; }
 .button { display: inline-flex; min-height: 48px; max-width: 100%; align-items: center; justify-content: center; gap: 12px; padding: 12px 20px; border: 1px solid transparent; border-radius: 6px; font-size: 16px; font-weight: 600; line-height: 1.45; overflow-wrap: anywhere; text-align: center; transition: transform 100ms var(--ease-out); }
-.button .icon-sprite { width: 20px; height: 20px; }
+.button .icon-sprite { width: 25px; height: 20px; }
 .button-primary { color: var(--color-surface); background: var(--color-primary); }
 .button-secondary { border-color: var(--color-border); color: var(--color-primary); background: transparent; }
 .button:active { transform: scale(.98); transition-duration: 140ms; }
@@ -86,7 +86,7 @@ p { overflow-wrap: anywhere; text-wrap: pretty; }
 .hero-description { max-width: 460px; margin-bottom: 28px; color: var(--color-text-secondary); font-size: 17px; line-height: 1.8; }
 .hero-actions { display: flex; flex-wrap: wrap; gap: 12px; }
 .hero-note { display: flex; align-items: start; gap: 8px; margin: 18px 0 0; color: var(--color-text-secondary); font-size: 14px; }
-.note-mark { width: 18px; height: 18px; margin-top: 3px; transform: rotate(90deg); }
+.note-mark { width: 22.5px; height: 18px; margin-top: 3px; transform: rotate(90deg); }
 .hero-figure { min-width: 0; margin: 0; }
 .product-frame { overflow: hidden; padding: 6px; border: 1px solid var(--color-border); border-radius: 8px; background: var(--color-surface); }
 .product-screen { width: 100%; height: auto; background: var(--color-surface); }
@@ -107,18 +107,18 @@ p { overflow-wrap: anywhere; text-wrap: pretty; }
 .feature-detail { display: grid; grid-template-columns: 36px minmax(0, 1fr); gap: 16px; padding-block: 24px; border-bottom: 1px solid var(--color-divider); }
 .feature-detail:first-child { padding-top: 0; }
 .detail-icon { display: grid; width: 36px; height: 36px; place-items: center; border-radius: 6px; background: var(--color-surface-subtle); }
-.detail-icon .icon-sprite { width: 24px; height: 24px; }
+.detail-icon .icon-sprite { width: 30px; height: 24px; }
 .feature-detail h3 { margin: 0 0 8px; font-size: 20px; line-height: 1.45; }
 .feature-detail p { margin: 0; color: var(--color-text-secondary); font-size: 16px; line-height: 1.8; }
 .text-link { display: inline-flex; min-height: 44px; max-width: 100%; align-items: center; gap: 10px; margin-top: 20px; color: var(--color-primary); font-size: 16px; font-weight: 600; }
-.text-link .icon-sprite { width: 20px; height: 20px; }
+.text-link .icon-sprite { width: 25px; height: 20px; }
 .how-section { padding-block: 80px; }
 .steps-list { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); padding: 0; margin: 0; list-style: none; border-block: 1px solid var(--color-border); }
 .step-item { display: grid; grid-template-columns: 28px 44px minmax(0, 1fr); align-items: start; gap: 12px; padding: 28px 20px; }
 .step-item + .step-item { border-left: 1px solid var(--color-divider); }
 .step-number { padding-top: 6px; color: var(--color-primary); font-size: 13px; font-weight: 700; font-variant-numeric: tabular-nums; }
 .step-icon { display: grid; width: 44px; height: 44px; place-items: center; border: 1px solid var(--color-border); border-radius: 6px; background: var(--color-surface); }
-.step-icon .icon-sprite { width: 24px; height: 24px; }
+.step-icon .icon-sprite { width: 30px; height: 24px; }
 .step-copy { min-width: 0; }
 .step-copy h3 { margin: 0 0 8px; font-size: 18px; line-height: 1.5; }
 .step-copy p { margin: 0; color: var(--color-text-secondary); font-size: 16px; }
@@ -126,7 +126,7 @@ p { overflow-wrap: anywhere; text-wrap: pretty; }
 .record-band { border-block: 1px solid var(--color-divider); background: var(--color-surface-subtle); }
 .record-inner { display: grid; grid-template-columns: 72px minmax(0, 1fr) minmax(0, .35fr); align-items: center; gap: 32px; padding-block: 56px; }
 .record-mark { display: grid; width: 72px; height: 72px; place-items: center; }
-.record-mark .icon-sprite { width: 56px; height: 56px; }
+.record-mark .icon-sprite { width: 70px; height: 56px; }
 .record-inner h2 { max-width: 650px; margin: 0; font-size: clamp(28px, 3vw, 36px); line-height: 1.35; }
 .record-description { max-width: 620px; margin: 18px 0 0; color: var(--color-text-secondary); font-size: 16px; line-height: 1.8; }
 .record-footnote { padding-left: 24px; border-left: 2px solid var(--color-border); }
@@ -137,12 +137,12 @@ p { overflow-wrap: anywhere; text-wrap: pretty; }
 .faq-item { border-bottom: 1px solid var(--color-divider); }
 .faq-item summary { position: relative; display: flex; min-height: 72px; align-items: center; padding: 20px 44px 20px 0; cursor: pointer; font-size: 17px; font-weight: 600; line-height: 1.55; overflow-wrap: anywhere; list-style: none; }
 .faq-item summary::-webkit-details-marker { display: none; }
-.faq-toggle-icon { position: absolute; top: 50%; right: 8px; width: 20px; height: 20px; transform: translateY(-50%); }
-.faq-item[open] .faq-toggle-icon { background-position: 31.25% 100%; }
+.faq-toggle-icon { position: absolute; top: 50%; right: 8px; width: 25px; height: 20px; transform: translateY(-50%); }
+.faq-item[open] .faq-toggle-icon { background-position: 33.3333% 100%; }
 .faq-item p { padding: 0 36px 24px 0; margin: 0; color: var(--color-text-secondary); font-size: 16px; line-height: 1.85; }
 .closing-cta { border-block: 1px solid var(--color-divider); background: var(--color-surface); text-align: center; }
 .closing-inner { display: flex; flex-direction: column; align-items: center; padding-block: 64px; }
-.closing-stitch { width: 28px; height: 28px; margin-bottom: 14px; }
+.closing-stitch { width: 35px; height: 28px; margin-bottom: 14px; }
 .closing-inner h2 { max-width: 700px; margin: 0; font-size: clamp(30px, 3.5vw, 44px); line-height: 1.3; }
 .closing-inner > p:not(.eyebrow) { margin: 16px 0 24px; color: var(--color-text-secondary); font-size: 16px; }
 .footer-inner { display: grid; grid-template-columns: 1.2fr .7fr 1fr; gap: 32px; padding-block: 40px; }
@@ -216,7 +216,7 @@ p { overflow-wrap: anywhere; text-wrap: pretty; }
   .step-copy { grid-column: auto; }
   .record-inner { grid-template-columns: minmax(0, 1fr); gap: 20px; padding-block: 40px; }
   .record-mark { width: 48px; height: 48px; }
-  .record-mark .icon-sprite { width: 40px; height: 40px; }
+  .record-mark .icon-sprite { width: 45px; height: 36px; }
   .record-inner h2 { font-size: 30px; }
   .record-footnote { grid-column: auto; padding-left: 16px; }
   .faq-section { grid-template-columns: minmax(0, 1fr); gap: 24px; }

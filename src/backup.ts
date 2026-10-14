@@ -1,9 +1,9 @@
 import { strFromU8, strToU8, unzipSync, zipSync } from 'fflate'
-import type { AnnotationRecord, ChartDocument, ColorworkGrid, CounterHistoryEntry, CounterTimeLap, DocumentRecord, DocumentWorkTimeDay, HomeProject, KnittingReport, PageRecord, PageWorkRecord, PhotoPageRecord, PreferenceRecord, RegionHighlight, ReportTimelinePhoto, ViewerSnapshot } from './types'
+import type { AnnotationRecord, ChartDocument, ColorworkGrid, CounterHistoryEntry, CounterTimeLap, DocumentRecord, DocumentWorkTimeDay, DocumentWorkTimeSession, HomeProject, KnittingReport, PageRecord, PageWorkRecord, PhotoPageRecord, PreferenceRecord, RegionHighlight, ReportTimelinePhoto, ViewerSnapshot } from './types'
 import { normalizePageWork, readWorkspaceData, type WorkspaceData } from './storage'
 import { normalizeVisiblePageRecord } from './pageManagement'
 import { createDefaultCounters, isCurrentCounterSnapshots, isLegacyCounterSnapshots, normalizeCounterSnapshots, normalizeCounterTimeLaps, MAX_COUNTER_HISTORY } from './smartCounter'
-import { isWorkDateKey, normalizeWorkTimeDays } from './workTime'
+import { isWorkDateKey, localWorkDateKey, normalizeWorkTimeDays } from './workTime'
 
 interface BackupDocument extends Omit<DocumentRecord, 'pdf' | 'cover'> {
   pdfPath: string | null
@@ -47,6 +47,24 @@ function isDocumentWorkTimeDays(value: unknown): value is DocumentWorkTimeDay[] 
     dates.add(day.date)
     return true
   })
+}
+
+function isDocumentWorkTimeSessions(value: unknown): value is DocumentWorkTimeSession[] {
+  if (!Array.isArray(value) || value.length > 100_000) return false
+  const ids = new Set<string>()
+  return value.every((session) => {
+    if (!isObject(session) || typeof session.id !== 'string' || !session.id || session.id.length > 100 || ids.has(session.id) ||
+      !isWorkDateKey(session.workDate) || !Number.isSafeInteger(session.startedAt) || !Number.isSafeInteger(session.endedAt) ||
+      (session.endedAt as number) <= (session.startedAt as number) || !Number.isSafeInteger(session.elapsedMs) ||
+      (session.elapsedMs as number) <= 0 || session.elapsedMs !== (session.endedAt as number) - (session.startedAt as number) ||
+      localWorkDateKey(new Date(session.startedAt as number)) !== session.workDate) return false
+    ids.add(session.id)
+    return true
+  })
+}
+
+function isDocumentWorkTimeNotes(value: unknown): value is Record<string, string> {
+  return isObject(value) && Object.keys(value).length <= 100_000 && Object.entries(value).every(([date, note]) => isWorkDateKey(date) && typeof note === 'string' && note.length <= 20_000)
 }
 
 function isThumbnailGroups(value: unknown, pageCount: number) {
@@ -267,7 +285,9 @@ function isKnittingReport(value: unknown, documentIds: Set<string>): value is Kn
   const yarns = value.yarns as unknown[]
   const accessories = value.accessories as unknown[]
   const measurements = value.measurements as unknown[]
-  return yarns.every((row) => isObject(row) && isReportPhoto(row.photo) && (row.usedMeters === undefined || typeof row.usedMeters === 'string') && (row.memo === undefined || typeof row.memo === 'string')) &&
+    return yarns.every((row) => isObject(row) && isReportPhoto(row.photo) && (row.usedMeters === undefined || typeof row.usedMeters === 'string') &&
+      (row.strandCount === undefined || typeof row.strandCount === 'string') && (row.needleSizeMm === undefined || typeof row.needleSizeMm === 'string') &&
+      (row.memo === undefined || typeof row.memo === 'string')) &&
     accessories.every((row) => isObject(row) && isReportPhoto(row.photo)) && measurements.every((row) => isObject(row) && (row.unit === undefined || row.unit === 'cm' || row.unit === 'inch'))
 }
 
@@ -372,7 +392,7 @@ export async function readWorkspaceBackup(file: File): Promise<WorkspaceData> {
   const ids = new Set<string>()
   const documents: DocumentRecord[] = manifest.documents.map((entry, index) => {
     if (!isObject(entry)) throw new Error('작업 파일에 올바르지 않은 도안 정보가 있습니다.')
-    const { id, fileName, size, pageCount, createdAt, lastOpenedAt, tags, pdfPath, coverPath, totalWorkTimeMs, todayWorkDate, todayWorkTimeMs, workTimeDays } = entry
+    const { id, fileName, size, pageCount, createdAt, lastOpenedAt, tags, pdfPath, coverPath, totalWorkTimeMs, todayWorkDate, todayWorkTimeMs, workTimeDays, workTimeSessions, workTimeNotes } = entry
     const photoFolder = (manifest.version as number) >= 13 && entry.kind === 'photos'
     if (typeof id !== 'string' || !id || ids.has(id) || typeof fileName !== 'string' || !fileName ||
       !Number.isSafeInteger(size) || (size as number) < 0 || !Number.isSafeInteger(pageCount) || (pageCount as number) < 1 ||
@@ -382,6 +402,8 @@ export async function readWorkspaceBackup(file: File): Promise<WorkspaceData> {
       (todayWorkDate !== undefined && !isWorkDateKey(todayWorkDate)) ||
       (todayWorkTimeMs !== undefined && (!Number.isSafeInteger(todayWorkTimeMs) || (todayWorkTimeMs as number) < 0)) ||
       (workTimeDays !== undefined && !isDocumentWorkTimeDays(workTimeDays)) ||
+      (workTimeSessions !== undefined && !isDocumentWorkTimeSessions(workTimeSessions)) ||
+      (workTimeNotes !== undefined && !isDocumentWorkTimeNotes(workTimeNotes)) ||
       (entry.kind !== undefined && entry.kind !== 'pdf' && entry.kind !== 'photos')) {
       throw new Error('작업 파일에 올바르지 않은 도안 정보가 있습니다.')
     }
@@ -420,6 +442,8 @@ export async function readWorkspaceBackup(file: File): Promise<WorkspaceData> {
       ...(typeof todayWorkDate === 'string' ? { todayWorkDate } : {}),
       ...(typeof todayWorkTimeMs === 'number' ? { todayWorkTimeMs } : {}),
       ...(normalizedWorkTimeDays.length ? { workTimeDays: normalizedWorkTimeDays } : {}),
+      workTimeSessions: Array.isArray(workTimeSessions) ? workTimeSessions as DocumentWorkTimeSession[] : [],
+      workTimeNotes: workTimeNotes && typeof workTimeNotes === 'object' ? workTimeNotes as Record<string, string> : {},
       pdf: pdfBlob,
       cover,
     }

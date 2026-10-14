@@ -1,7 +1,14 @@
 import { describe, expect, it } from 'vitest'
-import { anchoredScrollOffset, classifyWheelInput, clientPointForPagePosition, isEditableTarget, pagePositionAtClientPoint, pinchPreviewTranslation, scrollOffsetForZoomFocus, wheelActionForBurst, wheelZoom } from './viewerInteraction'
+import { anchoredScrollOffset, classifyWheelInput, clientPointForPagePosition, isEditableTarget, pagePositionAtClientPoint, pinchPreviewTranslation, regionHighlightPointerAction, scrollOffsetForZoomFocus, wheelActionForBurst, wheelZoom } from './viewerInteraction'
 
 describe('PDF viewer input helpers', () => {
+  it('moves an existing region only when the region highlight tool is active', () => {
+    expect(regionHighlightPointerAction('pan', true)).toBe('select')
+    expect(regionHighlightPointerAction('region-highlight', true)).toBe('move')
+    expect(regionHighlightPointerAction('region-highlight', false)).toBe('create')
+    expect(regionHighlightPointerAction('pen', true)).toBe('ignore')
+  })
+
   it('recognizes stepped mouse wheels while preserving trackpad scrolling', () => {
     expect(classifyWheelInput({ deltaX: 0, deltaY: -100, deltaMode: 0, ctrlKey: false })).toBe('zoom')
     expect(classifyWheelInput({ deltaX: 0, deltaY: 3, deltaMode: 1, ctrlKey: false })).toBe('zoom')
@@ -42,6 +49,55 @@ describe('PDF viewer input helpers', () => {
       const translation = pinchPreviewTranslation(300, 400, 400, 800, rotation, 1.8, 0.27, 0.64, 280, 450)
       const anchor = clientPointForPagePosition({ left: 299.5, top: 399.5, width: 1, height: 1 } as DOMRect, 400, 800, rotation, 1.8, 0.27, 0.64)
       expect({ x: anchor.x + translation.x, y: anchor.y + translation.y }).toEqual({ x: 280, y: 450 })
+    }
+  })
+
+  it('keeps the final pinch point under the same midpoint after the PDF raster changes size', () => {
+    const baseWidth = 400
+    const baseHeight = 800
+    const point = { x: 0.27, y: 0.64 }
+    const target = { x: 280, y: 450 }
+    const zoom = 1.8
+
+    for (const rotation of [0, 90, 180, 270]) {
+      const initialRect = {
+        left: 100,
+        top: 100,
+        width: rotation % 180 === 0 ? baseWidth : baseHeight,
+        height: rotation % 180 === 0 ? baseHeight : baseWidth,
+      } as DOMRect
+      const translation = pinchPreviewTranslation(
+        initialRect.left + initialRect.width / 2,
+        initialRect.top + initialRect.height / 2,
+        baseWidth,
+        baseHeight,
+        rotation,
+        zoom,
+        point.x,
+        point.y,
+        target.x,
+        target.y,
+      )
+      const previewPoint = clientPointForPagePosition(initialRect, baseWidth, baseHeight, rotation, zoom, point.x, point.y)
+      expect({ x: previewPoint.x + translation.x, y: previewPoint.y + translation.y }).toEqual(target)
+
+      const finalWidth = baseWidth * zoom
+      const finalHeight = baseHeight * zoom
+      const finalRect = {
+        left: 120,
+        top: 90,
+        width: rotation % 180 === 0 ? finalWidth : finalHeight,
+        height: rotation % 180 === 0 ? finalHeight : finalWidth,
+      } as DOMRect
+      const finalPoint = clientPointForPagePosition(finalRect, finalWidth, finalHeight, rotation, 1, point.x, point.y)
+      const oldScroll = { x: 500, y: 500 }
+      const nextScroll = {
+        x: scrollOffsetForZoomFocus(oldScroll.x, finalPoint.x, target.x, 5000, 1000),
+        y: scrollOffsetForZoomFocus(oldScroll.y, finalPoint.y, target.y, 5000, 1000),
+      }
+
+      expect(finalPoint.x - (nextScroll.x - oldScroll.x)).toBeCloseTo(target.x)
+      expect(finalPoint.y - (nextScroll.y - oldScroll.y)).toBeCloseTo(target.y)
     }
   })
 

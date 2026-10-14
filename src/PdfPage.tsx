@@ -14,7 +14,7 @@ import { textNoteBoxAt, textNoteCounterRotation, textNoteGestureExceededThreshol
 import type { PdfQrLink } from './qr'
 import { rotatedPageSize } from './pageGeometry'
 import { displayRectToPageRect, focusBandHeightRatio, focusDimOpacity, focusRowSpacing, guidePositionForRotation, pageRectToDisplayRect } from './focusGeometry'
-import { clientPointForPagePosition, classifyWheelInput, isEditableTarget, pagePositionAtClientPoint, pinchPreviewTranslation, scrollOffsetForZoomFocus, wheelActionForBurst, wheelZoom, type WheelInput, type ZoomFocus } from './viewerInteraction'
+import { clientPointForPagePosition, classifyWheelInput, isEditableTarget, pagePositionAtClientPoint, pinchPreviewTranslation, regionHighlightPointerAction, scrollOffsetForZoomFocus, wheelActionForBurst, wheelZoom, type WheelInput, type ZoomFocus } from './viewerInteraction'
 import { acquireThumbnailCache, getViewerResourcePolicy, pdfRasterScale, releaseCanvasWhenSettled, viewerCanvasMemory } from './pdfRenderResources'
 import { pdfPageRenderQueue } from './pdfPageRenderQueue'
 import type { LimitedAnnotationKind } from './annotationLimits'
@@ -518,11 +518,12 @@ export function PdfPage({ pdf, page, paneId, pane, splitView, rotation, active, 
   const selectedRegionIdRef = useRef<string | null>(null)
   const [regionPopoverOpen, setRegionPopoverOpen] = useState(false)
   const [regionPopoverPosition, setRegionPopoverPosition] = useState<RegionPopoverPosition | null>(null)
-  function updateSelectedRegionId(id: string | null) {
+  const updateSelectedNoteId = setSelectedNoteId
+  const updateSelectedRegionId = useCallback((id: string | null) => {
     selectedRegionIdRef.current = id
     setSelectedRegionId(id)
     setRegionPopoverPosition(null)
-  }
+  }, [])
   const renderKey = [page, pane.zoom, rotation, size.width, size.height].join(':')
   const colorworkGrid = work.colorworkGrid?.visible ? work.colorworkGrid : null
   const selectedRegion = regionHighlights.find((region) => region.id === selectedRegionId) ?? null
@@ -854,40 +855,29 @@ export function PdfPage({ pdf, page, paneId, pane, splitView, rotation, active, 
     if (canvas) onPageRendered(page, canvas)
   }, [readyKey, renderKey, page, onPageRendered])
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     const element = scrollRef.current
-    if (!element || readyKey !== renderKey) return
+    if (!element) return
+    const rasterReady = readyKey === renderKey
     const focus = zoomFocusRef.current
-    const frame = requestAnimationFrame(() => {
-      if (focus && applyZoomFocus(focus)) {
-        zoomFocusRef.current = null
-        recordCenter()
-      } else {
-        element.scrollLeft = Math.max(0, pane.centerX * element.scrollWidth - element.clientWidth / 2)
-        element.scrollTop = Math.max(0, pane.centerY * element.scrollHeight - element.clientHeight / 2)
+    if (focus) {
+      if (applyZoomFocus(focus)) {
+        if (rasterReady) {
+          zoomFocusRef.current = null
+          recordCenter()
+        }
+        return
       }
-    })
-    return () => cancelAnimationFrame(frame)
-  }, [readyKey, renderKey, page, pane.zoom, pane.centerX, pane.centerY, rotation, zoomPreviewScale, applyZoomFocus, recordCenter])
+      if (!rasterReady) return
+    }
+    if (!rasterReady && !canPreviewZoom) return
+    element.scrollLeft = Math.max(0, pane.centerX * element.scrollWidth - element.clientWidth / 2)
+    element.scrollTop = Math.max(0, pane.centerY * element.scrollHeight - element.clientHeight / 2)
+  }, [readyKey, renderKey, page, pane.zoom, pane.centerX, pane.centerY, rotation, zoomPreviewScale, canPreviewZoom, applyZoomFocus, recordCenter])
 
   useEffect(() => {
     centerRef.current = { x: pane.centerX, y: pane.centerY }
   }, [page, pane.zoom, pane.centerX, pane.centerY])
-
-  useEffect(() => {
-    if (!canPreviewZoom) return
-    const element = scrollRef.current
-    if (!element) return
-    const focus = zoomFocusRef.current
-    const frame = requestAnimationFrame(() => {
-      if (focus) applyZoomFocus(focus)
-      else {
-        element.scrollLeft = Math.max(0, pane.centerX * element.scrollWidth - element.clientWidth / 2)
-        element.scrollTop = Math.max(0, pane.centerY * element.scrollHeight - element.clientHeight / 2)
-      }
-    })
-    return () => cancelAnimationFrame(frame)
-  }, [zoomPreviewScale, canPreviewZoom, rotation, pane.centerX, pane.centerY, applyZoomFocus])
 
   useEffect(() => {
     if (editingNoteId !== null) textInputRef.current?.focus()
@@ -967,7 +957,7 @@ export function PdfPage({ pdf, page, paneId, pane, splitView, rotation, active, 
       document.removeEventListener('pointerdown', onPointerDown, true)
       document.removeEventListener('keydown', onKeyDown)
     }
-  }, [active, regionPopoverOpen, selectedRegionId])
+  }, [active, regionPopoverOpen, selectedRegionId, updateSelectedRegionId])
 
   useLayoutEffect(() => {
     setPendingStrokePreviews((current) => {
@@ -1007,10 +997,10 @@ export function PdfPage({ pdf, page, paneId, pane, splitView, rotation, active, 
     event.currentTarget.setPointerCapture(event.pointerId)
     const before = currentWorkRef.current
     regionDrawing.current = { pointerId: event.pointerId, start: boundedPagePoint(point), before }
-    setRegionPreview({ id: 'draft', ...regionFromPoints(point, point), color: annotationStyle.color, opacity: 0.3 })
+    setRegionPreview({ id: 'draft', ...regionFromPoints(point, point), color: annotationStyle.color, opacity: annotationStyle.opacity })
     updateSelectedRegionId(null)
     setRegionPopoverOpen(false)
-    setSelectedNoteId(null)
+    updateSelectedNoteId(null)
     setEditingNoteId(null)
   }
 
@@ -1032,13 +1022,16 @@ export function PdfPage({ pdf, page, paneId, pane, splitView, rotation, active, 
   }
 
   function handleRegionPointerDown(event: ReactPointerEvent<SVGElement>, region: RegionHighlight, kind: 'move' | RegionResizeHandle = 'move') {
-    event.stopPropagation()
-    if (tool !== 'pan') return
+    const action = regionHighlightPointerAction(tool, true)
+    if (action === 'ignore') return
+    updateSelectedNoteId(null)
+    setEditingNoteId(null)
     updateSelectedRegionId(region.id)
     setRegionPopoverOpen(true)
-    setSelectedNoteId(null)
-    setEditingNoteId(null)
-    beginRegionTransform(event, region, kind)
+    if (action === 'move' || kind !== 'move') {
+      event.stopPropagation()
+      beginRegionTransform(event, region, kind)
+    }
   }
 
   function moveRegionTransform(event: ReactPointerEvent<SVGSVGElement>) {
@@ -1096,7 +1089,7 @@ export function PdfPage({ pdf, page, paneId, pane, splitView, rotation, active, 
     const drawing = regionDrawing.current
     if (!drawing || drawing.pointerId !== event.pointerId) return
     const point = boundedPagePoint(pointFromEvent(event, event.currentTarget, rotation))
-    setRegionPreview({ id: 'draft', ...regionFromPoints(drawing.start, point), color: annotationStyle.color, opacity: 0.3 })
+    setRegionPreview({ id: 'draft', ...regionFromPoints(drawing.start, point), color: annotationStyle.color, opacity: annotationStyle.opacity })
   }
 
   function finishRegionHighlight(event: ReactPointerEvent<SVGSVGElement>, cancelled = false) {
@@ -1111,7 +1104,7 @@ export function PdfPage({ pdf, page, paneId, pane, splitView, rotation, active, 
     const visualWidth = (isQuarterTurn ? box.height : box.width) * (isQuarterTurn ? displayedSize.css.height : displayedSize.css.width)
     const visualHeight = (isQuarterTurn ? box.width : box.height) * (isQuarterTurn ? displayedSize.css.width : displayedSize.css.height)
     if (visualWidth < 8 || visualHeight < 8) return
-    const region: RegionHighlight = { id: crypto.randomUUID(), ...box, color: annotationStyle.color, opacity: 0.3 }
+    const region: RegionHighlight = { id: crypto.randomUUID(), ...box, color: annotationStyle.color, opacity: annotationStyle.opacity }
     const next = { ...drawing.before, regionHighlights: [...(drawing.before.regionHighlights ?? []), region] }
     if (onWorkChangeRef.current(next, true, true, drawing.before) === false) return
     currentWorkRef.current = next
@@ -1166,6 +1159,10 @@ export function PdfPage({ pdf, page, paneId, pane, splitView, rotation, active, 
     if (!(target instanceof Element) || !target.closest('.page-note')) {
       setSelectedNoteId(null)
       setEditingNoteId(null)
+    }
+    if (!(target instanceof Element) || !target.closest('.page-note, [data-region-highlight-id], [data-region-highlight-handle]')) {
+      updateSelectedNoteId(null)
+      updateSelectedRegionId(null)
     }
     if (tool !== 'pan' || (event.pointerType === 'mouse' && event.button !== 0)) return
     const area = scrollRef.current
@@ -1442,7 +1439,7 @@ export function PdfPage({ pdf, page, paneId, pane, splitView, rotation, active, 
     currentWorkRef.current = { ...before, annotations: [...before.annotations, note] }
     textEditBefore.current.set(id, before)
     setTextDraft({ id, value: '' })
-    setSelectedNoteId(id)
+    updateSelectedNoteId(id)
     setEditingNoteId(id)
     setTextPreviewPoint(null)
     onTextToolConsumed()
@@ -1718,7 +1715,7 @@ export function PdfPage({ pdf, page, paneId, pane, splitView, rotation, active, 
     textEditBefore.current.delete(id)
     setTextDraft((draft) => draft?.id === id ? null : draft)
     setEditingNoteId((active) => active === id ? null : active)
-    if (!annotation.text?.trim()) setSelectedNoteId((active) => active === id ? null : active)
+    if (!annotation.text?.trim()) updateSelectedNoteId(null)
   }
 
   function startTextEdit(id: string) {
@@ -1728,7 +1725,7 @@ export function PdfPage({ pdf, page, paneId, pane, splitView, rotation, active, 
     if (!annotation) return
     if (!textEditBefore.current.has(id)) textEditBefore.current.set(id, current)
     setTextDraft({ id, value: annotation.text ?? '' })
-    setSelectedNoteId(id)
+    updateSelectedNoteId(id)
     setEditingNoteId(id)
   }
 
@@ -1770,7 +1767,7 @@ export function PdfPage({ pdf, page, paneId, pane, splitView, rotation, active, 
     }
     textEditBefore.current.delete(id)
     setTextDraft((draft) => draft?.id === id ? null : draft)
-    setSelectedNoteId((active) => active === id ? null : active)
+    updateSelectedNoteId(null)
     setEditingNoteId((active) => active === id ? null : active)
   }
 
@@ -1792,7 +1789,7 @@ export function PdfPage({ pdf, page, paneId, pane, splitView, rotation, active, 
       original: initial?.original ?? box,
       before: currentWorkRef.current,
     }
-    setSelectedNoteId(annotation.id)
+    updateSelectedNoteId(annotation.id)
   }
 
   function moveTextTransform(event: ReactPointerEvent<HTMLDivElement>) {
@@ -1849,7 +1846,7 @@ export function PdfPage({ pdf, page, paneId, pane, splitView, rotation, active, 
   function handleTextNotePointerDown(event: ReactPointerEvent<HTMLDivElement>, annotation: AnnotationRecord) {
     event.stopPropagation()
     onActivate()
-    setSelectedNoteId(annotation.id)
+    updateSelectedNoteId(annotation.id)
     const target = event.target
     const editingTarget = target instanceof Element && Boolean(target.closest('textarea'))
     if (tool !== 'pan') {
@@ -1884,9 +1881,9 @@ export function PdfPage({ pdf, page, paneId, pane, splitView, rotation, active, 
     currentWorkRef.current = next
     onWorkChange(next, true, true, before)
     textEditBefore.current.delete(id)
-    setSelectedNoteId(null)
+    updateSelectedNoteId(null)
     setEditingNoteId(null)
-  }, [editingNoteId, onWorkChange])
+  }, [editingNoteId, onWorkChange, updateSelectedNoteId])
 
   useEffect(() => {
     if (selectedNoteId === null) return
@@ -1915,7 +1912,7 @@ export function PdfPage({ pdf, page, paneId, pane, splitView, rotation, active, 
     event.stopPropagation()
     const point = pointFromEvent(event, event.currentTarget, rotation)
     if (tool === 'region-highlight') {
-      beginRegionHighlight(event, point)
+      if (regionHighlightPointerAction(tool, false) === 'create') beginRegionHighlight(event, point)
       return
     }
     if (tool === 'text') {
@@ -1923,7 +1920,7 @@ export function PdfPage({ pdf, page, paneId, pane, splitView, rotation, active, 
       addText(point)
       return
     }
-    setSelectedNoteId(null)
+    updateSelectedNoteId(null)
     setEditingNoteId(null)
     setTextPreviewPoint(null)
     if (tool === 'eraser') {
@@ -2139,7 +2136,7 @@ export function PdfPage({ pdf, page, paneId, pane, splitView, rotation, active, 
                   fillOpacity={region.opacity}
                   stroke="none"
                   strokeWidth={0}
-                  style={{ mixBlendMode: 'multiply', pointerEvents: tool === 'pan' ? 'all' : 'none', touchAction: 'none', cursor: 'move' }}
+                  style={{ mixBlendMode: 'multiply', pointerEvents: tool === 'pan' || tool === 'region-highlight' ? 'all' : 'none', touchAction: 'none', cursor: tool === 'region-highlight' ? 'move' : 'pointer' }}
                   onPointerDown={(event) => handleRegionPointerDown(event, region)}
                   onKeyDown={(event) => {
                     if (tool !== 'pan' || (event.key !== 'Enter' && event.key !== ' ')) return
@@ -2414,6 +2411,7 @@ export function PdfPage({ pdf, page, paneId, pane, splitView, rotation, active, 
                 height={guidePageSize.height}
                 cssWidth={rotatedCssSize.width}
                 cssHeight={rotatedCssSize.height}
+                renderedZoom={displayedRaster?.zoom ?? pane.zoom}
                 work={work}
                 counters={counters}
                 rotation={rotation}

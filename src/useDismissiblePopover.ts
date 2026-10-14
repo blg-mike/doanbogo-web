@@ -1,6 +1,7 @@
 import { useEffect, useRef } from 'react'
 
-type ElementRef = { readonly current: HTMLElement | null }
+type PopoverElement = Element & { focus?: () => void }
+type ElementRef = { readonly current: PopoverElement | null }
 
 export function useDismissiblePopover(open: boolean, panelRef: ElementRef, triggerRef: ElementRef, onClose: () => void) {
   const onCloseRef = useRef(onClose)
@@ -20,7 +21,7 @@ export function useDismissiblePopover(open: boolean, panelRef: ElementRef, trigg
       if (event.key !== 'Escape') return
       event.preventDefault()
       onCloseRef.current()
-      triggerRef.current?.focus()
+      triggerRef.current?.focus?.()
     }
     document.addEventListener('pointerdown', onPointerDown, true)
     document.addEventListener('keydown', onKeyDown)

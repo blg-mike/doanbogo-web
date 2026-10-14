@@ -1,3 +1,5 @@
+import type { AnnotationTool } from './types'
+
 export type WheelInput = {
   deltaX: number
   deltaY: number
@@ -6,6 +8,15 @@ export type WheelInput = {
 }
 
 export type ZoomFocus = { x: number; y: number; clientX: number; clientY: number; zoom: number }
+
+export function regionHighlightPointerAction(tool: AnnotationTool, hitsRegion: boolean) {
+  if (hitsRegion) {
+    if (tool === 'region-highlight') return 'move' as const
+    if (tool === 'pan') return 'select' as const
+    return 'ignore' as const
+  }
+  return tool === 'region-highlight' ? 'create' as const : 'ignore' as const
+}
 
 function clamp(value: number, minimum: number, maximum: number) {
   return Math.min(maximum, Math.max(minimum, value))

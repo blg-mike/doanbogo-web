@@ -28,7 +28,7 @@ import { guidePositionForRotation } from './focusGeometry'
 import { compactPageThumbnails, completePageList, createThumbnailGroupId, movePagesToThumbnailGroup, moveThumbnailRailItem, normalizeThumbnailRailOrder, reconcileThumbnailRailOrder, removePagesFromThumbnailGroups, reorderThumbnailGroups, thumbnailPagesForDrag, thumbnailRailOrderKey, visiblePageRange, type PageThumbnailItem } from './pageManagement'
 import { createDefaultPrimaryProgressGuide, migrateProgressGuides, prepareProgressGuidesForDirectInteraction, progressGuideCandidates } from './progressLines'
 import { ColorPresetButtons } from './ColorPresetButtons'
-import { ANNOTATION_COLOR_PRESETS, DESIGN_SYSTEM_COLORS, FUNCTIONAL_COLOR_PRESETS } from './designTokens'
+import { ANNOTATION_COLOR_PRESETS, DESIGN_SYSTEM_COLORS } from './designTokens'
 import { addedLimitedAnnotations, applyLimitedAnnotationAdditions, exceededAnnotationLimit, isAnnotationLimitReached, PAGE_ANNOTATION_LIMITS, type LimitedAnnotationKind } from './annotationLimits'
 import { useDismissiblePopover } from './useDismissiblePopover'
 import { getRequiredPageWorkPages, loadPageWorkWithTimeout, PageWorkLoadTimeoutError } from './pageWorkLoading'
@@ -84,18 +84,17 @@ type ThumbnailReorderGesture = {
 type CounterGuideAction = { kind: 'advance' | 'correct'; pageNumber: number; guideId: string }
 type CounterTimeLapAction = Omit<CounterTimeLap, 'historyEntryId'>
 type TimerBarDrag = { pointerId: number; offsetX: number; offsetY: number }
-
 function createCounterSession(documentId: string) { return { documentId, visible: false } }
 
 const defaultProgressSettings: ProgressSettings = {
-  horizontal: { visible: true, color: DESIGN_SYSTEM_COLORS.progress, thickness: 4, opacity: 0.8 },
+  horizontal: { visible: true, color: ANNOTATION_COLOR_PRESETS[0].color, thickness: 4, opacity: 0.8 },
   vertical: { visible: true, color: DESIGN_SYSTEM_COLORS.secondary, thickness: 1, opacity: 1 },
 }
 
 const defaultAnnotationSettings: AnnotationSettings = {
   pen: { color: ANNOTATION_COLOR_PRESETS[9].color, thickness: 2, opacity: 1, fontSize: 16 },
-  line: { color: FUNCTIONAL_COLOR_PRESETS[0].color, thickness: 2, opacity: 1, fontSize: 16 },
-  highlight: { color: ANNOTATION_COLOR_PRESETS[2].color, thickness: 16, opacity: 0.3, fontSize: 16 },
+  line: { color: ANNOTATION_COLOR_PRESETS[9].color, thickness: 2, opacity: 1, fontSize: 16 },
+  highlight: { color: ANNOTATION_COLOR_PRESETS[3].color, thickness: 16, opacity: 0.3, fontSize: 16 },
   text: { color: ANNOTATION_COLOR_PRESETS[9].color, thickness: 2, opacity: 1, fontSize: 18 },
 }
 const annotationToolLabelKeys: Record<LimitedAnnotationKind, '펜' | '형광펜' | '텍스트' | '구간 강조'> = {
@@ -953,7 +952,6 @@ export default function Viewer() {
   const secondaryPage = snapshot?.secondary.page
   const isSplit = snapshot?.split
   const activePaneId = snapshot?.activePane
-
   useEffect(() => {
     if (!miniBarOpen) return
     const closeOnEscape = (event: KeyboardEvent) => {
@@ -1150,7 +1148,9 @@ export default function Viewer() {
 
   function mutateSnapshot(change: (current: ViewerSnapshot) => ViewerSnapshot, immediate = false) {
     const current = snapshotRef.current
-    if (current) pushSnapshot(change(current), immediate)
+    if (!current) return
+    const next = change(current)
+    pushSnapshot(next, immediate)
   }
 
   async function saveDocumentName(event: ReactFormEvent<HTMLFormElement>) {
@@ -2165,15 +2165,26 @@ export default function Viewer() {
     const bar = event.currentTarget.closest<HTMLElement>('.viewer-timer-bar')
     if (!drag || drag.pointerId !== event.pointerId || !shell || !bar) return
     const shellRect = shell.getBoundingClientRect()
-    setTimerBarState({
-      documentId: id,
-      left: clamp(event.clientX - shellRect.left - drag.offsetX, 0, Math.max(0, shellRect.width - bar.offsetWidth)),
-      top: clamp(event.clientY - shellRect.top - drag.offsetY, 0, Math.max(0, shellRect.height - bar.offsetHeight)),
-    })
+    const left = clamp(event.clientX - shellRect.left - drag.offsetX, 0, Math.max(0, shellRect.width - bar.offsetWidth))
+    const top = clamp(event.clientY - shellRect.top - drag.offsetY, 0, Math.max(0, shellRect.height - bar.offsetHeight))
+    bar.style.left = left + 'px'
+    bar.style.top = top + 'px'
+    bar.style.right = 'auto'
   }
 
   function finishTimerBarDrag(event: ReactPointerEvent<HTMLButtonElement>) {
-    if (timerBarDragRef.current?.pointerId === event.pointerId) timerBarDragRef.current = null
+    if (timerBarDragRef.current?.pointerId !== event.pointerId) return
+    const shell = viewerShellRef.current
+    const bar = event.currentTarget.closest<HTMLElement>('.viewer-timer-bar')
+    if (shell && bar) {
+      const shellRect = shell.getBoundingClientRect()
+      setTimerBarState({
+        documentId: id,
+        left: clamp(Number.parseFloat(bar.style.left) || 0, 0, Math.max(0, shellRect.width - bar.offsetWidth)),
+        top: clamp(Number.parseFloat(bar.style.top) || 0, 0, Math.max(0, shellRect.height - bar.offsetHeight)),
+      })
+    }
+    timerBarDragRef.current = null
   }
 
   useEffect(() => {
@@ -2231,6 +2242,10 @@ export default function Viewer() {
     }, true)
   }
 
+  function selectViewerTool(nextTool: AnnotationTool) {
+    setTool(nextTool)
+  }
+
   function applyColorworkSettings(settings: ColorworkSettings) {
     if (!snapshot || colorworkRequest) return false
     const paneId = snapshot.activePane
@@ -2244,7 +2259,7 @@ export default function Viewer() {
     } else {
       setColorworkRequest({ id: crypto.randomUUID(), paneId, pageNumber, settings })
     }
-    setTool('pan')
+    selectViewerTool('pan')
     return true
   }
 
@@ -2286,10 +2301,10 @@ export default function Viewer() {
       colorworkBrushOpacity={colorworkBrushOpacity}
       colorworkEraser={colorworkEraser}
       onActivate={() => {
+        if (miniBarSettingsOpen) setMiniBarSettingsOpen(false)
         if (closeMiniBarOnPdfActionRef.current) {
           closeMiniBarOnPdfActionRef.current = false
           setMiniBarState((current) => current.documentId === id ? { ...current, open: false } : current)
-          setMiniBarSettingsOpen(false)
         }
         if (!active) mutateSnapshot((current) => ({ ...current, activePane: paneId }))
       }}
@@ -2849,13 +2864,13 @@ export default function Viewer() {
         <section className="viewer-controlbar" role="toolbar" aria-orientation="vertical" aria-label={t('뷰어 도구')}>
           <div className="viewer-controlbar-main">
             <div className="viewer-tools" role="group" aria-label={t('필기 도구')}>
-              <button type="button" className={'viewer-tool tool-toggle ' + (tool === 'pan' ? 'active' : '')} aria-label={t('이동 도구')} title={t('이동')} aria-pressed={tool === 'pan'} onClick={() => { closeMiniBarOnPdfActionRef.current = true; setTool('pan') }}><MousePointer2 size={17} /><span>{t('이동')}</span></button>
-              <button type="button" className={'viewer-tool tool-toggle ' + (tool === 'pen' ? 'active' : '')} aria-label={t('펜')} title={t('펜')} aria-pressed={tool === 'pen'} onClick={() => { closeMiniBarOnPdfActionRef.current = false; setTool('pen'); setMiniBarSettingsOpen(true) }}><Pencil size={17} /><span>{t('펜')}</span></button>
-              <button type="button" className={'viewer-tool tool-toggle ' + (tool === 'line' ? 'active' : '')} aria-label={t('직선')} title={t('직선')} aria-pressed={tool === 'line'} onClick={() => { closeMiniBarOnPdfActionRef.current = false; setTool('line') }}><Minus size={17} /><span>{t('직선')}</span></button>
-              <button type="button" className={'viewer-tool tool-toggle ' + (tool === 'highlight' ? 'active' : '')} aria-label={t('형광펜')} title={t('형광펜')} aria-pressed={tool === 'highlight'} onClick={() => { closeMiniBarOnPdfActionRef.current = false; setTool('highlight'); setMiniBarSettingsOpen(true) }}><Highlighter size={17} /><span>{t('형광펜')}</span></button>
-              <button type="button" className={'viewer-tool tool-toggle ' + (tool === 'eraser' ? 'active' : '')} aria-label={t('지우개')} title={t('지우개')} aria-pressed={tool === 'eraser'} onClick={() => { closeMiniBarOnPdfActionRef.current = false; setTool('eraser') }}><Eraser size={17} /><span>{t('지우개')}</span></button>
-              <button type="button" className={'viewer-tool tool-toggle ' + (tool === 'text' ? 'active' : '')} aria-label={t('텍스트')} title={t('텍스트')} aria-pressed={tool === 'text'} onClick={() => { closeMiniBarOnPdfActionRef.current = false; setTool('text') }}><Type size={17} /><span>{t('텍스트')}</span></button>
-              <button type="button" className={'viewer-tool tool-toggle region-highlight-tool ' + (tool === 'region-highlight' ? 'active' : '')} aria-label={t('구간 강조')} title={t('구간 강조')} aria-pressed={tool === 'region-highlight'} onClick={() => { closeMiniBarOnPdfActionRef.current = false; setMiniBarSettingsOpen(false); setTool('region-highlight') }}><Square size={17} /><span>{t('구간 강조')}</span></button>
+              <button type="button" className={'viewer-tool tool-toggle ' + (tool === 'pan' ? 'active' : '')} aria-label={t('이동 도구')} title={t('이동')} aria-pressed={tool === 'pan'} onClick={() => { closeMiniBarOnPdfActionRef.current = true; selectViewerTool('pan') }}><MousePointer2 size={17} /><span>{t('이동')}</span></button>
+              <button type="button" className={'viewer-tool tool-toggle ' + (tool === 'pen' ? 'active' : '')} aria-label={t('펜')} title={t('펜')} aria-pressed={tool === 'pen'} onClick={() => { closeMiniBarOnPdfActionRef.current = false; selectViewerTool('pen'); setMiniBarSettingsOpen(true) }}><Pencil size={17} /><span>{t('펜')}</span></button>
+              <button type="button" className={'viewer-tool tool-toggle ' + (tool === 'line' ? 'active' : '')} aria-label={t('직선')} title={t('직선')} aria-pressed={tool === 'line'} onClick={() => { closeMiniBarOnPdfActionRef.current = false; selectViewerTool('line') }}><Minus size={17} /><span>{t('직선')}</span></button>
+              <button type="button" className={'viewer-tool tool-toggle ' + (tool === 'highlight' ? 'active' : '')} aria-label={t('형광펜')} title={t('형광펜')} aria-pressed={tool === 'highlight'} onClick={() => { closeMiniBarOnPdfActionRef.current = false; selectViewerTool('highlight'); setMiniBarSettingsOpen(true) }}><Highlighter size={17} /><span>{t('형광펜')}</span></button>
+              <button type="button" className={'viewer-tool tool-toggle ' + (tool === 'eraser' ? 'active' : '')} aria-label={t('지우개')} title={t('지우개')} aria-pressed={tool === 'eraser'} onClick={() => { closeMiniBarOnPdfActionRef.current = false; selectViewerTool('eraser') }}><Eraser size={17} /><span>{t('지우개')}</span></button>
+              <button type="button" className={'viewer-tool tool-toggle ' + (tool === 'text' ? 'active' : '')} aria-label={t('텍스트')} title={t('텍스트')} aria-pressed={tool === 'text'} onClick={() => { closeMiniBarOnPdfActionRef.current = false; selectViewerTool('text') }}><Type size={17} /><span>{t('텍스트')}</span></button>
+              <button type="button" className={'viewer-tool tool-toggle region-highlight-tool ' + (tool === 'region-highlight' ? 'active' : '')} aria-label={t('구간 강조')} title={t('구간 강조')} aria-pressed={tool === 'region-highlight'} onClick={() => { closeMiniBarOnPdfActionRef.current = false; setMiniBarSettingsOpen(false); selectViewerTool('region-highlight') }}><Square size={17} /><span>{t('구간 강조')}</span></button>
               <button type="button" className="viewer-tool chart-tool" aria-label={t('컬러워크 설정')} title={t('차트 크기와 뜨개 게이지 설정')} disabled={!pageWorks[activePage] || Boolean(colorworkRequest)} onClick={() => setColorworkDialog(true)}><Grid3X3 size={17} /><span>{t('컬러워크')}</span>{activeColorworkGrid && <small>{activeColorworkGrid.columns}×{activeColorworkGrid.rows}</small>}</button>
               {activeColorworkGrid && <>
                 <button type="button" className="viewer-tool compact-tool" aria-label={activeColorworkGrid.visible ? t('컬러워크 숨기기') : t('컬러워크 보이기')} title={activeColorworkGrid.visible ? t('컬러워크 숨기기') : t('컬러워크 보이기')} aria-pressed={activeColorworkGrid.visible} onClick={toggleColorworkVisibility}>{activeColorworkGrid.visible ? <Eye size={16} /> : <EyeOff size={16} />}</button>
@@ -2871,9 +2886,9 @@ export default function Viewer() {
         </section>
           </div>
           {miniBarSettingsOpen && <div className="viewer-mini-settings-panel" ref={miniBarSettingsPanelRef} role="group" aria-label={t('도구 설정')}>
-            {activeAnnotationStyle && <section className="viewer-mini-settings-section">
+            {activeAnnotationStyle && <section className="viewer-mini-settings-section annotation-style-section">
               <strong>{t('필기 스타일')}</strong>
-              <ColorPresetButtons label={t('필기 색상')} className="annotation-color-presets" presets={tool === 'line' ? FUNCTIONAL_COLOR_PRESETS : ANNOTATION_COLOR_PRESETS} includeCurrentColor={tool === 'line'} value={activeAnnotationStyle.color} onChange={(color) => changeAnnotationStyle(tool as 'pen' | 'line' | 'highlight' | 'text', { color })} />
+              <ColorPresetButtons label={t('필기 색상')} className="annotation-color-presets" presets={ANNOTATION_COLOR_PRESETS} includeCurrentColor={false} value={activeAnnotationStyle.color} onChange={(color) => changeAnnotationStyle(tool as 'pen' | 'line' | 'highlight' | 'text', { color })} />
               {tool !== 'text' && <label><span>{t('굵기')}</span><input aria-label={t('필기 굵기')} type="range" min="1" max="24" value={activeAnnotationStyle.thickness} onChange={(event) => changeAnnotationStyle(tool as 'pen' | 'line' | 'highlight', { thickness: Number(event.currentTarget.value) })} /></label>}
               {tool !== 'text' && <label><span>{t('투명도')}</span><input aria-label={t('필기 투명도')} type="range" min="10" max="100" value={Math.round(activeAnnotationStyle.opacity * 100)} onChange={(event) => changeAnnotationStyle(tool as 'pen' | 'line' | 'highlight', { opacity: Number(event.currentTarget.value) / 100 })} /></label>}
               {tool === 'text' && <label><span>{t('글자 크기')}</span><input aria-label={t('글자 크기')} type="range" min="10" max="48" value={activeAnnotationStyle.fontSize} onChange={(event) => changeAnnotationStyle('text', { fontSize: Number(event.currentTarget.value) })} /></label>}

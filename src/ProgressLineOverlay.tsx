@@ -1,12 +1,12 @@
 import { formatNumber, t, translateMessage, type LocaleKey } from './locales/index'
-import { useEffect, useId, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react'
-import { Ellipsis, Palette } from 'lucide-react'
+import { useEffect, useId, useRef, useState, type KeyboardEvent as ReactKeyboardEvent, type PointerEvent as ReactPointerEvent } from 'react'
+import { Ellipsis } from 'lucide-react'
 import { focusBandHeightRatio, focusDimOpacity, pageRectToDisplayRect } from './focusGeometry'
 import type { CounterSnapshot, PageRotation, PageWorkRecord, ProgressGuide, ProgressGuideScreenPosition } from './types'
 import { ColorPresetButtons } from './ColorPresetButtons'
 import { PROGRESS_LINE_COLOR_PRESETS } from './designTokens'
 import { useDismissiblePopover } from './useDismissiblePopover'
-import { createDefaultPrimaryProgressGuide } from './progressLines'
+import { createDefaultPrimaryProgressGuide, progressGuideMoveExceededThreshold, progressLineStrokeWidth } from './progressLines'
 const minimumLength = 0.2
 type StyleField = 'opacity' | 'thickness' | 'dimOpacity' | 'bandHeightRatio'
 
@@ -23,6 +23,10 @@ type Drag = {
   work: PageWorkRecord
   historyBefore: PageWorkRecord
   previousPreview: ProgressGuide | null
+  startClientX: number
+  startClientY: number
+  focusTarget: SVGElement
+  longPressed: boolean
 }
 type Calibration = {
   guideId: string
@@ -131,11 +135,12 @@ function updateGuideWork(work: PageWorkRecord, guideId: string, changes: Partial
   }
 }
 
-export function ProgressLineOverlay({ width, height, cssWidth, cssHeight, work, counters, rotation, active, disabled, defaultColor, defaultOpacity, defaultThickness, onActivate, onWorkChange }: {
+export function ProgressLineOverlay({ width, height, cssWidth, cssHeight, renderedZoom, work, counters, rotation, active, disabled, defaultColor, defaultOpacity, defaultThickness, onActivate, onWorkChange }: {
   width: number
   height: number
   cssWidth: number
   cssHeight: number
+  renderedZoom: number
   work: PageWorkRecord
   counters: CounterSnapshot[]
   rotation: PageRotation
@@ -151,9 +156,13 @@ export function ProgressLineOverlay({ width, height, cssWidth, cssHeight, work, 
   const dragRef = useRef<Drag | null>(null)
   const overlayRef = useRef<HTMLDivElement | null>(null)
   const menuPanelRef = useRef<HTMLDivElement | null>(null)
-  const menuTriggerRef = useRef<HTMLButtonElement | null>(null)
+  const menuTriggerRef = useRef<(Element & { focus?: () => void }) | null>(null)
+  const longPressTimerRef = useRef<number | undefined>(undefined)
   const [previewGuide, setPreviewGuide] = useState<ProgressGuide | null>(null)
   const [selectedId, setSelectedId] = useState<string | null>(null)
+  function selectGuide(id: string | null) {
+    setSelectedId(id)
+  }
   const [menuGuideId, setMenuGuideId] = useState<string | null>(null)
   const [styleGuideId, setStyleGuideId] = useState<string | null>(null)
   const [styleMenuAnchor, setStyleMenuAnchor] = useState<{ x: number; y: number } | null>(null)
@@ -184,6 +193,28 @@ export function ProgressLineOverlay({ width, height, cssWidth, cssHeight, work, 
   })
   const currentCalibrationCounter = calibration ? counters.find((counter) => counter.id === calibration.counterId) : undefined
 
+  useEffect(() => () => {
+    if (longPressTimerRef.current !== undefined) window.clearTimeout(longPressTimerRef.current)
+  }, [])
+
+  function openStyleMenu(guide: ProgressGuide, clientX: number, clientY: number, trigger: HTMLElement | SVGElement) {
+    const overlay = overlayRef.current?.getBoundingClientRect()
+    if (!overlay) return
+    menuTriggerRef.current = trigger
+    selectGuide(guide.id)
+    setConnectingGuideId(null)
+    setMenuGuideId(guide.id)
+    setStyleGuideId(guide.id)
+    setStyleMenuAnchor({ x: clientX - overlay.left, y: clientY - overlay.top })
+  }
+
+  function openStyleMenuFromKeyboard(event: ReactKeyboardEvent<SVGElement>, guide: ProgressGuide) {
+    if (event.key !== 'Enter' && event.key !== ' ') return
+    event.preventDefault()
+    const rect = event.currentTarget.getBoundingClientRect()
+    openStyleMenu(guide, rect.left + rect.width / 2, rect.top + rect.height / 2, event.currentTarget)
+  }
+
   useDismissiblePopover(menuGuideId !== null, menuPanelRef, menuTriggerRef, () => {
     setStyleGuideId(null)
     setMenuGuideId(null)
@@ -208,6 +239,12 @@ export function ProgressLineOverlay({ width, height, cssWidth, cssHeight, work, 
     }
   }
 
+  function clearLongPressTimer() {
+    if (longPressTimerRef.current === undefined) return
+    window.clearTimeout(longPressTimerRef.current)
+    longPressTimerRef.current = undefined
+  }
+
   function begin(event: ReactPointerEvent<SVGSVGElement>) {
     if (disabled) return
     const target = (event.target as SVGElement).closest<SVGElement>('[data-guide-id]')
@@ -227,6 +264,7 @@ export function ProgressLineOverlay({ width, height, cssWidth, cssHeight, work, 
     const workingWork = previewGuide?.id === guide.id
       ? { ...work, horizontalGuides: work.horizontalGuides?.map((item) => item.id === guide.id ? previewGuide : item) }
       : work
+    const focusTarget = target as SVGElement
     dragRef.current = {
       id: guide.id,
       action,
@@ -239,12 +277,24 @@ export function ProgressLineOverlay({ width, height, cssWidth, cssHeight, work, 
       work: workingWork,
       historyBefore: calibration?.beforeWork ?? work,
       previousPreview: previewGuide,
+      startClientX: event.clientX,
+      startClientY: event.clientY,
+      focusTarget,
+      longPressed: false,
     }
-    setSelectedId(guide.id)
+    selectGuide(guide.id)
     setMenuGuideId(null)
     setStyleGuideId(null)
     setStyleMenuAnchor(null)
     setConnectingGuideId(null)
+    clearLongPressTimer()
+    const pointerId = event.pointerId
+    longPressTimerRef.current = window.setTimeout(() => {
+      const drag = dragRef.current
+      if (!drag || drag.pointerId !== pointerId || drag.moved) return
+      drag.longPressed = true
+      openStyleMenu(guide, drag.startClientX, drag.startClientY, drag.focusTarget)
+    }, 450)
   }
 
   function dragChanges(drag: Drag, x: number, y: number): Partial<ProgressGuide> | null {
@@ -273,7 +323,9 @@ export function ProgressLineOverlay({ width, height, cssWidth, cssHeight, work, 
     const rect = event.currentTarget.getBoundingClientRect()
     const dx = (pos.x - drag.startX) * rect.width
     const dy = (pos.y - drag.startY) * rect.height
-    if (!drag.moved && Math.hypot(dx, dy) >= 8) {
+    if (drag.longPressed) return
+    if (!drag.moved && progressGuideMoveExceededThreshold(drag.startClientX, drag.startClientY, event.clientX, event.clientY)) {
+      clearLongPressTimer()
       drag.moved = true
       drag.axis = drag.action === 'body' ? Math.abs(dx) > Math.abs(dy) ? 'x' : 'y' : 'x'
     }
@@ -287,6 +339,7 @@ export function ProgressLineOverlay({ width, height, cssWidth, cssHeight, work, 
   function finish(event: ReactPointerEvent<SVGSVGElement>, cancelled = false) {
     const drag = dragRef.current
     if (!drag || drag.pointerId !== event.pointerId) return
+    clearLongPressTimer()
     event.preventDefault()
     event.stopPropagation()
     if (cancelled) {
@@ -294,9 +347,13 @@ export function ProgressLineOverlay({ width, height, cssWidth, cssHeight, work, 
       dragRef.current = null
       return
     }
+    if (drag.longPressed) {
+      dragRef.current = null
+      return
+    }
     const pos = point(event, event.currentTarget)
     if (!drag.moved) {
-      setSelectedId(drag.id)
+      openStyleMenu(drag.base, event.clientX, event.clientY, drag.focusTarget)
       dragRef.current = null
       return
     }
@@ -316,7 +373,7 @@ export function ProgressLineOverlay({ width, height, cssWidth, cssHeight, work, 
   function startLine() {
     const guide = createDefaultPrimaryProgressGuide(0.5)
     onWorkChange({ ...work, progressMigration: 'complete', horizontalGuides: [...guides, guide] }, true, true, work)
-    setSelectedId(guide.id)
+    selectGuide(guide.id)
   }
 
   function updateGuide(id: string, changes: Partial<ProgressGuide>, before = work, shown?: ProgressGuide) {
@@ -352,7 +409,7 @@ export function ProgressLineOverlay({ width, height, cssWidth, cssHeight, work, 
       focus: { enabled: false, strength: 'medium', range: 0, scope: 'page', rowSpacing: primary.rowSpacing ?? 0.03 },
     }
     onWorkChange({ ...work, horizontalGuides: [...guides, reference] }, true, true, work)
-    setSelectedId(reference.id)
+    selectGuide(reference.id)
     setMenuGuideId(null)
   }
 
@@ -360,14 +417,14 @@ export function ProgressLineOverlay({ width, height, cssWidth, cssHeight, work, 
     setDeletedGuide(guide)
     onWorkChange({ ...work, horizontalGuides: guides.filter((item) => item.id !== guide.id) }, true, true, work)
     setMenuGuideId(null)
-    setSelectedId(guide.id === selectedId ? null : selectedId)
+    selectGuide(guide.id === selectedId ? null : selectedId)
     setNotice('진행선을 삭제했습니다.')
   }
 
   function undoDelete() {
     if (!deletedGuide || guides.some((guide) => guide.id === deletedGuide.id)) return
     onWorkChange({ ...work, horizontalGuides: [...guides, deletedGuide] }, true, true, work)
-    setSelectedId(deletedGuide.id)
+    selectGuide(deletedGuide.id)
     setDeletedGuide(null)
     setNotice('진행선을 복구했습니다.')
   }
@@ -376,7 +433,7 @@ export function ProgressLineOverlay({ width, height, cssWidth, cssHeight, work, 
     const counter = counters.find((item) => item.id === counterId)
     if (!counter) return
     setCalibration({ guideId: guide.id, counterId: counter.id, counterRow: counterRow(counter), rotation, phase: 'current', beforeWork: work })
-    setSelectedId(guide.id)
+    selectGuide(guide.id)
     setPreviewGuide(null)
     setMenuGuideId(null)
     setConnectingGuideId(null)
@@ -566,7 +623,7 @@ export function ProgressLineOverlay({ width, height, cssWidth, cssHeight, work, 
         const start = guide.xStartRatio ?? 0.15
         const end = guide.xEndRatio ?? 0.85
         const y = calibrationFirstPosition * height
-        return <g pointerEvents="none"><line x1={start * width} x2={end * width} y1={y} y2={y} stroke={guide.color ?? defaultColor} strokeWidth={Math.max(2, defaultThickness * sx)} strokeOpacity="0.28" strokeDasharray="10 8" /><text x={start * width + 8} y={Math.max(12, y - 6)} fill={guide.color ?? defaultColor} fontSize={Math.max(10, width / 100)}>{t("현재 단")}</text></g>
+        return <g pointerEvents="none"><line x1={start * width} x2={end * width} y1={y} y2={y} stroke={guide.color ?? defaultColor} strokeWidth={Math.max(2, progressLineStrokeWidth(defaultThickness, width, cssWidth, renderedZoom))} strokeOpacity="0.28" strokeDasharray="10 8" /><text x={start * width + 8} y={Math.max(12, y - 6)} fill={guide.color ?? defaultColor} fontSize={Math.max(10, width / 100)}>{t("현재 단")}</text></g>
       })()}
       {calibrationPreviewPositions.map(({ step, unclamped }) => {
         const guide = displayedGuides.find((item) => item.id === calibration?.guideId)
@@ -576,7 +633,7 @@ export function ProgressLineOverlay({ width, height, cssWidth, cssHeight, work, 
         const end = guide.xEndRatio ?? 0.85
         const label = step === 0 ? t('현재') : '+' + formatNumber(step)
         return <g key={step} pointerEvents="none" opacity={step === 0 ? 0.36 : 0.24}>
-          <line x1={start * width} x2={end * width} y1={y} y2={y} stroke={guide.color ?? defaultColor} strokeWidth={Math.max(2, defaultThickness * sx)} strokeDasharray="10 8" />
+          <line x1={start * width} x2={end * width} y1={y} y2={y} stroke={guide.color ?? defaultColor} strokeWidth={Math.max(2, progressLineStrokeWidth(defaultThickness, width, cssWidth, renderedZoom))} strokeDasharray="10 8" />
           <text x={start * width + 8} y={Math.max(12, y - 6)} fill={guide.color ?? defaultColor} fontSize={Math.max(10, width / 100)}>{label}{unclamped < 0 || unclamped > 1 ? t(' · 경계') : ''}</text>
         </g>
       })}
@@ -590,19 +647,21 @@ export function ProgressLineOverlay({ width, height, cssWidth, cssHeight, work, 
         const selected = selectedId === guide.id
         const markerX = guide.markerProgress === undefined ? null : (start + (end - start) * guide.markerProgress) * width
         const stroke = guide.thickness === undefined
-          ? guide.role === 'reference' ? Math.max(1, defaultThickness * sx * 0.5) : Math.max(2, defaultThickness * sx)
-          : Math.max(0.5, guide.thickness * sx)
+          ? guide.role === 'reference'
+            ? Math.max(1, progressLineStrokeWidth(defaultThickness * 0.5, width, cssWidth, renderedZoom))
+            : Math.max(2, progressLineStrokeWidth(defaultThickness, width, cssWidth, renderedZoom))
+          : Math.max(0.5, progressLineStrokeWidth(guide.thickness, width, cssWidth, renderedZoom))
         return <g key={guide.id}>
           <line x1={x1} x2={x2} y1={y} y2={y} stroke={color} strokeWidth={stroke} strokeOpacity={guide.opacity ?? (guide.role === 'reference' ? Math.min(defaultOpacity, 0.45) : defaultOpacity)} strokeLinecap="round" pointerEvents="none" />
-          <line data-guide-id={guide.id} data-progress-action="body" x1={x1} x2={x2} y1={y} y2={y} stroke="transparent" strokeWidth={Math.max(stroke, 44 * sy)} pointerEvents={disabled ? 'none' : 'stroke'} />
+          <line data-guide-id={guide.id} data-progress-action="body" x1={x1} x2={x2} y1={y} y2={y} stroke="transparent" strokeWidth={Math.max(stroke, 44 * sy)} pointerEvents={disabled ? 'none' : 'stroke'} role="button" tabIndex={disabled ? -1 : 0} aria-label={guide.role === 'primary' ? t('진행선 표시 스타일') : t('참고선 표시 스타일')} aria-pressed={selected} onKeyDown={(event) => openStyleMenuFromKeyboard(event, guide)} />
           {markerX !== null && <g>
-            <ellipse data-guide-id={guide.id} data-progress-action="marker" cx={markerX} cy={y} rx={hitX} ry={hitY} fill="transparent" pointerEvents={disabled ? 'none' : 'all'} />
+            <ellipse data-guide-id={guide.id} data-progress-action="marker" cx={markerX} cy={y} rx={hitX} ry={hitY} fill="transparent" pointerEvents={disabled ? 'none' : 'all'} role="button" tabIndex={disabled ? -1 : 0} aria-label={guide.role === 'primary' ? t('진행선 표시 스타일') : t('참고선 표시 스타일')} aria-pressed={selected} onKeyDown={(event) => openStyleMenuFromKeyboard(event, guide)} />
             <circle cx={markerX} cy={y} r={Math.max(6, 6 * sx)} fill={color} stroke="white" strokeWidth={Math.max(2, 2 * sx)} pointerEvents="none" />
             <path d={'M ' + (markerX - 5 * sx) + ' ' + (y + 8 * sy) + ' L ' + (markerX + 5 * sx) + ' ' + (y + 8 * sy) + ' L ' + markerX + ' ' + (y + 15 * sy) + ' Z'} fill={color} pointerEvents="none" />
           </g>}
           {selected && <g>
-            <ellipse data-guide-id={guide.id} data-progress-action="start" cx={x1} cy={y} rx={hitX} ry={hitY} fill="transparent" pointerEvents={disabled ? 'none' : 'all'} />
-            <ellipse data-guide-id={guide.id} data-progress-action="end" cx={x2} cy={y} rx={hitX} ry={hitY} fill="transparent" pointerEvents={disabled ? 'none' : 'all'} />
+            <ellipse data-guide-id={guide.id} data-progress-action="start" cx={x1} cy={y} rx={hitX} ry={hitY} fill="transparent" pointerEvents={disabled ? 'none' : 'all'} role="button" tabIndex={disabled ? -1 : 0} aria-label={guide.role === 'primary' ? t('진행선 표시 스타일') : t('참고선 표시 스타일')} aria-pressed={selected} onKeyDown={(event) => openStyleMenuFromKeyboard(event, guide)} />
+            <ellipse data-guide-id={guide.id} data-progress-action="end" cx={x2} cy={y} rx={hitX} ry={hitY} fill="transparent" pointerEvents={disabled ? 'none' : 'all'} role="button" tabIndex={disabled ? -1 : 0} aria-label={guide.role === 'primary' ? t('진행선 표시 스타일') : t('참고선 표시 스타일')} aria-pressed={selected} onKeyDown={(event) => openStyleMenuFromKeyboard(event, guide)} />
             <circle cx={x1} cy={y} r={Math.max(6, 6 * sx)} fill="white" stroke={color} strokeWidth={Math.max(2, 2 * sx)} pointerEvents="none" />
             <circle cx={x2} cy={y} r={Math.max(6, 6 * sx)} fill="white" stroke={color} strokeWidth={Math.max(2, 2 * sx)} pointerEvents="none" />
           </g>}
@@ -613,34 +672,9 @@ export function ProgressLineOverlay({ width, height, cssWidth, cssHeight, work, 
     {displayedGuides.map((guide) => <div
       key={'menu-' + guide.id}
       className="progress-line-actions"
-      style={{ left: clamp((guide.xEndRatio ?? 0.85) * cssWidth + 4, 4, Math.max(4, cssWidth - 84)), top: guide.position * cssHeight }}
+      style={{ left: clamp((guide.xEndRatio ?? 0.85) * cssWidth + 4, 4, Math.max(4, cssWidth - 48)), top: guide.position * cssHeight }}
     >
       <button
-        ref={styleGuideId === guide.id ? menuTriggerRef : undefined}
-        type="button"
-        className="progress-line-menu-trigger"
-        aria-label={guide.role === 'primary' ? t('진행선 표시 스타일') : t('참고선 표시 스타일')}
-        title={t("표시 스타일")}
-        onPointerDown={(event) => { event.preventDefault(); event.stopPropagation(); if (!active) onActivate() }}
-        onClick={(event) => {
-          const rect = event.currentTarget.getBoundingClientRect()
-          const overlay = overlayRef.current?.getBoundingClientRect()
-          if (styleGuideId === guide.id) {
-            setStyleGuideId(null)
-            setMenuGuideId(null)
-            setStyleMenuAnchor(null)
-            return
-          }
-          menuTriggerRef.current = event.currentTarget
-          setSelectedId(guide.id)
-          setConnectingGuideId(null)
-          setMenuGuideId(guide.id)
-          setStyleGuideId(guide.id)
-          setStyleMenuAnchor({ x: rect.left + rect.width / 2 - (overlay?.left ?? 0), y: rect.top + rect.height / 2 - (overlay?.top ?? 0) })
-        }}
-      ><Palette size={17} /></button>
-      <button
-        ref={menuGuideId === guide.id && styleGuideId !== guide.id ? menuTriggerRef : undefined}
         type="button"
         className="progress-line-menu-trigger"
         aria-label={guide.role === 'primary' ? t('진행선 옵션') : t('참고선 옵션')}
@@ -648,7 +682,7 @@ export function ProgressLineOverlay({ width, height, cssWidth, cssHeight, work, 
         onPointerDown={(event) => { event.preventDefault(); event.stopPropagation(); if (!active) onActivate() }}
         onClick={(event) => {
           menuTriggerRef.current = event.currentTarget
-          setSelectedId(guide.id)
+          selectGuide(guide.id)
           setConnectingGuideId(null)
           setStyleMenuAnchor(null)
           if (menuGuideId === guide.id && styleGuideId !== guide.id) {
@@ -666,17 +700,18 @@ export function ProgressLineOverlay({ width, height, cssWidth, cssHeight, work, 
       const menuGuide = guides.find((item) => item.id === menuGuideId) ?? guide
       const connectedCounter = counters.find((counter) => counter.id === guide.linkedCounterId)
       const stylePanelOpen = styleGuideId === menuGuideId && styleMenuAnchor !== null
+      const menuWidth = 244
       const anchorLeft = styleMenuAnchor ? styleMenuAnchor.x + 14 : 0
       const left = stylePanelOpen
-        ? clamp(anchorLeft + 226 <= cssWidth - 6 ? anchorLeft : styleMenuAnchor.x - 240, 6, Math.max(6, cssWidth - 226))
-        : clamp((guide.xEndRatio ?? 0.85) * cssWidth, 6, Math.max(6, cssWidth - 226))
+        ? clamp(anchorLeft + menuWidth <= cssWidth - 6 ? anchorLeft : styleMenuAnchor.x - menuWidth - 14, 6, Math.max(6, cssWidth - menuWidth - 6))
+        : clamp((guide.xEndRatio ?? 0.85) * cssWidth, 6, Math.max(6, cssWidth - menuWidth - 6))
       const top = stylePanelOpen
-        ? clamp(styleMenuAnchor.y - 18, 6, Math.max(6, cssHeight - 360))
-        : clamp(guide.position * cssHeight + 28, 6, Math.max(6, cssHeight - 360))
-      return <div ref={menuPanelRef} className="progress-line-menu" role="menu" style={{ left, top }} onPointerDown={(event) => event.stopPropagation()}>
+        ? clamp(styleMenuAnchor.y - 18, 6, Math.max(6, cssHeight - (guide.role === 'primary' ? 430 : 285) - 6))
+        : clamp(guide.position * cssHeight + 28, 6, Math.max(6, cssHeight - 220))
+      return <div ref={menuPanelRef} className={'progress-line-menu' + (stylePanelOpen ? ' progress-line-style-menu' : '')} role="menu" style={{ left, top }} onPointerDown={(event) => event.stopPropagation()}>
         {styleGuideId === menuGuideId ? <>
           <strong>{t("표시 스타일")}</strong>
-          <ColorPresetButtons label={t("진행선 색상")} className="progress-color-presets" value={guide.color ?? defaultColor} presets={PROGRESS_LINE_COLOR_PRESETS} onChange={(color) => updateGuide(menuGuideId, { color })} />
+          <ColorPresetButtons label={t("진행선 색상")} className="progress-color-presets" value={guide.color ?? defaultColor} presets={PROGRESS_LINE_COLOR_PRESETS} includeCurrentColor={false} onChange={(color) => updateGuide(menuGuideId, { color })} />
           {renderStyleRange(menuGuide, 'thickness', '두께')}
           {renderStyleRange(menuGuide, 'opacity', '투명도')}
           {guide.role === 'primary' && <>
@@ -684,7 +719,7 @@ export function ProgressLineOverlay({ width, height, cssWidth, cssHeight, work, 
             {renderStyleRange(menuGuide, 'dimOpacity', '집중 강도', !menuGuide.focus?.enabled)}
             {renderStyleRange(menuGuide, 'bandHeightRatio', '집중선 두께', !menuGuide.focus?.enabled)}
           </>}
-          <button type="button" role="menuitem" onClick={() => { setStyleGuideId(null); setMenuGuideId(null); setStyleMenuAnchor(null) }}>{t("닫기")}</button>
+          <button type="button" role="menuitem" onClick={() => { setStyleGuideId(null); setMenuGuideId(null); setStyleMenuAnchor(null); menuTriggerRef.current?.focus?.() }}>{t("닫기")}</button>
         </> : <>
           {guide.role === 'primary' && <>
             <button type="button" role="menuitem" onClick={() => addMarker(menuGuide)}>{guide.markerProgress === undefined ? t('마커 표시') : t('마커 지우기')}</button>

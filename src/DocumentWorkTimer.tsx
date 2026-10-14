@@ -2,9 +2,9 @@ import { Pause, Play } from 'lucide-react'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { t } from './locales'
-import { addDocumentWorkTime } from './storage'
-import type { DocumentWorkTimeDay } from './types'
-import { formatWorkTime, localWorkDateKey } from './workTime'
+import { addDocumentWorkSessions } from './storage'
+import type { DocumentWorkTimeDay, DocumentWorkTimeSession } from './types'
+import { formatWorkTime, localWorkDateKey, splitWorkTimeSession } from './workTime'
 
 export type DocumentTimerClock = { sessionId: string; elapsedNow: () => number; todayElapsedNow: () => number; isRunning: () => boolean; startIfNotStartedToday: () => boolean; pauseAndSave: () => Promise<void> }
 
@@ -25,12 +25,15 @@ type Props = {
 export default function DocumentWorkTimer({ documentId, initialTodayWorkDate, initialTodayWorkTimeMs = 0, portalTarget, onWorkTimeChange, onTodayWorkTimeChange, onUnsavedChange, onSavingChange, onClockChange }: Props) {
   const [sessionId] = useState(() => crypto.randomUUID())
   const elapsedBaseRef = useRef(0)
-  const lastSavedElapsedRef = useRef(0)
   const initialTodayBase = initialTodayWorkDate === localWorkDateKey() ? initialTodayWorkTimeMs : 0
   const todayWorkDateRef = useRef(localWorkDateKey())
   const todayBaseRef = useRef(initialTodayBase)
   const todaySessionStartElapsedRef = useRef(0)
   const startedAtRef = useRef<number | null>(null)
+  const workSessionIdRef = useRef<string | null>(null)
+  const workSessionStartedAtRef = useRef<number | null>(null)
+  const lastAutoSavedBoundaryRef = useRef<number | null>(null)
+  const pendingSessionsRef = useRef<DocumentWorkTimeSession[]>([])
   const runningRef = useRef(false)
   const savingRef = useRef(false)
   const savePromiseRef = useRef<Promise<boolean> | null>(null)
@@ -41,7 +44,7 @@ export default function DocumentWorkTimer({ documentId, initialTodayWorkDate, in
   const [error, setError] = useState(false)
 
   useEffect(() => {
-    if (runningRef.current || startedAtRef.current !== null || elapsedBaseRef.current > 0 || lastSavedElapsedRef.current > 0) return
+    if (runningRef.current || startedAtRef.current !== null || elapsedBaseRef.current > 0) return
     const currentDate = localWorkDateKey()
     todayWorkDateRef.current = currentDate
     todaySessionStartElapsedRef.current = 0
@@ -58,7 +61,7 @@ export default function DocumentWorkTimer({ documentId, initialTodayWorkDate, in
     : 0, [elapsedNow])
 
   const startTimer = useCallback(() => {
-    if (savingRef.current || runningRef.current) return false
+    if (savingRef.current || runningRef.current || pendingSessionsRef.current.length) return false
     const currentDate = localWorkDateKey()
     if (todayWorkDateRef.current !== currentDate) {
       todayWorkDateRef.current = currentDate
@@ -68,7 +71,11 @@ export default function DocumentWorkTimer({ documentId, initialTodayWorkDate, in
       onTodayWorkTimeChange(currentDate, 0)
     }
     setError(false)
-    startedAtRef.current = Date.now()
+    const startedAt = Date.now()
+    startedAtRef.current = startedAt
+    workSessionIdRef.current = crypto.randomUUID()
+    workSessionStartedAtRef.current = startedAt
+    lastAutoSavedBoundaryRef.current = null
     runningRef.current = true
     setRunning(true)
     onUnsavedChange(true)
@@ -80,31 +87,41 @@ export default function DocumentWorkTimer({ documentId, initialTodayWorkDate, in
     return startTimer()
   }, [startTimer, todayElapsedNow])
 
-  const saveElapsed = useCallback(async function saveElapsedInternal(elapsed: number, workDate = todayWorkDateRef.current): Promise<boolean> {
+  const saveSessions = useCallback(async function saveSessionsInternal(sessions: DocumentWorkTimeSession[], elapsed: number, final: boolean): Promise<boolean> {
     const pending = savePromiseRef.current
     if (pending) {
       if (!await pending) return false
-      return saveElapsedInternal(elapsed, workDate)
+      return saveSessionsInternal(sessions, elapsed, final)
     }
-    const delta = Math.max(0, elapsed - lastSavedElapsedRef.current)
-    if (delta === 0) {
-      onUnsavedChange(false)
+    if (!sessions.length) {
+      if (final) {
+        workSessionIdRef.current = null
+        workSessionStartedAtRef.current = null
+        pendingSessionsRef.current = []
+      }
+      onUnsavedChange(runningRef.current)
       setError(false)
       return true
     }
+    pendingSessionsRef.current = sessions
     savingRef.current = true
     setSaving(true)
     onSavingChange(true)
     setError(false)
     const operation = (async () => {
       try {
-        const totals = await addDocumentWorkTime(documentId, delta, workDate)
-        lastSavedElapsedRef.current = elapsed
+        const totals = await addDocumentWorkSessions(documentId, sessions)
         if (totals.todayWorkDate === localWorkDateKey()) todayBaseRef.current = Math.max(0, totals.todayWorkTimeMs - Math.max(0, elapsed - todaySessionStartElapsedRef.current))
+        pendingSessionsRef.current = []
+        if (final) {
+          workSessionIdRef.current = null
+          workSessionStartedAtRef.current = null
+          lastAutoSavedBoundaryRef.current = null
+        }
         if (activeRef.current) {
-          setElapsedMs(totals.todayWorkTimeMs)
+          if (totals.todayWorkDate === localWorkDateKey()) setElapsedMs(totals.todayWorkTimeMs)
           onWorkTimeChange(totals)
-          onUnsavedChange(false)
+          onUnsavedChange(runningRef.current)
         }
         return true
       } catch {
@@ -128,15 +145,21 @@ export default function DocumentWorkTimer({ documentId, initialTodayWorkDate, in
 
   const pauseAndSave = useCallback(async () => {
     const elapsed = elapsedNow()
+    let sessions = pendingSessionsRef.current
     if (runningRef.current) {
+      const endedAt = Date.now()
+      const sessionId = workSessionIdRef.current
+      const sessionStartedAt = workSessionStartedAtRef.current
+      sessions = sessionId && sessionStartedAt !== null ? splitWorkTimeSession(sessionId, sessionStartedAt, endedAt) : []
       elapsedBaseRef.current = elapsed
       startedAtRef.current = null
       runningRef.current = false
       setElapsedMs(todayElapsedNow())
       setRunning(false)
     }
-    if (!await saveElapsed(elapsed)) throw new Error('작업시간을 저장하지 못했습니다.')
-  }, [elapsedNow, saveElapsed, todayElapsedNow])
+    pendingSessionsRef.current = sessions
+    if (!await saveSessions(sessions, elapsedBaseRef.current, true)) throw new Error('작업시간을 저장하지 못했습니다.')
+  }, [elapsedNow, saveSessions, todayElapsedNow])
 
   useEffect(() => {
     onClockChange({ sessionId, elapsedNow, todayElapsedNow, isRunning: () => runningRef.current, startIfNotStartedToday, pauseAndSave })
@@ -152,19 +175,27 @@ export default function DocumentWorkTimer({ documentId, initialTodayWorkDate, in
 
   useEffect(() => {
     const update = () => {
-      const currentDate = localWorkDateKey()
+      const now = Date.now()
+      const currentDate = localWorkDateKey(new Date(now))
+      if (runningRef.current && workSessionIdRef.current && workSessionStartedAtRef.current !== null) {
+        const todayStart = new Date(new Date(now).getFullYear(), new Date(now).getMonth(), new Date(now).getDate()).getTime()
+        const sessionStartedAt = workSessionStartedAtRef.current
+        if (sessionStartedAt < todayStart && lastAutoSavedBoundaryRef.current !== todayStart) {
+          lastAutoSavedBoundaryRef.current = todayStart
+          const segments = splitWorkTimeSession(workSessionIdRef.current, sessionStartedAt, todayStart)
+          const elapsedAtBoundary = elapsedBaseRef.current + Math.max(0, todayStart - (startedAtRef.current ?? todayStart))
+          void saveSessions(segments, elapsedAtBoundary, false)
+        }
+      }
       if (todayWorkDateRef.current !== currentDate) {
-        const previousDate = todayWorkDateRef.current
-        const elapsed = elapsedNow()
-        void saveElapsed(elapsed, previousDate).then((saved) => {
-          if (!saved || todayWorkDateRef.current !== previousDate) return
-          todayWorkDateRef.current = currentDate
-          todayBaseRef.current = 0
-          todaySessionStartElapsedRef.current = elapsed
-          setElapsedMs(0)
-          onTodayWorkTimeChange(currentDate, 0)
-        })
-        return
+        const todayStart = new Date(new Date(now).getFullYear(), new Date(now).getMonth(), new Date(now).getDate()).getTime()
+        todayWorkDateRef.current = currentDate
+        todayBaseRef.current = 0
+        todaySessionStartElapsedRef.current = runningRef.current
+          ? elapsedBaseRef.current + Math.max(0, todayStart - (startedAtRef.current ?? todayStart))
+          : elapsedNow()
+        setElapsedMs(0)
+        onTodayWorkTimeChange(currentDate, 0)
       }
       setElapsedMs(todayElapsedNow())
     }
@@ -176,7 +207,7 @@ export default function DocumentWorkTimer({ documentId, initialTodayWorkDate, in
       document.removeEventListener('visibilitychange', update)
       window.removeEventListener('focus', update)
     }
-  }, [elapsedNow, onTodayWorkTimeChange, running, saveElapsed, todayElapsedNow])
+  }, [elapsedNow, onTodayWorkTimeChange, running, saveSessions, todayElapsedNow])
 
   async function toggle() {
     if (savingRef.current) return
@@ -184,8 +215,8 @@ export default function DocumentWorkTimer({ documentId, initialTodayWorkDate, in
       try { await pauseAndSave() } catch { /* The retry message remains visible while the timer stays paused. */ }
       return
     }
-    if (elapsedBaseRef.current > lastSavedElapsedRef.current) {
-      await saveElapsed(elapsedBaseRef.current)
+    if (pendingSessionsRef.current.length) {
+      await saveSessions(pendingSessionsRef.current, elapsedBaseRef.current, true)
       return
     }
     startTimer()

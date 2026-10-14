@@ -1,14 +1,14 @@
-import { formatDate, formatDayCount, formatNumber, t, translateMessage, type LocaleKey } from './locales/index'
-import { useEffect, useRef, useState, type KeyboardEvent, type ReactNode } from 'react'
-import { ArrowLeft, CalendarDays, Check, ChevronDown, ChevronUp, CircleDashed, Clipboard, Clock3, Download, Ellipsis, Gauge, GripVertical, ImagePlus, Pencil, Plus, Ruler, Scissors, Share2, Shirt, Sparkles, Trash2, X } from 'lucide-react'
+import { formatDate, formatNumber, t, translateMessage, type LocaleKey } from './locales/index'
+import { useEffect, useRef, useState, type KeyboardEvent } from 'react'
+import { ArrowLeft, Check, ChevronDown, ChevronUp, Clipboard, Download, Ellipsis, GripVertical, ImagePlus, Info, Pencil, Plus, Share2, Sparkles, Trash2, X } from 'lucide-react'
 import BrandLoading from './BrandLoading'
-import { deleteKnittingReport, getKnittingReportById, getKnittingReports, getPageWorks, getViewer, saveKnittingReport, type KnittingReportSummary } from './storage'
-import type { CounterSnapshot, DocumentWorkTimeDay, KnittingReport, ReportAccessory, ReportMeasurement, ReportModification, ReportNeedle, ReportTimelinePhoto, ReportYarn } from './types'
+import { deleteKnittingReport, getDocument, getKnittingReportById, getKnittingReports, getPageWorks, getViewer, saveDocumentWorkTimeNote, saveKnittingReport, type KnittingReportSummary } from './storage'
+import type { CounterSnapshot, DocumentWorkTimeDay, DocumentWorkTimeSession, KnittingReport, ReportAccessory, ReportMeasurement, ReportModification, ReportNeedle, ReportTimelinePhoto, ReportYarn } from './types'
 import { exportKnittingReportPdf } from './knittingReportPdf'
 import InstagramReportDialog from './InstagramReportDialog'
 import InstagramCaptionDialog from './InstagramCaptionDialog'
 import { analyzeKnittingReportCandidates } from './knittingReportAnalysis'
-import { formatWorkTime, formatWorkTimeHoursMinutes } from './workTime'
+import ReportWorkTime from './ReportWorkTime'
 import './ReportDesignSystem.css'
 
 type Props = { documentId: string; fileName: string; pageCount: number; totalWorkTimeMs: number; workTimeDays: DocumentWorkTimeDay[]; reportId?: string; onBack: () => void; onReportChange?: (reportId: string) => void }
@@ -18,18 +18,13 @@ type DetailId = 'project' | 'pattern' | 'size' | 'yarn' | 'needles' | 'modificat
 const featureOptions = '라글란,드롭숄더,브이넥,크롭,오버핏,케이블,배색,탑다운,바텀업'
 const tensionOptions = ['많이 널손', '널손', '보통', '쫀손', '많이 쫀손']
 
-function formatNumericText(value?: string) {
-  if (!value || !/^[+-]?\d+(?:[.,]\d+)?$/.test(value.trim())) return value ?? ''
-  return formatNumber(Number(value.trim().replace(',', '.')))
-}
-
 function cleanName(fileName: string) {
   return fileName.replace(/\.pdf$/i, '').trim() || t('뜨개 프로젝트')
 }
 
 function createKnittingReport(documentId: string, fileName: string, title = cleanName(fileName)): KnittingReport {
   return {
-    id: crypto.randomUUID(), documentId, title, createdAt: Date.now(), updatedAt: Date.now(), status: 'draft', completedAt: null, fields: { 'project.name': title }, representativePhoto: '',
+    id: crypto.randomUUID(), documentId, title, createdAt: Date.now(), updatedAt: Date.now(), status: 'draft', completedAt: null, fields: { 'project.name': title, 'project.status': '진행중' }, representativePhoto: '',
     yarns: [], needles: [], accessories: [],
     measurements: [t('기장'), t('가슴둘레'), t('소매길이')].map((label) => ({ id: crypto.randomUUID(), label, pattern: '', finished: '', unit: 'cm' as const })),
     modifications: [], finishedPhotos: [], workPhotos: [],
@@ -45,14 +40,6 @@ function localDateValue(timestamp: number) {
   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`
 }
 
-function projectDays(start: string, finish: string) {
-  if (!start || !finish) return ''
-  const from = new Date(start + 'T00:00:00')
-  const to = new Date(finish + 'T00:00:00')
-  const days = Math.floor((to.getTime() - from.getTime()) / 86400000)
-  return Number.isFinite(days) && days >= 0 ? formatDayCount(days) : ''
-}
-
 async function compressPhotos(files: File[]) {
   const photos: ReportTimelinePhoto[] = []
   for (const file of files) {
@@ -63,7 +50,7 @@ async function compressPhotos(files: File[]) {
 }
 
 function makeYarn(): ReportYarn {
-  return { id: crypto.randomUUID(), photo: '', brand: '', product: '', colorName: '', colorNumber: '', lot: '', fiber: '', country: '', weightClass: '', recommendedNeedle: '', skeinWeight: '', skeinLength: '', retailer: '', purchaseLink: '', price: '', quantity: '', usedSkeins: '', usedWeight: '', usedMeters: '', memo: '', leftover: '' }
+  return { id: crypto.randomUUID(), photo: '', brand: '', product: '', colorName: '', colorNumber: '', lot: '', fiber: '', country: '', weightClass: '', recommendedNeedle: '', skeinWeight: '', skeinLength: '', retailer: '', purchaseLink: '', price: '', quantity: '', usedSkeins: '', usedWeight: '', usedMeters: '', strandCount: '', needleSizeMm: '', memo: '', leftover: '' }
 }
 
 function makeNeedle(): ReportNeedle {
@@ -150,14 +137,6 @@ function PhotoField({ label, value, onChange, onProcessingChange, onPreview }: {
   </div>
 }
 
-function ReportCard({ title, summary, icon, recommended, onClick }: { title: string; summary: string; icon: ReactNode; recommended?: boolean; onClick: () => void }) {
-  return <button type="button" className="report-summary-card" onClick={onClick}><span className="report-summary-icon">{icon}</span><span className="report-summary-copy"><strong>{title}</strong><small>{summary || t('필요할 때 다시 확인할 수 있도록 자세히 남겨두세요.')}</small></span>{recommended && <span className="report-recommended">{t("추천")}</span>}<Pencil size={15} className="report-summary-edit" /></button>
-}
-
-function PersonalCard({ title, summary, icon, open, onClick }: { title: string; summary: string; icon: ReactNode; open: boolean; onClick: () => void }) {
-  return <button type="button" className={'report-personal-card' + (open ? ' open' : '')} aria-expanded={open} onClick={onClick}><span className="report-personal-icon">{icon}</span><span className="report-summary-copy"><strong>{title}</strong><small>{summary || t('필요할 때 다시 확인할 수 있도록 자세히 남겨두세요.')}</small></span><ChevronDown size={17} className="report-personal-chevron" /></button>
-}
-
 export default function KnittingReport({ documentId, fileName, pageCount, totalWorkTimeMs, workTimeDays, reportId, onBack, onReportChange }: Props) {
   const [report, setReport] = useState<KnittingReport | null>(null)
   const [reports, setReports] = useState<KnittingReportSummary[]>([])
@@ -173,7 +152,8 @@ export default function KnittingReport({ documentId, fileName, pageCount, totalW
   const [previewPhoto, setPreviewPhoto] = useState('')
   const [draggedPhotoId, setDraggedPhotoId] = useState('')
   const [undoDelete, setUndoDelete] = useState<{ label: string; restore: (current: KnittingReport) => KnittingReport } | null>(null)
-  const [expandedPersonal, setExpandedPersonal] = useState<string[]>([])
+  const [workTimeDetails, setWorkTimeDetails] = useState<{ documentId: string; sessions: DocumentWorkTimeSession[]; notes: Record<string, string>; loading: boolean }>({ documentId, sessions: [], notes: {}, loading: true })
+  const [documentWorkTime, setDocumentWorkTime] = useState({ totalWorkTimeMs, workTimeDays })
   const [moreOpen, setMoreOpen] = useState(false)
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false)
   const [deleteError, setDeleteError] = useState('')
@@ -213,6 +193,18 @@ export default function KnittingReport({ documentId, fileName, pageCount, totalW
   const deletingReportIdRef = useRef<string | null>(null)
   const analyzeNowRef = useRef<(target?: KnittingReport | null) => Promise<void>>(async () => {})
   const saveQueueRef = useRef(Promise.resolve())
+
+  useEffect(() => {
+    let active = true
+    void getDocument(documentId).then((document) => {
+      if (!active) return
+      setDocumentWorkTime({ totalWorkTimeMs: document?.totalWorkTimeMs ?? totalWorkTimeMs, workTimeDays: document?.workTimeDays ?? workTimeDays })
+      setWorkTimeDetails({ documentId, sessions: document?.workTimeSessions ?? [], notes: document?.workTimeNotes ?? {}, loading: false })
+    }).catch(() => {
+      if (active) setWorkTimeDetails({ documentId, sessions: [], notes: {}, loading: false })
+    })
+    return () => { active = false }
+  }, [documentId, totalWorkTimeMs, workTimeDays])
 
   function trackPhotoProcessing(processing: boolean) {
     photoProcessingCount.current = Math.max(0, photoProcessingCount.current + (processing ? 1 : -1))
@@ -412,6 +404,11 @@ export default function KnittingReport({ documentId, fileName, pageCount, totalW
     update((current) => ({ ...current, [key]: (current[key] as ReportRow[]).map((row) => row.id === id ? { ...row, ...patch } : row) }) as KnittingReport)
   }
 
+  async function saveWorkTimeNote(date: string, note: string) {
+    const notes = await saveDocumentWorkTimeNote(documentId, date, note)
+    setWorkTimeDetails((current) => ({ ...current, documentId, notes }))
+  }
+
   function removeRow(key: ReportCollectionKey, id: string) {
     const current = reportRef.current
     const rows = current?.[key] as ReportRow[] | undefined
@@ -541,10 +538,6 @@ export default function KnittingReport({ documentId, fileName, pageCount, totalW
     }
   }
 
-  function togglePersonal(key: string) {
-    setExpandedPersonal((current) => current.includes(key) ? current.filter((item) => item !== key) : [...current, key])
-  }
-
   function updateWorkPhoto(id: string, patch: Partial<ReportTimelinePhoto>) {
     update((current) => ({ ...current, workPhotos: current.workPhotos.map((photo) => photo.id === id ? { ...photo, ...patch } : photo) }))
   }
@@ -571,10 +564,10 @@ export default function KnittingReport({ documentId, fileName, pageCount, totalW
     })
   }
 
-  function rowFields<T extends ReportRow, K extends ReportCollectionKey>(row: T, key: K, descriptors: { field: keyof T; label: string; wide?: boolean }[]) {
-    return <div className="report-fields">{descriptors.map(({ field: fieldName, label, wide }) => {
+  function rowFields<T extends ReportRow, K extends ReportCollectionKey>(row: T, key: K, descriptors: { field: keyof T; label: string; wide?: boolean; kind?: FieldKind }[]) {
+    return <div className="report-fields">{descriptors.map(({ field: fieldName, label, wide, kind }) => {
       const value = String(row[fieldName] ?? '')
-      return <ReportField key={String(fieldName) + ':' + value} label={label} value={value} wide={wide} onChange={(nextValue) => updateRow(key, row.id, { [fieldName]: nextValue } as Partial<KnittingReport[K][number]>)} />
+      return <ReportField key={String(fieldName) + ':' + value} label={label} value={value} kind={kind} wide={wide} onChange={(nextValue) => updateRow(key, row.id, { [fieldName]: nextValue } as Partial<KnittingReport[K][number]>)} />
     })}</div>
   }
 
@@ -590,7 +583,7 @@ export default function KnittingReport({ documentId, fileName, pageCount, totalW
       reportRef.current = saved
       setReport(saved)
       setReports((items) => items.map((item) => item.id === saved.id ? summarizeReport(saved) : item))
-      await exportKnittingReportPdf(saved, totalWorkTimeMs, workTimeDays)
+      await exportKnittingReportPdf(saved, documentWorkTime.totalWorkTimeMs, documentWorkTime.workTimeDays)
       setSaveState('저장됨')
     } catch (error) {
       setSaveState(error instanceof Error ? translateMessage(error.message) : t('PDF를 만들지 못했습니다.'))
@@ -703,6 +696,7 @@ export default function KnittingReport({ documentId, fileName, pageCount, totalW
       <div className="report-entry-title"><strong>{t("사용 실 ")}{index + 1}</strong><button type="button" className="report-icon-button" aria-label={t("실 삭제")} onClick={() => removeRow('yarns', yarn.id)}><Trash2 size={15} /></button></div>
       <div className="report-entry-with-photo"><PhotoField label="실 사진" value={yarn.photo} onChange={(photo) => updateRow('yarns', yarn.id, { photo })} onProcessingChange={trackPhotoProcessing} onPreview={setPreviewPhoto} />{rowFields(yarn, 'yarns', [
         { field: 'brand', label: '브랜드' }, { field: 'product', label: '제품명' }, { field: 'colorName', label: '컬러명' }, { field: 'colorNumber', label: '컬러번호' },
+        { field: 'strandCount', label: '합수', kind: 'number' }, { field: 'needleSizeMm', label: '바늘 크기 (mm)', kind: 'number' },
         { field: 'usedSkeins', label: '사용 타래 수' }, { field: 'usedWeight', label: '사용 중량 (g)' }, { field: 'usedMeters', label: '사용 길이 (m)' }, { field: 'memo', label: '메모', wide: true },
         { field: 'lot', label: 'Lot No.' }, { field: 'fiber', label: '성분' }, { field: 'weightClass', label: '실 굵기' }, { field: 'skeinWeight', label: '타래 중량' },
         { field: 'skeinLength', label: '타래 길이' }, { field: 'recommendedNeedle', label: '권장 바늘' }, { field: 'country', label: '제조국' },
@@ -737,57 +731,54 @@ export default function KnittingReport({ documentId, fileName, pageCount, totalW
       {field('review.problems', '문제와 해결', 'multiline', undefined, true)}{field('review.memo', '완성 메모', 'multiline', undefined, true)}
     </div>
   }
-  const yarnSummary = report.yarns.map((yarn) => [yarn.brand, yarn.product, yarn.colorName, yarn.colorNumber].filter(Boolean).join(' ')).filter(Boolean).join(' · ')
-  const usageSummary = report.yarns.map((yarn) => [yarn.usedSkeins && formatNumericText(yarn.usedSkeins) + t('볼'), yarn.usedWeight && formatNumericText(yarn.usedWeight) + 'g', yarn.usedMeters && formatNumericText(yarn.usedMeters) + 'm'].filter(Boolean).join(' · ')).filter(Boolean).join(' / ')
-  const needleSummary = report.needles.map((needle) => [needle.section, needle.size && needle.size + (needle.size.toLowerCase().includes('mm') ? '' : 'mm')].filter(Boolean).join(' ')).filter(Boolean).join(' · ')
-  const modificationSummary = report.modifications.map((item) => [item.section, item.changed || item.memo].filter(Boolean).join(' ')).filter(Boolean).join(' · ')
   const photoInput = (kind: 'work' | 'finished') => <label className="secondary-button report-photo-add"><Plus size={15} />{t("사진 추가")}<input type="file" accept="image/*" multiple onChange={(event) => { const files = [...(event.currentTarget.files ?? [])]; event.currentTarget.value = ''; if (kind === 'work') void addWorkPhotos(files); else void addFinishedPhotos(files) }} /></label>
 
-  const duration = projectDays(values['project.co'] ?? '', values['project.fo'] ?? '')
   const reportTitle = values['project.name'] || report.title || t('프로젝트 이름')
+  const extraDetailIds: DetailId[] = ['project', 'pattern', 'size', 'yarn', 'needles', 'modifications', 'oneLine', 'gauge', 'measurements', 'fit', 'yarnMemo', 'detailMemo', 'extras']
 
   return <div className="knitting-report-editor">
-    <header className="report-appbar"><button type="button" className="report-appbar-back" aria-label={t("도안으로 돌아가기")} onClick={onBack}><ArrowLeft size={20} /></button><strong>{t("뜨개보고서")}</strong><div className="report-appbar-actions"><span className="report-save-indicator"><i />{translateMessage(saveState)}</span><button type="button" className="report-status-toggle" aria-pressed={report.status === 'complete'} disabled={switching || exporting || processingPhotos || titleEditing} onClick={() => update((current) => ({ ...current, status: current.status === 'complete' ? 'draft' : 'complete', completedAt: current.status === 'complete' ? null : Date.now() }))}>{report.status === 'complete' ? t('작성 중으로 변경') : t('작성 완료')}</button><button type="button" className="report-appbar-edit" disabled={switching || exporting || processingPhotos} onClick={() => setActiveDetail(activeDetail ? null : 'project')}><Pencil size={15} /><span>{activeDetail ? t('닫기') : t('편집')}</span></button><button type="button" className="report-appbar-share" disabled={switching || processingPhotos || titleEditing} onClick={() => void openCaption()}><Share2 size={15} /><span>{t("공유하기")}</span></button><button ref={moreTriggerRef} type="button" className="report-more-trigger" aria-label={t("보고서 메뉴")} aria-expanded={moreOpen} onClick={() => setMoreOpen((value) => !value)}><Ellipsis size={22} /></button></div>
+    <header className="report-appbar"><button type="button" className="report-appbar-back" aria-label={t("도안으로 돌아가기")} onClick={onBack}><ArrowLeft size={20} /></button><strong>{t("뜨개보고서")}</strong><div className="report-appbar-actions"><span className="report-save-indicator"><i />{translateMessage(saveState)}</span><button type="button" className="report-appbar-share" disabled={switching || processingPhotos || titleEditing} onClick={() => void openCaption()}><Share2 size={15} /><span>{t("공유하기")}</span></button><button ref={moreTriggerRef} type="button" className="report-more-trigger" aria-label={t("보고서 메뉴")} aria-expanded={moreOpen} onClick={() => setMoreOpen((value) => !value)}><Ellipsis size={22} /></button></div>
       {moreOpen && <div ref={moreMenuRef} className="report-more-menu"><label>{t("보고서 선택")}<select aria-label={t("보고서 선택")} value={report.id} disabled={switching || processingPhotos || titleEditing} onChange={(event) => { setMoreOpen(false); void switchReport(event.currentTarget.value) }}>{reports.map((item, index) => <option key={item.id} value={item.id}>{item.title || t('보고서') + ' ' + (index + 1)}</option>)}</select></label>
-        <button type="button" disabled={switching || exporting || processingPhotos || titleEditing} onClick={() => { setMoreOpen(false); setActiveDetail('project') }}><Pencil size={15} />{t("수정")}</button><button type="button" className="danger-action" disabled={switching || exporting || processingPhotos || titleEditing || analysisLoading} onClick={() => { setMoreOpen(false); setDeleteError(''); setDeleteConfirmOpen(true) }}><Trash2 size={15} />{t("삭제")}</button><button type="button" disabled={switching || exporting || processingPhotos || titleEditing} onClick={() => { setMoreOpen(false); void addReport() }}><Plus size={15} />{t("보고서 추가")}</button><button type="button" disabled={switching || exporting || processingPhotos || titleEditing} onClick={() => { setMoreOpen(false); void downloadReport() }}><Download size={15} />{t("PDF 다운로드")}</button><button type="button" disabled={switching || processingPhotos || titleEditing} onClick={() => { setMoreOpen(false); void openInstagramImage() }}><ImagePlus size={15} />{t("인스타 이미지 만들기")}</button><button type="button" disabled={analysisLoading || switching} onClick={() => { setMoreOpen(false); void analyzeNow() }}><Sparkles size={15} />{t("수정사항 다시 찾기")}</button>
+        <button type="button" aria-pressed={report.status === 'complete'} disabled={switching || exporting || processingPhotos || titleEditing} onClick={() => { setMoreOpen(false); update((current) => ({ ...current, status: current.status === 'complete' ? 'draft' : 'complete', completedAt: current.status === 'complete' ? null : Date.now() })) }}><Check size={15} />{report.status === 'complete' ? t('작성 중으로 변경') : t('작성 완료')}</button><button type="button" disabled={switching || exporting || processingPhotos || titleEditing} onClick={() => { setMoreOpen(false); setActiveDetail('project') }}><Pencil size={15} />{t("수정")}</button><button type="button" className="danger-action" disabled={switching || exporting || processingPhotos || titleEditing || analysisLoading} onClick={() => { setMoreOpen(false); setDeleteError(''); setDeleteConfirmOpen(true) }}><Trash2 size={15} />{t("삭제")}</button><button type="button" disabled={switching || exporting || processingPhotos || titleEditing} onClick={() => { setMoreOpen(false); void addReport() }}><Plus size={15} />{t("보고서 추가")}</button><button type="button" disabled={switching || exporting || processingPhotos || titleEditing} onClick={() => { setMoreOpen(false); void downloadReport() }}><Download size={15} />{t("PDF 다운로드")}</button><button type="button" disabled={switching || processingPhotos || titleEditing} onClick={() => { setMoreOpen(false); void openInstagramImage() }}><ImagePlus size={15} />{t("인스타 이미지 만들기")}</button><button type="button" disabled={analysisLoading || switching} onClick={() => { setMoreOpen(false); void analyzeNow() }}><Sparkles size={15} />{t("수정사항 다시 찾기")}</button>
       </div>}
     </header>
     <div className={'report-workspace' + (activeDetail ? ' editing' : '')}>
     <aside className="report-navigation" aria-label={t("보고서 탐색")}><button type="button" className="report-nav-back" onClick={onBack}><ArrowLeft size={16} />{t("도안으로 돌아가기")}</button><span className="report-nav-label">{t("보고서")}</span><div className="report-nav-list">{reports.map((item, index) => <button type="button" key={item.id} className={item.id === report.id ? 'active' : ''} disabled={switching || processingPhotos || titleEditing} onClick={() => void switchReport(item.id)}><strong>{item.title || t('보고서') + ' ' + (index + 1)}</strong><small>{item.id === report.id ? t('열려 있음') : formatDate(item.updatedAt)}</small></button>)}</div><button type="button" className="report-nav-add" disabled={switching || processingPhotos || titleEditing} onClick={() => void addReport()}><Plus size={15} />{t("새 보고서")}</button></aside>
     <div className="report-scroll"><main className="knitting-report-content">
-      <section className="report-cover-card"><PhotoField label={t('완성 사진')} value={report.representativePhoto} onChange={(value) => update((current) => ({ ...current, representativePhoto: value }))} onProcessingChange={trackPhotoProcessing} onPreview={setPreviewPhoto} /><div className="report-cover-copy"><span className="report-cover-eyebrow">{t('뜨개보고서')}</span>
+      <section className="report-cover-card"><PhotoField label={t('완성 사진')} value={report.representativePhoto} onChange={(value) => update((current) => ({ ...current, representativePhoto: value }))} onProcessingChange={trackPhotoProcessing} onPreview={setPreviewPhoto} /><div className="report-cover-copy"><div className="report-cover-title-line"><span className="report-cover-eyebrow">{t('뜨개보고서')}</span><label className="report-cover-status"><span className="sr-only">{t('프로젝트 상태')}</span><select aria-label={t('프로젝트 상태')} value={values['project.status'] ?? ''} onChange={(event) => update((current) => ({ ...current, fields: { ...current.fields, 'project.status': event.currentTarget.value } }))}><option value="">{t('선택')}</option>{['예정', '진행중', '완성', '중단'].map((option) => <option key={option} value={option}>{t(option as LocaleKey)}</option>)}</select></label></div>
         <div className="report-title-row">{titleEditing ? <div className="report-title-edit-form"><input className="report-title-input" aria-label={t("보고서 제목")} autoFocus value={titleDraft} onChange={(event) => setTitleDraft(event.currentTarget.value)} onKeyDown={(event) => { if (event.key === 'Enter') { event.preventDefault(); saveTitleEdit() } else if (event.key === 'Escape') setTitleEditing(false) }} /><button type="button" className="report-title-action save" aria-label={t("제목 저장")} disabled={!titleDraft.trim()} onClick={saveTitleEdit}><Check size={16} /></button><button type="button" className="report-title-action cancel" aria-label={t("제목 수정 취소")} onClick={() => setTitleEditing(false)}><X size={15} /></button></div> : <><h1>{reportTitle}</h1><button type="button" className="report-title-edit-trigger" aria-label={t("보고서 제목 수정")} disabled={switching || exporting || processingPhotos} onClick={beginTitleEdit}><Pencil size={15} /></button></>}</div>
-        <button type="button" className="report-cover-pattern" onClick={() => setActiveDetail('pattern')}>{values['pattern.name'] || t('도안명 추가')}{values['pattern.designer'] ? ' · ' + values['pattern.designer'] : ''}</button><div className="report-cover-dates"><span>{values['project.co'] || t('시작일 추가')}</span><b>—</b><span>{values['project.fo'] || t('완료일 추가')}</span><button type="button" onClick={() => setActiveDetail('project')}>{t("프로젝트 정보 편집")}</button></div>
+        <div className="report-cover-fields">{field('pattern.name', '도안명')}{field('pattern.designer', '원작자')}{field('project.co', '시작일', 'date')}{field('project.fo', '완성일', 'date')}</div>
       </div></section>
-      <div className="report-facts" aria-label={t("프로젝트 요약")}>{values['project.status'] && <span className={'report-status-badge status-' + values['project.status']}><i />{values['project.status']}</span>}{values['project.fo'] && <span><CalendarDays size={15} />{values['project.fo']}</span>}{(values['pattern.selectedSize'] || values['pattern.originalSizes']) && <span><Ruler size={15} />{values['pattern.selectedSize'] || values['pattern.originalSizes']}</span>}<span><Clock3 size={15} />{t('누적 작업시간')} {formatWorkTime(totalWorkTimeMs)}</span>{values['project.workTime'] && <span>{t('작업시간 메모')}: {values['project.workTime']}</span>}{duration && <span>{values['project.co']} → {values['project.fo']} · {duration}</span>}</div>
-      <section className="report-worktime-history" aria-label={t('일별 타이머 기록')}><header><Clock3 size={16} /><h2>{t('일별 타이머 기록')}</h2></header>{workTimeDays.length ? <ol>{workTimeDays.map((day, index) => { const { hours, minutes } = formatWorkTimeHoursMinutes(day.elapsedMs); const durationText = t('{hours}시간 {minutes}분', { hours, minutes }); const dayLabel = t('{day}일차', { day: formatNumber(index + 1) }); return <li key={day.date}><time dateTime={day.date}>{t('작업일차: {dayLabel} · {duration}', { dayLabel, duration: durationText })}</time></li> })}</ol> : <p>{t('아직 저장된 일별 타이머 기록이 없습니다.')}</p>}</section>
-      <div className="report-content-grid"><section className="report-overview-section"><header><div><h2>{t("도안 · 재료 · 내 수정")}</h2><p>{t("필요한 항목을 선택해 자세히 편집하세요.")}</p></div></header><div className="report-summary-list">
-        <ReportCard title={t("뜬 사이즈")} icon={<Ruler size={18} />} summary={values['pattern.selectedSize'] || values['pattern.originalSizes'] || ''} recommended onClick={() => setActiveDetail('size')} />
-        <ReportCard title={t("사용 실")} icon={<CircleDashed size={18} />} summary={[yarnSummary, usageSummary].filter(Boolean).join(' · ')} recommended onClick={() => setActiveDetail('yarn')} />
-        <ReportCard title={t("사용 바늘")} icon={<Scissors size={18} />} summary={needleSummary} recommended onClick={() => setActiveDetail('needles')} />
-        <ReportCard title={t("도안에서 수정한 부분")} icon={<Pencil size={17} />} summary={modificationSummary} recommended onClick={() => setActiveDetail('modifications')} />
-        <ReportCard title={t("한줄 기록")} icon={<Clipboard size={17} />} summary={values['review.nextChanges'] || ''} recommended onClick={() => setActiveDetail('oneLine')} />
-      </div>
-      {(report.analysisCandidates ?? []).some((candidate) => candidate.status === 'suggested') && <button type="button" className="report-candidate-notice" onClick={() => { const pending = report.analysisCandidates!.filter((candidate) => candidate.status === 'suggested'); setCandidateSelection(pending.map((candidate) => candidate.id)); setCandidateReviewOpen(true) }}><Sparkles size={16} />{t("수정사항 후보 ")}{report.analysisCandidates!.filter((candidate) => candidate.status === 'suggested').length}{t("개 확인하기")}</button>}
-      {analysisNotice && <small className="report-analysis-notice" role="status">{analysisNotice}</small>}</section>
-      <section className="report-personal-section"><header><div><h2>{t("내 기록 ")}<span className="report-help-mark" title={t("필요한 항목만 열어 개인 기록으로 남길 수 있어요.")}>?</span></h2><p>{t("필요할 때 다시 확인할 수 있도록 자세히 남겨두세요.")}</p></div></header>
-        <PersonalCard title={t("게이지")} summary={[values['gauge.patternStitches'] && formatNumericText(values['gauge.patternStitches']) + t('코'), values['gauge.patternRows'] && formatNumericText(values['gauge.patternRows']) + t('단'), values['gauge.afterStitches'] && t('실제') + ' ' + formatNumericText(values['gauge.afterStitches']) + t('코'), values['gauge.afterRows'] && formatNumericText(values['gauge.afterRows']) + t('단')].filter(Boolean).join(' · ')} icon={<Gauge size={18} />} open={expandedPersonal.includes('gauge')} onClick={() => togglePersonal('gauge')} />
-        {expandedPersonal.includes('gauge') && <div className="report-personal-inline">{detailContent('gauge')}</div>}
-        <PersonalCard title={t("완성 실측")} summary={report.measurements.filter((row) => row.finished.trim()).map((row) => [row.label, row.finished].filter(Boolean).join(' ')).join(' · ')} icon={<Ruler size={18} />} open={expandedPersonal.includes('measurements')} onClick={() => togglePersonal('measurements')} />
-        {expandedPersonal.includes('measurements') && <div className="report-personal-inline">{detailContent('measurements')}</div>}
-        <PersonalCard title={t("핏 기록")} summary={values['review.fit'] || ''} icon={<Shirt size={18} />} open={expandedPersonal.includes('fit')} onClick={() => togglePersonal('fit')} />
-        {expandedPersonal.includes('fit') && <div className="report-personal-inline">{detailContent('fit')}</div>}
-        <PersonalCard title={t("실 메모")} summary={values['private.yarnMemo'] || ''} icon={<CircleDashed size={18} />} open={expandedPersonal.includes('yarnMemo')} onClick={() => togglePersonal('yarnMemo')} />
-        {expandedPersonal.includes('yarnMemo') && <div className="report-personal-inline">{detailContent('yarnMemo')}</div>}
-        <PersonalCard title={t("상세 메모")} summary={values['project.memo'] || ''} icon={<Clipboard size={18} />} open={expandedPersonal.includes('detailMemo')} onClick={() => togglePersonal('detailMemo')} />
-        {expandedPersonal.includes('detailMemo') && <div className="report-personal-inline">{detailContent('detailMemo')}</div>}
-        <button type="button" className="report-more-records" onClick={() => setActiveDetail('extras')}>{t("기타 기록 · 세탁 · 후기 편집 ")}<Pencil size={14} /></button>
-      </section></div>
-      <section className="report-photo-section"><header><div><h2>{t("과정 사진")}</h2><p>{t("작업 날짜와 설명을 남기고, 드래그하거나 화살표로 순서를 바꿀 수 있어요.")}</p></div></header><div className="report-photo-grid">
+      <div className="report-main-layout"><div className="report-form-main">
+        <section className="report-form-card"><header><h2>{t('실 · 바늘')}</h2><button type="button" className="report-add-action" onClick={() => update((current) => ({ ...current, yarns: [...current.yarns, makeYarn()] }))}><Plus size={18} />{t('실 추가')}</button></header>
+          {report.yarns.length ? report.yarns.map((yarn, index) => <article className="report-yarn-card" key={yarn.id}><div className="report-entry-title"><strong>{t('사용 실 ')}{index + 1}</strong><button type="button" className="report-remove-action" aria-label={t('실 삭제')} onClick={() => removeRow('yarns', yarn.id)}><Trash2 size={16} /></button></div>{rowFields(yarn, 'yarns', [
+            { field: 'product', label: '제품명', wide: true }, { field: 'colorName', label: '색상명' }, { field: 'colorNumber', label: '색상번호' },
+            { field: 'strandCount', label: '합수', kind: 'number' }, { field: 'usedWeight', label: '사용 중량', kind: 'number' }, { field: 'needleSizeMm', label: '바늘 크기 (mm)', kind: 'number' },
+          ])}</article>) : <p className="report-form-empty">{t('필요할 때 다시 확인할 수 있도록 자세히 남겨두세요.')}</p>}
+        </section>
+        <section className="report-form-card"><header><h2>{t('부자재')}</h2><button type="button" className="report-add-action" onClick={() => update((current) => ({ ...current, accessories: [...current.accessories, makeAccessory()] }))}><Plus size={18} />{t('부자재 추가')}</button></header>
+          <div className="report-accessory-table"><div className="report-accessory-head"><span>{t('종류')}</span><span>{t('수량')}</span><span>{t('메모')}</span><span /></div>
+            {report.accessories.map((accessory) => <div className="report-accessory-row" key={accessory.id}>{rowFields(accessory, 'accessories', [{ field: 'type', label: '종류' }, { field: 'quantity', label: '수량' }, { field: 'detail', label: '메모' }])}<button type="button" className="report-remove-action" aria-label={t('부자재 삭제')} onClick={() => removeRow('accessories', accessory.id)}><Trash2 size={16} /></button></div>)}
+          </div>
+          {!report.accessories.length && <p className="report-form-empty">{t('필요할 때 다시 확인할 수 있도록 자세히 남겨두세요.')}</p>}
+        </section>
+        <section className="report-form-card"><header><div><h2>{t('게이지 · 완성 사이즈')}</h2><p>{t('게이지는 10×10cm 기준으로 계산합니다.')}</p></div></header>
+          <label className="report-field report-gauge-unit">{t('측정 기준')}<select value={values['gauge.unit'] ?? '10cm'} onChange={(event) => update((current) => ({ ...current, fields: { ...current.fields, 'gauge.unit': event.currentTarget.value } }))}><option value="10cm">10 × 10 cm</option><option value="4in">4 in</option></select></label>
+          <div className="report-gauge-columns">{([['before', '세탁 전'], ['after', '세탁 후']] as const).map(([side, label]) => <section key={side}><h3>{t(label)}</h3><div>{field(`gauge.${side}Stitches`, '코')}{field(`gauge.${side}Rows`, '단')}</div></section>)}</div>
+          <div className="report-measurements-heading"><h3>{t('완성 실측')}</h3><small>{t('추가 치수')}</small></div>{measurementEditor}
+        </section>
+        <section className="report-form-card report-notes-photos"><header><h2>{t('메모 · 사진')}</h2></header>{field('project.memo', '메모', 'multiline', undefined, true)}
+          <div className="report-photo-grid">
         {report.workPhotos.map((photo, index) => <article className="report-photo-tile" key={photo.id} draggable onDragStart={() => setDraggedPhotoId(photo.id)} onDragOver={(event) => event.preventDefault()} onDrop={(event) => { event.preventDefault(); if (draggedPhotoId && draggedPhotoId !== photo.id) reorderWorkPhoto(draggedPhotoId, photo.id); setDraggedPhotoId('') }} onDragEnd={() => setDraggedPhotoId('')}><button type="button" className="report-photo-open" aria-label={`${photo.label || t('작업 과정 사진')} 크게 보기`} onClick={() => setPreviewPhoto(photo.dataUrl)}><img src={photo.dataUrl} alt={photo.label || t('작업 과정')} loading="lazy" decoding="async" /><span>{photo.activityDate || localDateValue(photo.uploadedAt)}</span></button><label className="report-photo-label"><span className="sr-only">{t("작업 사진 설명")}</span><input aria-label={t("작업 사진 설명")} value={photo.label} placeholder={t("작업 내용")} onChange={(event) => updateWorkPhoto(photo.id, { label: event.currentTarget.value })} /></label><label className="report-photo-date"><span className="sr-only">{t("작업 날짜")}</span><input aria-label={t("작업 날짜")} type="date" value={photo.activityDate} onChange={(event) => updateWorkPhoto(photo.id, { activityDate: event.currentTarget.value || localDateValue(photo.uploadedAt) })} /></label><div className="report-photo-tools"><button type="button" draggable onDragStart={(event) => { event.stopPropagation(); setDraggedPhotoId(photo.id) }} aria-label={t("사진 순서 이동 핸들")} title={t("드래그해 순서 변경")}><GripVertical size={16} aria-hidden="true" /></button><button type="button" aria-label={t("사진 앞으로 이동")} title={t("앞으로")} disabled={index === 0} onClick={() => moveWorkPhoto(index, -1)}><ChevronUp size={14} /></button><button type="button" aria-label={t("사진 뒤로 이동")} title={t("뒤로")} disabled={index === report.workPhotos.length - 1} onClick={() => moveWorkPhoto(index, 1)}><ChevronDown size={14} /></button></div><button type="button" className="report-photo-delete" aria-label={t("작업 사진 삭제")} onClick={() => removeReportPhoto('work', photo.id)}><Trash2 size={14} /></button></article>)}
         {report.finishedPhotos.map((photo) => <article className="report-photo-tile" key={photo.id}><button type="button" className="report-photo-open" aria-label={`${photo.label || t('완성 사진')} 크게 보기`} onClick={() => setPreviewPhoto(photo.dataUrl)}><img src={photo.dataUrl} alt={photo.label || t('완성 사진')} loading="lazy" decoding="async" /><span>{t("완성")}</span></button><input aria-label={t("완성 사진 설명")} value={photo.label} placeholder={t("완성 사진")} onChange={(event) => update((current) => ({ ...current, finishedPhotos: current.finishedPhotos.map((item) => item.id === photo.id ? { ...item, label: event.currentTarget.value } : item) }))} /><button type="button" className="report-photo-delete" aria-label={t("완성 사진 삭제")} onClick={() => removeReportPhoto('finished', photo.id)}><Trash2 size={14} /></button></article>)}
         {photoInput('work')}{photoInput('finished')}
-      </div></section>
+          </div>
+        </section>
+      </div><aside className="report-right-column"><ReportWorkTime totalWorkTimeMs={documentWorkTime.totalWorkTimeMs} workTimeDays={documentWorkTime.workTimeDays} sessions={workTimeDetails.documentId === documentId ? workTimeDetails.sessions : []} notes={workTimeDetails.documentId === documentId ? workTimeDetails.notes : {}} loading={workTimeDetails.documentId !== documentId || workTimeDetails.loading} onSaveNote={saveWorkTimeNote} /><p className="report-share-note"><Info size={19} /><span>{t('빈 항목은 공유 문구에서 제외됩니다.')}</span></p></aside></div>
+      <details className="report-extra-info"><summary><ChevronDown size={17} />{t('추가 정보')}</summary><div className="report-extra-info-body"><p>{t('필요한 항목을 선택해 자세히 편집하세요.')}</p><div className="report-extra-detail-buttons">{extraDetailIds.map((id) => <button type="button" key={id} onClick={() => setActiveDetail(id)}>{t(detailTitles[id])}<Pencil size={14} /></button>)}</div>
+        {(report.analysisCandidates ?? []).some((candidate) => candidate.status === 'suggested') && <button type="button" className="report-candidate-notice" onClick={() => { const pending = report.analysisCandidates!.filter((candidate) => candidate.status === 'suggested'); setCandidateSelection(pending.map((candidate) => candidate.id)); setCandidateReviewOpen(true) }}><Sparkles size={16} />{t('수정사항 후보 ')}{report.analysisCandidates!.filter((candidate) => candidate.status === 'suggested').length}{t('개 확인하기')}</button>}
+        {analysisNotice && <small className="report-analysis-notice" role="status">{analysisNotice}</small>}
+      </div></details>
       {candidateReviewOpen && <div className="modal-backdrop report-candidates-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) setCandidateReviewOpen(false) }}><section className="modal-card report-candidate-dialog" role="dialog" aria-modal="true" aria-label={t("수정사항 후보 검토")}><header className="report-detail-header"><div><small>{t('수정사항 후보 검토')}</small><h2>{t("수정사항 후보")}</h2><p>{t("확인한 내용만 보고서에 추가됩니다.")}</p></div><button type="button" className="icon-button" aria-label={t("닫기")} onClick={() => setCandidateReviewOpen(false)}><X size={18} /></button></header><div className="report-candidate-list">{(report.analysisCandidates ?? []).filter((candidate) => candidate.status === 'suggested').map((candidate) => <article className="report-candidate-card" key={candidate.id}><label><input type="checkbox" checked={candidateSelection.includes(candidate.id)} onChange={() => setCandidateSelection((current) => current.includes(candidate.id) ? current.filter((id) => id !== candidate.id) : [...current, candidate.id])} /><span>{t("선택")}</span></label><input aria-label={t("후보 구간")} value={candidate.section} onChange={(event) => update((current) => ({ ...current, analysisCandidates: (current.analysisCandidates ?? []).map((item) => item.id === candidate.id ? { ...item, section: event.currentTarget.value } : item) }))} /><div className="report-candidate-values">{candidate.original && <span>{candidate.original}</span>}<textarea aria-label={t("후보 수정 내용")} value={candidate.changed} onChange={(event) => update((current) => ({ ...current, analysisCandidates: (current.analysisCandidates ?? []).map((item) => item.id === candidate.id ? { ...item, changed: event.currentTarget.value } : item) }))} /></div><small>{candidate.source === 'counter' ? t('카운터 기록') : t('기록 메모')} · {candidate.evidence}</small><button type="button" className="text-button" disabled={switching} onClick={() => void dismissCandidate(candidate.id)}>{t("후보 제외")}</button></article>)}</div><footer className="report-candidate-actions"><span>{candidateSelection.length}{t("개 선택")}</span><button type="button" className="primary-button" disabled={switching || !candidateSelection.length} onClick={() => void applyCandidates()}>{t("선택한 항목 추가")}</button></footer></section></div>}
     </main></div>
     {activeDetail && <aside className="report-inspector" aria-label={detailTitles[activeDetail]}><header className="report-detail-header"><button type="button" className="icon-button report-inspector-back" aria-label={t("보고서로 돌아가기")} onClick={() => setActiveDetail(null)}><ArrowLeft size={18} /></button><div><small>{t("뜨개보고서")}</small><h2 id="report-inspector-title">{detailTitles[activeDetail]}</h2></div><button type="button" className="text-button report-inspector-done" onClick={() => setActiveDetail(null)}>{t("완료")}</button></header><div className="report-detail-body">{detailContent(activeDetail)}</div></aside>}

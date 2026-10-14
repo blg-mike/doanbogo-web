@@ -2,6 +2,14 @@ import type { PageWorkRecord, ProgressGuide } from './types'
 
 export const DEFAULT_PROGRESS_LINE_THICKNESS = 12
 
+export function progressGuideMoveExceededThreshold(startX: number, startY: number, nextX: number, nextY: number) {
+  return Math.hypot(nextX - startX, nextY - startY) > 8
+}
+
+export function progressLineStrokeWidth(thickness: number, pageWidth: number, cssWidth: number, renderedZoom: number) {
+  return thickness * pageWidth / Math.max(cssWidth, 1) * renderedZoom
+}
+
 export function createDefaultPrimaryProgressGuide(position: number): ProgressGuide {
   return {
     id: crypto.randomUUID(),

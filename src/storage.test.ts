@@ -1,8 +1,9 @@
 import 'fake-indexeddb/auto'
 import { describe, expect, it } from 'vitest'
-import { addDocument, addDocumentWorkTime, appendPhotoPages, createPhotoFolder, deleteDocument, deleteKnittingReport, duplicateDocument, getHomeProject, getKnittingReportById, getKnittingReports, getPageRecognition, getPageWork, getPages, getPhotoPage, getPhotoPages, getViewer, listDocuments, listHomeReports, markOpened, normalizePageWork, renameDocument, saveKnittingReport, savePageRecognition, savePageRecords, savePageWork, saveViewer, saveViewerAndPageWorks, setPageFlag, updateTags } from './storage'
+import { addDocument, addDocumentWorkSessions, addDocumentWorkTime, appendPhotoPages, createPhotoFolder, deleteDocument, deleteKnittingReport, duplicateDocument, getHomeProject, getKnittingReportById, getKnittingReports, getPageRecognition, getPageWork, getPages, getPhotoPage, getPhotoPages, getViewer, listDocuments, listHomeReports, markOpened, normalizePageWork, renameDocument, saveDocumentWorkTimeNote, saveKnittingReport, savePageRecognition, savePageRecords, savePageWork, saveViewer, saveViewerAndPageWorks, setPageFlag, updateTags } from './storage'
 import { createCounter } from './smartCounter'
 import type { DocumentRecord, KnittingReport } from './types'
+import { localWorkDateKey } from './workTime'
 
 function makeDocument(id: string, fileName: string, createdAt: number, tags: string[] = []): DocumentRecord {
   return {
@@ -99,6 +100,32 @@ describe('local document storage', () => {
     await deleteDocument(legacyDocument.id)
   })
 
+  it('stores work sessions idempotently and saves or clears a note by work date', async () => {
+    const document = makeDocument(crypto.randomUUID(), 'Session timer.pdf', Date.now())
+    const startedAt = new Date(2026, 9, 14, 9).getTime()
+    const session = {
+      id: 'timer-session:' + localWorkDateKey(new Date(startedAt)),
+      startedAt,
+      endedAt: startedAt + 30 * 60_000,
+      elapsedMs: 30 * 60_000,
+      workDate: localWorkDateKey(new Date(startedAt)),
+    }
+
+    await expect(addDocumentWorkSessions(document.id, [session])).rejects.toThrow()
+    await addDocument(document)
+    await addDocumentWorkSessions(document.id, [session])
+    await addDocumentWorkSessions(document.id, [session])
+
+    const saved = (await listDocuments()).find((item) => item.id === document.id)!
+    expect(saved).toMatchObject({ totalWorkTimeMs: session.elapsedMs, workTimeSessions: [session], workTimeDays: [{ date: session.workDate, elapsedMs: session.elapsedMs }] })
+    expect(await getHomeProject('document', document.id)).toMatchObject({ totalWorkTimeMs: session.elapsedMs, workTimeDays: [{ date: session.workDate, elapsedMs: session.elapsedMs }] })
+    expect(await saveDocumentWorkTimeNote(document.id, session.workDate, '오늘은 소매를 완성했다.')).toEqual({ [session.workDate]: '오늘은 소매를 완성했다.' })
+    expect((await listDocuments()).find((item) => item.id === document.id)?.workTimeNotes).toEqual({ [session.workDate]: '오늘은 소매를 완성했다.' })
+    expect(await saveDocumentWorkTimeNote(document.id, session.workDate, '   ')).toEqual({})
+    expect((await listDocuments()).find((item) => item.id === document.id)?.workTimeNotes).toEqual({})
+    await deleteDocument(document.id)
+  })
+
   it('searches by filename and tag and keeps the selected ordering', async () => {
     const prefix = crypto.randomUUID()
     const first = makeDocument(prefix + '-a', 'Cardigan.pdf', 1)
@@ -120,6 +147,10 @@ describe('local document storage', () => {
   it('duplicates the PDF while starting with fresh tags and viewer state', async () => {
     const original = { ...makeDocument(crypto.randomUUID(), 'Pattern.pdf', Date.now(), ['coat']), totalWorkTimeMs: 60_000 }
     await addDocument(original)
+    const startedAt = new Date(2026, 9, 14, 9).getTime()
+    const workDate = localWorkDateKey(new Date(startedAt))
+    await addDocumentWorkSessions(original.id, [{ id: 'copied-session:' + workDate, startedAt, endedAt: startedAt + 30_000, elapsedMs: 30_000, workDate }])
+    await saveDocumentWorkTimeNote(original.id, workDate, '원본 기록')
     await setPageFlag(original.id, 4, 'bookmarked', true)
     const copy = await duplicateDocument(original.id)
     const savedCopy = (await listDocuments('name')).find((document) => document.id === copy.id)
@@ -127,6 +158,8 @@ describe('local document storage', () => {
     expect(savedCopy?.fileName).toBe('복사본 - Pattern.pdf')
     expect(savedCopy?.tags).toEqual([])
     expect(savedCopy?.totalWorkTimeMs).toBe(0)
+    expect(savedCopy?.workTimeSessions).toEqual([])
+    expect(savedCopy?.workTimeNotes).toEqual({})
     expect(savedCopy?.pdf?.size).toBe(original.pdf!.size)
     expect((await getViewer(copy.id, copy.pageCount)).primary.page).toBe(1)
     expect(await getPages(copy.id)).toEqual([])

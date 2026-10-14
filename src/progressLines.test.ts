@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { createDefaultPrimaryProgressGuide, DEFAULT_PROGRESS_LINE_THICKNESS, guideRowPosition, migrateProgressGuides, prepareProgressGuidesForDirectInteraction, progressGuideCandidates } from './progressLines'
+import { createDefaultPrimaryProgressGuide, DEFAULT_PROGRESS_LINE_THICKNESS, guideRowPosition, migrateProgressGuides, prepareProgressGuidesForDirectInteraction, progressGuideCandidates, progressGuideMoveExceededThreshold, progressLineStrokeWidth } from './progressLines'
 import type { PageWorkRecord } from './types'
 
 function legacyWork(): PageWorkRecord {
@@ -76,5 +76,31 @@ describe('progress line migration', () => {
       role: 'primary', position: 0.62, xStartRatio: 0, xEndRatio: 1,
       thickness: DEFAULT_PROGRESS_LINE_THICKNESS,
     })
+  })
+})
+
+describe('progress line zoom thickness', () => {
+  it('keeps the eight-pixel gesture threshold for line dragging', () => {
+    expect(progressGuideMoveExceededThreshold(10, 20, 17, 20)).toBe(false)
+    expect(progressGuideMoveExceededThreshold(10, 20, 18, 20)).toBe(false)
+    expect(progressGuideMoveExceededThreshold(10, 20, 18.01, 20)).toBe(true)
+    expect(progressGuideMoveExceededThreshold(10, 20, 16, 26)).toBe(true)
+  })
+
+  it('keeps the displayed stroke width continuous from pinch preview through the final PDF raster', () => {
+    const pageWidth = 600
+    const initialCssWidth = 300
+    const initialZoom = 1
+    const nextZoom = 2
+    const previewScale = nextZoom / initialZoom
+
+    const previewSvgWidth = progressLineStrokeWidth(4, pageWidth, initialCssWidth, initialZoom)
+    const previewCssWidth = previewSvgWidth * initialCssWidth / pageWidth * previewScale
+    const finalCssWidth = 600
+    const settledSvgWidth = progressLineStrokeWidth(4, pageWidth, finalCssWidth, nextZoom)
+    const settledCssWidth = settledSvgWidth * finalCssWidth / pageWidth
+
+    expect(previewCssWidth).toBeCloseTo(8)
+    expect(settledCssWidth).toBeCloseTo(previewCssWidth)
   })
 })

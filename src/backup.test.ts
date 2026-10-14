@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest'
 import { strFromU8, strToU8, unzipSync, zipSync } from 'fflate'
 import { createWorkspaceBackup, readWorkspaceBackup } from './backup'
 import { createCounter, isLegacyCounterSnapshots } from './smartCounter'
-import { addDocument, addDocumentWorkTime, createPhotoFolder, deleteChart, deleteDocument, duplicateDocument, getChart, getHomeProject, getKnittingReport, getKnittingReports, getPageWork, getPages, getPhotoPages, getPreference, getViewer, importWorkspaceData, listCharts, listDocuments, saveChart, saveHomeProject, saveKnittingReport, savePageWork, savePreference, saveViewer, setPageFlag } from './storage'
+import { addDocument, addDocumentWorkSessions, addDocumentWorkTime, createPhotoFolder, deleteChart, deleteDocument, duplicateDocument, getChart, getHomeProject, getKnittingReport, getKnittingReports, getPageWork, getPages, getPhotoPages, getPreference, getViewer, importWorkspaceData, listCharts, listDocuments, saveChart, saveDocumentWorkTimeNote, saveHomeProject, saveKnittingReport, savePageWork, savePreference, saveViewer, setPageFlag } from './storage'
 import { createKnittingChart, makeRasterPdf } from './charts'
 import type { DocumentRecord, KnittingReport } from './types'
 import { localWorkDateKey } from './workTime'
@@ -255,11 +255,20 @@ describe('portable workspace backup', () => {
       id: documentId, fileName: '가디건.pdf', size: pdf.size, pageCount: 1,
       createdAt: Date.now(), lastOpenedAt: null, tags: [], pdf, cover: null,
     })
+    const startedAt = new Date(2026, 9, 14, 9).getTime()
+    const workDate = localWorkDateKey(new Date(startedAt))
+    const session = { id: 'report-session:' + workDate, startedAt, endedAt: startedAt + 45 * 60_000, elapsedMs: 45 * 60_000, workDate }
+    await addDocumentWorkSessions(documentId, [session])
+    await saveDocumentWorkTimeNote(documentId, workDate, '소매를 완성함')
     const report: KnittingReport = {
       id: crypto.randomUUID(), documentId, title: '가디건 프로젝트', createdAt: Date.now(), updatedAt: Date.now(),
       fields: { 'project.name': '가디건 프로젝트', 'project.status': '완성' },
       representativePhoto: 'data:image/jpeg;base64,/9j/4AAQ',
-      yarns: [], needles: [], accessories: [],
+      yarns: [{
+        id: 'yarn-with-new-fields', photo: '', brand: '브랜드', product: '울', colorName: '오트밀', colorNumber: '03', lot: '', fiber: '', country: '',
+        weightClass: '', recommendedNeedle: '', skeinWeight: '', skeinLength: '', retailer: '', purchaseLink: '', price: '', quantity: '',
+        usedSkeins: '', usedWeight: '150', usedMeters: '', strandCount: '3', needleSizeMm: '5.0', memo: '', leftover: '',
+      }], needles: [], accessories: [],
       measurements: [{ id: 'size-1', label: '기장', pattern: '54cm', finished: '57cm' }],
       modifications: [], finishedPhotos: [{ id: 'photo-1', label: '정면', dataUrl: 'data:image/jpeg;base64,/9j/4AAQ' }],
       workPhotos: [{ id: 'work-1', label: '소매 진행', dataUrl: 'data:image/jpeg;base64,/9j/4AAQ', uploadedAt: Date.now(), activityDate: '2026-10-01' }],
@@ -281,19 +290,27 @@ describe('portable workspace backup', () => {
     const restored = await readWorkspaceBackup(new File([backup], 'report.doanbogo'))
     expect(restored.knittingReports.filter((item) => item.documentId === documentId)).toHaveLength(2)
     expect(restored.knittingReports).toContainEqual(expect.objectContaining({ title: report.title, representativePhoto: report.representativePhoto }))
+    expect(restored.knittingReports.find((item) => item.id === report.id)?.yarns[0]).toMatchObject({ strandCount: '3', needleSizeMm: '5.0' })
+    expect(restored.documents.find((item) => item.id === documentId)).toMatchObject({ workTimeSessions: [session], workTimeNotes: { [workDate]: '소매를 완성함' } })
 
     const archiveEntries = unzipSync(new Uint8Array(await backup.arrayBuffer()))
-    const legacyManifest = JSON.parse(strFromU8(archiveEntries['manifest.json'])) as { version: number; knittingReports: Record<string, unknown>[] }
+    const legacyManifest = JSON.parse(strFromU8(archiveEntries['manifest.json'])) as { version: number; documents: Record<string, unknown>[]; knittingReports: Record<string, unknown>[] }
     legacyManifest.version = 7
+    const legacyDocument = legacyManifest.documents.find((item) => item.id === documentId)!
+    delete legacyDocument.workTimeSessions
+    delete legacyDocument.workTimeNotes
     legacyManifest.knittingReports = legacyManifest.knittingReports.filter((item) => item.documentId === documentId).slice(0, 1).map(({ id: _id, workPhotos: _workPhotos, ...item }) => item)
     const legacyBackup = new File([zipSync({ ...archiveEntries, 'manifest.json': strToU8(JSON.stringify(legacyManifest)) })], 'legacy-report.doanbogo')
     const legacyRestored = await readWorkspaceBackup(legacyBackup)
     expect(legacyRestored.knittingReports[0]).toMatchObject({ id: documentId, documentId, workPhotos: [] })
+    expect(legacyRestored.documents.find((item) => item.id === documentId)).toMatchObject({ workTimeSessions: [], workTimeNotes: {} })
 
     await importWorkspaceData(restored)
     const imported = (await listDocuments('name')).find((item) => item.id !== documentId)
     expect(imported).toBeTruthy()
+    expect(imported).toMatchObject({ workTimeSessions: [session], workTimeNotes: { [workDate]: '소매를 완성함' } })
     expect(await getKnittingReports(imported!.id)).toContainEqual(expect.objectContaining({ documentId: imported!.id, fields: report.fields, finishedPhotos: report.finishedPhotos, workPhotos: report.workPhotos }))
+    expect(await getKnittingReports(imported!.id)).toContainEqual(expect.objectContaining({ yarns: [expect.objectContaining({ strandCount: '3', needleSizeMm: '5.0' })] }))
     await deleteDocument(documentId)
     await deleteDocument(imported!.id)
     expect(await getKnittingReport(documentId)).toBeUndefined()

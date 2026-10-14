@@ -1,20 +1,21 @@
 export const DESIGN_SYSTEM_COLORS = {
-  primary: '#4B6334',
-  primaryHover: '#40552C',
-  primaryPressed: '#354624',
-  primarySoft: '#E9EEE4',
+  primary: '#47613F',
+  primaryHover: '#3D5537',
+  primaryPressed: '#35492F',
+  primarySoft: '#E6EDE0',
   secondary: '#4F6B7A',
   secondaryHover: '#435D69',
   secondarySoft: '#E9EEF1',
   tertiary: '#3D705C',
   tertiarySoft: '#E5F0EB',
-  background: '#FBF9F5',
-  surface: '#FFFFFF',
+  background: '#F7F4EE',
+  surface: '#FFFCF7',
   surfaceSubtle: '#F4F1EC',
-  text: '#2C2B27',
-  textSecondary: '#6E6A64',
+  viewerBackground: '#E9E6DF',
+  text: '#2E332D',
+  textSecondary: '#666B60',
   textMuted: '#918B84',
-  border: '#E4DED6',
+  border: '#E5DDD2',
   divider: '#ECE6DF',
   danger: '#B9473F',
   dangerSoft: '#F7E9E6',
@@ -33,22 +34,19 @@ export const FUNCTIONAL_COLOR_PRESETS = [
 ] as const
 
 export const ANNOTATION_COLOR_PRESETS = [
-  { name: '레드', color: '#E5494D' },
-  { name: '오렌지', color: '#F28C44' },
-  { name: '옐로우', color: '#F4C84B' },
-  { name: '그린', color: '#43A979' },
-  { name: '민트', color: '#45BDB1' },
-  { name: '블루', color: '#438EE9' },
-  { name: '퍼플', color: '#9469D5' },
-  { name: '핑크', color: '#E77CAA' },
-  { name: '그레이', color: '#848A96' },
-  { name: '블랙', color: '#292C33' },
+  { name: '핑크', color: '#EC4899' },
+  { name: '빨강', color: '#EF4444' },
+  { name: '주황', color: '#F97316' },
+  { name: '노랑', color: '#FACC15' },
+  { name: '초록', color: '#22C55E' },
+  { name: '청록', color: '#14B8A6' },
+  { name: '하늘', color: '#38BDF8' },
+  { name: '파랑', color: '#3B82F6' },
+  { name: '보라', color: '#A855F7' },
+  { name: '진회색', color: '#374151' },
 ] as const
 
-export const PROGRESS_LINE_COLOR_PRESETS = [
-  { name: '진행선 코랄', color: DESIGN_SYSTEM_COLORS.progress },
-  ...FUNCTIONAL_COLOR_PRESETS.slice(1),
-] as const
+export const PROGRESS_LINE_COLOR_PRESETS = ANNOTATION_COLOR_PRESETS
 
 export const DEFAULT_COUNTER_COLORS = {
   simple: '#557A95',

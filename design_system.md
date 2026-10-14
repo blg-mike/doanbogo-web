@@ -49,11 +49,16 @@ Do not replace them without updating this file first.
 
 | Role | Name | Hex | Primary Use |
 |---|---|---|---|
-| Primary | Moss Olive | `#4B6334` | Primary actions, selected states, active controls |
+| Primary | Moss Olive | `#47613F` | Primary actions, selected states, active controls |
 | Secondary | Muted Steel Blue | `#4F6B7A` | Secondary actions, information controls, page/navigation utility |
 | Tertiary | Deep Teal Green | `#3D705C` | Progress, completion, positive state, supporting functional accents |
-| Neutral | Warm Off White | `#FBF9F5` | Main app surface and warm neutral background |
-| Text | Warm Charcoal | `#2C2B27` | Primary text |
+| Neutral | Warm Off White | `#F7F4EE` | Main app background |
+| Surface | Soft White | `#FFFCF7` | Cards, popovers, and controls |
+| Viewer Background | Neutral Canvas Surround | `#E9E6DF` | Area around the original document |
+| Selected | Soft Olive | `#E6EDE0` | Selected and active controls |
+| Text | Craft Charcoal | `#2E332D` | Primary text |
+| Secondary Text | Muted Olive Gray | `#666B60` | Supporting text |
+| Border | Warm Border | `#E5DDD2` | Borders and separators |
 
 ---
 
@@ -65,25 +70,25 @@ Recommended token structure:
 
 ```css
 :root {
-  --color-primary: #4B6334;
+  --color-primary: #47613F;
+  --color-primary-soft: #E6EDE0;
   --color-secondary: #4F6B7A;
   --color-tertiary: #3D705C;
 
-  --color-bg: #FBF9F5;
-  --color-surface: #FFFFFF;
+  --color-background: #F7F4EE;
+  --color-surface: #FFFCF7;
   --color-surface-subtle: #F4F1EC;
+  --color-viewer-background: #E9E6DF;
 
-  --color-text-primary: #2C2B27;
-  --color-text-secondary: #6E6A64;
+  --color-text: #2E332D;
+  --color-text-secondary: #666B60;
   --color-text-muted: #918B84;
 
-  --color-border: #E4DED6;
+  --color-border: #E5DDD2;
   --color-divider: #ECE6DF;
 
-  --color-primary-hover: #40552C;
-  --color-primary-pressed: #354624;
-  --color-primary-soft: #E9EEE4;
-
+  --color-primary-hover: #3D5537;
+  --color-primary-pressed: #35492F;
   --color-secondary-hover: #435D69;
   --color-secondary-soft: #E9EEF1;
 
@@ -95,7 +100,7 @@ Recommended token structure:
   --color-warning: #B88732;
   --color-warning-soft: #F6EEDC;
 
-  --color-focus-ring: #4B6334;
+  --color-focus-ring: rgba(71, 97, 63, .3);
 }
 ```
 
@@ -105,7 +110,7 @@ Bad:
 
 ```css
 button {
-  background: #4B6334;
+  background: var(--color-primary);
 }
 ```
 
@@ -121,7 +126,7 @@ button {
 
 # 4. Color Usage Rules
 
-## Primary — `#4B6334`
+## Primary — `#47613F`
 
 Use for:
 
@@ -240,47 +245,30 @@ Progress / completed status
 
 # 6. Progress Line Color
 
-The progress line is a work-state element, not a general annotation.
-
-Default progress line should use a dedicated high-visibility accent derived from the design system.
-
-Recommended default:
-
-```css
---color-progress-line: #D46A4C;
-```
-
-This is intentionally warmer than the main green system because the line must remain easy to locate over monochrome knitting charts.
-
-Rules:
-
-- Progress line must remain visually distinct from Primary.
-- Do not use neon pink, bright blue, or arbitrary accent colors.
-- User-selectable progress-line presets may exist later, but the default must remain controlled by this system.
-- Progress-line color should not become the global app accent.
+Progress and reference lines use the same approved ten-color preset as annotation tools. New progress lines default to pink `#EC4899`; this is a tool color, not the global app accent. Preserve explicitly saved colors on existing guides and settings.
 
 ---
 
 # 7. Annotation Colors
 
-Annotation colors are functional tools and use this approved ten-color preset. Apply it to pen, highlighter, text, and region highlight controls.
+Annotation colors are functional tools and use this approved ten-color preset. Apply it to pen, straight line, highlighter, text, region highlight, progress line, and reference line controls.
 
 ```text
-Red           #E5494D
-Orange        #F28C44
-Yellow        #F4C84B
-Green         #43A979
-Mint          #45BDB1
-Blue          #438EE9
-Purple        #9469D5
-Pink          #E77CAA
-Gray          #848A96
-Black         #292C33
+Pink          #EC4899
+Red           #EF4444
+Orange        #F97316
+Yellow        #FACC15
+Green         #22C55E
+Teal          #14B8A6
+Sky Blue      #38BDF8
+Blue          #3B82F6
+Purple        #A855F7
+Dark Gray     #374151
 ```
 
-Show colors in two rows of five in this order. Do not add custom colors or an extra current-color swatch. Existing saved annotation colors remain unchanged until the user chooses a preset.
+Show colors in two rows of five in this order. Do not add custom colors or an extra current-color swatch. Existing saved annotation and line colors remain unchanged until the user chooses a preset.
 
-Use black as the new pen and text default, and yellow as the new highlighter and region-highlight default. Progress-line, counter, and brand colors remain separate.
+Use dark gray as the new pen, straight-line, and text default; yellow for highlighter and region-highlight; and pink for progress lines. Counter, brand, and yarn colors remain unchanged.
 
 ---
 
@@ -292,16 +280,22 @@ Recommended hierarchy:
 
 ```text
 App background
-#FBF9F5
+#F7F4EE
 
 Main surface
-#FFFFFF
+#FFFCF7
 
 Subtle grouped surface
 #F4F1EC
 
+Viewer surround
+#E9E6DF
+
+Selected background
+#E6EDE0
+
 Border
-#E4DED6
+#E5DDD2
 
 Divider
 #ECE6DF
@@ -320,10 +314,10 @@ Avoid:
 
 ```text
 Primary text
-#2C2B27
+#2E332D
 
 Secondary text
-#6E6A64
+#666B60
 
 Muted / metadata
 #918B84
@@ -344,7 +338,7 @@ Rules:
 ## Primary Button
 
 ```text
-Background: #4B6334
+Background: #47613F
 Text: White
 ```
 
@@ -475,10 +469,10 @@ Keep corners modern but controlled.
 Recommended:
 
 ```text
-Small controls: 8px
-Buttons: 8–10px
-Cards / sheets: 12–16px
-Large modals: 16px
+Buttons: 10px
+Tool rails: 14px
+Cards / sheets: 12px
+Popovers / large modals: 16px
 ```
 
 Avoid fully rounded pill shapes everywhere.
@@ -529,7 +523,7 @@ Icons should be:
 Recommended hit target:
 
 ```text
-Minimum interactive area: 40–44px
+Minimum interactive area: 44px
 ```
 
 Do not color every icon.
@@ -537,13 +531,13 @@ Do not color every icon.
 Inactive icons:
 
 ```text
-#6E6A64
+#666B60
 ```
 
 Active:
 
 ```text
-#4B6334
+#47613F
 ```
 
 Utility / informational:
@@ -617,11 +611,16 @@ Example:
 
 ```js
 colors: {
-  primary: '#4B6334',
+  primary: '#47613F',
   secondary: '#4F6B7A',
   tertiary: '#3D705C',
-  background: '#FBF9F5',
-  text: '#2C2B27',
+  background: '#F7F4EE',
+  surface: '#FFFCF7',
+  viewerBackground: '#E9E6DF',
+  selectedBackground: '#E6EDE0',
+  text: '#2E332D',
+  textSecondary: '#666B60',
+  border: '#E5DDD2',
 }
 ```
 
@@ -642,7 +641,7 @@ Before generating or modifying UI code:
 1. Read `design_system.md`.
 2. Reuse the defined semantic tokens.
 3. Do not invent new brand colors.
-4. Do not change Primary / Secondary / Tertiary values.
+4. Use the latest approved palette in section 22.
 5. Preserve Viewer neutrality.
 6. Use Primary only for important interaction.
 7. Use Secondary for utility/navigation.
@@ -659,7 +658,7 @@ Before generating or modifying UI code:
 - Use the semantic color tokens and approved functional presets for progress lines, annotations, and counters. Keep existing saved colors intact when loading older work.
 - Keep yarn colors user-selectable in Colorwork and Chart because those colors represent project materials rather than UI state.
 - The counter work panel remains available while the user clicks the PDF. Its nested settings and add menus close when dismissed outside their own controls.
-- Progress-line style settings open from the dedicated palette button beside the line options button.
+- Tapping a progress or reference line opens its style popup beside the line. A 450ms long press opens the same popup; movement beyond 8px keeps the direct drag behavior. The ellipsis button remains for line options.
 
 When uncertain:
 
@@ -671,8 +670,8 @@ When uncertain:
 
 ```text
 Primary
-#4B6334
-Moss Olive
+#47613F
+Olive Green
 
 Secondary
 #4F6B7A
@@ -683,16 +682,40 @@ Tertiary
 Deep Teal Green
 
 Neutral / Background
-#FBF9F5
-Warm Off White
+#F7F4EE
+Warm Background
+
+Surface
+#FFFCF7
+Soft White
+
+Viewer Background
+#E9E6DF
+Neutral Canvas Surround
+
+Selected Background
+#E6EDE0
+Soft Olive
 
 Primary Text
-#2C2B27
-Warm Charcoal
+#2E332D
+Craft Charcoal
 
-Progress Line
+Secondary Text
+#666B60
+Muted Olive Gray
+
+Border
+#E5DDD2
+Warm Border
+
+Progress Status
 #D46A4C
 Warm Coral
+
+Progress Line Default
+#EC4899
+Pink
 
 Danger
 #B9473F
@@ -700,6 +723,14 @@ Danger
 Warning
 #B88732
 ```
+
+## 2026-10-14 Viewer Style Popovers
+
+- Keep the function toolbar on the left and the draggable counter/timer floating bar in its existing position. Do not show a separate property bar under the header.
+- Pen and highlighter selection opens the existing style popover while leaving the drawing tool active. The first canvas action closes the popover.
+- A short tap or 450ms long press on a progress or reference line opens its style popup beside the line; movement beyond 8px keeps the direct drag behavior. The ellipsis button remains for line options.
+- Use the same approved two-row, five-column ten-color palette in all drawing and line style popovers. Stack thickness and opacity labels above full-width sliders aligned to the five color columns, with 44px touch areas.
+- Preserve saved colors, line drag, split view, and existing save/backup formats.
 
 ---
 
@@ -726,6 +757,14 @@ The product should feel calm enough to remain open beside the user for a long kn
 The pattern is always the visual priority.
 
 The interface should support the work, not compete with it.
+
+## 24. Viewer Style Popovers and Line Interaction (2026-10-14)
+
+Use the existing right-side style popover for pen and highlighter settings; selecting the tool opens it together with the drawing mode, and the first canvas action closes it. Do not render a separate contextual property bar below the header.
+
+A short tap or 450ms long press on a progress or reference line opens that line's style popup beside it. Cancel the hold when movement passes 8px so line movement and handle resizing stay direct. Keep the ellipsis button for marker, counter connection, reference, and delete options. Clamp the popup within the page area and return focus to the line on Escape.
+
+Use the two-row, five-column approved palette from section 7 in drawing and line style popovers. Place thickness and opacity labels above horizontal sliders whose width matches the five color columns. Keep color and slider hit areas at least 44px, preserve saved colors, and retain the current data and backup formats.
 
 
 ## 4. Shared interaction polish (2026-10-13)

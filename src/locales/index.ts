@@ -10,6 +10,7 @@ import { nb } from './nb'
 import { extendedTranslations } from './extended'
 import { generatedTranslations } from './generated'
 import { specializedTranslations } from './specialized'
+import { reportTranslations } from './report'
 
 export type { LocaleKey } from './ko'
 
@@ -21,12 +22,12 @@ export const languageNames: Record<LocaleId, string> = {
 
 const dictionaries: Record<LocaleId, Partial<Record<LocaleKey, string>>> = {
   ko,
-  en: { ...en, ...extendedTranslations.en, ...generatedTranslations.en, ...specializedTranslations.en },
-  ja: { ...ja, ...extendedTranslations.ja, ...generatedTranslations.ja, ...specializedTranslations.ja },
-  de: { ...de, ...extendedTranslations.de, ...generatedTranslations.de, ...specializedTranslations.de },
-  da: { ...da, ...extendedTranslations.da, ...generatedTranslations.da, ...specializedTranslations.da },
-  nb: { ...nb, ...extendedTranslations.nb, ...generatedTranslations.nb, ...specializedTranslations.nb },
-  fi: { ...fi, ...extendedTranslations.fi, ...generatedTranslations.fi, ...specializedTranslations.fi },
+  en: { ...en, ...extendedTranslations.en, ...generatedTranslations.en, ...specializedTranslations.en, ...reportTranslations.en },
+  ja: { ...ja, ...extendedTranslations.ja, ...generatedTranslations.ja, ...specializedTranslations.ja, ...reportTranslations.ja },
+  de: { ...de, ...extendedTranslations.de, ...generatedTranslations.de, ...specializedTranslations.de, ...reportTranslations.de },
+  da: { ...da, ...extendedTranslations.da, ...generatedTranslations.da, ...specializedTranslations.da, ...reportTranslations.da },
+  nb: { ...nb, ...extendedTranslations.nb, ...generatedTranslations.nb, ...specializedTranslations.nb, ...reportTranslations.nb },
+  fi: { ...fi, ...extendedTranslations.fi, ...generatedTranslations.fi, ...specializedTranslations.fi, ...reportTranslations.fi },
 }
 const htmlLocales: Record<LocaleId, string> = { ko: 'ko', en: 'en', ja: 'ja', de: 'de', da: 'da', nb: 'nb', fi: 'fi' }
 const listeners = new Set<() => void>()

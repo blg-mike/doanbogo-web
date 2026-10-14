@@ -157,6 +157,14 @@ export interface DocumentWorkTimeDay {
   elapsedMs: number
 }
 
+export interface DocumentWorkTimeSession {
+  id: string
+  startedAt: number
+  endedAt: number
+  elapsedMs: number
+  workDate: string
+}
+
 export interface DocumentRecord {
   id: string
   kind?: 'pdf' | 'photos'
@@ -170,6 +178,8 @@ export interface DocumentRecord {
   todayWorkDate?: string
   todayWorkTimeMs?: number
   workTimeDays?: DocumentWorkTimeDay[]
+  workTimeSessions?: DocumentWorkTimeSession[]
+  workTimeNotes?: Record<string, string>
   pdf: Blob | null
   cover: Blob | null
 }
@@ -435,6 +445,8 @@ export interface ReportYarn {
   usedSkeins: string
   usedWeight: string
   usedMeters?: string
+  strandCount?: string
+  needleSizeMm?: string
   memo?: string
   leftover: string
 }

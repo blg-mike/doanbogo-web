@@ -1,4 +1,7 @@
-import type { DocumentWorkTimeDay } from './types'
+import type { DocumentWorkTimeDay, DocumentWorkTimeSession } from './types'
+
+export type WorkTimeChartMode = 'day' | 'week' | 'month'
+export type WorkTimeChartBucket = { key: string; label: string; elapsedMs: number }
 
 export function formatWorkTime(milliseconds: number) {
   const seconds = Math.floor(Math.max(0, milliseconds) / 1000)
@@ -37,4 +40,64 @@ export function normalizeWorkTimeDays(days?: DocumentWorkTimeDay[], todayDate?: 
 
 export function localWorkDateKey(date = new Date()) {
   return [date.getFullYear(), String(date.getMonth() + 1).padStart(2, '0'), String(date.getDate()).padStart(2, '0')].join('-')
+}
+
+export function splitWorkTimeSession(id: string, startedAt: number, endedAt: number): DocumentWorkTimeSession[] {
+  if (!id || !Number.isFinite(startedAt) || !Number.isFinite(endedAt) || endedAt <= startedAt) return []
+  const segments: DocumentWorkTimeSession[] = []
+  let cursor = Math.floor(startedAt)
+  const end = Math.floor(endedAt)
+  while (cursor < end) {
+    const startDate = new Date(cursor)
+    const workDate = localWorkDateKey(startDate)
+    const nextMidnight = new Date(startDate.getFullYear(), startDate.getMonth(), startDate.getDate() + 1).getTime()
+    const segmentEnd = Math.min(end, nextMidnight)
+    const elapsedMs = segmentEnd - cursor
+    if (elapsedMs > 0) segments.push({ id: `${id}:${workDate}`, startedAt: cursor, endedAt: segmentEnd, elapsedMs, workDate })
+    cursor = segmentEnd
+  }
+  return segments
+}
+
+export function summarizeWorkTime(totalWorkTimeMs: number, days: readonly DocumentWorkTimeDay[]) {
+  const recordedDays = normalizeWorkTimeDays([...days]).filter((day) => day.elapsedMs > 0)
+  const recordedMs = recordedDays.reduce((sum, day) => sum + day.elapsedMs, 0)
+  return {
+    recordedDays,
+    unknownMs: Math.max(0, totalWorkTimeMs - recordedMs),
+    averageMs: recordedDays.length ? Math.floor(recordedMs / recordedDays.length) : 0,
+    longestDayMs: recordedDays.reduce((longest, day) => Math.max(longest, day.elapsedMs), 0),
+  }
+}
+
+export function workTimeChartBuckets(days: readonly DocumentWorkTimeDay[], mode: WorkTimeChartMode, count: number, now = new Date()): WorkTimeChartBucket[] {
+  const totals = new Map(normalizeWorkTimeDays([...days]).map((day) => [day.date, day.elapsedMs]))
+  const buckets: WorkTimeChartBucket[] = []
+  if (mode === 'day') {
+    for (let offset = count - 1; offset >= 0; offset -= 1) {
+      const date = new Date(now.getFullYear(), now.getMonth(), now.getDate() - offset)
+      const key = localWorkDateKey(date)
+      buckets.push({ key, label: `${date.getMonth() + 1}.${String(date.getDate()).padStart(2, '0')}`, elapsedMs: totals.get(key) ?? 0 })
+    }
+    return buckets
+  }
+  if (mode === 'week') {
+    const currentMonday = new Date(now.getFullYear(), now.getMonth(), now.getDate())
+    currentMonday.setDate(currentMonday.getDate() - (currentMonday.getDay() + 6) % 7)
+    for (let offset = count - 1; offset >= 0; offset -= 1) {
+      const start = new Date(currentMonday.getFullYear(), currentMonday.getMonth(), currentMonday.getDate() - offset * 7)
+      const end = new Date(start.getFullYear(), start.getMonth(), start.getDate() + 7)
+      const key = localWorkDateKey(start)
+      const elapsedMs = [...totals].reduce((sum, [date, value]) => sum + (date >= key && date < localWorkDateKey(end) ? value : 0), 0)
+      buckets.push({ key, label: `${start.getMonth() + 1}.${String(start.getDate()).padStart(2, '0')}`, elapsedMs })
+    }
+    return buckets
+  }
+  for (let offset = count - 1; offset >= 0; offset -= 1) {
+    const date = new Date(now.getFullYear(), now.getMonth() - offset, 1)
+    const key = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`
+    const elapsedMs = [...totals].reduce((sum, [day, value]) => sum + (day.startsWith(key) ? value : 0), 0)
+    buckets.push({ key, label: `${date.getFullYear()}.${String(date.getMonth() + 1).padStart(2, '0')}`, elapsedMs })
+  }
+  return buckets
 }

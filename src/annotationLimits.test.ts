@@ -18,8 +18,8 @@ function work(annotations: AnnotationRecord[] = [], regionHighlights: RegionHigh
 describe('per-page annotation limits', () => {
   it('exposes the approved colors in the requested order', () => {
     expect(ANNOTATION_COLOR_PRESETS.map((preset) => preset.color)).toEqual([
-      '#E5494D', '#F28C44', '#F4C84B', '#43A979', '#45BDB1',
-      '#438EE9', '#9469D5', '#E77CAA', '#848A96', '#292C33',
+      '#EC4899', '#EF4444', '#F97316', '#FACC15', '#22C55E',
+      '#14B8A6', '#38BDF8', '#3B82F6', '#A855F7', '#374151',
     ])
   })
 
