@@ -1117,11 +1117,15 @@ html.viewer-viewport-locked .viewer-shell { height: 100dvh; min-height: 0; flex:
 .photo-draft-list { display: grid; gap: 5px; max-height: min(38vh, 320px); padding: 0; margin: 0; overflow: auto; list-style: none; }
 .photo-draft-list li { min-width: 0; display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 5px 7px; border: 1px solid var(--color-border); border-radius: 8px; color: #59677d; background: var(--color-surface-subtle); font-size: 11px; }
 .photo-draft-list li > span { min-width: 0; display: flex; align-items: center; gap: 8px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.photo-draft-list li.photo-draft-failed { border-color: color-mix(in srgb, var(--color-danger) 45%, var(--color-border)); }
+.photo-draft-name { min-width: 0; display: flex; align-items: center; gap: 8px; overflow: hidden; text-overflow: ellipsis; }
+.photo-draft-name small { flex: 0 0 auto; color: var(--color-danger); font-size: 10px; }
 .photo-draft-list li b { width: 21px; height: 21px; display: grid; flex: 0 0 auto; place-items: center; border-radius: 6px; color: #3977cc; background: #edf4ff; font-size: 10px; }
 .photo-draft-list li > div { display: flex; flex: 0 0 auto; gap: 2px; }
 .photo-draft-list li button { width: 30px; height: 30px; display: grid; place-items: center; padding: 0; border: 0; border-radius: 6px; color: #758198; background: transparent; cursor: pointer; }
 .photo-draft-list li button:hover:not(:disabled) { color: var(--color-primary); background: #edf4ff; }
 .photo-draft-list li button:disabled { opacity: .35; cursor: default; }
+.photo-import-progress { margin: 0; color: var(--color-secondary); font-size: 12px; }
 
 /* Adaptive report layout */
 .report-appbar { grid-template-columns: 42px minmax(70px,1fr) auto; }

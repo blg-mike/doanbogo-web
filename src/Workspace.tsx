@@ -6,7 +6,7 @@ import yyLogo from './assets/yy-logo.png'
 import { createWorkspaceBackup, readWorkspaceBackup } from './backup'
 import { addDocument, appendPhotoPages, createPhotoFolder, duplicateChart, duplicateDocument, getDocument, getHomeProject, getPhotoPage, getPreference, getStorageMode, importWorkspaceData, isQuotaError, listCharts, listDocuments, listHomeProjects, markChartOpened, renameDocument, saveChart, saveHomeProject, savePreference, storageEstimate, subscribeStorageMode, updateTags, type StorageMode } from './storage'
 import { inspectPdf, pdfErrorMessage } from './pdf'
-import { preparePhotoFile, sortPhotoFiles } from './photoImages'
+import { PhotoPreparationError, preparePhotoFile, sortPhotoFiles, type PhotoPreparationErrorCode } from './photoImages'
 import { chartSvg } from './charts'
 import type { ChartDocument, DocumentRecord, HomeProject, SortMode, ViewMode } from './types'
 import { formatWorkTime } from './workTime'
@@ -14,6 +14,13 @@ import AppNavigation from './AppNavigation'
 import './Chart.css'
 
 const sortLabels: Record<SortMode, LocaleKey> = { recent: '최근 실행순', name: '이름순', upload: '업로드순' }
+const photoPreparationErrorKeys: Record<PhotoPreparationErrorCode, LocaleKey> = {
+  empty: '빈 사진 파일입니다.',
+  unsupported: '지원하지 않는 이미지 형식입니다. JPG, PNG 또는 WebP로 변환해 주세요.',
+  unreadable: '사진 파일을 읽지 못했습니다. 파일 권한을 확인하고 다시 선택해 주세요.',
+  decode: '사진 내용을 해독하지 못했습니다. JPG 또는 PNG로 다시 저장해 주세요.',
+  convert: '사진을 JPEG로 변환하지 못했습니다. 다른 사진으로 다시 시도해 주세요.',
+}
 
 function formatSize(bytes: number) {
   if (bytes < 1024 * 1024) return formatNumber(Math.max(1, Math.round(bytes / 1024))) + ' KB'
@@ -95,6 +102,8 @@ export default function Workspace() {
   const [photoFolderName, setPhotoFolderName] = useState('')
   const [photoDraft, setPhotoDraft] = useState<PhotoDraftItem[]>([])
   const [photoError, setPhotoError] = useState('')
+  const [photoProgress, setPhotoProgress] = useState('')
+  const [photoFailedId, setPhotoFailedId] = useState<string | null>(null)
   const [tagDraft, setTagDraft] = useState('')
   const [loading, setLoading] = useState(false)
   const [notice, setNotice] = useState('')
@@ -219,6 +228,8 @@ export default function Workspace() {
     setPhotoFolderName(t('사진 도안 만들기') + ' ' + formatDate(Date.now()))
     setPhotoDraft([])
     setPhotoError('')
+    setPhotoProgress('')
+    setPhotoFailedId(null)
     setDialog('photos')
   }
 
@@ -228,6 +239,8 @@ export default function Workspace() {
     setPhotoFolderName(document.fileName)
     setPhotoDraft([])
     setPhotoError('')
+    setPhotoProgress('')
+    setPhotoFailedId(null)
     setDialog('photos')
   }
 
@@ -236,6 +249,7 @@ export default function Workspace() {
     const sorted = sortPhotoFiles(Array.from(files))
     setPhotoDraft((current) => [...current, ...sorted.map((file) => ({ id: crypto.randomUUID(), file }))])
     setPhotoError('')
+    setPhotoFailedId(null)
   }
 
   function movePhotoDraft(index: number, offset: number) {
@@ -254,9 +268,17 @@ export default function Workspace() {
     importingRef.current = true
     setLoading(true)
     setPhotoError('')
+    setPhotoFailedId(null)
+    let currentPhoto: PhotoDraftItem | undefined
     try {
       const prepared = []
-      for (const item of photoDraft) prepared.push(await preparePhotoFile(item.file))
+      for (const [index, item] of photoDraft.entries()) {
+        currentPhoto = item
+        setPhotoProgress(t('사진 준비 중 {current}/{total}: {name}', { current: index + 1, total: photoDraft.length, name: item.file.name }))
+        prepared.push(await preparePhotoFile(item.file))
+      }
+      currentPhoto = undefined
+      setPhotoProgress(t('사진 저장 중…'))
       let saved: DocumentRecord
       if (photoMode === 'new') saved = await createPhotoFolder(photoFolderName, prepared)
       else if (selected?.kind === 'photos') {
@@ -268,13 +290,20 @@ export default function Workspace() {
       setDialog(null)
       setSelected(null)
       setPhotoDraft([])
+      setPhotoFailedId(null)
       setNotice(photoMode === 'new' ? t('사진 도안 폴더를 추가했습니다.') : t('사진 페이지를 추가했습니다.'))
     } catch (error) {
-      setPhotoError(isQuotaError(error)
-        ? t('브라우저 저장 공간이 부족해 사진을 저장하지 못했습니다. 저장 공간을 확보한 뒤 다시 시도해 주세요.')
-        : error instanceof Error ? translateMessage(error.message) : t('사진을 저장하지 못했습니다.'))
+      if (error instanceof PhotoPreparationError && currentPhoto) {
+        setPhotoFailedId(currentPhoto.id)
+        setPhotoError(t('사진 "{name}" 처리 실패: {reason}', { name: currentPhoto.file.name, reason: t(photoPreparationErrorKeys[error.code]) }))
+      } else if (isQuotaError(error)) {
+        setPhotoError(t('브라우저 저장 공간이 부족해 사진을 저장하지 못했습니다. 저장 공간을 확보한 뒤 다시 시도해 주세요.'))
+      } else {
+        setPhotoError(t('사진을 저장하지 못했습니다. 다시 시도해 주세요.'))
+      }
     } finally {
       setLoading(false)
+      setPhotoProgress('')
       importingRef.current = false
       if (photoCameraInput.current) photoCameraInput.current.value = ''
       if (photoFilesInput.current) photoFilesInput.current.value = ''
@@ -464,13 +493,14 @@ export default function Workspace() {
         <button className="danger-action" onClick={() => setDialog('delete')}>{t("휴지통으로 이동")}<span>{t("프로젝트와 작업 기록은 휴지통에서 복구할 수 있습니다")}</span></button>
       </div></Modal>}
       {dialog === 'rename' && selected && <Modal title={selected.kind === 'photos' ? t('사진 폴더 이름 변경') : t('PDF 이름 변경')} onClose={() => setDialog('menu')}><form className="modal-form" onSubmit={(event) => void saveDocumentName(event)}><label htmlFor="pdf-name-draft">{selected.kind === 'photos' ? t('폴더 이름') : t('PDF 이름')}</label><input id="pdf-name-draft" autoFocus required maxLength={120} value={fileNameDraft} onChange={(event) => setFileNameDraft(event.currentTarget.value)} />{selected.kind !== 'photos' && <p className="modal-copy">{t(".pdf 확장자는 저장할 때 자동으로 붙습니다.")}</p>}{renameError && <p className="rename-error" role="alert">{renameError}</p>}<div className="modal-actions"><button type="button" className="secondary-button" onClick={() => setDialog('menu')}>{t("취소")}</button><button className="primary-button" type="submit"><Check size={17} />{t("저장")}</button></div></form></Modal>}
-      {dialog === 'photos' && <Modal title={photoMode === 'new' ? t('사진 도안 만들기') : t('사진 추가')} onClose={() => { setDialog(photoMode === 'append' ? 'menu' : null); setPhotoDraft([]); setPhotoError('') }}><form className="modal-form photo-import-form" onSubmit={(event) => void savePhotos(event)}>
-        {photoMode === 'new' && <><label htmlFor="photo-folder-name">{t("폴더 이름")}</label><input id="photo-folder-name" required maxLength={120} value={photoFolderName} onChange={(event) => setPhotoFolderName(event.currentTarget.value)} /></>}
+      {dialog === 'photos' && <Modal title={photoMode === 'new' ? t('사진 도안 만들기') : t('사진 추가')} onClose={() => { if (loading) return; setDialog(photoMode === 'append' ? 'menu' : null); setPhotoDraft([]); setPhotoError(''); setPhotoProgress(''); setPhotoFailedId(null) }}><form className="modal-form photo-import-form" aria-busy={loading} onSubmit={(event) => void savePhotos(event)}>
+        {photoMode === 'new' && <><label htmlFor="photo-folder-name">{t("폴더 이름")}</label><input id="photo-folder-name" required maxLength={120} disabled={loading} value={photoFolderName} onChange={(event) => setPhotoFolderName(event.currentTarget.value)} /></>}
         <p className="modal-copy">{photoDraft.length ? `${photoDraft.length}장 선택됨 · 촬영 순서대로 페이지가 만들어집니다. 더 촬영하거나 사진을 선택한 뒤 완료하세요.` : t('사진을 찍거나 기존 사진 여러 장 또는 폴더를 선택하세요.')}</p>
-        <div className="photo-import-actions"><button type="button" className="secondary-button" onClick={() => photoCameraInput.current?.click()}><Camera size={16} />{photoDraft.length ? t('계속 촬영') : t('사진 찍기')}</button><button type="button" className="secondary-button" onClick={() => photoFilesInput.current?.click()}><Images size={16} />{t("사진 선택")}</button><button type="button" className="secondary-button" onClick={() => { photoFolderInput.current?.setAttribute('webkitdirectory', ''); photoFolderInput.current?.click() }}><FolderPlus size={16} />{t("폴더 선택")}</button></div>
-        {photoDraft.length > 0 && <ol className="photo-draft-list">{photoDraft.map((item, index) => <li key={item.id}><span><b>{index + 1}</b>{item.file.name}</span><div><button type="button" aria-label={`${item.file.name} 위로 이동`} title={t("위로")} disabled={index === 0} onClick={() => movePhotoDraft(index, -1)}><ChevronUp size={15} /></button><button type="button" aria-label={`${item.file.name} 아래로 이동`} title={t("아래로")} disabled={index === photoDraft.length - 1} onClick={() => movePhotoDraft(index, 1)}><ChevronDown size={15} /></button><button type="button" aria-label={`${item.file.name} 제거`} title={t("제거")} onClick={() => setPhotoDraft((current) => current.filter((photo) => photo.id !== item.id))}><X size={15} /></button></div></li>)}</ol>}
+        <div className="photo-import-actions"><button type="button" className="secondary-button" disabled={loading} onClick={() => photoCameraInput.current?.click()}><Camera size={16} />{photoDraft.length ? t('계속 촬영') : t('사진 찍기')}</button><button type="button" className="secondary-button" disabled={loading} onClick={() => photoFilesInput.current?.click()}><Images size={16} />{t("사진 선택")}</button><button type="button" className="secondary-button" disabled={loading} onClick={() => { photoFolderInput.current?.setAttribute('webkitdirectory', ''); photoFolderInput.current?.click() }}><FolderPlus size={16} />{t("폴더 선택")}</button></div>
+        {photoDraft.length > 0 && <ol className="photo-draft-list">{photoDraft.map((item, index) => <li key={item.id} className={photoFailedId === item.id ? 'photo-draft-failed' : undefined}><span><b>{index + 1}</b><span className="photo-draft-name">{item.file.name}{photoFailedId === item.id && <small>{t('처리 실패')}</small>}</span></span><div><button type="button" aria-label={`${item.file.name} 위로 이동`} title={t("위로")} disabled={loading || index === 0} onClick={() => movePhotoDraft(index, -1)}><ChevronUp size={15} /></button><button type="button" aria-label={`${item.file.name} 아래로 이동`} title={t("아래로")} disabled={loading || index === photoDraft.length - 1} onClick={() => movePhotoDraft(index, 1)}><ChevronDown size={15} /></button><button type="button" aria-label={`${item.file.name} 제거`} title={t("제거")} disabled={loading} onClick={() => { setPhotoDraft((current) => current.filter((photo) => photo.id !== item.id)); if (photoFailedId === item.id) { setPhotoFailedId(null); setPhotoError('') } }}><X size={15} /></button></div></li>)}</ol>}
+        {loading && photoProgress && <p className="photo-import-progress" role="status" aria-live="polite">{photoProgress}</p>}
         {photoError && <p className="rename-error" role="alert">{photoError}</p>}
-        <div className="modal-actions"><button type="button" className="secondary-button" onClick={() => { setDialog(photoMode === 'append' ? 'menu' : null); setPhotoDraft([]); setPhotoError('') }}>{t("취소")}</button><button className="primary-button" type="submit" disabled={!photoDraft.length || loading}>{loading ? t('사진을 준비하고 있습니다…') : photoMode === 'new' ? t('완료하고 폴더 만들기') : t('사진 추가 완료')}</button></div>
+        <div className="modal-actions"><button type="button" className="secondary-button" disabled={loading} onClick={() => { setDialog(photoMode === 'append' ? 'menu' : null); setPhotoDraft([]); setPhotoError(''); setPhotoFailedId(null) }}>{t("취소")}</button><button className="primary-button" type="submit" disabled={!photoDraft.length || loading}>{loading ? t('사진을 준비하고 있습니다…') : photoError ? t('다시 시도') : photoMode === 'new' ? t('완료하고 폴더 만들기') : t('사진 추가 완료')}</button></div>
       </form></Modal>}
       {dialog === 'chart-menu' && selectedChart && <Modal title={t("차트 관리")} onClose={() => setDialog(null)}><div className="action-list">
         <button onClick={() => { setChartTitleDraft(selectedChart.title); setDialog('chart-rename') }}>{t("이름 변경")}<span>{t("워크스페이스 카드에 표시되는 이름")}</span></button>

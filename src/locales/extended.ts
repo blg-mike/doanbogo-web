@@ -392,3 +392,85 @@ Object.assign(extendedTranslations.de, thumbnailRailPositionTranslations.de)
 Object.assign(extendedTranslations.da, thumbnailRailPositionTranslations.da)
 Object.assign(extendedTranslations.nb, thumbnailRailPositionTranslations.nb)
 Object.assign(extendedTranslations.fi, thumbnailRailPositionTranslations.fi)
+
+const photoImportTranslations = {
+  en: {
+    '빈 사진 파일입니다.': 'The selected photo file is empty.',
+    '지원하지 않는 이미지 형식입니다. JPG, PNG 또는 WebP로 변환해 주세요.': 'This image format is not supported. Convert it to JPG, PNG, or WebP.',
+    '사진 파일을 읽지 못했습니다. 파일 권한을 확인하고 다시 선택해 주세요.': 'Could not read this photo file. Check file access and select it again.',
+    '사진 내용을 해독하지 못했습니다. JPG 또는 PNG로 다시 저장해 주세요.': 'Could not decode this photo. Save it again as JPG or PNG and retry.',
+    '사진을 JPEG로 변환하지 못했습니다. 다른 사진으로 다시 시도해 주세요.': 'Could not convert this photo to JPEG. Try another photo.',
+    '사진 "{name}" 처리 실패: {reason}': 'Could not process "{name}": {reason}',
+    '사진 준비 중 {current}/{total}: {name}': 'Preparing photo {current}/{total}: {name}',
+    '사진 저장 중…': 'Saving photos…',
+    '처리 실패': 'Failed',
+    '사진을 저장하지 못했습니다. 다시 시도해 주세요.': 'Could not save the photos. Please try again.',
+  },
+  ja: {
+    '빈 사진 파일입니다.': '選択した写真ファイルは空です。',
+    '지원하지 않는 이미지 형식입니다. JPG, PNG 또는 WebP로 변환해 주세요.': 'この画像形式には対応していません。JPG、PNG、またはWebPに変換してください。',
+    '사진 파일을 읽지 못했습니다. 파일 권한을 확인하고 다시 선택해 주세요.': '写真ファイルを読み込めませんでした。アクセス権を確認して、もう一度選択してください。',
+    '사진 내용을 해독하지 못했습니다. JPG 또는 PNG로 다시 저장해 주세요.': '写真を読み取れませんでした。JPGまたはPNGで保存し直して、もう一度お試しください。',
+    '사진을 JPEG로 변환하지 못했습니다. 다른 사진으로 다시 시도해 주세요.': '写真をJPEGに変換できませんでした。別の写真でお試しください。',
+    '사진 "{name}" 처리 실패: {reason}': '「{name}」を処理できませんでした: {reason}',
+    '사진 준비 중 {current}/{total}: {name}': '写真を準備中 {current}/{total}: {name}',
+    '사진 저장 중…': '写真を保存中…',
+    '처리 실패': '失敗',
+    '사진을 저장하지 못했습니다. 다시 시도해 주세요.': '写真を保存できませんでした。もう一度お試しください。',
+  },
+  de: {
+    '빈 사진 파일입니다.': 'Die ausgewählte Fotodatei ist leer.',
+    '지원하지 않는 이미지 형식입니다. JPG, PNG 또는 WebP로 변환해 주세요.': 'Dieses Bildformat wird nicht unterstützt. Konvertieren Sie es in JPG, PNG oder WebP.',
+    '사진 파일을 읽지 못했습니다. 파일 권한을 확인하고 다시 선택해 주세요.': 'Die Fotodatei konnte nicht gelesen werden. Prüfen Sie den Dateizugriff und wählen Sie sie erneut aus.',
+    '사진 내용을 해독하지 못했습니다. JPG 또는 PNG로 다시 저장해 주세요.': 'Das Foto konnte nicht decodiert werden. Speichern Sie es erneut als JPG oder PNG und versuchen Sie es noch einmal.',
+    '사진을 JPEG로 변환하지 못했습니다. 다른 사진으로 다시 시도해 주세요.': 'Das Foto konnte nicht in JPEG umgewandelt werden. Versuchen Sie es mit einem anderen Foto.',
+    '사진 "{name}" 처리 실패: {reason}': '„{name}“ konnte nicht verarbeitet werden: {reason}',
+    '사진 준비 중 {current}/{total}: {name}': 'Foto wird vorbereitet {current}/{total}: {name}',
+    '사진 저장 중…': 'Fotos werden gespeichert…',
+    '처리 실패': 'Fehlgeschlagen',
+    '사진을 저장하지 못했습니다. 다시 시도해 주세요.': 'Die Fotos konnten nicht gespeichert werden. Bitte versuchen Sie es erneut.',
+  },
+  da: {
+    '빈 사진 파일입니다.': 'Den valgte billedfil er tom.',
+    '지원하지 않는 이미지 형식입니다. JPG, PNG 또는 WebP로 변환해 주세요.': 'Billedformatet understøttes ikke. Konvertér det til JPG, PNG eller WebP.',
+    '사진 파일을 읽지 못했습니다. 파일 권한을 확인하고 다시 선택해 주세요.': 'Billedfilen kunne ikke læses. Kontrollér filadgangen, og vælg den igen.',
+    '사진 내용을 해독하지 못했습니다. JPG 또는 PNG로 다시 저장해 주세요.': 'Billedet kunne ikke afkodes. Gem det igen som JPG eller PNG, og prøv igen.',
+    '사진을 JPEG로 변환하지 못했습니다. 다른 사진으로 다시 시도해 주세요.': 'Billedet kunne ikke konverteres til JPEG. Prøv med et andet billede.',
+    '사진 "{name}" 처리 실패: {reason}': '“{name}” kunne ikke behandles: {reason}',
+    '사진 준비 중 {current}/{total}: {name}': 'Forbereder billede {current}/{total}: {name}',
+    '사진 저장 중…': 'Gemmer billeder…',
+    '처리 실패': 'Mislykkedes',
+    '사진을 저장하지 못했습니다. 다시 시도해 주세요.': 'Billederne kunne ikke gemmes. Prøv igen.',
+  },
+  nb: {
+    '빈 사진 파일입니다.': 'Den valgte bildefilen er tom.',
+    '지원하지 않는 이미지 형식입니다. JPG, PNG 또는 WebP로 변환해 주세요.': 'Dette bildeformatet støttes ikke. Konverter det til JPG, PNG eller WebP.',
+    '사진 파일을 읽지 못했습니다. 파일 권한을 확인하고 다시 선택해 주세요.': 'Kunne ikke lese bildefilen. Kontroller filtilgangen og velg den på nytt.',
+    '사진 내용을 해독하지 못했습니다. JPG 또는 PNG로 다시 저장해 주세요.': 'Kunne ikke dekode bildet. Lagre det på nytt som JPG eller PNG, og prøv igjen.',
+    '사진을 JPEG로 변환하지 못했습니다. 다른 사진으로 다시 시도해 주세요.': 'Kunne ikke konvertere bildet til JPEG. Prøv et annet bilde.',
+    '사진 "{name}" 처리 실패: {reason}': 'Kunne ikke behandle «{name}»: {reason}',
+    '사진 준비 중 {current}/{total}: {name}': 'Forbereder bilde {current}/{total}: {name}',
+    '사진 저장 중…': 'Lagrer bilder…',
+    '처리 실패': 'Mislyktes',
+    '사진을 저장하지 못했습니다. 다시 시도해 주세요.': 'Kunne ikke lagre bildene. Prøv igjen.',
+  },
+  fi: {
+    '빈 사진 파일입니다.': 'Valittu kuvatiedosto on tyhjä.',
+    '지원하지 않는 이미지 형식입니다. JPG, PNG 또는 WebP로 변환해 주세요.': 'Tätä kuvatiedostomuotoa ei tueta. Muunna kuva JPG-, PNG- tai WebP-muotoon.',
+    '사진 파일을 읽지 못했습니다. 파일 권한을 확인하고 다시 선택해 주세요.': 'Kuvatiedoston lukeminen epäonnistui. Tarkista käyttöoikeudet ja valitse tiedosto uudelleen.',
+    '사진 내용을 해독하지 못했습니다. JPG 또는 PNG로 다시 저장해 주세요.': 'Kuvan lukeminen epäonnistui. Tallenna se uudelleen JPG- tai PNG-muodossa ja yritä uudelleen.',
+    '사진을 JPEG로 변환하지 못했습니다. 다른 사진으로 다시 시도해 주세요.': 'Kuvan muuntaminen JPEG-muotoon epäonnistui. Kokeile toista kuvaa.',
+    '사진 "{name}" 처리 실패: {reason}': 'Kuvan ”{name}” käsittely epäonnistui: {reason}',
+    '사진 준비 중 {current}/{total}: {name}': 'Valmistellaan kuvaa {current}/{total}: {name}',
+    '사진 저장 중…': 'Tallennetaan kuvia…',
+    '처리 실패': 'Epäonnistui',
+    '사진을 저장하지 못했습니다. 다시 시도해 주세요.': 'Kuvien tallentaminen epäonnistui. Yritä uudelleen.',
+  },
+} satisfies Record<'en' | 'ja' | 'de' | 'da' | 'nb' | 'fi', Record<string, string>>
+
+Object.assign(extendedTranslations.en, photoImportTranslations.en)
+Object.assign(extendedTranslations.ja, photoImportTranslations.ja)
+Object.assign(extendedTranslations.de, photoImportTranslations.de)
+Object.assign(extendedTranslations.da, photoImportTranslations.da)
+Object.assign(extendedTranslations.nb, photoImportTranslations.nb)
+Object.assign(extendedTranslations.fi, photoImportTranslations.fi)
