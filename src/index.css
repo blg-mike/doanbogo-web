@@ -1,5 +1,12 @@
+@font-face {
+  font-family: "Pretendard";
+  font-style: normal;
+  font-weight: 100 900;
+  font-display: swap;
+  src: url("./assets/fonts/PretendardVariable.woff2") format("woff2");
+}
 :root {
-  font-family: "Noto Sans KR", "Segoe UI", system-ui, sans-serif;
+  font-family: "Pretendard", "Noto Sans KR", "Segoe UI", system-ui, sans-serif;
   font-size: 16px;
   color: var(--color-text);
   background: var(--color-background);
@@ -9,30 +16,31 @@
   -moz-osx-font-smoothing: grayscale;
   font-optical-sizing: auto;
   font-weight: 400;
-  --color-primary: #47613F;
-  --color-primary-hover: #3D5537;
-  --color-primary-pressed: #35492F;
-  --color-primary-soft: #E6EDE0;
-  --color-secondary: #4F6B7A;
-  --color-secondary-hover: #435D69;
-  --color-secondary-soft: #E9EEF1;
-  --color-tertiary: #3D705C;
-  --color-tertiary-soft: #E5F0EB;
-  --color-background: #F7F4EE;
-  --color-surface: #FFFCF7;
-  --color-surface-subtle: #F4F1EC;
+  --color-primary: #21A366;
+  --color-primary-text: #111111;
+  --color-primary-hover: #107C41;
+  --color-primary-pressed: #0B5A30;
+  --color-primary-soft: #E7F5EC;
+  --color-secondary: #111111;
+  --color-secondary-hover: #303030;
+  --color-secondary-soft: #FFFFFF;
+  --color-tertiary: #107C41;
+  --color-tertiary-soft: #E7F5EC;
+  --color-background: #FFFFFF;
+  --color-surface: #FFFFFF;
+  --color-surface-subtle: #FFFFFF;
   --color-viewer-background: #E9E6DF;
-  --color-text: #2E332D;
-  --color-text-secondary: #666B60;
-  --color-text-muted: #918B84;
-  --color-border: #E5DDD2;
-  --color-divider: #ECE6DF;
+  --color-text: #111111;
+  --color-text-secondary: #525650;
+  --color-text-muted: #777C76;
+  --color-border: #CFCFC8;
+  --color-divider: #E4E2DC;
   --color-danger: #B9473F;
   --color-danger-soft: #F7E9E6;
   --color-warning: #B88732;
   --color-warning-soft: #F6EEDC;
-  --color-progress: #D46A4C;
-  --color-focus-ring: rgba(71, 97, 63, .3);
+  --color-progress: #21A366;
+  --color-focus-ring: rgba(16, 124, 65, .42);
   --space-1: 4px;
   --space-2: 8px;
   --space-3: 12px;
@@ -47,6 +55,7 @@
 html, body, #root { width: 100%; min-width: 320px; min-height: 100%; margin: 0; }
 html { -webkit-tap-highlight-color: transparent; }
 body { min-height: 100vh; }
+h1, h2, h3 { color: var(--color-text); font-weight: 600; }
 button, input, select, textarea { font: inherit; }
 button { color: inherit; }
 button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible { outline: 3px solid var(--color-focus-ring); outline-offset: 2px; }

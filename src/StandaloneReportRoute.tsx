@@ -3,7 +3,7 @@ import { useEffect, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import BrandLoading from './BrandLoading'
 import KnittingReport from './KnittingReport'
-import { getHomeProject } from './storage'
+import { addDocumentWorkTime, getHomeProject } from './storage'
 import type { DocumentWorkTimeDay, HomeProject } from './types'
 import { normalizeWorkTimeDays } from './workTime'
 
@@ -24,5 +24,5 @@ export default function StandaloneReportRoute() {
   }, [documentId])
   if (loading) return <BrandLoading kind="report" requestId={'standalone-report:' + reportId} layout="screen" />
   if (!project || project.deletedAt !== null) return <main className="knitting-report-error">{t("보고서를 연결된 프로젝트에서 찾지 못했습니다.")}<button className="text-button" onClick={() => navigate('/reports')}>{t("보고서 목록으로")}</button></main>
-  return <div className="standalone-report-route"><KnittingReport key={reportId} documentId={documentId} fileName={project.fileName ?? project.title} pageCount={project.pageCount ?? 1} totalWorkTimeMs={project.totalWorkTimeMs ?? 0} workTimeDays={workTimeDays} reportId={reportId} onBack={() => navigate('/reports')} onReportChange={(nextId) => navigate('/report/' + documentId + '/' + nextId, { replace: true })} /></div>
+  return <div className="standalone-report-route"><KnittingReport key={reportId} documentId={documentId} fileName={project.fileName ?? project.title} pageCount={project.pageCount ?? 1} totalWorkTimeMs={project.totalWorkTimeMs ?? 0} workTimeDays={workTimeDays} reportId={reportId} onBack={() => navigate('/reports')} onAddWorkTime={(date, elapsedMs) => addDocumentWorkTime(documentId, elapsedMs, date)} onReportChange={(nextId) => navigate('/report/' + documentId + '/' + nextId, { replace: true })} /></div>
 }

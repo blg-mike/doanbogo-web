@@ -60,6 +60,21 @@ describe('page work persistence', () => {
     vi.useRealTimers()
   })
 
+  it('flushes one requested page immediately without waiting for other dirty pages', async () => {
+    vi.useFakeTimers()
+    const save = vi.fn(async (_work: PageWorkRecord) => {})
+    const persistence = new PageWorkPersistence(save, 300)
+    const requested = work('doc', 5, 0.25)
+    persistence.schedule(requested)
+    persistence.schedule(work('doc', 7, 0.75))
+
+    await persistence.flush(requested)
+
+    expect(save.mock.calls.map(([record]) => record.pageNumber)).toEqual([5])
+    persistence.dispose()
+    vi.useRealTimers()
+  })
+
   it('reports a failed debounced save and retries the dirty record on a later flush', async () => {
     vi.useFakeTimers()
     const error = new Error('temporary storage failure')

@@ -1,5 +1,6 @@
 import type { CounterHistoryEntry, CounterKind, CounterSnapshot, CounterTaskKind, CounterTaskOccurrence, CounterTaskRule, CounterTaskStatus, CounterTimeLap, ProgressGuide } from './types'
 import { guideRowPosition } from './progressLines'
+import { guideGeometryForRotation } from './focusGeometry'
 import { DEFAULT_COUNTER_COLORS } from './designTokens'
 
 export const COUNTER_COUNT = 5
@@ -433,6 +434,7 @@ export function guidePositionForRow(guide: ProgressGuide, row: number) {
   const effectiveRow = row - (guide.counterRowOffset ?? 0)
   const region = guide.chartRegion
   if (!region) return guideRowPosition(guide, effectiveRow)
+  if (region.rowRanges?.length) return guideGeometryForRotation(guide, row, region.analysisRotation ?? 0).position
   const rowCount = Math.max(1, region.lastRow - region.firstRow + 1)
   let index = effectiveRow - region.startCounterRow
   if (region.repeat) index = ((index % rowCount) + rowCount) % rowCount
@@ -447,6 +449,7 @@ export function progressGuideForCounter(guide: ProgressGuide, counter: CounterSn
   const row = counter.kind === 'simple' ? counter.value : counter.currentRow ?? 1
   const rowDelta = previousRow === undefined ? undefined : row - previousRow
   const advanceCalibratedGuide = (target: ProgressGuide) => {
+    if (target.chartRegion?.rowRanges?.length) return target.position
     if (rowDelta === undefined || target.chartRegion || target.rowSpacing === undefined || !target.rowSpacingDirection) return guidePositionForRow(target, row)
     return Math.min(1, Math.max(0, target.position + rowDelta * target.rowSpacing * (target.rowSpacingDirection === 'down' ? 1 : -1)))
   }

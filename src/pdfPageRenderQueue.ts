@@ -24,7 +24,7 @@ export class PdfPageRenderQueue {
     }
     if (this.active?.key === key) this.cancelJob(this.active)
     this.queued.push(job)
-    if (this.active && this.active.priority < 0 && priority >= 0) this.cancelJob(this.active)
+    if (this.active && this.active.priority < priority) this.cancelJob(this.active)
     this.pump()
 
     return () => {

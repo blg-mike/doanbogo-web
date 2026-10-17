@@ -111,7 +111,7 @@ export const en: Record<string, string> = {
   "작성 중": "In progress",
   "계속 작성": "Continue editing",
   "뜨개보고서": "Knitting report",
-  "도안보고  ·  뜨개보고서": "DoanBogo  ·  Knitting report",
+  "도안보고  ·  뜨개보고서": "KnitPeek  ·  Knitting report",
   "작성일  ": "Created  ",
   "작성한 보고서 내용이 없습니다.": "There is no report content yet.",
   "선택을 바꾸면 편집한 문구가 새 문구로 바뀝니다. 계속할까요?": "Changing your selection will replace the edited caption. Continue?",

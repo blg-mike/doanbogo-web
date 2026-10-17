@@ -58,7 +58,7 @@ export async function openPhotoDocument(documentId: string) {
         getAnnotations: async () => [],
         getTextContent: async () => ({ items: [], styles: {} }),
         cleanup: () => undefined,
-        render: ({ canvas, canvasContext, viewport }: { canvas: HTMLCanvasElement; canvasContext: CanvasRenderingContext2D; viewport: PhotoViewport }) => {
+        render: ({ canvas, canvasContext, viewport, transform }: { canvas: HTMLCanvasElement; canvasContext: CanvasRenderingContext2D; viewport: PhotoViewport; transform?: [number, number, number, number, number, number] }) => {
           let cancelled = false
           const promise = (async () => {
             const image = await imageFromBlob(photo.blob)
@@ -68,7 +68,16 @@ export async function openPhotoDocument(documentId: string) {
               try {
                 canvasContext.setTransform(1, 0, 0, 1, 0, 0)
                 canvasContext.clearRect(0, 0, canvas.width, canvas.height)
-                canvasContext.drawImage(image, 0, 0, viewport.width, viewport.height)
+                if (transform && transform[0] === 1 && transform[1] === 0 && transform[2] === 0 && transform[3] === 1) {
+                  const sourceLeft = Math.max(0, -transform[4] / viewport.scale)
+                  const sourceTop = Math.max(0, -transform[5] / viewport.scale)
+                  const sourceWidth = Math.min(photo.width - sourceLeft, canvas.width / viewport.scale)
+                  const sourceHeight = Math.min(photo.height - sourceTop, canvas.height / viewport.scale)
+                  canvasContext.drawImage(image, sourceLeft, sourceTop, sourceWidth, sourceHeight, 0, 0, canvas.width, canvas.height)
+                } else {
+                  if (transform) canvasContext.transform(...transform)
+                  canvasContext.drawImage(image, 0, 0, viewport.width, viewport.height)
+                }
               } finally {
                 canvasContext.restore()
               }

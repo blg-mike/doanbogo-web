@@ -155,6 +155,28 @@ describe('counter model', () => {
     expect(guidePositionForRow(corrected, 69)).toBeCloseTo(guidePositionForRow(guide, 43))
   })
 
+  it('follows saved chart row ranges without rewriting their geometry into the guide', () => {
+    const guide = {
+      id: 'guide', role: 'primary' as const, linkedCounterId: 'base', position: 0.5, markerProgress: 0.4,
+      chartRegion: {
+        x: 0.1, y: 0.2, width: 0.8, height: 0.6, firstRow: 1, lastRow: 3, startCounterRow: 10,
+        repeat: false, direction: 'bottom-to-top' as const, analysisRotation: 0 as const, autoFollow: true,
+        rowRanges: [
+          { x: 0.2, y: 0.7, width: 0.3, height: 0.05 },
+          { x: 0.1, y: 0.4, width: 0.6, height: 0.04 },
+          { x: 0.5, y: 0.2, width: 0.4, height: 0.03 },
+        ],
+      },
+    }
+    const moved = progressGuideForCounter(guide, { ...createCounter('simple'), id: 'base', value: 11 }, 10)
+
+    const positions = [10, 11, 12].map((row) => guidePositionForRow(guide, row))
+    expect(positions[0]).toBeCloseTo(0.725)
+    expect(positions[1]).toBeCloseTo(0.42)
+    expect(positions[2]).toBeCloseTo(0.215)
+    expect(moved).toMatchObject({ position: 0.5, markerProgress: undefined, chartRegion: guide.chartRegion })
+  })
+
   it('clears the marker when the counter row changes even if the line is clamped', () => {
     const guide = { id: 'guide', role: 'primary' as const, position: 0.99, linkedCounterId: 'base', rowSpacing: 0.05, rowSpacingStartRow: 4, rowSpacingDirection: 'down' as const, markerProgress: 0.6 }
     const moved = progressGuideForCounter(guide, { ...createCounter('simple'), id: 'base', value: 5 }, 4)

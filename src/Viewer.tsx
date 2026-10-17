@@ -1,11 +1,12 @@
 import { formatNumber, t, translateMessage } from './locales/index'
-import { useCallback, useEffect, useMemo, useRef, useState, type DragEvent as ReactDragEvent, type FormEvent as ReactFormEvent, type MouseEvent as ReactMouseEvent, type PointerEvent as ReactPointerEvent, type ReactNode, type UIEvent as ReactUIEvent } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type DragEvent as ReactDragEvent, type FormEvent as ReactFormEvent, type MouseEvent as ReactMouseEvent, type PointerEvent as ReactPointerEvent, type ReactNode, type UIEvent as ReactUIEvent } from 'react'
 import type { PDFDocumentProxy } from 'pdfjs-dist'
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { ArrowLeft, Bookmark, Check, ChevronDown, ChevronLeft, ChevronRight, ChevronUp, Columns2, Eraser, Eye, EyeClosed, EyeOff, Files, Grid3X3, GripVertical, Highlighter, Maximize2, Minus, MousePointer2, Pencil, Plus, Redo2, RefreshCw, ScanLine, Settings2, SlidersHorizontal, Square, Type, Undo2, X } from 'lucide-react'
 import { createPortal } from 'react-dom'
 import BrandLoading from './BrandLoading'
 import yyLogo from './assets/yy-logo.png'
+import viewerToolsIcon from './assets/viewer-tools-icon.png'
 import { cancelThumbnailRenders, PdfPage, PdfThumbnail, setThumbnailRenderingPaused, waitForThumbnailQueueIdle } from './PdfPage'
 import { getDocument, getPageRecognition, getPageWork, getPageWorks, getPages, getPreference, getViewer, markOpened, renameDocument, savePageWork, savePreference, saveViewer, saveViewerAndPageWorks, setPageFlag } from './storage'
 import { pdfPageRenderQueue } from './pdfPageRenderQueue'
@@ -24,11 +25,11 @@ import { applyColorworkCellChanges, type ColorworkCellChange } from './colorwork
 import { PageWorkPersistence } from './pageWorkPersistence'
 import { enqueuePdfRecognition, pausePdfRecognitionForReport, releasePdfRecognitionViewer, resumePdfRecognitionFromReport, subscribePdfRecognition } from './pdfRecognition'
 import { getViewerResourcePolicy, setThumbnailPagesExcluded } from './pdfRenderResources'
-import { guidePositionForRotation } from './focusGeometry'
-import { compactPageThumbnails, completePageList, createThumbnailGroupId, movePagesToThumbnailGroup, moveThumbnailRailItem, normalizeThumbnailRailOrder, reconcileThumbnailRailOrder, removePagesFromThumbnailGroups, reorderThumbnailGroups, thumbnailPagesForDrag, thumbnailRailOrderKey, visiblePageRange, type PageThumbnailItem } from './pageManagement'
+import { guidePositionForRotation, isChartAutoFollowRotationCompatible } from './focusGeometry'
+import { compactPageThumbnails, completePageList, createThumbnailGroupFromPages, createThumbnailGroupId, movePagesToThumbnailGroup, moveThumbnailRailItem, normalizeThumbnailRailOrder, reconcileThumbnailRailOrder, removePagesFromThumbnailGroups, reorderThumbnailGroups, thumbnailPagesForDrag, thumbnailRailOrderKey, visiblePageRange, type PageThumbnailItem } from './pageManagement'
 import { createDefaultPrimaryProgressGuide, migrateProgressGuides, prepareProgressGuidesForDirectInteraction, progressGuideCandidates } from './progressLines'
 import { ColorPresetButtons } from './ColorPresetButtons'
-import { ANNOTATION_COLOR_PRESETS, DESIGN_SYSTEM_COLORS } from './designTokens'
+import { ANNOTATION_COLOR_PRESETS, DEFAULT_VERTICAL_GUIDE_COLOR } from './designTokens'
 import { addedLimitedAnnotations, applyLimitedAnnotationAdditions, exceededAnnotationLimit, isAnnotationLimitReached, PAGE_ANNOTATION_LIMITS, type LimitedAnnotationKind } from './annotationLimits'
 import { useDismissiblePopover } from './useDismissiblePopover'
 import { getRequiredPageWorkPages, loadPageWorkWithTimeout, PageWorkLoadTimeoutError } from './pageWorkLoading'
@@ -42,6 +43,7 @@ type PageWorkLoadRequest = { requestId: number; promise: Promise<PageWorkRecord 
 const MAX_CACHED_PAGE_WORKS = getViewerResourcePolicy().cachedPageWorks
 const MAX_PAGE_HISTORY_ACTIONS = 30
 const MAX_PAGE_HISTORY_BYTES = getViewerResourcePolicy().tablet ? 8 * 1024 * 1024 : 32 * 1024 * 1024
+const colorworkEnabled = false
 const EMPTY_THUMBNAIL_GROUPS: ThumbnailGroup[] = []
 type ThumbnailSelection = { pages: number[]; anchor: number; lastPage: number }
 type ThumbnailTouchGesture = {
@@ -88,7 +90,7 @@ function createCounterSession(documentId: string) { return { documentId, visible
 
 const defaultProgressSettings: ProgressSettings = {
   horizontal: { visible: true, color: ANNOTATION_COLOR_PRESETS[0].color, thickness: 4, opacity: 0.8 },
-  vertical: { visible: true, color: DESIGN_SYSTEM_COLORS.secondary, thickness: 1, opacity: 1 },
+  vertical: { visible: true, color: DEFAULT_VERTICAL_GUIDE_COLOR, thickness: 1, opacity: 1 },
 }
 
 const defaultAnnotationSettings: AnnotationSettings = {
@@ -255,6 +257,7 @@ export default function Viewer() {
   const counterActionRetryRef = useRef<(() => Promise<boolean>) | null>(null)
   const counterActionLockRef = useRef(false)
   const snapshotRef = useRef<ViewerSnapshot | null>(null)
+  const paneGestureOwnerRef = useRef<PaneId | null>(null)
   const saveTimer = useRef<number | undefined>(undefined)
   const pdfSessionRef = useRef<ViewerPdfSession | null>(null)
   const viewerLifecycleRef = useRef<'active' | 'suspending' | 'suspended' | 'resuming'>('active')
@@ -322,6 +325,11 @@ export default function Viewer() {
   }, [])
   const onTimerClockChange = useCallback((clock: DocumentTimerClock | null) => {
     timerClockRef.current = clock
+  }, [])
+  const addViewerWorkTime = useCallback((workDate: string, elapsedMs: number) => {
+    const clock = timerClockRef.current
+    if (!clock) return Promise.reject(new Error('작업시간 입력을 준비하지 못했습니다.'))
+    return clock.addWorkTime(workDate, elapsedMs)
   }, [])
   const [viewerExitSaving, setViewerExitSaving] = useState(false)
   const [viewerExitError, setViewerExitError] = useState('')
@@ -404,9 +412,11 @@ export default function Viewer() {
   if (thumbnailGroupState.documentId !== id) setThumbnailGroupState({ documentId: id, expandedGroupId: null })
   const expandedThumbnailGroupId = thumbnailGroupState.documentId === id ? thumbnailGroupState.expandedGroupId : null
   const [thumbnailGroupDialog, setThumbnailGroupDialog] = useState(false)
+  const [thumbnailGroupTarget, setThumbnailGroupTarget] = useState<{ documentId: string; pages: number[] } | null>(null)
   const [thumbnailGroupDraft, setThumbnailGroupDraft] = useState('')
   const [thumbnailGroupSaving, setThumbnailGroupSaving] = useState(false)
   const [thumbnailGroupError, setThumbnailGroupError] = useState('')
+  const [thumbnailRailScrolling, setThumbnailRailScrolling] = useState(false)
   const [thumbnailGroupPopover, setThumbnailGroupPopover] = useState<{ documentId: string; groupId: string; left: number; top: number; mode: 'menu' | 'rename' | 'order' | 'rail-order' } | null>(null)
   const [thumbnailGroupOrderDraft, setThumbnailGroupOrderDraft] = useState<string[]>([])
   const [thumbnailRailOrderDraft, setThumbnailRailOrderDraft] = useState<ThumbnailRailOrderItem[]>([])
@@ -495,6 +505,7 @@ export default function Viewer() {
     thumbnailScrollRef.current = thumbnailRailRef.current?.scrollLeft ?? thumbnailScrollRef.current
     window.clearTimeout(thumbnailScrollTimerRef.current)
     thumbnailScrollTimerRef.current = undefined
+    setThumbnailRailScrolling(false)
     cancelThumbnailRenders()
     setLoading(true)
     setSuspended(true)
@@ -945,7 +956,7 @@ export default function Viewer() {
   const activeWork = pageWorks[activePage] ?? blankWork(id, activePage)
   const activeZoom = snapshot ? snapshot[snapshot.activePane].zoom : 1
   const activeRotation = snapshot ? snapshot[snapshot.activePane].rotations?.[activePage] ?? activeWork.rotation ?? 0 : 0
-  const activeColorworkGrid = activeWork.colorworkGrid ?? null
+  const activeColorworkGrid = colorworkEnabled ? activeWork.colorworkGrid ?? null : null
   const canUndo = activeHistory.cursor > 0
   const canRedo = activeHistory.cursor < activeHistory.actions.length
   const primaryPage = snapshot?.primary.page
@@ -1465,7 +1476,9 @@ export default function Viewer() {
     const linkedGuide = [...(activeWork?.horizontalGuides ?? []), ...(activeWork?.verticalGuides ?? [])].find((guide) => guide.id === current.counterGuideAutoPanId && guide.linkedCounterId)
     const linkedCounter = linkedGuide ? nextCounters.find((counter) => counter.id === linkedGuide.linkedCounterId) : undefined
     const linkedRow = linkedCounter?.kind === 'simple' ? linkedCounter.value : linkedCounter?.currentRow ?? 1
-    const autoPanY = linkedGuide && linkedCounter ? guidePositionForRotation(linkedGuide, linkedRow, activeRotation) : undefined
+    const autoPanY = linkedGuide && linkedCounter && (!linkedGuide.chartRegion?.rowRanges?.length || isChartAutoFollowRotationCompatible(linkedGuide, activeRotation))
+      ? guidePositionForRotation(linkedGuide, linkedRow, activeRotation)
+      : undefined
     const primaryGuide = (activeWork?.horizontalGuides ?? []).find((guide) => guide.role === 'primary' && guide.linkedCounterId === base.id)
     const label = base.name + ' · ' + base.value + (completingGoal ? '단 목표 완료' : '단 완료')
     void commitCounterTransaction(nextCounters, label, base.value, undefined, true, autoPanY, base.id, { counterAlertAcknowledged: alertToAcknowledge }, primaryGuide ? { kind: 'advance', pageNumber: activePage, guideId: primaryGuide.id } : undefined, lapAction).finally(releaseCounterActionLock)
@@ -1559,7 +1572,7 @@ export default function Viewer() {
     annotationLimitNoticeTimerRef.current = window.setTimeout(() => {
       annotationLimitNoticeTimerRef.current = undefined
       setAnnotationLimitNotice('')
-    }, 3500)
+    }, 5000)
   }
 
   function canCreateLimitedAnnotation(pageNumber: number, kind: LimitedAnnotationKind) {
@@ -1567,6 +1580,20 @@ export default function Viewer() {
     if (!current || !isAnnotationLimitReached(current, kind)) return Boolean(current)
     notifyAnnotationLimit(kind)
     return false
+  }
+
+  function recordPageWorkHistory(pageNumber: number, before: PageWorkRecord, after: PageWorkRecord, cellChanges?: ColorworkCellChange[]) {
+    const action: WorkAction = cellChanges?.length ? { cellChanges } : { before, after }
+    const state = historyRef.current.get(pageNumber) ?? { actions: [], cursor: 0, byteCosts: [] }
+    const actions = state.actions.slice(0, state.cursor)
+    const byteCosts = state.byteCosts.slice(0, state.cursor)
+    actions.push(action)
+    byteCosts.push(estimateHistoryActionBytes(action))
+    while (actions.length > MAX_PAGE_HISTORY_ACTIONS) {
+      actions.shift()
+      byteCosts.shift()
+    }
+    updateHistory(pageNumber, { actions, cursor: actions.length, byteCosts })
   }
 
   function setPageWork(work: PageWorkRecord, immediate: boolean, recordHistory = false, historyBefore?: PageWorkRecord, cellChanges?: ColorworkCellChange[]): boolean {
@@ -1591,20 +1618,7 @@ export default function Viewer() {
       before = { ...current, annotations: current.annotations.filter((annotation) => !createdTextIds.has(annotation.id)) }
     }
     touchPageWork(work.pageNumber)
-    if (recordHistory) {
-      const action: WorkAction = cellChanges?.length ? { cellChanges } : { before, after: nextWork }
-      const state = historyRef.current.get(work.pageNumber) ?? { actions: [], cursor: 0, byteCosts: [] }
-      const actions = state.actions.slice(0, state.cursor)
-      const byteCosts = state.byteCosts.slice(0, state.cursor)
-      const actionBytes = estimateHistoryActionBytes(action)
-      actions.push(action)
-      byteCosts.push(actionBytes)
-      while (actions.length > MAX_PAGE_HISTORY_ACTIONS) {
-        actions.shift()
-        byteCosts.shift()
-      }
-      updateHistory(work.pageNumber, { actions, cursor: actions.length, byteCosts })
-    }
+    if (recordHistory) recordPageWorkHistory(work.pageNumber, before, nextWork, cellChanges)
     workRef.current = { ...workRef.current, [work.pageNumber]: nextWork }
     schedulePageWorksRender()
     void pageWorkPersistence.schedule(nextWork, immediate).catch((error: unknown) => {
@@ -1612,6 +1626,25 @@ export default function Viewer() {
       setSuspendError(pageWorkSaveErrorMessage)
     })
     return true
+  }
+
+  async function applyChartRowsWork(work: PageWorkRecord, before: PageWorkRecord) {
+    if (!setPageWork(work, false, false)) return false
+    const latest = workRef.current[work.pageNumber]
+    if (!latest) return false
+    try {
+      await pageWorkPersistence.flush(latest)
+      recordPageWorkHistory(work.pageNumber, before, latest)
+      setSuspendError((error) => error === pageWorkSaveErrorMessage ? '' : error)
+      return true
+    } catch (error) {
+      console.warn('[PDF] Chart row guide could not be saved.', error)
+      setPageWork(before, false, false)
+      const restored = workRef.current[before.pageNumber]
+      if (restored) await pageWorkPersistence.flush(restored).catch(() => {})
+      setSuspendError(pageWorkSaveErrorMessage)
+      return false
+    }
   }
 
   function undoRedo(direction: 'undo' | 'redo') {
@@ -2060,6 +2093,7 @@ export default function Viewer() {
       window.clearTimeout(thumbnailScrollTimerRef.current)
       thumbnailScrollTimerRef.current = undefined
       setThumbnailRenderingPaused(false)
+      setThumbnailRailScrolling(false)
       const gesture = thumbnailTouchGestureRef.current
       if (gesture) {
         window.clearTimeout(gesture.timer)
@@ -2075,12 +2109,13 @@ export default function Viewer() {
 
   function handleThumbnailScroll(event: ReactUIEvent<HTMLDivElement>) {
     thumbnailScrollRef.current = event.currentTarget.scrollLeft
-    if (!tabletResourcePolicy) return
-    setThumbnailRenderingPaused(true)
+    setThumbnailRailScrolling(true)
+    if (tabletResourcePolicy) setThumbnailRenderingPaused(true)
     window.clearTimeout(thumbnailScrollTimerRef.current)
     thumbnailScrollTimerRef.current = window.setTimeout(() => {
       thumbnailScrollTimerRef.current = undefined
-      setThumbnailRenderingPaused(false)
+      setThumbnailRailScrolling(false)
+      if (tabletResourcePolicy) setThumbnailRenderingPaused(false)
     }, 200)
   }
 
@@ -2247,7 +2282,7 @@ export default function Viewer() {
   }
 
   function applyColorworkSettings(settings: ColorworkSettings) {
-    if (!snapshot || colorworkRequest) return false
+    if (!colorworkEnabled || !snapshot || colorworkRequest) return false
     const paneId = snapshot.activePane
     const pageNumber = snapshot[paneId].page
     const before = workRef.current[pageNumber]
@@ -2268,7 +2303,7 @@ export default function Viewer() {
   }
 
   function toggleColorworkVisibility() {
-    if (!activeColorworkGrid) return
+    if (!colorworkEnabled || !activeColorworkGrid) return
     const before = workRef.current[activePage] ?? activeWork
     setPageWork({ ...before, colorworkGrid: { ...activeColorworkGrid, visible: !activeColorworkGrid.visible } }, true, true, before)
   }
@@ -2279,24 +2314,27 @@ export default function Viewer() {
     const rotation = pane.rotations?.[pane.page] ?? work.rotation ?? 0
     const style = tool === 'region-highlight' ? annotationSettings.highlight : tool === 'pen' || tool === 'line' || tool === 'highlight' || tool === 'text' ? annotationSettings[tool] : annotationSettings.pen
     return <PdfPage
-      key={paneId + ':' + pane.page}
+      key={id + ':' + paneId + ':' + pane.page}
       pdf={pdf!}
       page={pane.page}
       paneId={paneId}
       pane={pane}
+      paneGestureOwnerRef={paneGestureOwnerRef}
       splitView={Boolean(snapshot?.split)}
       rotation={rotation}
       active={active}
       tool={tool}
       lineSettings={progressSettings}
       counters={counters}
+      mainCounterId={mainCounter?.id ?? ''}
       annotationStyle={style}
       work={work}
+      colorworkEnabled={colorworkEnabled}
       workReady={Boolean(pageWorks[pane.page])}
       canCreateLimitedAnnotation={(kind) => canCreateLimitedAnnotation(pane.page, kind)}
       pageWorkLoadError={loadState?.status === 'error' ? loadState.message : undefined}
       onRetryPageWork={() => { void ensurePageWork(pane.page) }}
-      createColorworkRequest={colorworkRequest?.paneId === paneId && colorworkRequest.pageNumber === pane.page ? colorworkRequest : null}
+      createColorworkRequest={colorworkEnabled && colorworkRequest?.paneId === paneId && colorworkRequest.pageNumber === pane.page ? colorworkRequest : null}
       colorworkBrushColor={colorworkBrushColor}
       colorworkBrushOpacity={colorworkBrushOpacity}
       colorworkEraser={colorworkEraser}
@@ -2309,6 +2347,7 @@ export default function Viewer() {
         if (!active) mutateSnapshot((current) => ({ ...current, activePane: paneId }))
       }}
       onWorkChange={setPageWork}
+      onChartRowsApply={applyChartRowsWork}
       onCenter={(x, y) => saveCenter(paneId, x, y)}
       onZoom={(zoom) => changePane(paneId, (current) => ({ ...current, zoom }), true)}
       onColorworkRequestHandled={finishColorworkRequest}
@@ -2381,6 +2420,20 @@ export default function Viewer() {
     }
   }
 
+  function openThumbnailGroupDialog(pageNumbers?: number[]) {
+    setThumbnailGroupTarget(pageNumbers?.length ? { documentId: id, pages: [...pageNumbers] } : null)
+    setThumbnailGroupDraft('')
+    setThumbnailGroupError('')
+    setThumbnailGroupDialog(true)
+  }
+
+  function closeThumbnailGroupDialog() {
+    if (thumbnailGroupSavingRef.current) return
+    setThumbnailGroupDialog(false)
+    setThumbnailGroupTarget(null)
+    setThumbnailGroupError('')
+  }
+
   async function createThumbnailGroup(event?: ReactFormEvent<HTMLFormElement>) {
     event?.preventDefault()
     const name = thumbnailGroupDraft.trim()
@@ -2389,9 +2442,25 @@ export default function Viewer() {
       return
     }
     if (name.length > 100) return
-    const nextGroups = [...thumbnailGroups, { id: createThumbnailGroupId(), name, pageNumbers: [] }]
-    if (await saveThumbnailGroups(nextGroups)) {
+    const current = snapshotRef.current
+    if (!current || thumbnailGroupTarget && thumbnailGroupTarget.documentId !== id) return
+    const selectedPages = thumbnailGroupTarget?.pages ?? []
+    const group = { id: createThumbnailGroupId(), name, pageNumbers: [] as number[] }
+    const currentGroups = current.thumbnailGroups ?? EMPTY_THUMBNAIL_GROUPS
+    const created = selectedPages.length
+      ? createThumbnailGroupFromPages(currentGroups, current.thumbnailRailOrder, selectedPages, group, pdf?.numPages ?? 0)
+      : { groups: [...currentGroups, group], railOrder: undefined }
+    if (selectedPages.length && !created.groups.some((item) => item.id === group.id)) return
+    if (await saveThumbnailGroups(created.groups, created.railOrder)) {
+      if (selectedPages.length) {
+        if (pdf) setThumbnailPagesExcluded(pdf, selectedPages, true)
+        if (expandedThumbnailGroupId && !created.groups.some((item) => item.id === expandedThumbnailGroupId)) {
+          setThumbnailGroupState((state) => ({ ...state, expandedGroupId: null }))
+        }
+        setThumbnailSelection(null)
+      }
       setThumbnailGroupDialog(false)
+      setThumbnailGroupTarget(null)
       setThumbnailGroupDraft('')
       setThumbnailGroupError('')
     }
@@ -2619,6 +2688,15 @@ export default function Viewer() {
     const railKey = nested ? undefined : 'page:' + pageNumber
     const reorderFeedback = railKey && thumbnailReorderFeedback?.kind === 'rail' && thumbnailReorderFeedback.itemKey === railKey ? ' thumbnail-order-' + thumbnailReorderFeedback.position : ''
     return <div className={'page-thumbnail-entry' + (nested ? ' thumbnail-group-child-entry' : '') + reorderFeedback} key={pageNumber} data-thumbnail-label-drop={labelGroupId} data-thumbnail-rail-item={railKey}>
+      {!reportMode && selected && thumbnailSelection?.lastPage === pageNumber && !thumbnailRailScrolling && <button
+        type="button"
+        className="thumbnail-selection-group-add"
+        aria-label={t('그룹 추가')}
+        title={t('그룹 추가')}
+        disabled={thumbnailGroupSaving}
+        onPointerDown={(event) => event.stopPropagation()}
+        onClick={(event) => { event.stopPropagation(); openThumbnailGroupDialog(selectedThumbnailPages) }}
+      ><Plus size={17} /></button>}
       <PdfThumbnail
         pdf={pdf!} pageNumber={pageNumber} active={active} bookmarked={Boolean(state?.bookmarked)} selected={selected} draggable={false}
         dropTarget={thumbnailDropTarget === 'outside-page:' + pageNumber ? 'outside' : undefined}
@@ -2683,7 +2761,7 @@ export default function Viewer() {
   }
 
   const timerPortalTarget = loadError?.id === id || suspended || loading || loadedId !== id || !pdf || !snapshot ? null : timerPortalHost
-  const timerElement = <DocumentWorkTimer key={id + ':' + timerSessionKey} documentId={id} initialTodayWorkDate={todayWorkDate} initialTodayWorkTimeMs={todayWorkTimeMs} portalTarget={timerPortalTarget} onWorkTimeChange={onTimerWorkTimeChange} onTodayWorkTimeChange={onTimerTodayWorkTimeChange} onUnsavedChange={onTimerUnsavedChange} onSavingChange={onTimerSavingChange} onClockChange={onTimerClockChange} />
+  const timerElement = <DocumentWorkTimer key={id + ':' + timerSessionKey} documentId={id} initialTotalWorkTimeMs={documentWorkTimeMs} initialWorkTimeDays={documentWorkTimeDays} initialTodayWorkDate={todayWorkDate} initialTodayWorkTimeMs={todayWorkTimeMs} portalTarget={timerPortalTarget} onWorkTimeChange={onTimerWorkTimeChange} onTodayWorkTimeChange={onTimerTodayWorkTimeChange} onUnsavedChange={onTimerUnsavedChange} onSavingChange={onTimerSavingChange} onClockChange={onTimerClockChange} />
   const requestReportExit = () => {
     if (timerSaving) return
     if (timerHasUnsaved) {
@@ -2726,7 +2804,7 @@ export default function Viewer() {
       </header>
       <section className={'pdf-work-area' + (reportMode ? ' report-work-area' : '')}>
         <div className={'pdf-document-area ' + (reportMode ? '' : snapshot.split ? (orientation === 'wide' ? 'split-wide' : 'split-tall') : 'single-pane')} ref={areaRef}>
-        {reportMode ? <KnittingReport documentId={id} fileName={documentName} pageCount={pdf.numPages} totalWorkTimeMs={documentWorkTimeMs} workTimeDays={documentWorkTimeDays} onBack={() => setSearchParams({})} /> : snapshot.split ? <>
+        {reportMode ? <KnittingReport documentId={id} fileName={documentName} pageCount={pdf.numPages} totalWorkTimeMs={documentWorkTimeMs} workTimeDays={documentWorkTimeDays} onAddWorkTime={addViewerWorkTime} onBack={() => setSearchParams({})} /> : snapshot.split ? <>
           <div className="split-section" style={orientation === 'wide' ? { flex: '0 0 ' + splitBasis(displayedRatio) } : { width: '100%', flex: '0 0 ' + splitBasis(displayedRatio) }}>{renderPane('primary', snapshot.primary, snapshot.activePane === 'primary')}</div>
           <button className={'split-divider ' + orientation} aria-label={t("영역 크기 조정")} onPointerDown={beginDivider} onPointerMove={moveDivider} onPointerUp={finishDivider} onPointerCancel={finishDivider} onLostPointerCapture={finishDivider}><span /></button>
           <div className="split-section split-section-secondary" style={orientation === 'wide' ? { flex: '0 0 ' + splitBasis(1 - displayedRatio) } : { width: '100%', flex: '0 0 ' + splitBasis(1 - displayedRatio) }}>{renderPane('secondary', snapshot.secondary, snapshot.activePane === 'secondary')}</div>
@@ -2738,7 +2816,7 @@ export default function Viewer() {
         <div id={thumbnailContentId} className="thumbnail-content" hidden={thumbnailCollapsed}>
         {!thumbnailCollapsed && <>
         <div className="thumbnail-group-section">
-          <button type="button" className="thumbnail-group-add" disabled={thumbnailGroupSaving} onClick={() => { setThumbnailGroupDraft(''); setThumbnailGroupError(''); setThumbnailGroupDialog(true) }}><Plus size={15} /><span>{t('그룹 추가')}</span></button>
+          <button type="button" className="thumbnail-group-add" disabled={thumbnailGroupSaving} onClick={() => openThumbnailGroupDialog()}><Plus size={15} /><span>{t('그룹 추가')}</span></button>
           <div className="thumbnail-group-list" ref={thumbnailGroupListRef} aria-label={t('썸네일 그룹')}>
             {thumbnailGroups.map((group) => <button
               type="button"
@@ -2858,7 +2936,7 @@ export default function Viewer() {
         </div>
         {!reportMode && <div className={'viewer-floating-bar viewer-mini-bar' + (miniBarOpen ? ' expanded' : '')}>
           <button ref={miniBarAccordionButtonRef} type="button" className="viewer-mini-accordion-button" aria-label={t('뷰어 도구')} title={t('뷰어 도구')} aria-expanded={miniBarOpen} aria-controls={miniBarControlsId} onClick={() => { const open = !miniBarOpen; if (!open) closeMiniBarOnPdfActionRef.current = false; setMiniBarState({ documentId: id, open }); if (!open) setMiniBarSettingsOpen(false) }}>
-            <Grid3X3 size={17} /><span aria-hidden="true">{miniBarOpen ? <ChevronUp size={16} /> : <ChevronDown size={16} />}</span>
+            <img className="viewer-mini-accordion-icon" src={viewerToolsIcon} alt="" aria-hidden="true" /><span aria-hidden="true">{miniBarOpen ? <ChevronUp size={16} /> : <ChevronDown size={16} />}</span>
           </button>
           <div id={miniBarControlsId} ref={miniBarControlsRef} className="viewer-mini-scroll" hidden={!miniBarOpen}>
         <section className="viewer-controlbar" role="toolbar" aria-orientation="vertical" aria-label={t('뷰어 도구')}>
@@ -2866,12 +2944,11 @@ export default function Viewer() {
             <div className="viewer-tools" role="group" aria-label={t('필기 도구')}>
               <button type="button" className={'viewer-tool tool-toggle ' + (tool === 'pan' ? 'active' : '')} aria-label={t('이동 도구')} title={t('이동')} aria-pressed={tool === 'pan'} onClick={() => { closeMiniBarOnPdfActionRef.current = true; selectViewerTool('pan') }}><MousePointer2 size={17} /><span>{t('이동')}</span></button>
               <button type="button" className={'viewer-tool tool-toggle ' + (tool === 'pen' ? 'active' : '')} aria-label={t('펜')} title={t('펜')} aria-pressed={tool === 'pen'} onClick={() => { closeMiniBarOnPdfActionRef.current = false; selectViewerTool('pen'); setMiniBarSettingsOpen(true) }}><Pencil size={17} /><span>{t('펜')}</span></button>
-              <button type="button" className={'viewer-tool tool-toggle ' + (tool === 'line' ? 'active' : '')} aria-label={t('직선')} title={t('직선')} aria-pressed={tool === 'line'} onClick={() => { closeMiniBarOnPdfActionRef.current = false; selectViewerTool('line') }}><Minus size={17} /><span>{t('직선')}</span></button>
               <button type="button" className={'viewer-tool tool-toggle ' + (tool === 'highlight' ? 'active' : '')} aria-label={t('형광펜')} title={t('형광펜')} aria-pressed={tool === 'highlight'} onClick={() => { closeMiniBarOnPdfActionRef.current = false; selectViewerTool('highlight'); setMiniBarSettingsOpen(true) }}><Highlighter size={17} /><span>{t('형광펜')}</span></button>
               <button type="button" className={'viewer-tool tool-toggle ' + (tool === 'eraser' ? 'active' : '')} aria-label={t('지우개')} title={t('지우개')} aria-pressed={tool === 'eraser'} onClick={() => { closeMiniBarOnPdfActionRef.current = false; selectViewerTool('eraser') }}><Eraser size={17} /><span>{t('지우개')}</span></button>
               <button type="button" className={'viewer-tool tool-toggle ' + (tool === 'text' ? 'active' : '')} aria-label={t('텍스트')} title={t('텍스트')} aria-pressed={tool === 'text'} onClick={() => { closeMiniBarOnPdfActionRef.current = false; selectViewerTool('text') }}><Type size={17} /><span>{t('텍스트')}</span></button>
               <button type="button" className={'viewer-tool tool-toggle region-highlight-tool ' + (tool === 'region-highlight' ? 'active' : '')} aria-label={t('구간 강조')} title={t('구간 강조')} aria-pressed={tool === 'region-highlight'} onClick={() => { closeMiniBarOnPdfActionRef.current = false; setMiniBarSettingsOpen(false); selectViewerTool('region-highlight') }}><Square size={17} /><span>{t('구간 강조')}</span></button>
-              <button type="button" className="viewer-tool chart-tool" aria-label={t('컬러워크 설정')} title={t('차트 크기와 뜨개 게이지 설정')} disabled={!pageWorks[activePage] || Boolean(colorworkRequest)} onClick={() => setColorworkDialog(true)}><Grid3X3 size={17} /><span>{t('컬러워크')}</span>{activeColorworkGrid && <small>{activeColorworkGrid.columns}×{activeColorworkGrid.rows}</small>}</button>
+              {colorworkEnabled && <button type="button" className="viewer-tool chart-tool" aria-label={t('컬러워크 설정')} title={t('차트 크기와 뜨개 게이지 설정')} disabled={!pageWorks[activePage] || Boolean(colorworkRequest)} onClick={() => setColorworkDialog(true)}><Grid3X3 size={17} /><span>{t('컬러워크')}</span>{activeColorworkGrid && <small>{activeColorworkGrid.columns}×{activeColorworkGrid.rows}</small>}</button>}
               {activeColorworkGrid && <>
                 <button type="button" className="viewer-tool compact-tool" aria-label={activeColorworkGrid.visible ? t('컬러워크 숨기기') : t('컬러워크 보이기')} title={activeColorworkGrid.visible ? t('컬러워크 숨기기') : t('컬러워크 보이기')} aria-pressed={activeColorworkGrid.visible} onClick={toggleColorworkVisibility}>{activeColorworkGrid.visible ? <Eye size={16} /> : <EyeOff size={16} />}</button>
                 <button type="button" className={'viewer-tool compact-tool ' + (colorworkEraser ? 'active' : '')} aria-label={colorworkEraser ? t('컬러워크 지우개 끄기') : t('컬러워크 지우개')} title={colorworkEraser ? t('지우개 끄기') : t('색칠한 칸 지우기')} aria-pressed={colorworkEraser} onClick={() => setColorworkEraser((current) => !current)}><Eraser size={16} /></button>
@@ -2889,14 +2966,14 @@ export default function Viewer() {
             {activeAnnotationStyle && <section className="viewer-mini-settings-section annotation-style-section">
               <strong>{t('필기 스타일')}</strong>
               <ColorPresetButtons label={t('필기 색상')} className="annotation-color-presets" presets={ANNOTATION_COLOR_PRESETS} includeCurrentColor={false} value={activeAnnotationStyle.color} onChange={(color) => changeAnnotationStyle(tool as 'pen' | 'line' | 'highlight' | 'text', { color })} />
-              {tool !== 'text' && <label><span>{t('굵기')}</span><input aria-label={t('필기 굵기')} type="range" min="1" max="24" value={activeAnnotationStyle.thickness} onChange={(event) => changeAnnotationStyle(tool as 'pen' | 'line' | 'highlight', { thickness: Number(event.currentTarget.value) })} /></label>}
-              {tool !== 'text' && <label><span>{t('투명도')}</span><input aria-label={t('필기 투명도')} type="range" min="10" max="100" value={Math.round(activeAnnotationStyle.opacity * 100)} onChange={(event) => changeAnnotationStyle(tool as 'pen' | 'line' | 'highlight', { opacity: Number(event.currentTarget.value) / 100 })} /></label>}
-              {tool === 'text' && <label><span>{t('글자 크기')}</span><input aria-label={t('글자 크기')} type="range" min="10" max="48" value={activeAnnotationStyle.fontSize} onChange={(event) => changeAnnotationStyle('text', { fontSize: Number(event.currentTarget.value) })} /></label>}
+              {tool !== 'text' && <label><span>{t('굵기')}</span><input aria-label={t('필기 굵기')} type="range" min="1" max="24" value={activeAnnotationStyle.thickness} style={{ '--range-progress': `${((activeAnnotationStyle.thickness - 1) / 23) * 100}%` } as CSSProperties} onChange={(event) => changeAnnotationStyle(tool as 'pen' | 'line' | 'highlight', { thickness: Number(event.currentTarget.value) })} /></label>}
+              {tool !== 'text' && <label><span>{t('투명도')}</span><input aria-label={t('필기 투명도')} type="range" min="10" max="100" value={Math.round(activeAnnotationStyle.opacity * 100)} style={{ '--range-progress': `${((Math.round(activeAnnotationStyle.opacity * 100) - 10) / 90) * 100}%` } as CSSProperties} onChange={(event) => changeAnnotationStyle(tool as 'pen' | 'line' | 'highlight', { opacity: Number(event.currentTarget.value) / 100 })} /></label>}
+              {tool === 'text' && <label><span>{t('글자 크기')}</span><input aria-label={t('글자 크기')} type="range" min="10" max="48" value={activeAnnotationStyle.fontSize} style={{ '--range-progress': `${((activeAnnotationStyle.fontSize - 10) / 38) * 100}%` } as CSSProperties} onChange={(event) => changeAnnotationStyle('text', { fontSize: Number(event.currentTarget.value) })} /></label>}
             </section>}
             {activeColorworkGrid && <section className="viewer-mini-settings-section">
               <strong>{t('컬러워크 색칠 도구')}</strong>
               <label><span>{t('색상')}</span><input aria-label={t('컬러워크 색상')} type="color" value={colorworkBrushColor} onClick={() => { if (colorworkEraser) setColorworkEraser(false) }} onChange={(event) => setColorworkBrushColor(event.currentTarget.value)} /></label>
-              <label><span>{t('투명도')}</span><input aria-label={t('컬러워크 투명도')} type="range" min="0" max="100" value={Math.round(colorworkBrushOpacity * 100)} disabled={colorworkEraser} onChange={(event) => setColorworkBrushOpacity(Number(event.currentTarget.value) / 100)} /></label>
+              <label><span>{t('투명도')}</span><input aria-label={t('컬러워크 투명도')} type="range" min="0" max="100" value={Math.round(colorworkBrushOpacity * 100)} style={{ '--range-progress': `${Math.round(colorworkBrushOpacity * 100)}%` } as CSSProperties} disabled={colorworkEraser} onChange={(event) => setColorworkBrushOpacity(Number(event.currentTarget.value) / 100)} /></label>
             </section>}
           </div>}
         </div>}
@@ -2967,23 +3044,23 @@ export default function Viewer() {
         })()}
         {thumbnailGroupError && <span role="alert">{thumbnailGroupError}</span>}
       </form>, document.body)}
-      {thumbnailGroupDialog && <div className="modal-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) setThumbnailGroupDialog(false) }}>
+      {thumbnailGroupDialog && <div className="modal-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) closeThumbnailGroupDialog() }}>
         <form className="modal-card thumbnail-group-dialog" role="dialog" aria-modal="true" aria-label={t('그룹 추가')} onSubmit={(event) => void createThumbnailGroup(event)}>
-          <div className="modal-heading"><h2>{t('그룹 추가')}</h2><button type="button" className="icon-button" aria-label={t('닫기')} onClick={() => setThumbnailGroupDialog(false)}><X size={19} /></button></div>
+          <div className="modal-heading"><h2>{t('그룹 추가')}</h2><button type="button" className="icon-button" aria-label={t('닫기')} disabled={thumbnailGroupSaving} onClick={closeThumbnailGroupDialog}><X size={19} /></button></div>
           <div className="modal-form">
             <label htmlFor="thumbnail-group-name">{t('그룹 이름')}</label>
             <input id="thumbnail-group-name" autoFocus maxLength={100} value={thumbnailGroupDraft} onChange={(event) => setThumbnailGroupDraft(event.currentTarget.value)} placeholder={t('그룹 이름 입력')} />
             {thumbnailGroupError && <p className="thumbnail-group-error" role="alert">{thumbnailGroupError}</p>}
-            <div className="modal-actions"><button type="button" className="secondary-button" onClick={() => setThumbnailGroupDialog(false)}>{t('취소')}</button><button type="submit" className="primary-button" disabled={thumbnailGroupSaving}>{t('확인')}</button></div>
+            <div className="modal-actions"><button type="button" className="secondary-button" disabled={thumbnailGroupSaving} onClick={closeThumbnailGroupDialog}>{t('취소')}</button><button type="submit" className="primary-button" disabled={thumbnailGroupSaving}>{t('확인')}</button></div>
           </div>
         </form>
       </div>}
       {counterTimerPromptOpen && <div className="modal-backdrop counter-modal-backdrop" role="presentation"><section className="modal-card counter-timer-link-prompt" role="alertdialog" aria-modal="true" aria-labelledby="counter-timer-prompt-title"><div className="modal-heading"><h2 id="counter-timer-prompt-title">{t('타이머도 함께 시작할까요?')}</h2></div><p>{t('처음 카운터를 조작할 때 타이머 시작 여부를 묻고 선택을 기억합니다.')}</p>{counterTimerPromptError && <p className="counter-storage-error" role="alert">{counterTimerPromptError}</p>}<div className="modal-actions"><button type="button" className="secondary-button" disabled={counterTimerPromptSaving} onClick={() => void chooseCounterTimerPrompt('skip')}>{t('아니요, 기억')}</button><button type="button" className="primary-button" disabled={counterTimerPromptSaving} onClick={() => void chooseCounterTimerPrompt('start')}>{t('예, 시작하고 기억')}</button></div></section></div>}
-      {exitPromptOpen && <div className="modal-backdrop" role="presentation"><section className="modal-card" role="alertdialog" aria-modal="true" aria-labelledby="timer-exit-title" aria-describedby="timer-exit-message"><div className="modal-heading"><h2 id="timer-exit-title">{t('저장되지 않은 작업시간')}</h2></div><p id="timer-exit-message" className="timer-exit-message">{t('일시정지를 누르지 않아 마지막 저장 이후 측정한 시간은 누적 작업시간에 저장되지 않습니다.')}</p><div className="modal-actions"><button type="button" className="secondary-button" onClick={() => setExitPromptOpen(false)}>{t('계속 작업')}</button><button type="button" className="primary-button" onClick={() => { setExitPromptOpen(false); if (exitPromptTarget === 'report') { setTimerHasUnsaved(false); setTimerSessionKey((key) => key + 1); setSearchParams({ report: '1' }) } else navigate('/') }}>{t('나가기')}</button></div></section></div>}
+      {exitPromptOpen && <div className="modal-backdrop" role="presentation"><section className="modal-card" role="alertdialog" aria-modal="true" aria-labelledby="timer-exit-title" aria-describedby="timer-exit-message"><div className="modal-heading"><h2 id="timer-exit-title">{t('저장되지 않은 작업시간')}</h2></div><p id="timer-exit-message" className="timer-exit-message">{t('일시정지를 누르지 않아 마지막 저장 이후 측정한 시간은 누적 작업시간에 저장되지 않습니다.')}</p><div className="modal-actions"><button type="button" className="secondary-button" onClick={() => setExitPromptOpen(false)}>{t('계속 작업')}</button><button type="button" className="primary-button" onClick={() => { setExitPromptOpen(false); if (exitPromptTarget === 'report') { setTimerHasUnsaved(false); setTimerSessionKey((key) => key + 1); setSearchParams({ report: '1' }) } else navigate('/projects') }}>{t('나가기')}</button></div></section></div>}
       {viewerExitSaving && <div className="modal-backdrop viewer-exit-modal" role="presentation"><section className="modal-card" role="alertdialog" aria-modal="true" aria-live="polite"><div className="modal-heading"><h2>{t('저장하는 중…')}</h2></div><p>{t('저장하고 나가기')}</p></section></div>}
       {viewerExitError && <div className="modal-backdrop viewer-exit-modal" role="presentation"><section className="modal-card" role="alertdialog" aria-modal="true" aria-labelledby="viewer-exit-error-title"><div className="modal-heading"><h2 id="viewer-exit-error-title">{t('저장 오류')}</h2></div><p role="alert">{viewerExitError}</p><div className="modal-actions"><button type="button" className="secondary-button" onClick={() => setViewerExitError('')}>{t('계속 작업')}</button><button type="button" className="primary-button" onClick={() => void requestViewerExit()}>{t('다시 시도')}</button></div></section></div>}
       {renameDialog && <div className="modal-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) setRenameDialog(false) }}><section className="modal-card" role="dialog" aria-modal="true" aria-label={t("이름 변경")}><div className="modal-heading"><h2>{documentKind === 'photos' ? t('사진 폴더 이름 변경') : t('PDF 이름 변경')}</h2><button className="icon-button" aria-label={t("닫기")} onClick={() => setRenameDialog(false)}><X size={20} /></button></div><form className="modal-form" onSubmit={(event) => void saveDocumentName(event)}><label htmlFor="viewer-pdf-name">{documentKind === 'photos' ? t('폴더 이름') : t('PDF 이름')}</label><input id="viewer-pdf-name" autoFocus required maxLength={120} value={renameDraft} onChange={(event) => setRenameDraft(event.currentTarget.value)} />{renameError && <p className="rename-error" role="alert">{renameError}</p>}<div className="modal-actions"><button type="button" className="secondary-button" onClick={() => setRenameDialog(false)}>{t("취소")}</button><button className="primary-button" type="submit"><Check size={17} />{t("저장")}</button></div></form></section></div>}
-      {colorworkDialog && <ColorworkSettingsDialog
+      {colorworkEnabled && colorworkDialog && <ColorworkSettingsDialog
         key={snapshot.activePane + ':' + activePage}
         initial={activeColorworkGrid ?? defaultColorworkSettings}
         onClose={() => setColorworkDialog(false)}

@@ -19,6 +19,19 @@ export function formatWorkTimeHoursMinutes(milliseconds: number) {
   }
 }
 
+export function parseManualWorkTime(hours: string, minutes: string) {
+  if (!/^\d+$/.test(hours) || !/^\d+$/.test(minutes)) return null
+  const hourCount = Number(hours)
+  const minuteCount = Number(minutes)
+  if (!Number.isSafeInteger(hourCount) || hourCount > 9999 || !Number.isSafeInteger(minuteCount) || minuteCount > 59) return null
+  const totalMinutes = hourCount * 60 + minuteCount
+  return totalMinutes > 0 ? totalMinutes * 60_000 : null
+}
+
+export function persistedWorkTimeBase(totalWorkTimeMs: number, savedTimerSessionMs: number) {
+  return Math.max(0, totalWorkTimeMs - savedTimerSessionMs)
+}
+
 export function isWorkDateKey(value: unknown): value is string {
   if (typeof value !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return false
   const date = new Date(value + 'T00:00:00.000Z')

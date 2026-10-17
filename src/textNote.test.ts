@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { textNoteBoxAt, textNoteCounterRotation, textNoteGestureExceededThreshold } from './textNote'
+import { shouldPreventTextNotePointerDefault, textNoteBoxAt, textNoteCounterRotation, textNoteGestureExceededThreshold } from './textNote'
 
 describe('text note placement', () => {
   it('uses the existing default note dimensions', () => {
@@ -24,6 +24,14 @@ describe('text note rotation', () => {
 })
 
 describe('text note tap and drag intent', () => {
+  it('preserves native pointer interaction inside the text editor', () => {
+    expect(shouldPreventTextNotePointerDefault(true)).toBe(false)
+  })
+
+  it('prevents text selection when starting a gesture on the note surface', () => {
+    expect(shouldPreventTextNotePointerDefault(false)).toBe(true)
+  })
+
   it('keeps a tap below the movement threshold so it can open the editor', () => {
     expect(textNoteGestureExceededThreshold({ x: 100, y: 100 }, { x: 105, y: 104 })).toBe(false)
   })

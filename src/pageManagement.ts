@@ -30,6 +30,43 @@ export function movePagesToThumbnailGroup(groups: ThumbnailGroup[], pageNumbers:
     : { ...group, pageNumbers: group.pageNumbers.filter((page) => !selected.has(page)) })
 }
 
+export function createThumbnailGroupFromPages(
+  groups: ThumbnailGroup[],
+  order: unknown,
+  pageNumbers: number[],
+  newGroup: ThumbnailGroup,
+  pageCount: number,
+): { groups: ThumbnailGroup[]; railOrder: ThumbnailRailOrderItem[] } {
+  const validGroups = normalizeThumbnailGroups(groups, pageCount)
+  const selectedPages = [...new Set(pageNumbers.filter((page) => Number.isSafeInteger(page) && page > 0 && page <= pageCount))].sort((a, b) => a - b)
+  const currentOrder = normalizeThumbnailRailOrder(order, pageCount, validGroups)
+  if (!selectedPages.length) return { groups: validGroups, railOrder: currentOrder }
+
+  const selected = new Set(selectedPages)
+  const groupByPage = new Map(validGroups.flatMap((group) => group.pageNumbers.map((page) => [page, group.id] as const)))
+  const sourceIndex = Math.min(...selectedPages.map((page) => {
+    const groupId = groupByPage.get(page)
+    return currentOrder.findIndex((item) => groupId
+      ? item.type === 'group' && item.groupId === groupId
+      : item.type === 'page' && item.pageNumber === page)
+  }).filter((index) => index >= 0))
+  const nextGroups = [
+    ...validGroups.flatMap((group) => {
+      const remainingPages = group.pageNumbers.filter((page) => !selected.has(page))
+      return group.pageNumbers.length && !remainingPages.length ? [] : [{ ...group, pageNumbers: remainingPages }]
+    }),
+    { ...newGroup, pageNumbers: selectedPages },
+  ]
+  const nextGroupIds = new Set(nextGroups.map((group) => group.id))
+  const remains = (item: ThumbnailRailOrderItem) => item.type === 'page'
+    ? !selected.has(item.pageNumber)
+    : nextGroupIds.has(item.groupId)
+  const railOrder = currentOrder.filter(remains)
+  const insertionIndex = currentOrder.slice(0, sourceIndex).filter(remains).length
+  railOrder.splice(insertionIndex, 0, { type: 'group', groupId: newGroup.id })
+  return { groups: nextGroups, railOrder: normalizeThumbnailRailOrder(railOrder, pageCount, nextGroups) }
+}
+
 export function removePagesFromThumbnailGroups(groups: ThumbnailGroup[], pageNumbers: number[]): ThumbnailGroup[] {
   const selected = new Set(pageNumbers)
   return groups.flatMap((group) => {

@@ -3,32 +3,33 @@
   <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-    <meta name="theme-color" content="#FBF9F5">
-    <meta name="description" content="도안보고에서 PDF 뜨개도안을 열고, 진행선과 단수 카운터로 지금 뜨는 위치를 기록하세요. 작업 내용은 내 브라우저에 저장됩니다.">
+    <meta name="theme-color" content="#FFFFFF">
+    <meta name="description" content="니트피크에서 PDF 뜨개도안을 열고, 진행선과 단수 카운터로 지금 뜨는 위치를 기록하세요. 작업 내용은 내 브라우저에 저장됩니다.">
     <meta property="og:type" content="website">
-    <meta property="og:title" content="도안보고 | 뜨개 도안을 보며 이어서 뜨기">
+    <meta property="og:title" content="니트피크 | 뜨개 도안을 보며 이어서 뜨기">
     <meta property="og:description" content="PDF 뜨개도안을 열고 진행선과 단수 카운터로 지금 뜨는 위치를 기록하세요.">
     <meta property="og:image" content="@@VIEWER_IMAGE@@">
-    <meta property="og:image:alt" content="도안보고 PDF 뷰어의 실제 작업 화면">
+    <meta property="og:image:alt" content="니트피크 PDF 뷰어의 실제 작업 화면">
     <link rel="icon" type="image/png" href="@@FAVICON@@">
     <link rel="stylesheet" href="./homepage.css">
-    <title>도안보고 | 뜨개 도안을 보며 이어서 뜨기</title>
+    <title>니트피크 | 뜨개 도안을 보며 이어서 뜨기</title>
     <script type="application/ld+json">
-      {"@context":"https://schema.org","@type":"SoftwareApplication","name":"도안보고","description":"PDF와 사진 뜨개도안을 보면서 진행 위치, 단수, 메모와 프로젝트를 관리하는 브라우저 도구입니다.","applicationCategory":"UtilitiesApplication","operatingSystem":"Web browser"}
+      {"@context":"https://schema.org","@type":"SoftwareApplication","name":"니트피크","description":"PDF와 사진 뜨개도안을 보면서 진행 위치, 단수, 메모와 프로젝트를 관리하는 브라우저 도구입니다.","applicationCategory":"UtilitiesApplication","operatingSystem":"Web browser"}
     </script>
   </head>
   <body>
     <a class="skip-link" href="#main" data-i18n="skip">본문으로 건너뛰기</a>
     <header class="site-header">
       <div class="header-inner page-width">
-        <a class="brand" href="#top" aria-label="도안보고 홈">
+        <a class="brand" href="#top" aria-label="니트피크 홈" data-i18n-aria-label="brandHomeLabel">
           <img src="@@LOGO@@" width="38" height="38" alt="" fetchpriority="high">
-          <span>도안보고</span>
+          <span data-i18n="brandName">니트피크</span>
         </a>
-        <nav class="desktop-nav" aria-label="주요 메뉴">
-          <a href="#features" data-i18n="navFeatures">기능</a>
-          <a href="#how" data-i18n="navHow">사용 방법</a>
-          <a href="#faq" data-i18n="navFaq">자주 묻는 질문</a>
+        <nav class="desktop-nav" aria-label="주요 메뉴" data-i18n-aria-label="mainNavigationLabel">
+          <a href="#page/about" data-i18n="navAbout">서비스 소개</a>
+          <a href="#page/guide" data-i18n="navGuide">사용 가이드</a>
+          <a href="#page/features" data-i18n="navFeatureGuide">기능별 안내</a>
+          <a href="#page/faq" data-i18n="navFaqPage">자주 묻는 질문</a>
         </nav>
         <div class="header-actions">
           <label class="language-picker">
@@ -52,43 +53,45 @@
           </button>
         </div>
       </div>
-      <nav class="mobile-nav" id="mobile-menu" aria-label="모바일 메뉴" hidden inert aria-hidden="true">
-        <a href="#features" data-i18n="navFeatures">기능</a>
-        <a href="#how" data-i18n="navHow">사용 방법</a>
-        <a href="#faq" data-i18n="navFaq">자주 묻는 질문</a>
+      <nav class="mobile-nav" id="mobile-menu" aria-label="모바일 메뉴" data-i18n-aria-label="mobileNavigationLabel" hidden inert aria-hidden="true">
+        <a href="#page/about" data-i18n="navAbout">서비스 소개</a>
+        <a href="#page/guide" data-i18n="navGuide">사용 가이드</a>
+        <a href="#page/features" data-i18n="navFeatureGuide">기능별 안내</a>
+        <a href="#page/faq" data-i18n="navFaqPage">자주 묻는 질문</a>
         <a class="mobile-start" href="./index.html" data-i18n="start">지금 시작하기</a>
       </nav>
     </header>
 
     <main id="main">
+      <div class="home-content" id="home-content">
       <section class="hero page-width" id="top" aria-labelledby="hero-title">
         <div class="hero-copy">
           <p class="eyebrow" data-i18n="heroKicker">PDF 뜨개도안 작업 도구</p>
-          <h1 id="hero-title" data-i18n="heroTitle">도안은 편하게, 뜨개는 더 즐겁게.</h1>
+          <h1 id="hero-title"><span class="homepage-title-line" data-i18n="heroTitleLine1">도안은 편하게,</span><span class="homepage-title-line" data-i18n="heroTitleLine2">뜨개는 더 즐겁게.</span></h1>
           <p class="hero-description" data-i18n="heroBody">PDF 도안을 보며 지금 뜨는 단을 표시하세요. 진행선과 단수 카운터, 메모까지 한곳에 모아두고 다음에도 이어서 뜰 수 있어요.</p>
           <div class="hero-actions">
-            <a class="button button-primary button-large" href="./index.html"><span data-i18n="startNow">도안보고 시작하기</span></a>
+            <a class="button button-primary button-large" href="./index.html"><span data-i18n="startNow">니트피크 시작하기</span></a>
             <a class="button button-secondary button-large" href="#features" data-i18n="seeFeatures">기능 살펴보기</a>
           </div>
           <p class="hero-note"><span class="note-mark icon-sprite icon--arrow" aria-hidden="true"></span><span data-i18n="trialNote">계정 없이 브라우저에서 바로 시작할 수 있어요.</span></p>
         </div>
         <figure class="hero-figure">
           <div class="product-frame">
-            <img class="product-screen" src="@@VIEWER_IMAGE@@" width="1440" height="1050" alt="도안보고 PDF 뷰어에서 실제 뜨개 차트와 진행선, 페이지 도구를 확인하는 화면" data-i18n-alt="viewerAlt" fetchpriority="high">
+            <img class="product-screen" src="@@VIEWER_IMAGE@@" width="1440" height="1050" alt="니트피크 PDF 뷰어에서 실제 뜨개 차트와 진행선, 페이지 도구를 확인하는 화면" data-i18n-alt="viewerAlt" fetchpriority="high">
           </div>
-          <figcaption class="figure-note" data-i18n="figureNote">도안보고 PDF 뷰어 · 직접 만든 뜨개 차트로 촬영</figcaption>
+          <figcaption class="figure-note" data-i18n="figureNote">니트피크 PDF 뷰어 · 직접 만든 뜨개 차트로 촬영</figcaption>
         </figure>
       </section>
 
       <section class="feature-section" id="features" aria-labelledby="feature-title">
         <div class="page-width">
           <div class="section-heading feature-heading">
-            <div><p class="eyebrow" data-i18n="featureKicker">작업에 필요한 것만, 도안 곁에</p><h2 id="feature-title" data-i18n="featureTitle">종이 도안 보듯 자연스럽게, 작업 기록은 빠짐없이.</h2></div>
+            <div><p class="eyebrow" data-i18n="featureKicker">작업에 필요한 것만, 도안 곁에</p><h2 id="feature-title" class="homepage-fixed-title" tabindex="-1" data-i18n="featureTitle"><span class="homepage-title-line">종이 도안 보듯 자연스럽게,</span><span class="homepage-title-line">작업 기록은 빠짐없이.</span></h2></div>
             <p class="section-lead" data-i18n="featureLead">익숙한 PDF 도안에 작업 위치와 기록을 더해, 실과 바늘에 집중할 수 있도록 돕습니다.</p>
           </div>
           <div class="feature-main">
             <figure class="feature-image">
-              <img src="@@VIEWER_IMAGE@@" width="1440" height="1050" loading="lazy" alt="PDF 뜨개 차트와 페이지 썸네일, 진행선이 표시된 도안보고 화면" data-i18n-alt="viewerAlt">
+              <img src="@@VIEWER_IMAGE@@" width="1440" height="1050" loading="lazy" alt="PDF 뜨개 차트와 페이지 썸네일, 진행선이 표시된 니트피크 화면" data-i18n-alt="viewerAlt">
               <figcaption><span data-i18n="featureImageLabel">PDF 도안 · 1 / 3 페이지</span><span class="image-legend"><i aria-hidden="true"></i><span data-i18n="progressLabel">현재 작업 위치</span></span></figcaption>
             </figure>
             <div class="feature-copy">
@@ -108,7 +111,7 @@
       </section>
 
       <section class="how-section page-width" id="how" aria-labelledby="how-title">
-        <div class="section-heading split-heading how-heading"><div><p class="eyebrow" data-i18n="howKicker">도안이 준비되어 있다면</p><h2 id="how-title" data-i18n="howTitle">세 가지 동작으로 다음 단을 시작해요.</h2></div><p class="section-lead" data-i18n="howLead">도안을 불러오고, 현재 위치를 표시한 뒤, 다음에 이어서 뜰 수 있도록 저장하세요.</p></div>
+        <div class="section-heading split-heading how-heading"><div><p class="eyebrow" data-i18n="howKicker">도안이 준비되어 있다면</p><h2 id="how-title" class="homepage-fixed-title" tabindex="-1" data-i18n="howTitle"><span class="homepage-title-line">세 가지 동작으로</span><span class="homepage-title-line">다음 단을 시작해요.</span></h2></div><p class="section-lead" data-i18n="howLead">도안을 불러오고, 현재 위치를 표시한 뒤, 다음에 이어서 뜰 수 있도록 저장하세요.</p></div>
         <ol class="steps-list">
           <li class="step-item"><span class="step-number">01</span><div class="step-icon" aria-hidden="true"><span class="icon-sprite icon--import"></span></div><div class="step-copy"><h3 data-i18n="stepOneTitle">PDF 도안 불러오기</h3><p data-i18n="stepOneBody">브라우저에서 가지고 있는 도안을 엽니다.</p></div></li>
           <li class="step-item"><span class="step-number">02</span><div class="step-icon" aria-hidden="true"><span class="icon-sprite icon--chart"></span></div><div class="step-copy"><h3 data-i18n="stepTwoTitle">위치와 단수 표시하기</h3><p data-i18n="stepTwoBody">진행선과 카운터로 작업 위치를 기록합니다.</p></div></li>
@@ -120,13 +123,13 @@
       <section class="record-band" aria-labelledby="record-title">
         <div class="record-inner page-width">
           <div class="record-mark" aria-hidden="true"><span class="icon-sprite icon--record"></span></div>
-          <div><p class="eyebrow" data-i18n="recordKicker">다시 도안을 펼치는 날에도</p><h2 id="record-title" data-i18n="recordTitle">마지막으로 뜬 곳부터 차분히 이어가세요.</h2><p class="record-description" data-i18n="recordBody">페이지 위 작업 표시와 프로젝트 기록을 남기면, 다음 뜨개 시간에 필요한 내용을 다시 확인할 수 있어요.</p></div>
+          <div class="record-copy"><p class="eyebrow" data-i18n="recordKicker">다시 도안을 펼치는 날에도</p><h2 id="record-title" class="homepage-fixed-title" data-i18n="recordTitle"><span class="homepage-title-line">마지막으로 뜬 곳부터</span><span class="homepage-title-line">차분히 이어가세요.</span></h2><p class="record-description" data-i18n="recordBody">페이지 위 작업 표시와 프로젝트 기록을 남기면, 다음 뜨개 시간에 필요한 내용을 다시 확인할 수 있어요.</p></div>
           <div class="record-footnote"><p data-i18n="recordLocalNote">작업 데이터는 이 브라우저에 저장됩니다.</p></div>
         </div>
       </section>
 
       <section class="faq-section page-width" id="faq" aria-labelledby="faq-title">
-        <div class="section-heading faq-heading"><p class="eyebrow" data-i18n="faqKicker">시작 전에 확인해 보세요</p><h2 id="faq-title" data-i18n="faqTitle">자주 묻는 질문</h2></div>
+        <div class="section-heading faq-heading"><p class="eyebrow" data-i18n="faqKicker">시작 전에 확인해 보세요</p><h2 id="faq-title" tabindex="-1" data-i18n="faqTitle">자주 묻는 질문</h2></div>
         <div class="faq-list">
           <details class="faq-item"><summary><span data-i18n="faqOneQ">어떤 뜨개도안을 사용할 수 있나요?</span><span class="faq-toggle-icon icon-sprite icon--plus" aria-hidden="true"></span></summary><p data-i18n="faqOneA">PDF 도안을 열 수 있고, 종이 도안은 사진 도안 폴더로 만들 수 있어요. 나만의 뜨개 차트를 직접 그릴 수도 있습니다.</p></details>
           <details class="faq-item"><summary><span data-i18n="faqTwoQ">도안과 작업 내용은 어디에 저장되나요?</span><span class="faq-toggle-icon icon-sprite icon--plus" aria-hidden="true"></span></summary><p data-i18n="faqTwoA">도안과 작업 데이터는 브라우저 로컬 저장소에 저장됩니다. 자동 기기 간 동기화는 제공하지 않으므로, 기기를 옮길 때는 작업 파일을 내보내어 백업하고 가져오세요.</p></details>
@@ -139,22 +142,93 @@
         <div class="closing-inner page-width">
           <span class="closing-stitch icon-sprite icon--stitch" aria-hidden="true"></span>
           <p class="eyebrow" data-i18n="closingKicker">도안은 가까이에, 뜨개는 느긋하게</p>
-          <h2 id="closing-title" data-i18n="closingTitle">이제 뜨개에만 집중해 보세요.</h2>
-          <p data-i18n="closingBody">도안보고에서 다음 뜨개 시간을 시작합니다.</p>
-          <a class="button button-primary button-large" href="./index.html"><span data-i18n="startNow">도안보고 시작하기</span></a>
+          <h2 id="closing-title" class="homepage-fixed-title" data-i18n="closingTitle"><span class="homepage-title-line">이제 뜨개에만</span><span class="homepage-title-line">집중해 보세요.</span></h2>
+          <p data-i18n="closingBody">니트피크에서 다음 뜨개 시간을 시작합니다.</p>
+          <a class="button button-primary button-large" href="./index.html"><span data-i18n="startNow">니트피크 시작하기</span></a>
         </div>
+      </section>
+      </div>
+
+      <section class="info-page page-width" data-info-page="about" hidden aria-labelledby="about-title">
+        <a class="page-back" href="#top" data-i18n="backHome">← 홈으로</a>
+        <header class="info-page-head"><p class="eyebrow" data-i18n="aboutKicker">도안과 뜨개 사이, 필요한 도구</p><h1 id="about-title" tabindex="-1" data-i18n="aboutTitle">뜨개 도안을 보며, 하던 작업을 이어가세요.</h1><p class="info-page-lead" data-i18n="aboutLead">PDF와 사진 도안을 열고 진행 위치와 작업 시간을 기록하는 뜨개 작업 도구입니다.</p></header>
+        <div class="info-card-grid">
+          <article class="info-card"><span class="info-card-icon"><span class="icon-sprite icon--pdf" aria-hidden="true"></span></span><h2 data-i18n="aboutPdfTitle">PDF 도안</h2><p data-i18n="aboutPdfBody">가지고 있는 PDF를 원본 그대로 열고 페이지를 살펴보거나 확대합니다.</p></article>
+          <article class="info-card"><span class="info-card-icon"><span class="icon-sprite icon--import" aria-hidden="true"></span></span><h2 data-i18n="aboutPhotoTitle">사진 도안</h2><p data-i18n="aboutPhotoBody">종이 도안을 사진으로 가져와 페이지 순서대로 정리합니다.</p></article>
+          <article class="info-card"><span class="info-card-icon"><span class="icon-sprite icon--chart" aria-hidden="true"></span></span><h2 data-i18n="aboutLineTitle">진행선</h2><p data-i18n="aboutLineBody">차트에서 지금 뜨는 위치를 표시하고 카운터와 연결해 움직입니다.</p></article>
+          <article class="info-card"><span class="info-card-icon"><span class="icon-sprite icon--counter" aria-hidden="true"></span></span><h2 data-i18n="aboutCounterTitle">카운터와 타이머</h2><p data-i18n="aboutCounterBody">단수를 세고 작업 시간을 측정해 도안 곁에 기록합니다.</p></article>
+          <article class="info-card"><span class="info-card-icon"><span class="icon-sprite icon--chart" aria-hidden="true"></span></span><h2 data-i18n="aboutSplitTitle">두 영역 보기</h2><p data-i18n="aboutSplitBody">서로 다른 페이지를 나란히 열어 각 영역을 따로 조작합니다.</p></article>
+          <article class="info-card"><span class="info-card-icon"><span class="icon-sprite icon--record" aria-hidden="true"></span></span><h2 data-i18n="aboutRecordTitle">뜨개 기록</h2><p data-i18n="aboutRecordBody">프로젝트별 작업 시간과 메모를 남기고 다시 확인합니다.</p></article>
+        </div>
+        <nav class="info-page-links" aria-label="관련 안내" data-i18n-aria-label="relatedLinksLabel"><a class="button button-secondary" href="#page/guide" data-i18n="navGuide">사용 가이드</a><a class="button button-secondary" href="#page/features" data-i18n="navFeatureGuide">기능별 안내</a><a class="button button-primary" href="./index.html" data-i18n="start">지금 시작하기</a></nav>
+      </section>
+
+      <section class="info-page page-width" data-info-page="guide" hidden aria-labelledby="guide-title">
+        <a class="page-back" href="#top" data-i18n="backHome">← 홈으로</a>
+        <header class="info-page-head"><p class="eyebrow" data-i18n="guideKicker">처음 시작할 때</p><h1 id="guide-title" tabindex="-1" data-i18n="guideTitle">도안을 열고 작업을 기록하는 방법</h1><p class="info-page-lead" data-i18n="guideLead">도안을 가져온 뒤 진행 위치, 단수, 시간을 기록하고 다음에 이어서 뜹니다.</p></header>
+        <div class="guide-layout"><ol class="guide-steps">
+          <li><span>01</span><div><h2 data-i18n="guideStep1Title">도안 가져오기</h2><p data-i18n="guideStep1Body">프로젝트에서 ‘PDF 가져오기’를 누르거나 ‘사진 도안 만들기’에서 사진을 선택합니다.</p></div></li>
+          <li><span>02</span><div><h2 data-i18n="guideStep2Title">진행선 표시하기</h2><p data-i18n="guideStep2Body">뷰어에서 ‘진행선 시작’을 선택하고 차트에서 작업 중인 줄에 선을 놓습니다.</p></div></li>
+          <li><span>03</span><div><h2 data-i18n="guideStep3Title">카운터 맞추기</h2><p data-i18n="guideStep3Body">카운터를 추가해 현재 단수를 입력합니다. 진행선과 연결하면 단수를 바꿀 때 위치도 함께 이동합니다.</p></div></li>
+          <li><span>04</span><div><h2 data-i18n="guideStep4Title">작업 시간 재기</h2><p data-i18n="guideStep4Body">뷰어의 타이머를 시작하거나 일시정지합니다. 저장된 기록은 프로젝트의 작업 기록에서 확인합니다.</p></div></li>
+          <li><span>05</span><div><h2 data-i18n="guideStep5Title">저장하고 다시 열기</h2><p data-i18n="guideStep5Body">작업 위치와 메모는 브라우저에 저장됩니다. 기기를 옮기기 전에는 프로젝트 백업을 내보내고 새 기기에서 가져옵니다.</p></div></li>
+        </ol><figure class="guide-figure"><img src="@@VIEWER_IMAGE@@" width="1440" height="1050" loading="lazy" alt="뜨개 도안 위에 진행선이 표시된 니트피크 뷰어" data-i18n-alt="guideViewerAlt"><figcaption data-i18n="guideImageCaption">실제 PDF 뷰어 화면</figcaption></figure></div>
+        <nav class="info-page-links" aria-label="관련 안내" data-i18n-aria-label="relatedLinksLabel"><a class="button button-secondary" href="#page/features" data-i18n="navFeatureGuide">기능별 안내</a><a class="button button-primary" href="./index.html" data-i18n="start">지금 시작하기</a></nav>
+      </section>
+
+      <section class="info-page page-width" data-info-page="features" hidden aria-labelledby="features-page-title">
+        <a class="page-back" href="#top" data-i18n="backHome">← 홈으로</a>
+        <header class="info-page-head"><p class="eyebrow" data-i18n="featuresKicker">도안에 맞춰 골라 쓰는 기능</p><h1 id="features-page-title" tabindex="-1" data-i18n="featuresTitle">자주 쓰는 작업을 도안 옆에서</h1><p class="info-page-lead" data-i18n="featuresLead">사진 도안 정리, 두 영역 보기, 뜨개 기록을 실제 작업 순서에 맞춰 사용할 수 있습니다.</p></header>
+        <div class="feature-guide-list">
+          <article class="feature-guide-item"><span class="feature-guide-number">01</span><div><h2 data-i18n="photoGuideTitle">사진 도안: 페이지를 모으고 순서를 정리해요</h2><p data-i18n="photoGuideBody">‘사진 도안 만들기’에서 여러 장을 가져와 한 도안으로 구성합니다. 페이지 순서를 확인하고 필요하면 사진을 추가해 이어서 봅니다.</p></div></article>
+          <article class="feature-guide-item"><span class="feature-guide-number">02</span><div><h2 data-i18n="splitGuideTitle">두 영역 보기: 두 페이지를 나란히 살펴봐요</h2><p data-i18n="splitGuideBody">뷰어에서 ‘두 영역 보기’를 선택합니다. 각 영역에서 페이지와 확대 위치를 따로 조작하고, 가운데 구분선을 움직여 화면 비율을 조정합니다.</p></div></article>
+          <article class="feature-guide-item"><span class="feature-guide-number">03</span><div><h2 data-i18n="recordGuideTitle">뜨개 기록: 작업 시간과 메모를 돌아봐요</h2><p data-i18n="recordGuideBody">타이머 기록과 프로젝트 메모를 저장하면 프로젝트의 작업 기록에서 날짜별 작업 시간과 남겨 둔 내용을 확인할 수 있습니다.</p></div></article>
+        </div>
+        <nav class="info-page-links" aria-label="관련 안내" data-i18n-aria-label="relatedLinksLabel"><a class="button button-secondary" href="#page/guide" data-i18n="navGuide">사용 가이드</a><a class="button button-primary" href="./index.html" data-i18n="start">지금 시작하기</a></nav>
+      </section>
+
+      <section class="info-page page-width" data-info-page="faq" hidden aria-labelledby="faq-page-title">
+        <a class="page-back" href="#top" data-i18n="backHome">← 홈으로</a>
+        <header class="info-page-head"><p class="eyebrow" data-i18n="faqPageKicker">저장과 사용 환경</p><h1 id="faq-page-title" tabindex="-1" data-i18n="faqPageTitle">자주 묻는 질문</h1><p class="info-page-lead" data-i18n="faqPageLead">데이터 저장, 백업, 브라우저와 기기 사용에 관해 안내합니다.</p></header>
+        <div class="faq-list info-faq-list">
+          <details class="faq-item"><summary data-i18n="faqLocalQ">내 도안과 작업 내용은 어디에 저장되나요?</summary><p data-i18n="faqLocalA">도안과 작업 데이터는 현재 사용 중인 브라우저의 기기 내 저장소에 보관됩니다. 계정이나 자동 기기 간 동기화는 제공하지 않습니다.</p></details>
+          <details class="faq-item"><summary data-i18n="faqTemporaryQ">브라우저 저장을 사용할 수 없으면 어떻게 되나요?</summary><p data-i18n="faqTemporaryA">저장소를 사용할 수 없는 환경에서는 임시 저장으로 동작할 수 있으며, 이 경우 브라우저를 닫으면 데이터가 유지되지 않을 수 있습니다. 화면에 표시되는 저장 상태를 확인하세요.</p></details>
+          <details class="faq-item"><summary data-i18n="faqBackupQ">백업과 복원은 어떻게 하나요?</summary><p data-i18n="faqBackupA">프로젝트 화면의 백업 내보내기로 작업 파일을 저장하고, 복원할 때는 가져오기를 사용합니다. 백업 파일은 별도 위치에 보관하세요.</p></details>
+          <details class="faq-item"><summary data-i18n="faqClearQ">브라우저 데이터를 지워도 되나요?</summary><p data-i18n="faqClearA">사이트 데이터나 브라우저 저장 공간을 지우면 도안과 작업 기록이 삭제될 수 있습니다. 먼저 백업을 내보내세요.</p></details>
+          <details class="faq-item"><summary data-i18n="faqOriginQ">기기나 브라우저, 사이트 주소를 바꾸면 기록이 따라오나요?</summary><p data-i18n="faqOriginA">브라우저·기기·사이트 주소가 바뀌면 저장소가 달라져 자동으로 이어지지 않습니다. 기존 환경에서 백업을 내보내고 새 환경에서 가져오세요.</p></details>
+          <details class="faq-item"><summary data-i18n="faqDevicesQ">어떤 기기에서 사용할 수 있나요?</summary><p data-i18n="faqDevicesA">브라우저에서 실행되는 웹 앱이며 화면 크기에 따라 배치가 바뀝니다. 동작은 브라우저와 기기 환경에 따라 달라질 수 있으므로, 중요한 작업은 먼저 백업하고 사용 중 저장 상태를 확인하세요.</p></details>
+          <details class="faq-item"><summary data-i18n="faqAccountQ">회원가입이 필요한가요?</summary><p data-i18n="faqAccountA">현재 문서화된 기본 기능은 계정을 만들지 않고 사용할 수 있습니다.</p></details>
+        </div>
+        <nav class="info-page-links" aria-label="관련 안내" data-i18n-aria-label="relatedLinksLabel"><a class="button button-secondary" href="#page/terms" data-i18n="navTerms">이용약관</a><a class="button button-secondary" href="#page/privacy" data-i18n="navPrivacy">개인정보 처리방침</a><a class="button button-primary" href="./index.html" data-i18n="start">지금 시작하기</a></nav>
+      </section>
+
+      <section class="info-page legal-page page-width" data-info-page="terms" hidden aria-labelledby="terms-title">
+        <a class="page-back" href="#top" data-i18n="backHome">← 홈으로</a>
+        <header class="info-page-head"><p class="eyebrow" data-i18n="legalKicker">문서 안내</p><h1 id="terms-title" tabindex="-1" data-i18n="navTerms">이용약관</h1><p class="legal-draft-note" data-i18n="legalDraftNote">초안 · 운영자 정보, 문의처와 시행일을 확정한 뒤 공개해야 합니다.</p></header>
+        <article class="legal-content" data-legal-document="terms"></article>
+        <nav class="info-page-links" aria-label="관련 안내" data-i18n-aria-label="relatedLinksLabel"><a class="button button-secondary" href="#page/privacy" data-i18n="navPrivacy">개인정보 처리방침</a><a class="button button-primary" href="./index.html" data-i18n="start">지금 시작하기</a></nav>
+      </section>
+
+      <section class="info-page legal-page page-width" data-info-page="privacy" hidden aria-labelledby="privacy-title">
+        <a class="page-back" href="#top" data-i18n="backHome">← 홈으로</a>
+        <header class="info-page-head"><p class="eyebrow" data-i18n="legalKicker">문서 안내</p><h1 id="privacy-title" tabindex="-1" data-i18n="navPrivacy">개인정보 처리방침</h1><p class="legal-draft-note" data-i18n="legalDraftNote">초안 · 운영자 정보, 문의처와 시행일을 확정한 뒤 공개해야 합니다.</p></header>
+        <article class="legal-content" data-legal-document="privacy"></article>
+        <nav class="info-page-links" aria-label="관련 안내" data-i18n-aria-label="relatedLinksLabel"><a class="button button-secondary" href="#page/terms" data-i18n="navTerms">이용약관</a><a class="button button-primary" href="./index.html" data-i18n="start">지금 시작하기</a></nav>
       </section>
     </main>
 
+    <div class="legal-template-bank" hidden>@@LEGAL_DOCUMENTS@@</div>
+
     <footer class="site-footer">
       <div class="footer-inner page-width">
-        <div class="footer-brand"><a class="brand" href="#top" aria-label="도안보고 홈"><img src="@@LOGO@@" width="32" height="32" alt="" loading="lazy"><span>도안보고</span></a><p data-i18n="footerCopy">좋아하는 도안 곁에서, 뜨개를 이어가세요.</p></div>
-        <nav class="footer-nav" aria-label="서비스 안내"><strong data-i18n="footerService">서비스</strong><a href="#features" data-i18n="navFeatures">기능</a><a href="#how" data-i18n="navHow">사용 방법</a><a href="#faq" data-i18n="navFaq">자주 묻는 질문</a></nav>
+        <div class="footer-brand"><a class="brand" href="#top" aria-label="니트피크 홈" data-i18n-aria-label="brandHomeLabel"><img src="@@LOGO@@" width="32" height="32" alt="" loading="lazy"><span>니트피크</span></a><p data-i18n="footerCopy">좋아하는 도안 곁에서, 뜨개를 이어가세요.</p></div>
+        <nav class="footer-nav" aria-label="서비스 안내" data-i18n-aria-label="footerLinksLabel"><strong data-i18n="footerService">서비스</strong><a href="#page/about" data-i18n="navAbout">서비스 소개</a><a href="#page/guide" data-i18n="navGuide">사용 가이드</a><a href="#page/features" data-i18n="navFeatureGuide">기능별 안내</a><a href="#page/faq" data-i18n="navFaqPage">자주 묻는 질문</a><a href="#page/terms" data-i18n="navTerms">이용약관</a><a href="#page/privacy" data-i18n="navPrivacy">개인정보 처리방침</a></nav>
         <div class="footer-language"><label class="language-picker"><span class="sr-only" data-i18n="languageLabel">언어 선택</span><select class="language-mirror" aria-label="언어 선택" data-i18n-aria-label="languageLabel"><option value="auto" data-i18n="languageAuto">기기 언어</option><option value="ko">한국어</option><option value="en">English</option><option value="ja">日本語</option><option value="de">Deutsch</option><option value="da">Dansk</option><option value="nb">Norsk (bokmål)</option><option value="fi">Suomi</option></select><span class="icon-sprite icon--chevron" aria-hidden="true"></span></label><a class="footer-start" href="./index.html" data-i18n="start">지금 시작하기</a></div>
       </div>
-      <div class="footer-bottom page-width"><span>© <span id="year">2026</span> 도안보고</span><span data-i18n="footerStorage">도안과 작업 데이터는 브라우저에 저장됩니다.</span></div>
+      <div class="footer-bottom page-width"><span>© <span id="year">2026</span> 니트피크</span><span data-i18n="footerStorage">도안과 작업 데이터는 브라우저에 저장됩니다.</span></div>
     </footer>
-    <noscript><p class="noscript-note">도안보고는 PDF 뜨개도안, 진행선과 단수 카운터, 작업 기록을 제공하는 브라우저 도구입니다. 지금 시작하기를 눌러 앱을 여세요.</p></noscript>
+    <noscript><p class="noscript-note">니트피크는 PDF 뜨개도안, 진행선과 단수 카운터, 작업 기록을 제공하는 브라우저 도구입니다. 지금 시작하기를 눌러 앱을 여세요.</p></noscript>
+    <script src="./pages.js"></script>
     <script src="./homepage.js"></script>
   </body>
 </html>

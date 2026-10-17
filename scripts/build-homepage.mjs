@@ -1,24 +1,34 @@
 import { mkdir, readFile, writeFile } from 'node:fs/promises'
 import { dirname, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { renderMarkdown } from './markdown-to-html.mjs'
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 const templatePath = resolve(root, 'homepage/index.html')
 const outputPath = resolve(root, 'portable/homepage.html')
-const [template, stylesheet, behavior, logo, viewer, favicon, generatedIcons] = await Promise.all([
+const [template, stylesheet, pages, behavior, logo, viewer, favicon, generatedIcons, pretendard] = await Promise.all([
   readFile(templatePath, 'utf8'),
   readFile(resolve(root, 'homepage/homepage.css'), 'utf8'),
+  readFile(resolve(root, 'homepage/pages.js'), 'utf8'),
   readFile(resolve(root, 'homepage/homepage.js'), 'utf8'),
   readFile(resolve(root, 'src/assets/yy-logo.png')),
   readFile(resolve(root, 'homepage/assets/viewer.png')),
   readFile(resolve(root, 'src/assets/yy-favicon.png')),
   readFile(resolve(root, 'homepage/assets/generated-icons.png')),
+  readFile(resolve(root, 'src/assets/fonts/PretendardVariable.woff2')),
 ])
+const legalLocales = ['ko', 'en', 'ja', 'de', 'da', 'nb', 'fi']
+const legalTypes = ['terms', 'privacy']
+const legalDocuments = await Promise.all(legalTypes.flatMap((type) => legalLocales.map(async (locale) => {
+  const markdown = await readFile(resolve(root, '..', 'docs', `${type}-${locale}.md`), 'utf8')
+  return `<template id="legal-${type}-${locale}">${renderMarkdown(markdown)}</template>`
+})))
 const embeddedStylesheet = stylesheet.replace(
   'url("./assets/generated-icons.png")',
   `url("data:image/png;base64,${generatedIcons.toString('base64')}")`,
-)
+).replace('url("@@PRETENDARD_FONT@@")', `url("data:font/woff2;base64,${pretendard.toString('base64')}")`)
 if (embeddedStylesheet === stylesheet) throw new Error('The generated icon sprite reference was not found in the homepage stylesheet.')
+if (embeddedStylesheet.includes('@@PRETENDARD_FONT@@')) throw new Error('The local Pretendard font reference was not embedded in the homepage stylesheet.')
 
 const replacements = [
   ['@@LOGO@@', `data:image/png;base64,${logo.toString('base64')}`],
@@ -28,10 +38,12 @@ const replacements = [
 
 let html = template
   .replace('<link rel="stylesheet" href="./homepage.css">', `<style>\n${embeddedStylesheet}\n</style>`)
+  .replace('<script src="./pages.js"></script>', `<script>\n${pages}\n</script>`)
   .replace('<script src="./homepage.js"></script>', `<script>\n${behavior}\n</script>`)
+  .replace('@@LEGAL_DOCUMENTS@@', legalDocuments.join('\n'))
 for (const [placeholder, value] of replacements) html = html.replaceAll(placeholder, value)
 
-if (/@@[A-Z_]+@@|(?:src|href)="\.\/homepage\.(?:css|js)"|generated-icons\.png/.test(html)) {
+if (/@@[A-Z_]+@@|(?:src|href)="\.\/(?:homepage|pages)\.(?:css|js)"|generated-icons\.png/.test(html)) {
   throw new Error('The homepage still has an external asset reference or unresolved asset placeholder.')
 }
 

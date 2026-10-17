@@ -1,5 +1,5 @@
 import { formatNumber, t, translateMessage } from './locales/index'
-import { useCallback, useEffect, useLayoutEffect, useRef, useState, type DragEvent as ReactDragEvent, type MouseEvent as ReactMouseEvent, type PointerEvent as ReactPointerEvent, type RefObject } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type DragEvent as ReactDragEvent, type MouseEvent as ReactMouseEvent, type PointerEvent as ReactPointerEvent, type RefObject } from 'react'
 import { createPortal } from 'react-dom'
 import type { PDFDocumentProxy, PDFPageProxy, RenderTask } from 'pdfjs-dist'
 import { Bookmark, Check, Trash2 } from 'lucide-react'
@@ -7,15 +7,18 @@ import BrandLoading from './BrandLoading'
 import { ColorPresetButtons } from './ColorPresetButtons'
 import { ANNOTATION_COLOR_PRESETS } from './designTokens'
 import { ProgressLineOverlay } from './ProgressLineOverlay'
+import { ChartRowRecognitionDialog, type ChartRowRecognitionResult } from './ChartRowRecognitionDialog'
+import type { DetectedChartRow } from './chartRowDetection'
+import { runChartRowsWorker } from './chartRowsWorker'
 import type { AnnotationRecord, AnnotationStyle, AnnotationTool, ColorworkCell, ColorworkCreateRequest, ColorworkGrid, CounterSnapshot, PageRotation, PageWorkRecord, PaneId, PaneSnapshot, ProgressGuide, ProgressSettings, RegionHighlight } from './types'
 import { createColorworkGrid, resizeColorworkGridDisplay } from './colorwork'
 import { appendInkPoint, createInkAnnotation, createInkId, type ActiveInkStroke, type InkPoint } from './inkStroke'
-import { textNoteBoxAt, textNoteCounterRotation, textNoteGestureExceededThreshold } from './textNote'
+import { shouldPreventTextNotePointerDefault, textNoteBoxAt, textNoteCounterRotation, textNoteGestureExceededThreshold } from './textNote'
 import type { PdfQrLink } from './qr'
 import { rotatedPageSize } from './pageGeometry'
-import { displayRectToPageRect, focusBandHeightRatio, focusDimOpacity, focusRowSpacing, guidePositionForRotation, pageRectToDisplayRect } from './focusGeometry'
-import { clientPointForPagePosition, classifyWheelInput, isEditableTarget, pagePositionAtClientPoint, pinchPreviewTranslation, regionHighlightPointerAction, scrollOffsetForZoomFocus, wheelActionForBurst, wheelZoom, type WheelInput, type ZoomFocus } from './viewerInteraction'
-import { acquireThumbnailCache, getViewerResourcePolicy, pdfRasterScale, releaseCanvasWhenSettled, viewerCanvasMemory } from './pdfRenderResources'
+import { displayRectToPageRect, focusBandHeightRatio, focusDimOpacity, focusRowSpacing, guideGeometryForRotation, pageRectToDisplayRect } from './focusGeometry'
+import { canStartPaneGesture, clientPointForPagePosition, classifyWheelInput, isEditableTarget, pagePositionAtClientPoint, pinchPreviewTranslation, regionHighlightPointerAction, scrollOffsetForZoomFocus, visiblePageCrop, wheelActionForBurst, wheelZoom, type WheelInput, type ZoomFocus } from './viewerInteraction'
+import { acquireThumbnailCache, getViewerResourcePolicy, MAX_PDF_CANVAS_PIXELS, pdfRasterScale, releaseCanvasWhenSettled, viewerCanvasMemory } from './pdfRenderResources'
 import { pdfPageRenderQueue } from './pdfPageRenderQueue'
 import type { LimitedAnnotationKind } from './annotationLimits'
 
@@ -50,6 +53,15 @@ type RegionHighlightTransform = {
 }
 type RegionHighlightDrawing = { pointerId: number; start: Point; before: PageWorkRecord }
 type RegionPopoverPosition = { left: number; top: number }
+type ChartRecognitionState = {
+  guideId: string
+  stage: 'select' | 'analyzing' | 'review' | 'error'
+  selection?: { x: number; y: number; width: number; height: number }
+  imageUrl?: string
+  rows?: DetectedChartRow[]
+  error?: string
+  rotation: PageRotation
+}
 const EMPTY_REGION_HIGHLIGHTS: RegionHighlight[] = []
 
 interface ThumbnailJob {
@@ -414,19 +426,22 @@ function withTextBox(annotation: AnnotationRecord, pageHeight: number): Annotati
   return { ...annotation, points: [{ x: box.x, y: box.y }], boxWidth: box.width, boxHeight: box.height }
 }
 
-export function PdfPage({ pdf, page, paneId, pane, splitView, rotation, active, tool, lineSettings, counters, annotationStyle, work, workReady, canCreateLimitedAnnotation, pageWorkLoadError, onRetryPageWork, colorworkBrushColor, colorworkBrushOpacity, colorworkEraser, createColorworkRequest, pageLinks, qrLinks, onPageRendered, onActivate, onWorkChange, onZoom, onCenter, onColorworkRequestHandled, onTextToolConsumed, onRegionHighlightToolConsumed }: {
+export function PdfPage({ pdf, page, paneId, pane, paneGestureOwnerRef, splitView, rotation, active, tool, lineSettings, counters, mainCounterId, annotationStyle, work, colorworkEnabled, workReady, canCreateLimitedAnnotation, pageWorkLoadError, onRetryPageWork, colorworkBrushColor, colorworkBrushOpacity, colorworkEraser, createColorworkRequest, pageLinks, qrLinks, onPageRendered, onActivate, onWorkChange, onChartRowsApply, onZoom, onCenter, onColorworkRequestHandled, onTextToolConsumed, onRegionHighlightToolConsumed }: {
   pdf: PDFDocumentProxy
   page: number
   paneId: PaneId
   pane: PaneSnapshot
+  paneGestureOwnerRef: { current: PaneId | null }
   splitView: boolean
   rotation: PageRotation
   active: boolean
   tool: AnnotationTool
   lineSettings: ProgressSettings
   counters: CounterSnapshot[]
+  mainCounterId: string
   annotationStyle: AnnotationStyle
   work: PageWorkRecord
+  colorworkEnabled: boolean
   workReady: boolean
   canCreateLimitedAnnotation: (kind: LimitedAnnotationKind) => boolean
   pageWorkLoadError?: string
@@ -440,6 +455,7 @@ export function PdfPage({ pdf, page, paneId, pane, splitView, rotation, active, 
   onPageRendered: (pageNumber: number, canvas: HTMLCanvasElement) => void
   onActivate: () => void
   onWorkChange: (work: PageWorkRecord, immediate: boolean, recordHistory?: boolean, historyBefore?: PageWorkRecord, cellChanges?: { index: number; before: ColorworkCell | null; after: ColorworkCell | null }[]) => boolean
+  onChartRowsApply: (work: PageWorkRecord, before: PageWorkRecord) => Promise<boolean>
   onZoom: (zoom: number, focus?: ZoomFocus) => void
   onCenter: (x: number, y: number) => void
   onColorworkRequestHandled: (id: string) => void
@@ -449,7 +465,9 @@ export function PdfPage({ pdf, page, paneId, pane, splitView, rotation, active, 
   const resourcePolicy = getViewerResourcePolicy()
   const scrollRef = useRef<HTMLDivElement>(null)
   const rotationLayerRef = useRef<HTMLDivElement>(null)
+  const pageSvgRef = useRef<SVGSVGElement>(null)
   const canvasRef = useRef<HTMLCanvasElement>(null)
+  const detailCanvasRef = useRef<HTMLCanvasElement>(null)
   const annotationLayerRef = useRef<HTMLDivElement>(null)
   const textInputRef = useRef<HTMLTextAreaElement>(null)
   const textStyleToolbarRef = useRef<HTMLDivElement>(null)
@@ -458,9 +476,15 @@ export function PdfPage({ pdf, page, paneId, pane, splitView, rotation, active, 
   const regionPopoverRef = useRef<HTMLDivElement>(null)
   const regionNodesRef = useRef(new Map<string, SVGRectElement>())
   const renderQueueKey = useRef<object>({})
+  const detailQueueKey = useRef<object>({})
   const renderPriority = useRef(active ? 1 : 0)
   const displayCanvasKey = useRef<object>({})
   const stagingCanvasKey = useRef<object>({})
+  const detailDisplayCanvasKey = useRef<object>({})
+  const detailStagingCanvasKey = useRef<object>({})
+  const detailCancelRef = useRef<(() => void) | null>(null)
+  const detailSequenceRef = useRef(0)
+  const detailRefreshTimerRef = useRef(0)
   const handledColorworkRequest = useRef<string | null>(null)
   const colorworkTransform = useRef<ColorworkTransform | null>(null)
   const colorworkStroke = useRef<ColorworkStroke | null>(null)
@@ -477,8 +501,9 @@ export function PdfPage({ pdf, page, paneId, pane, splitView, rotation, active, 
   const lastRenderPage = useRef<{ page: number; rotation: PageRotation } | null>(null)
   const [size, setSize] = useState<Size>({ width: 0, height: 0 })
   const [displayedSize, setDisplayedSize] = useState<{ page: Size; css: Size } | null>(null)
-  const [displayedRaster, setDisplayedRaster] = useState<{ pdf: PDFDocumentProxy; page: number; zoom: number; rotation: PageRotation } | null>(null)
+  const [displayedRaster, setDisplayedRaster] = useState<{ pdf: PDFDocumentProxy; page: number; zoom: number; rotation: PageRotation; scale: number } | null>(null)
   const [readyKey, setReadyKey] = useState('')
+  const [detailRequest, setDetailRequest] = useState({ key: '', revision: 0 })
   const [renderError, setRenderError] = useState<{ key: string; message: string } | null>(null)
   const [retry, setRetry] = useState(0)
   const pinchZoom = useRef<number | null>(null)
@@ -518,17 +543,47 @@ export function PdfPage({ pdf, page, paneId, pane, splitView, rotation, active, 
   const selectedRegionIdRef = useRef<string | null>(null)
   const [regionPopoverOpen, setRegionPopoverOpen] = useState(false)
   const [regionPopoverPosition, setRegionPopoverPosition] = useState<RegionPopoverPosition | null>(null)
+  const [chartRecognition, setChartRecognition] = useState<ChartRecognitionState | null>(null)
+  const [chartSelectionPreview, setChartSelectionPreview] = useState<{ x: number; y: number; width: number; height: number } | null>(null)
+  const chartSelectionRef = useRef<{ pointerId: number; start: Point } | null>(null)
+  const chartRequestRef = useRef(0)
+  const chartCancelRef = useRef<(() => void) | null>(null)
+  const previousToolRef = useRef(tool)
   const updateSelectedNoteId = setSelectedNoteId
   const updateSelectedRegionId = useCallback((id: string | null) => {
     selectedRegionIdRef.current = id
     setSelectedRegionId(id)
     setRegionPopoverPosition(null)
   }, [])
-  const renderKey = [page, pane.zoom, rotation, size.width, size.height].join(':')
-  const colorworkGrid = work.colorworkGrid?.visible ? work.colorworkGrid : null
+  useEffect(() => {
+    if (previousToolRef.current !== tool && tool === 'region-highlight') {
+      setRegionPopoverOpen(false)
+      updateSelectedRegionId(null)
+    }
+    previousToolRef.current = tool
+  }, [tool, updateSelectedRegionId])
+  const renderKey = [page, pane.zoom, rotation, size.width, size.height, splitView].join(':')
+  const colorworkGrid = colorworkEnabled && work.colorworkGrid?.visible ? work.colorworkGrid : null
   const selectedRegion = regionHighlights.find((region) => region.id === selectedRegionId) ?? null
   const canPreviewZoom = displayedRaster?.pdf === pdf && displayedRaster.page === page && displayedRaster.rotation === rotation
   const zoomPreviewScale = canPreviewZoom ? pane.zoom / displayedRaster.zoom : 1
+  const cancelDetailRender = useCallback(() => {
+    window.clearTimeout(detailRefreshTimerRef.current)
+    detailSequenceRef.current++
+    detailCancelRef.current?.()
+    detailCancelRef.current = null
+    const canvas = detailCanvasRef.current
+    if (canvas) {
+      canvas.style.visibility = 'hidden'
+      clearCanvas(canvas)
+    }
+    viewerCanvasMemory.release(detailDisplayCanvasKey.current)
+  }, [])
+  const scheduleDetailRender = useCallback(() => {
+    cancelDetailRender()
+    const key = renderKey
+    detailRefreshTimerRef.current = window.setTimeout(() => setDetailRequest((current) => ({ key, revision: current.revision + 1 })), 200)
+  }, [cancelDetailRender, renderKey])
 
   useEffect(() => {
     const element = scrollRef.current
@@ -544,6 +599,10 @@ export function PdfPage({ pdf, page, paneId, pane, splitView, rotation, active, 
       observer.disconnect()
     }
   }, [])
+
+  useLayoutEffect(() => {
+    cancelDetailRender()
+  }, [page, pane.zoom, rotation, size.width, size.height, splitView, cancelDetailRender])
 
   useEffect(() => {
     const area = scrollRef.current
@@ -642,9 +701,14 @@ export function PdfPage({ pdf, page, paneId, pane, splitView, rotation, active, 
 
   useEffect(() => () => {
     if (canvasRef.current) clearCanvas(canvasRef.current)
+    if (detailCanvasRef.current) clearCanvas(detailCanvasRef.current)
     if (colorworkCanvasRef.current) clearCanvas(colorworkCanvasRef.current)
+    window.clearTimeout(detailRefreshTimerRef.current)
+    detailCancelRef.current?.()
     viewerCanvasMemory.release(displayCanvasKey.current)
     viewerCanvasMemory.release(stagingCanvasKey.current)
+    viewerCanvasMemory.release(detailDisplayCanvasKey.current)
+    viewerCanvasMemory.release(detailStagingCanvasKey.current)
   }, [])
 
   useEffect(() => {
@@ -793,7 +857,7 @@ export function PdfPage({ pdf, page, paneId, pane, splitView, rotation, active, 
         targetContext.drawImage(staging, 0, 0)
         const css = { width: base.width * cssScale, height: base.height * cssScale }
         setDisplayedSize({ page: { width: base.width, height: base.height }, css })
-        setDisplayedRaster({ pdf, page, zoom: pane.zoom, rotation })
+        setDisplayedRaster({ pdf, page, zoom: pane.zoom, rotation, scale: rasterScale })
         setReadyKey(renderKey)
       } catch (cause) {
         if (!cancelled && sequence === renderSequence.current && (timedOut || !(cause instanceof Error && cause.name === 'RenderingCancelledException'))) {
@@ -825,6 +889,154 @@ export function PdfPage({ pdf, page, paneId, pane, splitView, rotation, active, 
     }
   }, [pdf, page, pane.zoom, rotation, size.width, size.height, retry, renderKey, splitView, resourcePolicy])
 
+  useEffect(() => {
+    if (readyKey !== renderKey) return
+    scheduleDetailRender()
+  }, [readyKey, renderKey, scheduleDetailRender])
+
+  useEffect(() => {
+    if (detailRequest.key !== renderKey || readyKey !== renderKey || !displayedSize || !displayedRaster || displayedRaster.pdf !== pdf || displayedRaster.page !== page || displayedRaster.rotation !== rotation) return
+    const area = scrollRef.current
+    const layer = rotationLayerRef.current
+    const target = detailCanvasRef.current
+    if (!area || !layer || !target) return
+
+    const pageWidth = displayedSize.page.width
+    const pageHeight = displayedSize.page.height
+    const cssScale = displayedSize.css.width / pageWidth
+    const targetScale = cssScale * Math.min(window.devicePixelRatio || 1, 2)
+    if (displayedRaster.scale >= targetScale - 0.001) return
+
+    let cancelled = false
+    let renderTask: RenderTask | undefined
+    let staging: HTMLCanvasElement | null = null
+    let timeoutId = 0
+    let rejectTimeout!: (reason: Error) => void
+    const timeoutPromise = new Promise<never>((_, reject) => { rejectTimeout = reject })
+    const cancellationMarker = Symbol('cancelled')
+    let resolveCancellation!: (value: typeof cancellationMarker) => void
+    const cancellationPromise = new Promise<typeof cancellationMarker>((resolve) => { resolveCancellation = resolve })
+    const requestId = ++detailSequenceRef.current
+    const cancelRender = () => {
+      if (cancelled) return
+      cancelled = true
+      resolveCancellation(cancellationMarker)
+      renderTask?.cancel?.()
+    }
+    let cancelQueuedRender: (() => void) | undefined
+    const runRender = async () => {
+      if (cancelled || requestId !== detailSequenceRef.current) return
+      const areaRect = area.getBoundingClientRect()
+      const viewportRect = {
+        left: areaRect.left + area.clientLeft,
+        top: areaRect.top + area.clientTop,
+        right: areaRect.left + area.clientLeft + area.clientWidth,
+        bottom: areaRect.top + area.clientTop + area.clientHeight,
+      }
+      const pageRect = layer.getBoundingClientRect()
+      const crop = visiblePageCrop(pageRect, viewportRect, layer.clientWidth, layer.clientHeight, rotation, zoomPreviewScale)
+      if (!crop?.width || !crop.height) {
+        if (detailCancelRef.current === cancelQueuedRender) detailCancelRef.current = null
+        return
+      }
+
+      const cropLeft = crop.x * pageWidth
+      const cropTop = crop.y * pageHeight
+      const cropWidth = crop.width * pageWidth
+      const cropHeight = crop.height * pageHeight
+      const availableBytes = viewerCanvasMemory.availableBytes(detailStagingCanvasKey.current)
+      const maxPixels = Math.min(MAX_PDF_CANVAS_PIXELS, Math.floor(availableBytes / 8))
+      if (!maxPixels) {
+        if (detailCancelRef.current === cancelQueuedRender) detailCancelRef.current = null
+        return
+      }
+      const rasterScale = pdfRasterScale(cropWidth, cropHeight, targetScale, 1, maxPixels)
+      if (rasterScale <= displayedRaster.scale + 0.001) {
+        if (detailCancelRef.current === cancelQueuedRender) detailCancelRef.current = null
+        return
+      }
+      const pixelWidth = Math.ceil(cropWidth * rasterScale)
+      const pixelHeight = Math.ceil(cropHeight * rasterScale)
+      const canvasBytes = pixelWidth * pixelHeight * 4
+      if (!canvasBytes) {
+        if (detailCancelRef.current === cancelQueuedRender) detailCancelRef.current = null
+        return
+      }
+
+      let timedOut = false
+      timeoutId = window.setTimeout(() => {
+        timedOut = true
+        renderTask?.cancel?.()
+        rejectTimeout(new Error('detail-render-timeout'))
+      }, 20000)
+      try {
+        const pageRequest = pdf.getPage(page)
+        const pageResult = await Promise.race([pageRequest, cancellationPromise, timeoutPromise])
+        if (pageResult === cancellationMarker || cancelled || requestId !== detailSequenceRef.current) return
+        const pdfPage = pageResult as PDFPageProxy
+
+        staging = document.createElement('canvas')
+        if (!viewerCanvasMemory.reserve(detailStagingCanvasKey.current, canvasBytes)) return
+        staging.width = pixelWidth
+        staging.height = pixelHeight
+        const stagingContext = staging.getContext('2d', { alpha: false })
+        if (!stagingContext) return
+        const viewport = pdfPage.getViewport({ scale: rasterScale })
+        renderTask = pdfPage.render({
+          canvas: staging,
+          canvasContext: stagingContext,
+          viewport,
+          transform: [1, 0, 0, 1, -cropLeft * rasterScale, -cropTop * rasterScale],
+        })
+        try {
+          const renderResult = await Promise.race([renderTask.promise, cancellationPromise, timeoutPromise])
+          if (renderResult === cancellationMarker || cancelled || timedOut) {
+            await renderTask.promise.catch(() => {})
+            return
+          }
+        } catch {
+          renderTask.cancel?.()
+          await renderTask.promise.catch(() => {})
+          return
+        }
+        if (requestId !== detailSequenceRef.current) return
+
+        target.style.visibility = 'hidden'
+        clearCanvas(target)
+        viewerCanvasMemory.release(detailDisplayCanvasKey.current)
+        if (!viewerCanvasMemory.reserve(detailDisplayCanvasKey.current, canvasBytes)) return
+        target.width = pixelWidth
+        target.height = pixelHeight
+        const targetContext = target.getContext('2d', { alpha: false })
+        if (!targetContext) {
+          clearCanvas(target)
+          viewerCanvasMemory.release(detailDisplayCanvasKey.current)
+          return
+        }
+        targetContext.drawImage(staging, 0, 0)
+        target.style.left = cropLeft * cssScale + 'px'
+        target.style.top = cropTop * cssScale + 'px'
+        target.style.width = cropWidth * cssScale + 'px'
+        target.style.height = cropHeight * cssScale + 'px'
+        target.style.visibility = 'visible'
+      } catch {
+        // Keep the whole-page raster visible when an optional detail render fails.
+      } finally {
+        window.clearTimeout(timeoutId)
+        if (staging) clearCanvas(staging)
+        viewerCanvasMemory.release(detailStagingCanvasKey.current)
+        if (detailCancelRef.current === cancelQueuedRender) detailCancelRef.current = null
+      }
+    }
+
+    cancelQueuedRender = pdfPageRenderQueue.enqueue(detailQueueKey.current, runRender, cancelRender, active ? -0.5 : -1)
+    detailCancelRef.current = cancelQueuedRender
+    return () => {
+      cancelQueuedRender?.()
+      if (detailCancelRef.current === cancelQueuedRender) detailCancelRef.current = null
+    }
+  }, [readyKey, renderKey, detailRequest, displayedSize, displayedRaster, pdf, page, rotation, zoomPreviewScale, active])
+
   const applyZoomFocus = useCallback((focus: ZoomFocus) => {
     const area = scrollRef.current
     const layer = rotationLayerRef.current
@@ -847,7 +1059,8 @@ export function PdfPage({ pdf, page, paneId, pane, splitView, rotation, active, 
     const y = element.scrollHeight > element.clientHeight ? (element.scrollTop + element.clientHeight / 2) / element.scrollHeight : 0.5
     centerRef.current = { x, y }
     onCenterRef.current(x, y)
-  }, [])
+    scheduleDetailRender()
+  }, [scheduleDetailRender])
 
   useEffect(() => {
     if (readyKey !== renderKey) return
@@ -886,6 +1099,161 @@ export function PdfPage({ pdf, page, paneId, pane, splitView, rotation, active, 
   useEffect(() => {
     currentWorkRef.current = work
   }, [work])
+
+  function cancelChartRecognition() {
+    chartRequestRef.current += 1
+    chartCancelRef.current?.()
+    chartCancelRef.current = null
+    chartSelectionRef.current = null
+    setChartSelectionPreview(null)
+    setChartRecognition(null)
+  }
+
+  function beginChartSelectionCapture(event: ReactPointerEvent<HTMLDivElement>) {
+    if (chartRecognition?.stage !== 'select') {
+      handlePanePointerDownCapture(event)
+      return
+    }
+    if (event.pointerType === 'mouse' && event.button !== 0) return
+    const svg = pageSvgRef.current
+    if (!svg) return
+    event.preventDefault()
+    event.stopPropagation()
+    onActivate()
+    const start = boundedPagePoint(pointFromEvent(event, svg, rotation))
+    chartSelectionRef.current = { pointerId: event.pointerId, start }
+    setChartSelectionPreview({ x: start.x, y: start.y, width: 0, height: 0 })
+    try { svg.setPointerCapture(event.pointerId) } catch { /* Pointer capture can be unavailable in embedded browsers. */ }
+  }
+
+  function openChartRecognition(guideId: string) {
+    chartCancelRef.current?.()
+    chartCancelRef.current = null
+    chartSelectionRef.current = null
+    setChartSelectionPreview(null)
+    setChartRecognition({ guideId, stage: 'select', rotation })
+  }
+
+  async function analyzeChartRegion(selection: { x: number; y: number; width: number; height: number }, guideId: string) {
+    const requestId = ++chartRequestRef.current
+    const analysisRotation = rotation
+    let source: HTMLCanvasElement | null = null
+    let oriented: HTMLCanvasElement | null = null
+    let renderTask: RenderTask | undefined
+    let cancelWorker: (() => void) | null = null
+    const cancel = () => {
+      renderTask?.cancel?.()
+      cancelWorker?.()
+    }
+    chartCancelRef.current?.()
+    chartCancelRef.current = cancel
+    setChartRecognition({ guideId, stage: 'analyzing', selection, rotation: analysisRotation })
+    try {
+      const sourcePage = await pdf.getPage(page)
+      if (requestId !== chartRequestRef.current) return
+      const baseViewport = sourcePage.getViewport({ scale: 1 })
+      const cropLeft = selection.x * baseViewport.width
+      const cropTop = selection.y * baseViewport.height
+      const cropWidth = selection.width * baseViewport.width
+      const cropHeight = selection.height * baseViewport.height
+      const rasterScale = Math.min(2, Math.sqrt(1_500_000 / Math.max(1, cropWidth * cropHeight)))
+      const pixelWidth = Math.max(1, Math.ceil(cropWidth * rasterScale))
+      const pixelHeight = Math.max(1, Math.ceil(cropHeight * rasterScale))
+      source = document.createElement('canvas')
+      source.width = pixelWidth
+      source.height = pixelHeight
+      const sourceContext = source.getContext('2d', { willReadFrequently: true })
+      if (!sourceContext) throw new Error('차트 이미지를 만들 수 없습니다.')
+      const viewport = sourcePage.getViewport({ scale: rasterScale })
+      renderTask = sourcePage.render({
+        canvas: source,
+        canvasContext: sourceContext,
+        viewport,
+        transform: [1, 0, 0, 1, -cropLeft * rasterScale, -cropTop * rasterScale],
+      })
+      await renderTask.promise
+      if (requestId !== chartRequestRef.current) return
+
+      const swapped = analysisRotation === 90 || analysisRotation === 270
+      oriented = document.createElement('canvas')
+      oriented.width = swapped ? source.height : source.width
+      oriented.height = swapped ? source.width : source.height
+      const orientedContext = oriented.getContext('2d', { willReadFrequently: true })
+      if (!orientedContext) throw new Error('회전한 차트 이미지를 만들 수 없습니다.')
+      if (analysisRotation === 90) {
+        orientedContext.translate(oriented.width, 0)
+        orientedContext.rotate(Math.PI / 2)
+      } else if (analysisRotation === 180) {
+        orientedContext.translate(oriented.width, oriented.height)
+        orientedContext.rotate(Math.PI)
+      } else if (analysisRotation === 270) {
+        orientedContext.translate(0, oriented.height)
+        orientedContext.rotate(-Math.PI / 2)
+      }
+      orientedContext.drawImage(source, 0, 0)
+      const imageUrl = oriented.toDataURL('image/png')
+      const worker = runChartRowsWorker(orientedContext.getImageData(0, 0, oriented.width, oriented.height))
+      cancelWorker = worker.cancel
+      const rows = await worker.promise
+      if (requestId !== chartRequestRef.current) return
+      setChartRecognition({ guideId, stage: 'review', selection, imageUrl, rows, rotation: analysisRotation })
+    } catch (error) {
+      if (requestId !== chartRequestRef.current || error instanceof Error && error.name === 'AbortError') return
+      setChartRecognition({ guideId, stage: 'error', selection, rotation: analysisRotation, error: t('차트 행을 분석하지 못했습니다. 지정 영역을 다시 선택해 주세요.') })
+    } finally {
+      if (source) { source.width = 0; source.height = 0 }
+      if (oriented) { oriented.width = 0; oriented.height = 0 }
+      if (chartRequestRef.current === requestId) chartCancelRef.current = null
+    }
+  }
+
+  async function applyChartRows(result: ChartRowRecognitionResult) {
+    const state = chartRecognition
+    const before = currentWorkRef.current
+    const guide = before.horizontalGuides?.find((item) => item.id === state?.guideId)
+    if (!state?.selection || !guide || !result.rows.length || result.rows.length > 9999) return false
+    const displayCrop = pageRectToDisplayRect(state.selection, state.rotation)
+    const rowRanges = result.rows.map((row) => displayRectToPageRect({
+      x: displayCrop.x + row.x * displayCrop.width,
+      y: displayCrop.y + row.y * displayCrop.height,
+      width: row.width * displayCrop.width,
+      height: row.height * displayCrop.height,
+    }, state.rotation))
+    const nextGuide: ProgressGuide = {
+      ...guide,
+      linkedCounterId: result.counterId,
+      counterRowOffset: 0,
+      positionOffset: undefined,
+      rowSpacing: undefined,
+      rowSpacingStartRow: undefined,
+      rowSpacingDirection: undefined,
+      chartRegion: {
+        ...state.selection,
+        firstRow: 1,
+        lastRow: rowRanges.length,
+        startCounterRow: result.startCounterRow,
+        repeat: false,
+        direction: result.direction,
+        rowRanges,
+        analysisRotation: state.rotation,
+        autoFollow: true,
+      },
+      markerProgress: guide.markerProgress,
+    }
+    const next = { ...before, horizontalGuides: before.horizontalGuides?.map((item) => item.id === guide.id ? nextGuide : item) ?? [nextGuide] }
+    return onChartRowsApply(next, before)
+  }
+
+  useEffect(() => () => {
+    chartRequestRef.current += 1
+    chartCancelRef.current?.()
+    chartCancelRef.current = null
+  }, [])
+
+  useEffect(() => {
+    // oxlint-disable-next-line react/set-state-in-effect -- Cancel analysis when its source coordinate frame changes.
+    if (chartRecognition && chartRecognition.rotation !== rotation) cancelChartRecognition()
+  }, [rotation, chartRecognition])
 
   useLayoutEffect(() => {
     if (!active || !regionPopoverOpen || !selectedRegionId) return
@@ -1022,7 +1390,7 @@ export function PdfPage({ pdf, page, paneId, pane, splitView, rotation, active, 
   }
 
   function handleRegionPointerDown(event: ReactPointerEvent<SVGElement>, region: RegionHighlight, kind: 'move' | RegionResizeHandle = 'move') {
-    const action = regionHighlightPointerAction(tool, true)
+    const action = regionHighlightPointerAction(tool, true, selectedRegionId === region.id)
     if (action === 'ignore') return
     updateSelectedNoteId(null)
     setEditingNoteId(null)
@@ -1031,7 +1399,7 @@ export function PdfPage({ pdf, page, paneId, pane, splitView, rotation, active, 
     if (action === 'move' || kind !== 'move') {
       event.stopPropagation()
       beginRegionTransform(event, region, kind)
-    }
+    } else event.stopPropagation()
   }
 
   function moveRegionTransform(event: ReactPointerEvent<SVGSVGElement>) {
@@ -1154,6 +1522,15 @@ export function PdfPage({ pdf, page, paneId, pane, splitView, rotation, active, 
     setRegionPopoverOpen(false)
   }
 
+  function handlePanePointerDownCapture(event: ReactPointerEvent<HTMLDivElement>) {
+    if (tool === 'pan' && !canStartPaneGesture(paneGestureOwnerRef.current, paneId)) {
+      event.preventDefault()
+      event.stopPropagation()
+      return
+    }
+    onActivate()
+  }
+
   function pointerDown(event: ReactPointerEvent<HTMLDivElement>) {
     const target = event.target
     if (!(target instanceof Element) || !target.closest('.page-note')) {
@@ -1167,6 +1544,8 @@ export function PdfPage({ pdf, page, paneId, pane, splitView, rotation, active, 
     if (tool !== 'pan' || (event.pointerType === 'mouse' && event.button !== 0)) return
     const area = scrollRef.current
     if (!area) return
+    if (!canStartPaneGesture(paneGestureOwnerRef.current, paneId)) return
+    paneGestureOwnerRef.current = paneId
     event.currentTarget.setPointerCapture(event.pointerId)
     pointers.current.set(event.pointerId, { x: event.clientX, y: event.clientY })
     const current = gesture.current
@@ -1180,6 +1559,7 @@ export function PdfPage({ pdf, page, paneId, pane, splitView, rotation, active, 
       const layer = rotationLayerRef.current
       if (!layer) return
       const layerRect = layer.getBoundingClientRect()
+      cancelDetailRender()
       gesture.current = {
         kind: 'pinch', firstId: current.pointerId, secondId: event.pointerId,
         distance: Math.max(1, Math.hypot(event.clientX - first.x, event.clientY - first.y)),
@@ -1227,7 +1607,9 @@ export function PdfPage({ pdf, page, paneId, pane, splitView, rotation, active, 
       gesture.current = null
       pinchZoom.current = null
       zoomFocusRef.current = null
+      if (paneGestureOwnerRef.current === paneId) paneGestureOwnerRef.current = null
       if (rotationLayerRef.current) rotationLayerRef.current.style.transform = 'rotate(' + rotation + 'deg) scale(' + zoomPreviewScale + ')'
+      recordCenter()
       return
     }
     pointers.current.set(event.pointerId, { x: event.clientX, y: event.clientY })
@@ -1255,7 +1637,21 @@ export function PdfPage({ pdf, page, paneId, pane, splitView, rotation, active, 
     const remaining = [...pointers.current.entries()][0]
     if (area && remaining) {
       gesture.current = { kind: 'pan', pointerId: remaining[0], x: remaining[1].x, y: remaining[1].y, scrollLeft: area.scrollLeft, scrollTop: area.scrollTop }
-    } else gesture.current = null
+    } else {
+      gesture.current = null
+      if (paneGestureOwnerRef.current === paneId) paneGestureOwnerRef.current = null
+    }
+  }
+
+  function pointerCaptureLost(event: ReactPointerEvent<HTMLDivElement>) {
+    if (!pointers.current.has(event.pointerId)) return
+    pointers.current.clear()
+    gesture.current = null
+    pinchZoom.current = null
+    zoomFocusRef.current = null
+    if (paneGestureOwnerRef.current === paneId) paneGestureOwnerRef.current = null
+    if (rotationLayerRef.current) rotationLayerRef.current.style.transform = 'rotate(' + rotation + 'deg) scale(' + zoomPreviewScale + ')'
+    recordCenter()
   }
 
   function removeStrokeListeners() {
@@ -1646,7 +2042,7 @@ export function PdfPage({ pdf, page, paneId, pane, splitView, rotation, active, 
   }, [work.colorworkGrid, displayedSize, rotation, resourcePolicy])
 
   useEffect(() => {
-    if (!createColorworkRequest || createColorworkRequest.paneId !== paneId || createColorworkRequest.pageNumber !== page) return
+    if (!colorworkEnabled || !createColorworkRequest || createColorworkRequest.paneId !== paneId || createColorworkRequest.pageNumber !== page) return
     if (!displayedSize || handledColorworkRequest.current === createColorworkRequest.id) return
     handledColorworkRequest.current = createColorworkRequest.id
     const pageLayer = annotationLayerRef.current
@@ -1678,7 +2074,7 @@ export function PdfPage({ pdf, page, paneId, pane, splitView, rotation, active, 
     onActivate()
     onWorkChange({ ...work, colorworkGrid: grid }, true, true, work)
     onColorworkRequestHandled(createColorworkRequest.id)
-  }, [createColorworkRequest, displayedSize, paneId, page, rotation, work, onActivate, onWorkChange, onColorworkRequestHandled])
+  }, [colorworkEnabled, createColorworkRequest, displayedSize, paneId, page, rotation, work, onActivate, onWorkChange, onColorworkRequestHandled])
 
   function updateText(id: string, value: string) {
     const text = value.slice(0, 500)
@@ -1827,7 +2223,10 @@ export function PdfPage({ pdf, page, paneId, pane, splitView, rotation, active, 
       return
     }
     pendingTextGesture.current = null
-    if (pending.wasEditing) textInputRef.current?.blur()
+    if (pending.wasEditing) {
+      const editing = currentWorkRef.current.annotations.find((item) => item.id === pending.id && item.type === 'text')
+      if (editing?.text?.trim()) textInputRef.current?.blur()
+    }
     const annotation = currentWorkRef.current.annotations.find((item) => item.id === pending.id && item.type === 'text')
     if (!annotation) return
     beginTextTransform(event, annotation, 'move', { start: pending.start, original: pending.original })
@@ -1870,7 +2269,7 @@ export function PdfPage({ pdf, page, paneId, pane, splitView, rotation, active, 
       original: box,
       wasEditing: editingTarget,
     }
-    if (!editingTarget) event.preventDefault()
+    if (shouldPreventTextNotePointerDefault(editingTarget)) event.preventDefault()
   }
 
   const deleteText = useCallback((id: string) => {
@@ -1900,6 +2299,16 @@ export function PdfPage({ pdf, page, paneId, pane, splitView, rotation, active, 
   }, [deleteText, selectedNoteId])
 
   function handleSvgPointerDown(event: ReactPointerEvent<SVGSVGElement>) {
+    if (chartRecognition?.stage === 'select') {
+      event.preventDefault()
+      event.stopPropagation()
+      onActivate()
+      const start = boundedPagePoint(pointFromEvent(event, event.currentTarget, rotation))
+      chartSelectionRef.current = { pointerId: event.pointerId, start }
+      setChartSelectionPreview({ x: start.x, y: start.y, width: 0, height: 0 })
+      try { event.currentTarget.setPointerCapture(event.pointerId) } catch { /* Page selection remains available without pointer capture. */ }
+      return
+    }
     if (tool === 'pan') {
       setTextPreviewPoint(null)
       return
@@ -1936,6 +2345,12 @@ export function PdfPage({ pdf, page, paneId, pane, splitView, rotation, active, 
   }
 
   function handleSvgPointerMove(event: ReactPointerEvent<SVGSVGElement>) {
+    if (chartSelectionRef.current?.pointerId === event.pointerId) {
+      event.preventDefault()
+      event.stopPropagation()
+      setChartSelectionPreview(regionFromPoints(chartSelectionRef.current.start, pointFromEvent(event, event.currentTarget, rotation)))
+      return
+    }
     if (regionDrawing.current?.pointerId === event.pointerId) {
       updateRegionPreview(event)
       return
@@ -1977,6 +2392,21 @@ export function PdfPage({ pdf, page, paneId, pane, splitView, rotation, active, 
   }
 
   function finishSvgPointer(event: ReactPointerEvent<SVGSVGElement>, cancelled: boolean) {
+    const chartSelection = chartSelectionRef.current
+    if (chartSelection?.pointerId === event.pointerId) {
+      chartSelectionRef.current = null
+      const selection = cancelled ? null : regionFromPoints(chartSelection.start, pointFromEvent(event, event.currentTarget, rotation))
+      setChartSelectionPreview(null)
+      event.preventDefault()
+      event.stopPropagation()
+      if (selection && selection.width >= 0.01 && selection.height >= 0.01 && chartRecognition?.guideId) {
+        const guideId = chartRecognition.guideId
+        void analyzeChartRegion(selection, guideId)
+      } else if (!cancelled) {
+        setChartRecognition((current) => current ? { ...current, stage: 'select' } : current)
+      }
+      return
+    }
     if (regionDrawing.current?.pointerId === event.pointerId) {
       finishRegionHighlight(event, cancelled)
       return
@@ -2025,7 +2455,7 @@ export function PdfPage({ pdf, page, paneId, pane, splitView, rotation, active, 
     const counter = counters.find((item) => item.id === guide.linkedCounterId)
     if (!counter) return oriented
     const row = counter.kind === 'simple' ? counter.value : counter.currentRow ?? 1
-    return { ...oriented, position: guidePositionForRotation(guide, row, rotation) }
+    return { ...oriented, ...guideGeometryForRotation(guide, row, rotation) }
   }
   const visibleHorizontalGuides = horizontalGuides.map(displayGuide)
   const focusGuides = active ? visibleHorizontalGuides.filter((guide) => !guide.role && guide.focus?.enabled) : []
@@ -2100,15 +2530,17 @@ export function PdfPage({ pdf, page, paneId, pane, splitView, rotation, active, 
     <div className={'pdf-pane ' + (active ? 'is-active' : '')}>
       <div className="pane-label">{active ? t('현재 작업 영역') : t('보조 영역')}</div>
       {strokeError && <div className="ink-save-error" role="alert"><span>{t("필기를 반영하지 못했습니다.")}</span><button type="button" onClick={retryStrokeSave}>{t("다시 시도")}</button></div>}
-      <div className="pdf-scroll-area" ref={scrollRef} onScroll={recordCenter} onPointerDownCapture={onActivate} onPointerDown={pointerDown} onPointerMove={pointerMove} onPointerUp={pointerEnd} onPointerCancel={pointerEnd} onDoubleClick={doubleTap}>
+      <div className={'pdf-scroll-area' + (splitView && pane.zoom <= 1 ? ' is-fit-zoom' : '')} ref={scrollRef} onScroll={recordCenter} onPointerDownCapture={beginChartSelectionCapture} onPointerDown={pointerDown} onPointerMove={pointerMove} onPointerUp={pointerEnd} onPointerCancel={pointerEnd} onLostPointerCapture={pointerCaptureLost} onDoubleClick={doubleTap}>
         <div className="pdf-page-wrap" style={pageWrapStyle}>
           <div ref={rotationLayerRef} className="pdf-rotation-content" style={cssSize ? { width: cssSize.width, height: cssSize.height, transform: 'rotate(' + rotation + 'deg) scale(' + zoomPreviewScale + ')' } : undefined}>
           <div className="pdf-image-layer" style={cssSize ? { width: cssSize.width, height: cssSize.height } : undefined}>
             <canvas ref={canvasRef} aria-label={t('PDF {page}페이지', { page: formatNumber(page) })} />
+            <canvas ref={detailCanvasRef} className="pdf-detail-canvas" width={0} height={0} style={{ left: 0, top: 0, width: 0, height: 0, visibility: 'hidden' }} aria-hidden="true" />
             {focusGuides.length > 0 && <div className="pdf-focus-dim-fallback" aria-hidden="true" style={{ background: 'rgba(19,31,49,' + focusDimAmount + ')', maskImage: 'linear-gradient(to ' + (focusAxis === 'x' ? 'right' : 'bottom') + ', ' + fallbackMaskStops.join(', ') + ')', WebkitMaskImage: 'linear-gradient(to ' + (focusAxis === 'x' ? 'right' : 'bottom') + ', ' + fallbackMaskStops.join(', ') + ')', clipPath: fallbackClipPath }} />}
             {pageSize && cssSize && <>
             <svg
-                className={'pdf-svg-overlay ' + (tool === 'pan' ? 'pan-mode' : tool === 'text' ? 'text-mode' : 'draw-mode')}
+                ref={pageSvgRef}
+                className={'pdf-svg-overlay ' + (tool === 'pan' ? 'pan-mode' : tool === 'text' ? 'text-mode' : 'draw-mode') + (chartRecognition?.stage === 'select' ? ' chart-row-selecting' : '')}
                 viewBox={'0 0 ' + pageSize.width + ' ' + pageSize.height}
                 preserveAspectRatio="none"
               onPointerDown={handleSvgPointerDown}
@@ -2199,6 +2631,8 @@ export function PdfPage({ pdf, page, paneId, pane, splitView, rotation, active, 
                 strokeWidth={cssSize ? pageSize.width / Math.max(cssSize.width, 1) * 1.5 : 1.5}
                 style={{ pointerEvents: 'none' }}
               />)}
+              {chartRecognition?.stage === 'select' && <rect x="0" y="0" width={pageSize.width} height={pageSize.height} fill="transparent" pointerEvents="all" />}
+              {chartSelectionPreview && <rect className="chart-row-selection-preview" x={chartSelectionPreview.x * pageSize.width} y={chartSelectionPreview.y * pageSize.height} width={chartSelectionPreview.width * pageSize.width} height={chartSelectionPreview.height * pageSize.height} />}
             </svg>
             <div className="annotation-layer" ref={annotationLayerRef} style={{ width: cssSize.width, height: cssSize.height }}>
               {tool === 'text' && textPreviewPoint && (() => {
@@ -2248,84 +2682,89 @@ export function PdfPage({ pdf, page, paneId, pane, splitView, rotation, active, 
                 if (!annotation) return null
                 return <div
                   ref={textStyleToolbarRef}
-                  className="text-style-toolbar"
+                  className="text-style-toolbar viewer-mini-settings-panel"
                   role="toolbar"
                   aria-label={t("선택한 텍스트 설정")}
                   style={textToolbarPosition ? { left: textToolbarPosition.x, top: textToolbarPosition.y, transform: 'rotate(' + textNoteCounterRotation(rotation) + 'deg)' } : { left: 0, top: 0, visibility: 'hidden', transform: 'rotate(' + textNoteCounterRotation(rotation) + 'deg)' }}
                   onPointerDown={(event) => event.stopPropagation()}
                 >
-                  <label className="text-style-size" title={t("글자 크기")}>
-                    <span>{t("크기")}</span>
-                    <input
-                      aria-label={t("텍스트 글자 크기")}
-                      type="number"
-                      min="10"
-                      max="48"
-                      step="1"
-                      value={fontSizeDraft?.id === annotation.id ? fontSizeDraft.value : String(annotation.style.fontSize)}
-                      onFocus={() => {
-                        beginTextStyleChange(annotation.id)
-                        setFontSizeDraft({ id: annotation.id, value: String(annotation.style.fontSize) })
-                      }}
-                      onChange={(event) => {
-                        const value = event.currentTarget.value
-                        setFontSizeDraft({ id: annotation.id, value })
-                        const fontSize = Number(value)
-                        if (Number.isInteger(fontSize) && fontSize >= 10 && fontSize <= 48) changeTextStyle(annotation.id, { fontSize }, true)
-                      }}
-                      onBlur={(event) => {
-                        const value = Number(event.currentTarget.value)
-                        if (Number.isFinite(value)) changeTextStyle(annotation.id, { fontSize: Math.min(48, Math.max(10, Math.round(value))) }, true)
-                        setFontSizeDraft(null)
-                        finishTextStyleChange(annotation.id)
-                      }}
-                      onKeyDown={(event) => { if (event.key === 'Enter') event.currentTarget.blur() }}
-                    />
-                    <input
-                      aria-label={t("텍스트 글자 크기 조절")}
-                      type="range"
-                      min="10"
-                      max="48"
-                      value={annotation.style.fontSize}
-                      onPointerDown={() => beginTextStyleChange(annotation.id)}
-                      onPointerUp={() => finishTextStyleChange(annotation.id)}
-                      onPointerCancel={() => finishTextStyleChange(annotation.id)}
-                      onFocus={() => beginTextStyleChange(annotation.id)}
-                      onBlur={() => finishTextStyleChange(annotation.id)}
-                      onKeyDown={() => beginTextStyleChange(annotation.id)}
-                      onKeyUp={() => finishTextStyleChange(annotation.id)}
-                      onChange={(event) => changeTextStyle(annotation.id, { fontSize: Number(event.currentTarget.value) }, true)}
-                    />
-                  </label>
-                  <div className="text-style-color" title={t("글자 색상")}>
-                    <span>{t("색상")}</span>
-                    <ColorPresetButtons
-                      label={t("텍스트 색상")}
-                      className="annotation-color-presets text-style-color-presets"
-                      presets={ANNOTATION_COLOR_PRESETS}
-                      includeCurrentColor={false}
-                      value={annotation.style.color}
-                      onChange={(color) => changeTextStyle(annotation.id, { color })}
-                    />
-                  </div>
-                  <label className="text-style-opacity" title={t("글자 투명도")}>
-                    <span>{t("투명도 ")}{Math.round(annotation.style.opacity * 100)}%</span>
-                    <input
-                      aria-label={t("텍스트 투명도")}
-                      type="range"
-                      min="0"
-                      max="100"
-                      value={Math.round(annotation.style.opacity * 100)}
-                      onPointerDown={() => beginTextStyleChange(annotation.id)}
-                      onPointerUp={() => finishTextStyleChange(annotation.id)}
-                      onPointerCancel={() => finishTextStyleChange(annotation.id)}
-                      onFocus={() => beginTextStyleChange(annotation.id)}
-                      onBlur={() => finishTextStyleChange(annotation.id)}
-                      onKeyDown={() => beginTextStyleChange(annotation.id)}
-                      onKeyUp={() => finishTextStyleChange(annotation.id)}
-                      onChange={(event) => changeTextStyle(annotation.id, { opacity: Number(event.currentTarget.value) / 100 }, true)}
-                    />
-                  </label>
+                  <section className="viewer-mini-settings-section annotation-style-section">
+                    <strong>{t("필기 스타일")}</strong>
+                    <div className="text-style-color" title={t("글자 색상")}>
+                      <span>{t("색상")}</span>
+                      <ColorPresetButtons
+                        label={t("텍스트 색상")}
+                        className="annotation-color-presets text-style-color-presets"
+                        presets={ANNOTATION_COLOR_PRESETS}
+                        includeCurrentColor={false}
+                        value={annotation.style.color}
+                        onChange={(color) => changeTextStyle(annotation.id, { color })}
+                      />
+                    </div>
+                    <label className="text-style-size" title={t("글자 크기")}>
+                      <span>{t("글자 크기")}</span>
+                      <input
+                        aria-label={t("텍스트 글자 크기")}
+                        type="number"
+                        min="10"
+                        max="48"
+                        step="1"
+                        value={fontSizeDraft?.id === annotation.id ? fontSizeDraft.value : String(annotation.style.fontSize)}
+                        onFocus={() => {
+                          beginTextStyleChange(annotation.id)
+                          setFontSizeDraft({ id: annotation.id, value: String(annotation.style.fontSize) })
+                        }}
+                        onChange={(event) => {
+                          const value = event.currentTarget.value
+                          setFontSizeDraft({ id: annotation.id, value })
+                          const fontSize = Number(value)
+                          if (Number.isInteger(fontSize) && fontSize >= 10 && fontSize <= 48) changeTextStyle(annotation.id, { fontSize }, true)
+                        }}
+                        onBlur={(event) => {
+                          const value = Number(event.currentTarget.value)
+                          if (Number.isFinite(value)) changeTextStyle(annotation.id, { fontSize: Math.min(48, Math.max(10, Math.round(value))) }, true)
+                          setFontSizeDraft(null)
+                          finishTextStyleChange(annotation.id)
+                        }}
+                        onKeyDown={(event) => { if (event.key === 'Enter') event.currentTarget.blur() }}
+                      />
+                      <input
+                        aria-label={t("텍스트 글자 크기 조절")}
+                        type="range"
+                        min="10"
+                        max="48"
+                        value={annotation.style.fontSize}
+                        style={{ '--range-progress': `${((annotation.style.fontSize - 10) / 38) * 100}%` } as CSSProperties}
+                        onPointerDown={() => beginTextStyleChange(annotation.id)}
+                        onPointerUp={() => finishTextStyleChange(annotation.id)}
+                        onPointerCancel={() => finishTextStyleChange(annotation.id)}
+                        onFocus={() => beginTextStyleChange(annotation.id)}
+                        onBlur={() => finishTextStyleChange(annotation.id)}
+                        onKeyDown={() => beginTextStyleChange(annotation.id)}
+                        onKeyUp={() => finishTextStyleChange(annotation.id)}
+                        onChange={(event) => changeTextStyle(annotation.id, { fontSize: Number(event.currentTarget.value) }, true)}
+                      />
+                    </label>
+                    <label className="text-style-opacity" title={t("글자 투명도")}>
+                      <span>{t("투명도 ")}{Math.round(annotation.style.opacity * 100)}%</span>
+                      <input
+                        aria-label={t("텍스트 투명도")}
+                        type="range"
+                        min="0"
+                        max="100"
+                        value={Math.round(annotation.style.opacity * 100)}
+                        style={{ '--range-progress': `${Math.round(annotation.style.opacity * 100)}%` } as CSSProperties}
+                        onPointerDown={() => beginTextStyleChange(annotation.id)}
+                        onPointerUp={() => finishTextStyleChange(annotation.id)}
+                        onPointerCancel={() => finishTextStyleChange(annotation.id)}
+                        onFocus={() => beginTextStyleChange(annotation.id)}
+                        onBlur={() => finishTextStyleChange(annotation.id)}
+                        onKeyDown={() => beginTextStyleChange(annotation.id)}
+                        onKeyUp={() => finishTextStyleChange(annotation.id)}
+                        onChange={(event) => changeTextStyle(annotation.id, { opacity: Number(event.currentTarget.value) / 100 }, true)}
+                      />
+                    </label>
+                  </section>
                 </div>
               })()}
               {tool === 'pan' && pageLinks?.map((link, index) => <a
@@ -2416,12 +2855,13 @@ export function PdfPage({ pdf, page, paneId, pane, splitView, rotation, active, 
                 counters={counters}
                 rotation={rotation}
                 active={active}
-                disabled={tool === 'text' || tool === 'region-highlight' || !workReady}
+                disabled={!workReady}
                 defaultColor={lineSettings.horizontal.color}
                 defaultOpacity={lineSettings.horizontal.opacity}
                 defaultThickness={lineSettings.horizontal.thickness}
                 onActivate={onActivate}
                 onWorkChange={onWorkChange}
+                onRecognizeChart={openChartRecognition}
               />
             </div>}
             </>}
@@ -2432,8 +2872,29 @@ export function PdfPage({ pdf, page, paneId, pane, splitView, rotation, active, 
         {!workReady && !pageWorkLoadError && <div className="pane-loading"><BrandLoading kind="page-work" requestId={paneId + ':' + page + ':page-work'} layout="pane" /></div>}
         {workReady && renderError?.key !== renderKey && readyKey !== renderKey && <div className={'pane-loading' + (displayedRaster?.pdf === pdf && displayedRaster.page === page ? ' pane-loading-refresh' : '')}><BrandLoading kind="pdf" requestId={paneId + ':' + page + ':' + renderKey} layout={displayedRaster?.pdf === pdf && displayedRaster.page === page ? 'overlay' : 'pane'} /></div>}
         {workReady && renderError?.key === renderKey && <div className="pane-error" role="alert">{renderError.message}<button type="button" onClick={() => { setRenderError(null); setRetry((current) => current + 1) }}>{t("다시 시도")}</button></div>}
+        {chartRecognition?.stage === 'select' && <div className="chart-row-select-hint" role="status"><span>{t('차트 영역을 드래그해 지정하세요.')}</span><button type="button" onClick={cancelChartRecognition}>{t('취소')}</button></div>}
+        {chartRecognition?.stage === 'analyzing' && <div className="chart-row-select-hint" role="status"><span>{t('차트 행을 분석하고 있습니다…')}</span><button type="button" onClick={cancelChartRecognition}>{t('취소')}</button></div>}
       </div>
     </div>
+    {chartRecognition && (chartRecognition.stage === 'review' || chartRecognition.stage === 'error') && <ChartRowRecognitionDialog
+      imageUrl={chartRecognition.imageUrl ?? ''}
+      initialRows={chartRecognition.rows ?? []}
+      counters={counters}
+      initialCounterId={mainCounterId || work.horizontalGuides?.find((guide) => guide.id === chartRecognition.guideId)?.linkedCounterId || ''}
+      initialCounterRow={(() => {
+        const counterId = mainCounterId || work.horizontalGuides?.find((guide) => guide.id === chartRecognition.guideId)?.linkedCounterId
+        const counter = counters.find((item) => item.id === counterId)
+        return counter ? counter.kind === 'simple' ? counter.value : counter.currentRow ?? 1 : counters.find((item) => item.kind === 'simple' && item.unit === 'row' && !item.linkedToId)?.value ?? 1
+      })()}
+      error={chartRecognition.stage === 'error' ? chartRecognition.error : undefined}
+      onRetry={() => { if (chartRecognition.selection) void analyzeChartRegion(chartRecognition.selection, chartRecognition.guideId) }}
+      onCancel={cancelChartRecognition}
+      onApply={async (result) => {
+        const saved = await applyChartRows(result)
+        if (saved) cancelChartRecognition()
+        return saved
+      }}
+    />}
     {active && regionPopoverOpen && selectedRegion && typeof document !== 'undefined' && createPortal(
       <div
         ref={regionPopoverRef}
@@ -2464,6 +2925,7 @@ export function PdfPage({ pdf, page, paneId, pane, splitView, rotation, active, 
             max="100"
             step="1"
             value={Math.round(selectedRegion.opacity * 100)}
+            style={{ '--range-progress': `${((Math.round(selectedRegion.opacity * 100) - 10) / 90) * 100}%` } as CSSProperties}
             aria-label={t('구간 강조 투명도')}
             onPointerDown={() => beginRegionOpacityChange(selectedRegion.id)}
             onPointerUp={() => finishRegionOpacityChange()}

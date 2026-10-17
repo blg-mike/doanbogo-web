@@ -48,11 +48,11 @@ function inlinePortableAppIcons() {
 export default defineConfig(({ mode }) => {
   const portable = mode === 'portable'
   const manifest = {
-    name: '도안보고',
-    short_name: '도안보고',
+    name: '니트피크',
+    short_name: '니트피크',
     description: 'PDF 도안과 나만의 뜨개 차트를 모아 보세요.',
-    theme_color: '#f8fafd',
-    background_color: '#f8fafd',
+    theme_color: '#FFFFFF',
+    background_color: '#FFFFFF',
     display: 'standalone' as const,
     start_url: './',
     scope: './',

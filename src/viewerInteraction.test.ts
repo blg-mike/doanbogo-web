@@ -1,12 +1,20 @@
 import { describe, expect, it } from 'vitest'
-import { anchoredScrollOffset, classifyWheelInput, clientPointForPagePosition, isEditableTarget, pagePositionAtClientPoint, pinchPreviewTranslation, regionHighlightPointerAction, scrollOffsetForZoomFocus, wheelActionForBurst, wheelZoom } from './viewerInteraction'
+import { anchoredScrollOffset, canStartPaneGesture, classifyWheelInput, clientPointForPagePosition, isEditableTarget, pagePositionAtClientPoint, pinchPreviewTranslation, regionHighlightPointerAction, scrollOffsetForZoomFocus, visiblePageCrop, wheelActionForBurst, wheelZoom } from './viewerInteraction'
 
 describe('PDF viewer input helpers', () => {
-  it('moves an existing region only when the region highlight tool is active', () => {
+  it('selects a region on first contact and allows a later drag to move it with either selection tool', () => {
     expect(regionHighlightPointerAction('pan', true)).toBe('select')
-    expect(regionHighlightPointerAction('region-highlight', true)).toBe('move')
+    expect(regionHighlightPointerAction('pan', true, true)).toBe('move')
+    expect(regionHighlightPointerAction('region-highlight', true)).toBe('select')
+    expect(regionHighlightPointerAction('region-highlight', true, true)).toBe('move')
     expect(regionHighlightPointerAction('region-highlight', false)).toBe('create')
     expect(regionHighlightPointerAction('pen', true)).toBe('ignore')
+  })
+
+  it('keeps simultaneous pan gestures in one viewer pane while allowing a same-pane pinch', () => {
+    expect(canStartPaneGesture(null, 'primary')).toBe(true)
+    expect(canStartPaneGesture('primary', 'primary')).toBe(true)
+    expect(canStartPaneGesture('primary', 'secondary')).toBe(false)
   })
 
   it('recognizes stepped mouse wheels while preserving trackpad scrolling', () => {
@@ -42,6 +50,38 @@ describe('PDF viewer input helpers', () => {
     const point = clientPointForPagePosition(rect, 400, 200, 90, 2, 0.25, 0.75)
     expect(point).toEqual({ x: 200, y: 200 })
     expect(pagePositionAtClientPoint(rect, 400, 200, 90, 2, point.x, point.y)).toEqual({ x: 0.25, y: 0.75 })
+  })
+
+  it('maps the visible viewport crop back to page coordinates through rotation', () => {
+    expect(visiblePageCrop(
+      { left: 100, top: 100, width: 400, height: 200 } as DOMRect,
+      { left: 200, top: 150, right: 300, bottom: 200 } as DOMRect,
+      400, 200, 0, 1,
+    )).toEqual({ x: 0.25, y: 0.25, width: 0.25, height: 0.25 })
+    const rotatedCrop = visiblePageCrop(
+      { left: 100, top: 100, width: 200, height: 400 } as DOMRect,
+      { left: 150, top: 200, right: 200, bottom: 300 } as DOMRect,
+      400, 200, 90, 1,
+    )
+    expect(rotatedCrop?.x).toBeCloseTo(0.25)
+    expect(rotatedCrop?.y).toBeCloseTo(0.5)
+    expect(rotatedCrop?.width).toBeCloseTo(0.25)
+    expect(rotatedCrop?.height).toBeCloseTo(0.25)
+    expect(visiblePageCrop(
+      { left: 100, top: 100, width: 400, height: 200 } as DOMRect,
+      { left: 0, top: 0, right: 50, bottom: 50 } as DOMRect,
+      400, 200, 0, 1,
+    )).toBeNull()
+    for (const rotation of [0, 90, 180, 270]) {
+      const width = rotation % 180 ? 200 : 400
+      const height = rotation % 180 ? 400 : 200
+      const rect = { left: 100, top: 100, width, height } as DOMRect
+      const crop = visiblePageCrop(rect, { left: 100 + width / 4, top: 100 + height / 4, right: 100 + width * 3 / 4, bottom: 100 + height * 3 / 4 } as DOMRect, 400, 200, rotation, 1)
+      expect(crop?.x).toBeCloseTo(0.25)
+      expect(crop?.y).toBeCloseTo(0.25)
+      expect(crop?.width).toBeCloseTo(0.5)
+      expect(crop?.height).toBeCloseTo(0.5)
+    }
   })
 
   it('keeps the pinch anchor under the moving midpoint for both page orientations', () => {

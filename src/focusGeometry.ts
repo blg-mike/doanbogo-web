@@ -39,7 +39,12 @@ export function focusRowSpacing(region: ProgressChartRegion | undefined, fallbac
   return rowCount > 1 ? (region.rowLayout?.height ?? display.height) / (rowCount - 1) : fallback
 }
 
-export function guidePositionForRotation(guide: ProgressGuide, row: number, rotation: PageRotation) {
+export function isChartAutoFollowRotationCompatible(guide: ProgressGuide, rotation: PageRotation) {
+  const analysisRotation = guide.chartRegion?.analysisRotation
+  return analysisRotation === undefined || (rotation - analysisRotation + 360) % 180 === 0
+}
+
+function legacyGuidePositionForRotation(guide: ProgressGuide, row: number, rotation: PageRotation) {
   const screenPosition = guide.rotationPositions?.[String(rotation) as '0' | '90' | '180' | '270']
   const orientedGuide = screenPosition ? { ...guide, ...screenPosition } : guide
   const effectiveRow = row - (orientedGuide.counterRowOffset ?? 0)
@@ -60,6 +65,40 @@ export function guidePositionForRotation(guide: ProgressGuide, row: number, rota
         return display.y + display.height * direction
       })()
   return Math.min(1, Math.max(0, position + (orientedGuide.positionOffset ?? 0)))
+}
+
+export function guideGeometryForRotation(guide: ProgressGuide, row: number, rotation: PageRotation) {
+  const screenPosition = guide.rotationPositions?.[String(rotation) as '0' | '90' | '180' | '270']
+  const orientedGuide = screenPosition ? { ...guide, ...screenPosition } : guide
+  const region = guide.chartRegion
+  if (region?.rowRanges?.length && region.autoFollow !== false && isChartAutoFollowRotationCompatible(guide, rotation)) {
+    const rowCount = region.rowRanges.length
+    const effectiveRow = row - (guide.counterRowOffset ?? 0)
+    const rawIndex = effectiveRow - region.startCounterRow
+    const index = region.repeat ? ((rawIndex % rowCount) + rowCount) % rowCount : Math.max(0, Math.min(rowCount - 1, rawIndex))
+    const rect = pageRectToDisplayRect(region.rowRanges[index], rotation)
+    return {
+      position: Math.min(1, Math.max(0, rect.y + rect.height / 2 + (guide.positionOffset ?? 0))),
+      xStartRatio: rect.x,
+      xEndRatio: rect.x + rect.width,
+    }
+  }
+  if (region?.rowRanges?.length) {
+    return {
+      position: orientedGuide.position,
+      xStartRatio: orientedGuide.xStartRatio ?? 0.15,
+      xEndRatio: orientedGuide.xEndRatio ?? 0.85,
+    }
+  }
+  return {
+    position: legacyGuidePositionForRotation(guide, row, rotation),
+    xStartRatio: orientedGuide.xStartRatio ?? 0.15,
+    xEndRatio: orientedGuide.xEndRatio ?? 0.85,
+  }
+}
+
+export function guidePositionForRotation(guide: ProgressGuide, row: number, rotation: PageRotation) {
+  return guideGeometryForRotation(guide, row, rotation).position
 }
 
 export function formatFocusSpacingPercent(value: number) {

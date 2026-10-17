@@ -165,7 +165,10 @@ function isGuideArray(value: unknown) {
       Number.isSafeInteger(guide.chartRegion.startCounterRow) && Number(guide.chartRegion.startCounterRow) >= 1 && typeof guide.chartRegion.repeat === 'boolean' &&
       ['top-to-bottom', 'bottom-to-top'].includes(String(guide.chartRegion.direction)) &&
       (guide.chartRegion.rowLayout === undefined || isObject(guide.chartRegion.rowLayout) && Number.isFinite(guide.chartRegion.rowLayout.top) && Number(guide.chartRegion.rowLayout.top) >= 0 && Number(guide.chartRegion.rowLayout.top) <= 1 && Number.isFinite(guide.chartRegion.rowLayout.height) && Number(guide.chartRegion.rowLayout.height) > 0 && Number(guide.chartRegion.rowLayout.height) <= 1 && Number(guide.chartRegion.rowLayout.top) + Number(guide.chartRegion.rowLayout.height) <= 1.000001) &&
-      (guide.chartRegion.rowPositions === undefined || Array.isArray(guide.chartRegion.rowPositions) && guide.chartRegion.rowPositions.length === Number(guide.chartRegion.lastRow) - Number(guide.chartRegion.firstRow) + 1 && guide.chartRegion.rowPositions.every((position) => Number.isFinite(position) && Number(position) >= 0 && Number(position) <= 1))) &&
+      (guide.chartRegion.rowPositions === undefined || Array.isArray(guide.chartRegion.rowPositions) && guide.chartRegion.rowPositions.length === Number(guide.chartRegion.lastRow) - Number(guide.chartRegion.firstRow) + 1 && guide.chartRegion.rowPositions.every((position) => Number.isFinite(position) && Number(position) >= 0 && Number(position) <= 1)) &&
+      (guide.chartRegion.rowRanges === undefined || Array.isArray(guide.chartRegion.rowRanges) && guide.chartRegion.rowRanges.length === Number(guide.chartRegion.lastRow) - Number(guide.chartRegion.firstRow) + 1 && guide.chartRegion.rowRanges.every((row) => isObject(row) && Number.isFinite(row.x) && Number(row.x) >= 0 && Number(row.x) < 1 && Number.isFinite(row.y) && Number(row.y) >= 0 && Number(row.y) < 1 && Number.isFinite(row.width) && Number(row.width) > 0 && Number(row.width) <= 1 && Number.isFinite(row.height) && Number(row.height) > 0 && Number(row.height) <= 1 && Number(row.x) + Number(row.width) <= 1.000001 && Number(row.y) + Number(row.height) <= 1.000001)) &&
+      (guide.chartRegion.analysisRotation === undefined || [0, 90, 180, 270].includes(Number(guide.chartRegion.analysisRotation))) &&
+      (guide.chartRegion.autoFollow === undefined || typeof guide.chartRegion.autoFollow === 'boolean')) &&
     (guide.focus === undefined || isObject(guide.focus) && typeof guide.focus.enabled === 'boolean' && ['low', 'medium', 'high'].includes(String(guide.focus.strength)) &&
       [0, 1, 2].includes(guide.focus.range as number) && ['page', 'region'].includes(String(guide.focus.scope)) && Number.isFinite(guide.focus.rowSpacing) && Number(guide.focus.rowSpacing) > 0 && Number(guide.focus.rowSpacing) <= 1 &&
       (guide.focus.dimOpacity === undefined || Number.isFinite(guide.focus.dimOpacity) && Number(guide.focus.dimOpacity) >= 0 && Number(guide.focus.dimOpacity) <= 0.8) &&
@@ -283,11 +286,14 @@ function isKnittingReport(value: unknown, documentIds: Set<string>): value is Kn
       !value.workPhotos.every((photo) => isObject(photo) && typeof photo.id === 'string' && typeof photo.label === 'string' && photo.label.length <= 500 &&
         isReportPhoto(photo.dataUrl) && Number.isFinite(photo.uploadedAt) && typeof photo.activityDate === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(photo.activityDate))))) return false
   const yarns = value.yarns as unknown[]
+  const needles = value.needles as unknown[]
   const accessories = value.accessories as unknown[]
   const measurements = value.measurements as unknown[]
     return yarns.every((row) => isObject(row) && isReportPhoto(row.photo) && (row.usedMeters === undefined || typeof row.usedMeters === 'string') &&
       (row.strandCount === undefined || typeof row.strandCount === 'string') && (row.needleSizeMm === undefined || typeof row.needleSizeMm === 'string') &&
       (row.memo === undefined || typeof row.memo === 'string')) &&
+    needles.every((row) => isObject(row) && (row.brand === undefined || typeof row.brand === 'string' && row.brand.length <= 20_000) &&
+      (row.sizeUnit === undefined || row.sizeUnit === 'mm' || row.sizeUnit === 'US' || row.sizeUnit === 'JP')) &&
     accessories.every((row) => isObject(row) && isReportPhoto(row.photo)) && measurements.every((row) => isObject(row) && (row.unit === undefined || row.unit === 'cm' || row.unit === 'inch'))
 }
 

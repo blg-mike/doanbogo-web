@@ -29,6 +29,8 @@ const dictionaries: Record<LocaleId, Partial<Record<LocaleKey, string>>> = {
   nb: { ...nb, ...extendedTranslations.nb, ...generatedTranslations.nb, ...specializedTranslations.nb, ...reportTranslations.nb },
   fi: { ...fi, ...extendedTranslations.fi, ...generatedTranslations.fi, ...specializedTranslations.fi, ...reportTranslations.fi },
 }
+const defaultMeasurementLabelKeys = ['기장', '가슴둘레', '소매길이'] as const
+const defaultMeasurementLabels = new Set(Object.values(dictionaries).flatMap((dictionary) => defaultMeasurementLabelKeys.map((key) => dictionary[key] ?? ko[key])))
 const htmlLocales: Record<LocaleId, string> = { ko: 'ko', en: 'en', ja: 'ja', de: 'de', da: 'da', nb: 'nb', fi: 'fi' }
 const listeners = new Set<() => void>()
 let activeLocale: LocaleId = 'ko'
@@ -39,7 +41,10 @@ let initializePromise: Promise<void> | undefined
 function publish(preference: LanguagePreference) {
   languagePreference = preference
   activeLocale = preference === 'auto' ? detectLocale() : preference
-  if (typeof document !== 'undefined') document.documentElement.lang = htmlLocales[activeLocale]
+  if (typeof document !== 'undefined') {
+    document.documentElement.lang = htmlLocales[activeLocale]
+    document.title = dictionaries[activeLocale]['도안보고'] ?? ko['도안보고']
+  }
   for (const listener of listeners) listener()
 }
 
@@ -85,6 +90,14 @@ export async function reloadLanguagePreference() {
 export function t(key: LocaleKey, values?: Record<string, string | number>): string {
   const message = dictionaries[activeLocale][key] ?? ko[key] ?? key
   return values ? interpolateMessage(message, values) : message
+}
+
+export function isDefaultMeasurementLabel(value: string) {
+  return defaultMeasurementLabels.has(value.trim())
+}
+
+export function getLocaleMessageVariants(key: LocaleKey) {
+  return Object.values(dictionaries).map((dictionary) => dictionary[key] ?? ko[key])
 }
 
 export function translateMessage(message: string) {

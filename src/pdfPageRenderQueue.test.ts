@@ -91,4 +91,27 @@ describe('PDF page render queue', () => {
     expect(cancelled).toBe(true)
     expect(calls).toEqual(['background:start', 'background:end', 'viewer'])
   })
+
+  it('yields lower-priority detail work to the active pane detail render', async () => {
+    const queue = new PdfPageRenderQueue()
+    const backgroundKey = {}
+    const activeKey = {}
+    const background = deferred()
+    const calls: string[] = []
+    let cancelled = false
+    queue.enqueue(backgroundKey, async () => {
+      calls.push('background:start')
+      await background.promise
+      calls.push('background:end')
+    }, () => {
+      cancelled = true
+      background.resolve()
+    }, -1)
+    await Promise.resolve()
+    queue.enqueue(activeKey, async () => { calls.push('active') }, vi.fn(), -0.5)
+
+    await vi.waitFor(() => expect(calls).toContain('active'))
+    expect(cancelled).toBe(true)
+    expect(calls).toEqual(['background:start', 'background:end', 'active'])
+  })
 })

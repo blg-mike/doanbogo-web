@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { formatWorkTime, formatWorkTimeHoursMinutes, isWorkDateKey, localWorkDateKey, normalizeWorkTimeDays, splitWorkTimeSession, summarizeWorkTime, workTimeChartBuckets } from './workTime'
+import { formatWorkTime, formatWorkTimeHoursMinutes, isWorkDateKey, localWorkDateKey, normalizeWorkTimeDays, parseManualWorkTime, persistedWorkTimeBase, splitWorkTimeSession, summarizeWorkTime, workTimeChartBuckets } from './workTime'
 
 describe('work time formatting', () => {
   it('shows hours, minutes, and seconds without wrapping long totals', () => {
@@ -19,6 +19,26 @@ describe('work time formatting', () => {
       { date: '2026-10-14', elapsedMs: 10_000 },
     ])
     expect(normalizeWorkTimeDays(undefined, '2026-10-13', 20_000)).toEqual([{ date: '2026-10-13', elapsedMs: 20_000 }])
+  })
+
+  it('validates manually entered work time in whole hours and minutes', () => {
+    expect(parseManualWorkTime('1', '30')).toBe(90 * 60_000)
+    expect(parseManualWorkTime('0', '1')).toBe(60_000)
+    expect(parseManualWorkTime('0', '0')).toBeNull()
+    expect(parseManualWorkTime('-1', '0')).toBeNull()
+    expect(parseManualWorkTime('1.5', '0')).toBeNull()
+    expect(parseManualWorkTime('1', '60')).toBeNull()
+    expect(parseManualWorkTime('10000', '0')).toBeNull()
+  })
+
+  it('keeps manual additions and live timer time separate until pause saves the session', () => {
+    const measuredMs = 10 * 60_000
+    const manuallyAddedMs = 5 * 60_000
+    const timerDuringManualAdd = persistedWorkTimeBase(manuallyAddedMs, 0) + measuredMs
+    const timerAfterPauseSave = persistedWorkTimeBase(manuallyAddedMs + measuredMs, measuredMs) + measuredMs
+
+    expect(timerDuringManualAdd).toBe(15 * 60_000)
+    expect(timerAfterPauseSave).toBe(15 * 60_000)
   })
 
   it('accepts only real calendar dates for timer history', () => {

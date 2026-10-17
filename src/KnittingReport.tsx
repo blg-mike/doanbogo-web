@@ -2,17 +2,20 @@ import { formatDate, formatNumber, t, translateMessage, type LocaleKey } from '.
 import { useEffect, useRef, useState, type KeyboardEvent } from 'react'
 import { ArrowLeft, Check, ChevronDown, ChevronUp, Clipboard, Download, Ellipsis, GripVertical, ImagePlus, Info, Pencil, Plus, Share2, Sparkles, Trash2, X } from 'lucide-react'
 import BrandLoading from './BrandLoading'
-import { deleteKnittingReport, getDocument, getKnittingReportById, getKnittingReports, getPageWorks, getViewer, saveDocumentWorkTimeNote, saveKnittingReport, type KnittingReportSummary } from './storage'
-import type { CounterSnapshot, DocumentWorkTimeDay, DocumentWorkTimeSession, KnittingReport, ReportAccessory, ReportMeasurement, ReportModification, ReportNeedle, ReportTimelinePhoto, ReportYarn } from './types'
+import { deleteKnittingReport, getDocument, getKnittingReportById, getKnittingReports, getPageWorks, getViewer, saveKnittingReport, type KnittingReportSummary } from './storage'
+import type { CounterSnapshot, DocumentWorkTimeDay, KnittingReport, ReportAccessory, ReportMeasurement, ReportModification, ReportNeedle, ReportTimelinePhoto, ReportYarn } from './types'
 import { exportKnittingReportPdf } from './knittingReportPdf'
 import InstagramReportDialog from './InstagramReportDialog'
 import InstagramCaptionDialog from './InstagramCaptionDialog'
 import { analyzeKnittingReportCandidates } from './knittingReportAnalysis'
 import ReportWorkTime from './ReportWorkTime'
+import type { DocumentWorkTimeTotals } from './DocumentWorkTimer'
+import { getGaugeMeasurement } from './reportFormatting'
+import { applyMeasurementSelection, createDefaultMeasurements, findMeasurementPresetRow, isMeasurementPresetAdded, measurementPresetKeys, type MeasurementEntryDraft, type MeasurementPresetKey } from './reportMeasurementSelection'
 import './ReportDesignSystem.css'
 
-type Props = { documentId: string; fileName: string; pageCount: number; totalWorkTimeMs: number; workTimeDays: DocumentWorkTimeDay[]; reportId?: string; onBack: () => void; onReportChange?: (reportId: string) => void }
-type FieldKind = 'text' | 'date' | 'number' | 'url' | 'multiline' | 'select' | 'tags'
+type Props = { documentId: string; fileName: string; pageCount: number; totalWorkTimeMs: number; workTimeDays: DocumentWorkTimeDay[]; reportId?: string; onBack: () => void; onAddWorkTime: (date: string, elapsedMs: number) => Promise<DocumentWorkTimeTotals>; onReportChange?: (reportId: string) => void }
+type FieldKind = 'text' | 'date' | 'number' | 'positiveDecimal' | 'url' | 'multiline' | 'select' | 'tags'
 type DetailId = 'project' | 'pattern' | 'size' | 'yarn' | 'needles' | 'modifications' | 'oneLine' | 'gauge' | 'measurements' | 'fit' | 'yarnMemo' | 'detailMemo' | 'extras'
 
 const featureOptions = '라글란,드롭숄더,브이넥,크롭,오버핏,케이블,배색,탑다운,바텀업'
@@ -24,9 +27,10 @@ function cleanName(fileName: string) {
 
 function createKnittingReport(documentId: string, fileName: string, title = cleanName(fileName)): KnittingReport {
   return {
-    id: crypto.randomUUID(), documentId, title, createdAt: Date.now(), updatedAt: Date.now(), status: 'draft', completedAt: null, fields: { 'project.name': title, 'project.status': '진행중' }, representativePhoto: '',
+    id: crypto.randomUUID(), documentId, title, createdAt: Date.now(), updatedAt: Date.now(), status: 'draft', completedAt: null,
+    fields: { 'project.name': title, 'project.status': '진행중', 'gauge.beforeWidth': '10', 'gauge.beforeHeight': '10', 'gauge.beforeUnit': 'cm', 'gauge.afterWidth': '10', 'gauge.afterHeight': '10', 'gauge.afterUnit': 'cm' }, representativePhoto: '',
     yarns: [], needles: [], accessories: [],
-    measurements: [t('기장'), t('가슴둘레'), t('소매길이')].map((label) => ({ id: crypto.randomUUID(), label, pattern: '', finished: '', unit: 'cm' as const })),
+    measurements: createDefaultMeasurements((key) => t(key)),
     modifications: [], finishedPhotos: [], workPhotos: [],
   }
 }
@@ -54,15 +58,11 @@ function makeYarn(): ReportYarn {
 }
 
 function makeNeedle(): ReportNeedle {
-  return { id: crypto.randomUUID(), section: '', type: '', size: '', cableLength: '', memo: '' }
+  return { id: crypto.randomUUID(), section: '', type: '', size: '', sizeUnit: 'mm', cableLength: '', memo: '' }
 }
 
 function makeAccessory(): ReportAccessory {
   return { id: crypto.randomUUID(), photo: '', type: '', size: '', quantity: '', detail: '' }
-}
-
-function makeMeasurement(): ReportMeasurement {
-  return { id: crypto.randomUUID(), label: '', pattern: '', finished: '', unit: 'cm' }
 }
 
 function makeModification(): ReportModification {
@@ -91,11 +91,15 @@ async function compressPhoto(file: File) {
   })
 }
 
-function ReportField({ label, value, onChange, kind = 'text', options, wide = false }: {
-  label: string; value: string; onChange: (value: string) => void; kind?: FieldKind; options?: string[]; wide?: boolean
+function ReportField({ label, value, onChange, kind = 'text', options, wide = false, emptyLabel = '선택' }: {
+  label: string; value: string; onChange: (value: string) => void; kind?: FieldKind; options?: string[]; wide?: boolean; emptyLabel?: string
 }) {
   const [draft, setDraft] = useState(value)
   function commit() {
+    if (kind === 'positiveDecimal' && draft.trim() && (!Number.isFinite(Number(draft)) || Number(draft) <= 0)) {
+      setDraft(value)
+      return
+    }
     if (draft !== value) onChange(draft)
   }
   function editKeys(event: KeyboardEvent<HTMLInputElement | HTMLTextAreaElement>) {
@@ -110,14 +114,159 @@ function ReportField({ label, value, onChange, kind = 'text', options, wide = fa
     }
   }
   return <label className={'report-field' + (wide ? ' wide' : '')}>{t(label as LocaleKey)}
-    {kind === 'select' ? <select value={value} onChange={(event) => onChange(event.currentTarget.value)}><option value="">{t("선택")}</option>{options?.map((option) => <option key={option} value={option}>{t(option as LocaleKey)}</option>)}</select> :
+    {kind === 'select' ? <select value={value} onChange={(event) => onChange(event.currentTarget.value)}><option value="">{t(emptyLabel as LocaleKey)}</option>{options?.map((option) => <option key={option} value={option}>{t(option as LocaleKey)}</option>)}</select> :
       kind === 'tags' ? <span className="report-tag-options">{options?.map((option) => {
         const selected = value.split(',').map((item) => item.trim()).filter(Boolean).includes(option)
         return <button key={option} type="button" className={selected ? 'selected' : ''} onClick={() => onChange(selected ? value.split(',').map((item) => item.trim()).filter((item) => item !== option).join(', ') : [...value.split(',').map((item) => item.trim()).filter(Boolean), option].join(', '))}>{t(option as LocaleKey)}</button>
       })}</span> :
       kind === 'multiline' ? <textarea value={draft} onChange={(event) => setDraft(event.currentTarget.value)} onBlur={commit} onKeyDown={editKeys} rows={3} /> :
-        <input type={kind === 'number' ? 'text' : kind} inputMode={kind === 'number' ? 'decimal' : undefined} value={draft} onChange={(event) => setDraft(event.currentTarget.value)} onBlur={commit} onKeyDown={editKeys} />}
+        <input type={kind === 'number' ? 'text' : kind === 'positiveDecimal' ? 'number' : kind} inputMode={kind === 'number' || kind === 'positiveDecimal' ? 'decimal' : undefined} min={kind === 'positiveDecimal' ? '0' : undefined} step={kind === 'positiveDecimal' ? 'any' : undefined} value={draft} onChange={(event) => setDraft(event.currentTarget.value)} onBlur={commit} onKeyDown={editKeys} />}
   </label>
+}
+
+function MeasurementLabelInput({ label, onCommit }: { label: string; onCommit: (value: string) => void }) {
+  const [draft, setDraft] = useState(label)
+  const [editing, setEditing] = useState(false)
+  const originalLabel = useRef(label)
+  const cancelled = useRef(false)
+  if (editing) return <input className="report-measurement-label-input" aria-label={`${label} ${t('측정 항목')}`} placeholder={t('측정 항목')} autoFocus value={draft}
+    onChange={(event) => setDraft(event.currentTarget.value)}
+    onBlur={() => {
+      setEditing(false)
+      const next = draft.trim()
+      if (cancelled.current || !next) setDraft(originalLabel.current)
+      else if (next !== originalLabel.current) onCommit(next)
+    }}
+    onKeyDown={(event) => {
+      if (event.key === 'Enter' && !event.nativeEvent.isComposing) {
+        event.preventDefault()
+        event.currentTarget.blur()
+      } else if (event.key === 'Escape') {
+        event.preventDefault()
+        cancelled.current = true
+        setDraft(originalLabel.current)
+        setEditing(false)
+        event.currentTarget.blur()
+      }
+    }} />
+  return <div className="report-measurement-label-display"><span>{label || t('측정 항목')}</span><button type="button" className="report-measurement-rename" aria-label={`${label} ${t('항목명 수정')}`} onClick={() => { originalLabel.current = label; cancelled.current = false; setDraft(label); setEditing(true) }}><Pencil size={15} /></button></div>
+}
+
+type CustomMeasurementDraft = MeasurementEntryDraft & { id: string }
+
+function makeCustomMeasurementDraft(): CustomMeasurementDraft {
+  return { id: crypto.randomUUID(), label: '', finished: '', unit: 'cm' }
+}
+
+function MeasurementAddDialog({ existingMeasurements, onAdd, onClose }: {
+  existingMeasurements: ReportMeasurement[]
+  onAdd: (presets: MeasurementEntryDraft[], custom: MeasurementEntryDraft[]) => void
+  onClose: () => void
+}) {
+  const [selectedPresets, setSelectedPresets] = useState<MeasurementPresetKey[]>(() => measurementPresetKeys.filter((key) => isMeasurementPresetAdded(existingMeasurements, key)))
+  const [presetValues, setPresetValues] = useState<Record<MeasurementPresetKey, Omit<MeasurementEntryDraft, 'label'>>>(() => Object.fromEntries(measurementPresetKeys.map((key) => {
+    const row = findMeasurementPresetRow(existingMeasurements, key)
+    return [key, { finished: row?.finished ?? '', unit: row?.unit ?? 'cm' }]
+  })) as Record<MeasurementPresetKey, Omit<MeasurementEntryDraft, 'label'>>)
+  const [customSelected, setCustomSelected] = useState(false)
+  const [customEntries, setCustomEntries] = useState<CustomMeasurementDraft[]>([])
+  const [edited, setEdited] = useState(false)
+  const dialogRef = useRef<HTMLElement>(null)
+  const titleRef = useRef<HTMLHeadingElement>(null)
+
+  useEffect(() => {
+    const previouslyFocused = document.activeElement instanceof HTMLElement ? document.activeElement : null
+    titleRef.current?.focus()
+    return () => previouslyFocused?.focus()
+  }, [])
+
+  function close(confirmDiscard: boolean) {
+    if (confirmDiscard && edited && !window.confirm(t('입력 내용을 버릴까요?'))) return
+    onClose()
+  }
+
+  function handleKeyDown(event: KeyboardEvent<HTMLElement>) {
+    if (event.key === 'Escape') {
+      event.preventDefault()
+      event.stopPropagation()
+      close(true)
+      return
+    }
+    if (event.key !== 'Tab') return
+    const focusable = [...(dialogRef.current?.querySelectorAll<HTMLElement>('button:not(:disabled), input:not(:disabled), select:not(:disabled), textarea:not(:disabled)') ?? [])]
+    if (!focusable.length) return
+    const first = focusable[0]
+    const last = focusable[focusable.length - 1]
+    if (event.shiftKey && (document.activeElement === first || document.activeElement === titleRef.current)) {
+      event.preventDefault()
+      last.focus()
+    } else if (!event.shiftKey && document.activeElement === last) {
+      event.preventDefault()
+      first.focus()
+    }
+  }
+
+  function togglePreset(key: MeasurementPresetKey, checked: boolean) {
+    setEdited(true)
+    setSelectedPresets((current) => checked ? [...current, key] : current.filter((item) => item !== key))
+  }
+
+  function toggleCustom(checked: boolean) {
+    setEdited(true)
+    setCustomSelected(checked)
+    if (checked && !customEntries.length) setCustomEntries([makeCustomMeasurementDraft()])
+  }
+
+  function updateCustom(id: string, patch: Partial<CustomMeasurementDraft>) {
+    setEdited(true)
+    setCustomEntries((current) => current.map((entry) => entry.id === id ? { ...entry, ...patch } : entry))
+  }
+
+  const count = selectedPresets.length + (customSelected ? customEntries.length : 0)
+  const customNameMissing = customSelected && customEntries.some((entry) => !entry.label.trim())
+  const removedPreset = measurementPresetKeys.some((key) => isMeasurementPresetAdded(existingMeasurements, key) && !selectedPresets.includes(key))
+  const canApply = !customNameMissing && (count > 0 || removedPreset)
+
+  function applySelected() {
+    if (!canApply) return
+    const removedWithValues = existingMeasurements.some((row) => measurementPresetKeys.some((key) => !selectedPresets.includes(key) && findMeasurementPresetRow([row], key) && (row.finished.trim() || row.pattern.trim())))
+    if (removedWithValues && !window.confirm(t('입력된 치수를 삭제할까요?'))) return
+    const presets = measurementPresetKeys.filter((key) => selectedPresets.includes(key)).map((key) => ({ label: t(key), ...presetValues[key] }))
+    const custom = customSelected ? customEntries.map(({ label, finished, unit }) => ({ label, finished, unit })) : []
+    onAdd(presets, custom)
+  }
+
+  return <div className="modal-backdrop report-measurement-backdrop" role="presentation" onPointerDown={(event) => { if (event.target === event.currentTarget) close(true) }}>
+    <section ref={dialogRef} className="modal-card report-measurement-dialog" role="dialog" aria-modal="true" aria-labelledby="report-measurement-dialog-title" onKeyDown={handleKeyDown}>
+      <header className="report-measurement-dialog-header"><h2 id="report-measurement-dialog-title" ref={titleRef} tabIndex={-1}>{t('완성 실측 추가')}</h2><button type="button" className="icon-button report-measurement-close" aria-label={t('닫기')} onClick={() => close(true)}><X size={18} /></button></header>
+      <div className="report-measurement-dialog-content">
+        <div className="report-measurement-choices">{measurementPresetKeys.map((key, index) => {
+          const label = t(key)
+          const selected = selectedPresets.includes(key)
+          const inputId = `report-measurement-preset-${index}`
+          const valueId = `${inputId}-value`
+          return <div className="report-measurement-choice-group" key={key}>
+            <label className="report-measurement-choice" htmlFor={inputId}><input id={inputId} type="checkbox" checked={selected} aria-expanded={selected} aria-controls={valueId} onChange={(event) => togglePreset(key, event.currentTarget.checked)} /><span>{label}</span></label>
+            {selected && <div id={valueId} className="report-measurement-choice-fields"><input aria-label={`${label} ${t('완성 치수')}`} placeholder={t('완성')} value={presetValues[key].finished} onChange={(event) => { const finished = event.currentTarget.value; setEdited(true); setPresetValues((current) => ({ ...current, [key]: { ...current[key], finished } })) }} /><select aria-label={`${label} ${t('치수 단위')}`} value={presetValues[key].unit} onChange={(event) => { const unit = event.currentTarget.value as 'cm' | 'inch'; setEdited(true); setPresetValues((current) => ({ ...current, [key]: { ...current[key], unit } })) }}><option value="cm">cm</option><option value="inch">{t('inch')}</option></select></div>}
+          </div>
+        })}
+          <div className="report-measurement-choice-group">
+            <label className="report-measurement-choice" htmlFor="report-measurement-custom"><input id="report-measurement-custom" type="checkbox" checked={customSelected} aria-expanded={customSelected} aria-controls="report-measurement-custom-fields" onChange={(event) => toggleCustom(event.currentTarget.checked)} /><span>{t('직접 입력')}</span></label>
+            {customSelected && <div id="report-measurement-custom-fields" className="report-measurement-custom-list">{customEntries.map((entry, index) => <div className="report-measurement-custom-row" key={entry.id}>
+              <label>{t('측정 항목')}<input required aria-invalid={!entry.label.trim()} aria-label={`${index + 1} ${t('직접 입력')} ${t('측정 항목')}`} placeholder={t('측정 항목')} value={entry.label} onChange={(event) => updateCustom(entry.id, { label: event.currentTarget.value })} /></label>
+              <label>{t('완성 치수')}<input aria-label={`${entry.label || index + 1} ${t('완성 치수')}`} placeholder={t('완성')} value={entry.finished} onChange={(event) => updateCustom(entry.id, { finished: event.currentTarget.value })} /></label>
+              <label>{t('치수 단위')}<select aria-label={`${entry.label || index + 1} ${t('치수 단위')}`} value={entry.unit} onChange={(event) => updateCustom(entry.id, { unit: event.currentTarget.value as 'cm' | 'inch' })}><option value="cm">cm</option><option value="inch">{t('inch')}</option></select></label>
+              <button type="button" className="report-icon-button" aria-label={`${index + 1} ${t('직접 입력')} ${t('측정 항목 삭제')}`} onClick={() => { setEdited(true); setCustomEntries((current) => current.filter((item) => item.id !== entry.id)); if (customEntries.length === 1) setCustomSelected(false) }}><Trash2 size={15} /></button>
+            </div>)}
+              {customNameMissing && <small className="report-error" role="alert">{t('직접 입력 항목 이름을 입력하세요.')}</small>}
+              <button type="button" className="secondary-button report-add-button" onClick={() => { setEdited(true); setCustomSelected(true); setCustomEntries((current) => [...current, makeCustomMeasurementDraft()]) }}><Plus size={15} />{t('직접 입력 항목 더 추가')}</button>
+            </div>}
+          </div>
+        </div>
+      </div>
+      <footer className="report-measurement-dialog-actions"><button type="button" className="secondary-button" onClick={() => close(false)}>{t('취소')}</button><button type="button" className="primary-button" disabled={!canApply} onClick={applySelected}>{count ? t('{count}개 적용', { count }) : t('적용')}</button></footer>
+    </section>
+  </div>
 }
 
 function PhotoField({ label, value, onChange, onProcessingChange, onPreview }: { label: string; value: string; onChange: (value: string) => void; onProcessingChange?: (processing: boolean) => void; onPreview?: (value: string) => void }) {
@@ -137,7 +286,7 @@ function PhotoField({ label, value, onChange, onProcessingChange, onPreview }: {
   </div>
 }
 
-export default function KnittingReport({ documentId, fileName, pageCount, totalWorkTimeMs, workTimeDays, reportId, onBack, onReportChange }: Props) {
+export default function KnittingReport({ documentId, fileName, pageCount, totalWorkTimeMs, workTimeDays, reportId, onBack, onAddWorkTime, onReportChange }: Props) {
   const [report, setReport] = useState<KnittingReport | null>(null)
   const [reports, setReports] = useState<KnittingReportSummary[]>([])
   const [saveState, setSaveState] = useState('불러오는 중')
@@ -146,13 +295,13 @@ export default function KnittingReport({ documentId, fileName, pageCount, totalW
   const [processingPhotos, setProcessingPhotos] = useState(false)
   const [captionOpen, setCaptionOpen] = useState(false)
   const [instagramOpen, setInstagramOpen] = useState(false)
+  const [measurementDialogOpen, setMeasurementDialogOpen] = useState(false)
   const [titleEditing, setTitleEditing] = useState(false)
   const [titleDraft, setTitleDraft] = useState('')
   const [activeDetail, setActiveDetail] = useState<DetailId | null>(null)
   const [previewPhoto, setPreviewPhoto] = useState('')
   const [draggedPhotoId, setDraggedPhotoId] = useState('')
   const [undoDelete, setUndoDelete] = useState<{ label: string; restore: (current: KnittingReport) => KnittingReport } | null>(null)
-  const [workTimeDetails, setWorkTimeDetails] = useState<{ documentId: string; sessions: DocumentWorkTimeSession[]; notes: Record<string, string>; loading: boolean }>({ documentId, sessions: [], notes: {}, loading: true })
   const [documentWorkTime, setDocumentWorkTime] = useState({ totalWorkTimeMs, workTimeDays })
   const [moreOpen, setMoreOpen] = useState(false)
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false)
@@ -199,10 +348,7 @@ export default function KnittingReport({ documentId, fileName, pageCount, totalW
     void getDocument(documentId).then((document) => {
       if (!active) return
       setDocumentWorkTime({ totalWorkTimeMs: document?.totalWorkTimeMs ?? totalWorkTimeMs, workTimeDays: document?.workTimeDays ?? workTimeDays })
-      setWorkTimeDetails({ documentId, sessions: document?.workTimeSessions ?? [], notes: document?.workTimeNotes ?? {}, loading: false })
-    }).catch(() => {
-      if (active) setWorkTimeDetails({ documentId, sessions: [], notes: {}, loading: false })
-    })
+    }).catch(() => {})
     return () => { active = false }
   }, [documentId, totalWorkTimeMs, workTimeDays])
 
@@ -371,7 +517,7 @@ export default function KnittingReport({ documentId, fileName, pageCount, totalW
     undoTimer.current = window.setTimeout(() => {
       undoTimer.current = undefined
       setUndoDelete(null)
-    }, 4000)
+    }, 5000)
   }
 
   function undoLastDelete() {
@@ -404,9 +550,10 @@ export default function KnittingReport({ documentId, fileName, pageCount, totalW
     update((current) => ({ ...current, [key]: (current[key] as ReportRow[]).map((row) => row.id === id ? { ...row, ...patch } : row) }) as KnittingReport)
   }
 
-  async function saveWorkTimeNote(date: string, note: string) {
-    const notes = await saveDocumentWorkTimeNote(documentId, date, note)
-    setWorkTimeDetails((current) => ({ ...current, documentId, notes }))
+  async function addWorkTime(date: string, elapsedMs: number) {
+    const totals = await onAddWorkTime(date, elapsedMs)
+    setDocumentWorkTime({ totalWorkTimeMs: totals.totalWorkTimeMs, workTimeDays: totals.workTimeDays })
+    return totals
   }
 
   function removeRow(key: ReportCollectionKey, id: string) {
@@ -564,11 +711,23 @@ export default function KnittingReport({ documentId, fileName, pageCount, totalW
     })
   }
 
-  function rowFields<T extends ReportRow, K extends ReportCollectionKey>(row: T, key: K, descriptors: { field: keyof T; label: string; wide?: boolean; kind?: FieldKind }[]) {
-    return <div className="report-fields">{descriptors.map(({ field: fieldName, label, wide, kind }) => {
+  function rowFields<T extends ReportRow, K extends ReportCollectionKey>(row: T, key: K, descriptors: { field: keyof T; label: string; wide?: boolean; kind?: FieldKind; options?: string[]; emptyLabel?: string }[]) {
+    return <div className="report-fields">{descriptors.map(({ field: fieldName, label, wide, kind, options, emptyLabel }) => {
       const value = String(row[fieldName] ?? '')
-      return <ReportField key={String(fieldName) + ':' + value} label={label} value={value} kind={kind} wide={wide} onChange={(nextValue) => updateRow(key, row.id, { [fieldName]: nextValue } as Partial<KnittingReport[K][number]>)} />
+      return <ReportField key={String(fieldName) + ':' + value} label={label} value={value} kind={kind} options={options} wide={wide} emptyLabel={emptyLabel} onChange={(nextValue) => updateRow(key, row.id, { [fieldName]: nextValue } as Partial<KnittingReport[K][number]>)} />
     })}</div>
+  }
+
+  function needleCards(showDetails: boolean) {
+    return loadedReport.needles.map((needle, index) => <article className="report-entry-card compact report-needle-card" key={needle.id}>
+      <div className="report-entry-title"><strong>{t("바늘 ")}{index + 1}</strong><button type="button" className="report-icon-button" aria-label={t("바늘 삭제")} onClick={() => removeRow('needles', needle.id)}><Trash2 size={15} /></button></div>
+      {rowFields(needle, 'needles', [
+        { field: 'type', label: '바늘 종류', kind: 'select', options: [...new Set(['대바늘', '코바늘', '기타', needle.type].filter(Boolean))] },
+        { field: 'size', label: '사이즈' }, { field: 'sizeUnit', label: '표기', kind: 'select', options: ['mm', 'US', 'JP'], emptyLabel: '기존 표기' },
+        { field: 'brand', label: '브랜드' }, { field: 'section', label: '사용 부위' },
+        ...(showDetails ? [{ field: 'cableLength' as const, label: '케이블 길이' }, { field: 'memo' as const, label: '메모', wide: true }] : []),
+      ])}
+    </article>)
   }
 
   async function downloadReport() {
@@ -672,13 +831,35 @@ export default function KnittingReport({ documentId, fileName, pageCount, totalW
   const loadedReport = report
   const values = report.fields
   const detailTitles: Record<DetailId, LocaleKey> = { project: '프로젝트 정보', pattern: '도안 정보', size: '사이즈', yarn: '사용 실', needles: '바늘 · 부자재', modifications: '도안에서 수정한 부분', oneLine: '한줄 기록', gauge: '게이지', measurements: '완성 실측', fit: '핏 · 완성 후기', yarnMemo: '실 메모', detailMemo: '상세 메모', extras: '기타 기록' }
-  const measurementEditor = <div className="report-measurement-editor">{report.measurements.map((row) => <article className="report-measurement-edit-row" key={row.id}>
-    <input aria-label={t("측정 항목")} placeholder={t("예: 총장")} value={row.label} onChange={(event) => updateRow('measurements', row.id, { label: event.currentTarget.value })} />
-    <input aria-label={t("도안 치수")} placeholder={t("도안")} value={row.pattern} onChange={(event) => updateRow('measurements', row.id, { pattern: event.currentTarget.value })} />
-    <input aria-label={t("완성 치수")} placeholder={t("완성")} value={row.finished} onChange={(event) => updateRow('measurements', row.id, { finished: event.currentTarget.value })} />
-    <select aria-label={t("치수 단위")} value={row.unit ?? 'cm'} onChange={(event) => updateRow('measurements', row.id, { unit: event.currentTarget.value as 'cm' | 'inch' })}><option value="cm">cm</option><option value="inch">{t('inch')}</option></select>
-    <button type="button" className="report-icon-button" aria-label={t("측정 항목 삭제")} onClick={() => removeRow('measurements', row.id)}><Trash2 size={15} /></button>
-  </article>)}<button type="button" className="secondary-button report-add-button" onClick={() => update((current) => ({ ...current, measurements: [...current.measurements, makeMeasurement()] }))}><Plus size={15} />{t("측정 항목 추가")}</button></div>
+  function saveMeasurementSelection(presets: MeasurementEntryDraft[], custom: MeasurementEntryDraft[]) {
+    update((current) => ({ ...current, measurements: applyMeasurementSelection(current.measurements, presets, custom) }))
+    setMeasurementDialogOpen(false)
+  }
+  const measurementEditor = <div className="report-measurement-editor">{report.measurements.length === 0 && <p className="report-measurement-empty">{t('완성한 작품의 치수를 기록해 보세요.')}</p>}{report.measurements.map((row) => <article className="report-measurement-edit-row" key={row.id}>
+    <MeasurementLabelInput label={row.label} onCommit={(label) => updateRow('measurements', row.id, { label })} />
+    <input className="report-measurement-value" aria-label={`${row.label} ${t('완성 치수')}`} placeholder={t("완성")} value={row.finished} onChange={(event) => updateRow('measurements', row.id, { finished: event.currentTarget.value })} />
+    <select className="report-measurement-unit" aria-label={`${row.label} ${t('치수 단위')}`} value={row.unit ?? 'cm'} onChange={(event) => updateRow('measurements', row.id, { unit: event.currentTarget.value as 'cm' | 'inch' })}><option value="cm">cm</option><option value="inch">{t('inch')}</option></select>
+    <button type="button" className="report-icon-button report-measurement-delete" aria-label={`${row.label} ${t('측정 항목 삭제')}`} onClick={() => removeRow('measurements', row.id)}><Trash2 size={15} /></button>
+  </article>)}<button type="button" className="secondary-button report-add-button" onClick={() => setMeasurementDialogOpen(true)}><Plus size={15} />{t('치수 추가')}</button></div>
+
+  function gaugeField(id: string, label: string, kind: FieldKind = 'text', options?: string[], fallback = '') {
+    const value = values[id] ?? fallback
+    return <ReportField key={id + ':' + value} label={label} value={value} kind={kind} options={options} onChange={(nextValue) => update((current) => ({ ...current, fields: { ...current.fields, [id]: nextValue } }))} />
+  }
+
+  const gaugeEditor = <div className="report-gauge-editor">
+    {gaugeField('gauge.pattern', '무늬')}
+    <div className="report-gauge-columns">{([['before', '세탁 전'], ['after', '세탁 후']] as const).map(([side, label]) => {
+      const gauge = getGaugeMeasurement(values, side)
+      const counts = [gauge.stitches && `${gauge.stitches}${t('코')}`, gauge.rows && `${gauge.rows}${t('단')}`].filter(Boolean).join(' · ')
+      const dimensions = gauge.width || gauge.height ? `${gauge.width || '—'} × ${gauge.height || '—'} ${gauge.unit === 'inch' ? t('inch') : 'cm'}` : ''
+      return <section key={side}><h3>{t(label)}</h3><div className="report-gauge-counts">
+        {gaugeField(`gauge.${side}Stitches`, '코', 'number')}{gaugeField(`gauge.${side}Rows`, '단', 'number')}
+      </div><h4>{t('측정 크기')}</h4><div className="report-gauge-size">
+        {gaugeField(`gauge.${side}Width`, '가로', 'positiveDecimal', undefined, gauge.width)}{gaugeField(`gauge.${side}Height`, '세로', 'positiveDecimal', undefined, gauge.height)}{gaugeField(`gauge.${side}Unit`, '표기', 'select', ['cm', 'inch'], gauge.unit)}
+      </div><p className="report-gauge-summary">{[counts, dimensions].filter(Boolean).join(' / ') || '—'}</p></section>
+    })}</div>
+  </div>
 
   function detailContent(id: DetailId) {
     if (id === 'project') return <div className="report-fields">
@@ -704,7 +885,7 @@ export default function KnittingReport({ documentId, fileName, pageCount, totalW
       ])}</div></article>)}<button type="button" className="secondary-button report-add-button" onClick={() => update((current) => ({ ...current, yarns: [...current.yarns, makeYarn()] }))}><Plus size={15} />{t("다른 실 추가")}</button></>
     if (id === 'needles') return <>
       <div className="report-detail-subheading"><h3>{t("사용 바늘")}</h3><button type="button" className="secondary-button" onClick={() => update((current) => ({ ...current, needles: [...current.needles, makeNeedle()] }))}><Plus size={14} />{t("바늘 추가")}</button></div>
-      {loadedReport.needles.map((needle, index) => <article className="report-entry-card compact" key={needle.id}><div className="report-entry-title"><strong>{t("바늘 ")}{index + 1}</strong><button type="button" className="report-icon-button" aria-label={t("바늘 삭제")} onClick={() => removeRow('needles', needle.id)}><Trash2 size={15} /></button></div>{rowFields(needle, 'needles', [{ field: 'section', label: '구간' }, { field: 'type', label: '바늘 종류' }, { field: 'size', label: '사이즈' }, { field: 'cableLength', label: '케이블 길이' }, { field: 'memo', label: '메모', wide: true }])}</article>)}
+      {needleCards(true)}
       <div className="report-detail-subheading"><h3>{t("부자재")}</h3><button type="button" className="secondary-button" onClick={() => update((current) => ({ ...current, accessories: [...current.accessories, makeAccessory()] }))}><Plus size={14} />{t("부자재 추가")}</button></div>
       {loadedReport.accessories.map((accessory, index) => <article className="report-entry-card" key={accessory.id}><div className="report-entry-title"><strong>{t("부자재 ")}{index + 1}</strong><button type="button" className="report-icon-button" aria-label={t("부자재 삭제")} onClick={() => removeRow('accessories', accessory.id)}><Trash2 size={15} /></button></div><PhotoField label="부자재 사진" value={accessory.photo} onChange={(photo) => updateRow('accessories', accessory.id, { photo })} onProcessingChange={trackPhotoProcessing} onPreview={setPreviewPhoto} />{rowFields(accessory, 'accessories', [{ field: 'type', label: '종류' }, { field: 'size', label: '크기' }, { field: 'quantity', label: '수량' }, { field: 'detail', label: '상세', wide: true }])}</article>)}
     </>
@@ -712,9 +893,8 @@ export default function KnittingReport({ documentId, fileName, pageCount, totalW
       {loadedReport.modifications.map((item, index) => <article className="report-entry-card compact" key={item.id}><div className="report-entry-title"><strong>{item.section || '수정사항 ' + (index + 1)}</strong><button type="button" className="report-icon-button" aria-label={t("수정사항 삭제")} onClick={() => removeRow('modifications', item.id)}><Trash2 size={15} /></button></div>{rowFields(item, 'modifications', [{ field: 'section', label: '구간' }, { field: 'original', label: '도안 값' }, { field: 'changed', label: '실제 변경' }, { field: 'memo', label: '메모', wide: true }])}</article>)}
       {!loadedReport.modifications.length && <p className="report-empty-hint">{t("아직 기록된 수정사항이 없어요.")}</p>}<button type="button" className="secondary-button report-add-button" onClick={() => update((current) => ({ ...current, modifications: [...current.modifications, makeModification()] }))}><Plus size={15} />{t("직접 추가")}</button></>
     if (id === 'oneLine') return <>{field('review.nextChanges', '한줄 기록', 'multiline', undefined, true)}<small className="report-field-hint">{t("권장 150자 · 다음에 참고하고 싶은 점이나 다시 뜨고 싶은 마음을 적어 주세요.")}</small></>
-    if (id === 'gauge') return <><div className="report-fields">
-      {field('gauge.unit', '측정 기준', 'select', ['10cm', '4in'])}{field('gauge.patternStitches', '도안 게이지 · 코')}{field('gauge.patternRows', '도안 게이지 · 단')}
-      {field('gauge.beforeStitches', '세탁 전 · 코')}{field('gauge.beforeRows', '세탁 전 · 단')}{field('gauge.afterStitches', '세탁 후 · 코')}{field('gauge.afterRows', '세탁 후 · 단')}{field('gauge.memo', '게이지 메모', 'multiline', undefined, true)}
+    if (id === 'gauge') return <>{gaugeEditor}<div className="report-fields">
+      {field('gauge.patternStitches', '도안 게이지 · 코')}{field('gauge.patternRows', '도안 게이지 · 단')}{field('gauge.memo', '게이지 메모', 'multiline', undefined, true)}
     </div><div className="report-tension"><strong>{t("손땀")}</strong><div>{tensionOptions.map((option, index) => <label key={option} className={values['gauge.tension'] === String(index + 1) ? 'selected' : ''}><input type="radio" name="report-tension" value={index + 1} checked={values['gauge.tension'] === String(index + 1)} onChange={() => update((current) => ({ ...current, fields: { ...current.fields, 'gauge.tension': String(index + 1) } }))} />{t(option as LocaleKey)}</label>)}</div></div></>
     if (id === 'measurements') return <>{measurementEditor}<small className="report-field-hint">{t("항목명과 단위를 원하는 대로 입력할 수 있어요.")}</small></>
     if (id === 'fit') return <div className="report-fields">
@@ -750,11 +930,14 @@ export default function KnittingReport({ documentId, fileName, pageCount, totalW
         <div className="report-cover-fields">{field('pattern.name', '도안명')}{field('pattern.designer', '원작자')}{field('project.co', '시작일', 'date')}{field('project.fo', '완성일', 'date')}</div>
       </div></section>
       <div className="report-main-layout"><div className="report-form-main">
-        <section className="report-form-card"><header><h2>{t('실 · 바늘')}</h2><button type="button" className="report-add-action" onClick={() => update((current) => ({ ...current, yarns: [...current.yarns, makeYarn()] }))}><Plus size={18} />{t('실 추가')}</button></header>
+        <section className="report-form-card"><header><h2>{t('실')}</h2><button type="button" className="report-add-action" onClick={() => update((current) => ({ ...current, yarns: [...current.yarns, makeYarn()] }))}><Plus size={18} />{t('실 추가')}</button></header>
           {report.yarns.length ? report.yarns.map((yarn, index) => <article className="report-yarn-card" key={yarn.id}><div className="report-entry-title"><strong>{t('사용 실 ')}{index + 1}</strong><button type="button" className="report-remove-action" aria-label={t('실 삭제')} onClick={() => removeRow('yarns', yarn.id)}><Trash2 size={16} /></button></div>{rowFields(yarn, 'yarns', [
-            { field: 'product', label: '제품명', wide: true }, { field: 'colorName', label: '색상명' }, { field: 'colorNumber', label: '색상번호' },
-            { field: 'strandCount', label: '합수', kind: 'number' }, { field: 'usedWeight', label: '사용 중량', kind: 'number' }, { field: 'needleSizeMm', label: '바늘 크기 (mm)', kind: 'number' },
+            { field: 'brand', label: '브랜드' }, { field: 'product', label: '제품명' }, { field: 'colorName', label: '색상명' }, { field: 'colorNumber', label: '색상번호' },
+            { field: 'strandCount', label: '합수', kind: 'number' }, { field: 'usedWeight', label: '사용 중량', kind: 'number' },
           ])}</article>) : <p className="report-form-empty">{t('필요할 때 다시 확인할 수 있도록 자세히 남겨두세요.')}</p>}
+        </section>
+        <section className="report-form-card"><header><h2>{t('바늘')}</h2><button type="button" className="report-add-action" onClick={() => update((current) => ({ ...current, needles: [...current.needles, makeNeedle()] }))}><Plus size={18} />{t('바늘 추가')}</button></header>
+          {report.needles.length ? needleCards(false) : <p className="report-form-empty">{t('필요할 때 다시 확인할 수 있도록 자세히 남겨두세요.')}</p>}
         </section>
         <section className="report-form-card"><header><h2>{t('부자재')}</h2><button type="button" className="report-add-action" onClick={() => update((current) => ({ ...current, accessories: [...current.accessories, makeAccessory()] }))}><Plus size={18} />{t('부자재 추가')}</button></header>
           <div className="report-accessory-table"><div className="report-accessory-head"><span>{t('종류')}</span><span>{t('수량')}</span><span>{t('메모')}</span><span /></div>
@@ -762,9 +945,8 @@ export default function KnittingReport({ documentId, fileName, pageCount, totalW
           </div>
           {!report.accessories.length && <p className="report-form-empty">{t('필요할 때 다시 확인할 수 있도록 자세히 남겨두세요.')}</p>}
         </section>
-        <section className="report-form-card"><header><div><h2>{t('게이지 · 완성 사이즈')}</h2><p>{t('게이지는 10×10cm 기준으로 계산합니다.')}</p></div></header>
-          <label className="report-field report-gauge-unit">{t('측정 기준')}<select value={values['gauge.unit'] ?? '10cm'} onChange={(event) => update((current) => ({ ...current, fields: { ...current.fields, 'gauge.unit': event.currentTarget.value } }))}><option value="10cm">10 × 10 cm</option><option value="4in">4 in</option></select></label>
-          <div className="report-gauge-columns">{([['before', '세탁 전'], ['after', '세탁 후']] as const).map(([side, label]) => <section key={side}><h3>{t(label)}</h3><div>{field(`gauge.${side}Stitches`, '코')}{field(`gauge.${side}Rows`, '단')}</div></section>)}</div>
+        <section className="report-form-card"><header><h2>{t('게이지 · 완성 사이즈')}</h2></header>
+          {gaugeEditor}
           <div className="report-measurements-heading"><h3>{t('완성 실측')}</h3><small>{t('추가 치수')}</small></div>{measurementEditor}
         </section>
         <section className="report-form-card report-notes-photos"><header><h2>{t('메모 · 사진')}</h2></header>{field('project.memo', '메모', 'multiline', undefined, true)}
@@ -774,7 +956,7 @@ export default function KnittingReport({ documentId, fileName, pageCount, totalW
         {photoInput('work')}{photoInput('finished')}
           </div>
         </section>
-      </div><aside className="report-right-column"><ReportWorkTime totalWorkTimeMs={documentWorkTime.totalWorkTimeMs} workTimeDays={documentWorkTime.workTimeDays} sessions={workTimeDetails.documentId === documentId ? workTimeDetails.sessions : []} notes={workTimeDetails.documentId === documentId ? workTimeDetails.notes : {}} loading={workTimeDetails.documentId !== documentId || workTimeDetails.loading} onSaveNote={saveWorkTimeNote} /><p className="report-share-note"><Info size={19} /><span>{t('빈 항목은 공유 문구에서 제외됩니다.')}</span></p></aside></div>
+      </div><aside className="report-right-column"><ReportWorkTime documentId={documentId} totalWorkTimeMs={documentWorkTime.totalWorkTimeMs} workTimeDays={documentWorkTime.workTimeDays} onAddWorkTime={addWorkTime} onTotalsChange={(total, days) => setDocumentWorkTime({ totalWorkTimeMs: total, workTimeDays: days })} /><p className="report-share-note"><Info size={19} /><span>{t('빈 항목은 공유 문구에서 제외됩니다.')}</span></p></aside></div>
       <details className="report-extra-info"><summary><ChevronDown size={17} />{t('추가 정보')}</summary><div className="report-extra-info-body"><p>{t('필요한 항목을 선택해 자세히 편집하세요.')}</p><div className="report-extra-detail-buttons">{extraDetailIds.map((id) => <button type="button" key={id} onClick={() => setActiveDetail(id)}>{t(detailTitles[id])}<Pencil size={14} /></button>)}</div>
         {(report.analysisCandidates ?? []).some((candidate) => candidate.status === 'suggested') && <button type="button" className="report-candidate-notice" onClick={() => { const pending = report.analysisCandidates!.filter((candidate) => candidate.status === 'suggested'); setCandidateSelection(pending.map((candidate) => candidate.id)); setCandidateReviewOpen(true) }}><Sparkles size={16} />{t('수정사항 후보 ')}{report.analysisCandidates!.filter((candidate) => candidate.status === 'suggested').length}{t('개 확인하기')}</button>}
         {analysisNotice && <small className="report-analysis-notice" role="status">{analysisNotice}</small>}
@@ -785,6 +967,7 @@ export default function KnittingReport({ documentId, fileName, pageCount, totalW
     </div>
     <footer className="report-bottom-actions"><button type="button" className="report-save-button" disabled={switching || exporting || processingPhotos} onClick={async () => { setSwitching(true); try { await flushPendingReport(); setSaveState('저장됨') } catch (cause) { setSaveState(cause instanceof Error ? translateMessage(cause.message) : t('저장하지 못했습니다.')) } finally { setSwitching(false) }}}>{t("저장")}</button><button type="button" className="report-caption-button" disabled={switching || processingPhotos || titleEditing} onClick={() => void openCaption()}><Clipboard size={17} />{t("IG 문구 복사")}</button></footer>
     {deleteConfirmOpen && <div className="modal-backdrop report-delete-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget && !switching) { setDeleteConfirmOpen(false); setDeleteError('') } }}><section className="modal-card report-delete-dialog" role="dialog" aria-modal="true" aria-labelledby="report-delete-title"><header className="modal-heading"><h2 id="report-delete-title">{t('보고서 삭제')}</h2><button type="button" className="icon-button" aria-label={t('닫기')} disabled={switching} onClick={() => { setDeleteConfirmOpen(false); setDeleteError('') }}><X size={19} /></button></header><div className="settings-copy"><p>{t('{title} 보고서와 소속 사진·기록을 삭제할까요? 연결된 PDF·프로젝트·다른 보고서는 유지됩니다.', { title: reportTitle })}</p>{deleteError && <p className="report-error" role="alert">{deleteError}</p>}<div className="modal-actions"><button type="button" className="secondary-button" disabled={switching} onClick={() => { setDeleteConfirmOpen(false); setDeleteError('') }}>{t('취소')}</button><button type="button" className="danger-button" disabled={switching} onClick={() => void confirmDeleteReport()}>{t('삭제')}</button></div></div></section></div>}
+    {measurementDialogOpen && <MeasurementAddDialog existingMeasurements={report.measurements} onAdd={saveMeasurementSelection} onClose={() => setMeasurementDialogOpen(false)} />}
     {undoDelete && <div className="report-undo-snackbar" role="status"><span>{undoDelete.label}</span><button type="button" onClick={undoLastDelete}>{t("실행 취소")}</button><button type="button" aria-label={t("알림 닫기")} onClick={() => { if (undoTimer.current !== undefined) window.clearTimeout(undoTimer.current); undoTimer.current = undefined; setUndoDelete(null) }}><X size={15} /></button></div>}
     {previewPhoto && <div className="report-photo-lightbox" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) setPreviewPhoto('') }}><section role="dialog" aria-modal="true" aria-label={t("사진 크게 보기")}><button type="button" aria-label={t("사진 닫기")} onClick={() => setPreviewPhoto('')}><X size={20} /></button><img src={previewPhoto} alt={t("보고서 사진")} /></section></div>}
     {captionOpen && <InstagramCaptionDialog report={report} onClose={() => setCaptionOpen(false)} onCopied={() => setSaveState('IG 문구가 복사됐어요.')} />}

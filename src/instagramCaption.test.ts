@@ -32,4 +32,30 @@ describe('Instagram report caption', () => {
     expect(buildInstagramCaption(report)).not.toContain('세탁 후 늘어남')
     expect(buildInstagramCaption(report, [...recommendedCaptionFields, 'yarnMemo'])).toContain('세탁 후 늘어남')
   })
+
+  it('prints saved gauge dimensions, measurement units, and the chosen needle notation', () => {
+    const report = {
+      id: 'r', documentId: 'd', title: '가디건', createdAt: 1, updatedAt: 1,
+      fields: { 'gauge.pattern': '꽈배기', 'gauge.beforeStitches': '24', 'gauge.beforeRows': '16', 'gauge.beforeWidth': '8', 'gauge.beforeHeight': '5.5', 'gauge.beforeUnit': 'cm', 'gauge.afterStitches': '24', 'gauge.afterRows': '16', 'gauge.afterWidth': '9', 'gauge.afterHeight': '6', 'gauge.afterUnit': 'inch' },
+      representativePhoto: '', yarns: [],
+      needles: [
+        { id: 'us', section: '소매', type: '대바늘', size: '6', sizeUnit: 'US' as const, brand: '치아오구', cableLength: '', memo: '' },
+        { id: 'legacy', section: '몸판', type: '', size: '4.5', cableLength: '', memo: '' },
+      ],
+      accessories: [], measurements: [
+        { id: 'cm', label: '기장', pattern: '', finished: '57', unit: 'cm' as const },
+        { id: 'inch', label: '소매길이', pattern: '', finished: '22', unit: 'inch' as const },
+      ], modifications: [], finishedPhotos: [], workPhotos: [],
+    } satisfies KnittingReport
+    const caption = buildInstagramCaption(report, ['needles', 'gauge', 'measurements'])
+
+    expect(caption).toContain('치아오구 US 6')
+    expect(caption).toContain('몸판 4.5')
+    expect(caption).not.toContain('4.5mm')
+    expect(caption).toContain('꽈배기')
+    expect(caption).toContain('8 × 5.5 cm')
+    expect(caption).toContain('9 × 6 인치')
+    expect(caption).toContain('기장: 57 cm')
+    expect(caption).toContain('소매길이: 22 인치')
+  })
 })

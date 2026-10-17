@@ -15,6 +15,10 @@ export function textNoteGestureExceededThreshold(start: { x: number; y: number }
   return dx * dx + dy * dy >= threshold * threshold
 }
 
+export function shouldPreventTextNotePointerDefault(isEditingTarget: boolean): boolean {
+  return !isEditingTarget
+}
+
 export function textNoteBoxAt(point: { x: number; y: number }): TextNoteBox {
   const width = 0.3
   const height = 0.12

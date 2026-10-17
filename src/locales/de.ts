@@ -111,7 +111,7 @@ export const de: Record<string, string> = {
   "작성 중": "In Bearbeitung",
   "계속 작성": "Weiter bearbeiten",
   "뜨개보고서": "Strickbericht",
-  "도안보고  ·  뜨개보고서": "DoanBogo  ·  Strickbericht",
+  "도안보고  ·  뜨개보고서": "KnitPeek  ·  Strickbericht",
   "작성일  ": "Erstellt  ",
   "작성한 보고서 내용이 없습니다.": "Der Bericht enthält noch keine Einträge.",
   "선택을 바꾸면 편집한 문구가 새 문구로 바뀝니다. 계속할까요?": "Wenn du die Auswahl änderst, wird der bearbeitete Text ersetzt. Fortfahren?",

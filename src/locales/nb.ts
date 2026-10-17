@@ -111,7 +111,7 @@ export const nb: Record<string, string> = {
   "작성 중": "Under arbeid",
   "계속 작성": "Fortsett redigeringen",
   "뜨개보고서": "Strikkerapport",
-  "도안보고  ·  뜨개보고서": "DoanBogo  ·  Strikkerapport",
+  "도안보고  ·  뜨개보고서": "KnitPeek  ·  Strikkerapport",
   "작성일  ": "Opprettet  ",
   "작성한 보고서 내용이 없습니다.": "Rapporten har ikke noe innhold ennå.",
   "선택을 바꾸면 편집한 문구가 새 문구로 바뀝니다. 계속할까요?": "Hvis du endrer valget, erstattes den redigerte teksten. Vil du fortsette?",

@@ -30,6 +30,12 @@ export class PageWorkPersistence {
     return Promise.resolve()
   }
 
+  flush(work: PageWorkRecord) {
+    const key = JSON.stringify([work.documentId, work.pageNumber])
+    this.clearTimer(key)
+    return this.flushPage(key)
+  }
+
   async flushAll() {
     const keys = [...this.pending.keys()]
     keys.forEach((key) => this.clearTimer(key))

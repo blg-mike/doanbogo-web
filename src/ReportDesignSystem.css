@@ -222,12 +222,12 @@
 
 .reports-page .report-list .home-report-info small.is-complete { color: var(--color-tertiary); }
 
-.knitting-report-editor .report-measurement-edit-row { grid-template-columns: minmax(68px,.8fr) minmax(62px,.8fr) minmax(62px,.8fr) 62px 44px; }
+.knitting-report-editor .report-measurement-edit-row { grid-template-columns: minmax(64px,.9fr) minmax(68px,1fr) 62px 44px; }
 
 @media (max-width: 767px) {
   .knitting-report-editor .report-inspector { border-radius: 16px 16px 0 0; box-shadow: 0 -2px 12px rgba(44,43,39,.1); }
   .knitting-report-editor .report-bottom-actions { box-shadow: 0 -1px 6px rgba(44,43,39,.06); }
-  .knitting-report-editor .report-measurement-edit-row { grid-template-columns: minmax(52px,.8fr) minmax(48px,.7fr) minmax(48px,.7fr) 52px 44px; }
+  .knitting-report-editor .report-measurement-edit-row { grid-template-columns: minmax(64px,.9fr) minmax(68px,1fr) 62px 44px; }
   body:has(.knitting-report-editor) .pwa-notice { bottom: calc(65px + max(18px, env(safe-area-inset-bottom))); }
 }
 
@@ -294,8 +294,10 @@ body:has(.knitting-report-editor) .pwa-dismiss-button:focus-visible { outline: 3
 .knitting-report-editor .report-form-card > header p { margin: 4px 0 0; color: var(--color-text-secondary); font-size: 12px; line-height: 1.5; }
 .knitting-report-editor .report-add-action { min-height: 44px; display: inline-flex; flex: 0 0 auto; align-items: center; justify-content: center; gap: 6px; padding: 0 9px; border: 1px solid transparent; border-radius: 8px; color: var(--color-primary); background: transparent; font: inherit; font-size: 13px; font-weight: 650; cursor: pointer; }
 .knitting-report-editor .report-add-action:hover:not(:disabled) { border-color: var(--color-border); background: var(--color-primary-soft); }
-.knitting-report-editor .report-yarn-card { display: grid; gap: 9px; padding: 12px; border: 1px solid var(--color-divider); border-radius: 12px; background: var(--color-surface-subtle); }
-.knitting-report-editor .report-yarn-card + .report-yarn-card { margin-top: 9px; }
+.knitting-report-editor .report-yarn-card,
+.knitting-report-editor .report-needle-card { display: grid; gap: 9px; padding: 12px; border: 1px solid var(--color-divider); border-radius: 12px; background: var(--color-surface-subtle); }
+.knitting-report-editor .report-yarn-card + .report-yarn-card,
+.knitting-report-editor .report-needle-card + .report-needle-card { margin-top: 9px; }
 .knitting-report-editor .report-entry-title { min-width: 0; display: flex; align-items: center; justify-content: space-between; gap: 8px; }
 .knitting-report-editor .report-entry-title strong { min-width: 0; overflow-wrap: anywhere; color: var(--color-text); font-size: 13px; }
 .knitting-report-editor .report-remove-action { width: 44px; min-width: 44px; height: 44px; display: grid; place-items: center; border: 1px solid transparent; border-radius: 8px; color: var(--color-danger); background: transparent; cursor: pointer; }
@@ -313,18 +315,63 @@ body:has(.knitting-report-editor) .pwa-dismiss-button:focus-visible { outline: 3
 .knitting-report-editor .report-accessory-row .report-fields { display: contents; }
 .knitting-report-editor .report-accessory-row .report-field { min-width: 0; }
 .knitting-report-editor .report-accessory-row .report-field > input { width: 100%; min-width: 0; }
-.knitting-report-editor .report-gauge-unit { width: min(100%, 220px); margin-bottom: 12px; }
+.knitting-report-editor .report-gauge-editor { min-width: 0; display: grid; gap: 12px; }
+.knitting-report-editor .report-gauge-editor > .report-field { max-width: 360px; }
 .knitting-report-editor .report-gauge-columns { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
 .knitting-report-editor .report-gauge-columns > section { min-width: 0; display: grid; gap: 8px; padding: 12px; border: 1px solid var(--color-divider); border-radius: 12px; background: var(--color-surface-subtle); }
 .knitting-report-editor .report-gauge-columns h3,
 .knitting-report-editor .report-measurements-heading h3 { margin: 0; color: var(--color-text); font-size: 14px; }
 .knitting-report-editor .report-gauge-columns > section > div { min-width: 0; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+.knitting-report-editor .report-gauge-columns h4 { margin: 4px 0 0; color: var(--color-text-secondary); font-size: 12px; font-weight: 600; }
+.knitting-report-editor .report-gauge-columns .report-gauge-size { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) 82px; }
+.knitting-report-editor .report-gauge-summary { margin: 0; padding: 9px 10px; border-radius: 8px; color: var(--color-primary); background: var(--color-primary-soft); font-size: 12px; line-height: 1.5; overflow-wrap: anywhere; }
 .knitting-report-editor .report-measurements-heading { display: flex; align-items: baseline; gap: 10px; margin: 17px 0 10px; }
 .knitting-report-editor .report-measurements-heading small { color: var(--color-text-muted); font-size: 12px; }
 .knitting-report-editor .report-measurement-editor { min-width: 0; }
-.knitting-report-editor .report-measurement-edit-row { grid-template-columns: minmax(64px, .75fr) minmax(68px, 1fr) minmax(68px, 1fr) 64px 44px; gap: 6px; }
+.knitting-report-editor .report-measurement-empty { margin: 0 0 7px; color: var(--color-text-secondary); font-size: 13px; line-height: 1.5; }
+.knitting-report-editor .report-measurement-edit-row { min-width: 0; grid-template-columns: minmax(84px, .95fr) minmax(80px, 1fr) 64px 44px; grid-template-areas: "label value unit delete"; gap: 6px; }
+.knitting-report-editor .report-measurement-label-display,
+.knitting-report-editor .report-measurement-label-input { grid-area: label; min-width: 0; }
+.knitting-report-editor .report-measurement-label-display { min-height: 44px; display: flex; align-items: center; gap: 3px; color: var(--color-text); font-size: 12px; line-height: 1.35; }
+.knitting-report-editor .report-measurement-label-display > span { min-width: 0; flex: 1; overflow-wrap: anywhere; }
+.knitting-report-editor .report-measurement-rename { width: 44px; height: 44px; flex: 0 0 44px; display: grid; place-items: center; border: 0; border-radius: 8px; color: var(--color-secondary); background: transparent; cursor: pointer; }
+.knitting-report-editor .report-measurement-rename:hover { color: var(--color-primary); background: var(--color-primary-soft); }
+.knitting-report-editor .report-measurement-label-input { width: 100%; min-width: 0; min-height: 44px; padding: 0 9px; border: 1px solid var(--color-border); border-radius: 8px; color: var(--color-text); background: var(--color-surface); font: inherit; font-size: 12px; }
+.knitting-report-editor .report-measurement-value { grid-area: value; }
+.knitting-report-editor .report-measurement-unit { grid-area: unit; }
+.knitting-report-editor .report-measurement-delete { grid-area: delete; }
 .knitting-report-editor .report-measurement-edit-row > input,
 .knitting-report-editor .report-measurement-edit-row > select { min-height: 44px; height: auto; padding: 0 9px; font-size: 12px; }
+.knitting-report-editor .report-measurement-backdrop { position: fixed; z-index: 130; inset: 0; display: grid; place-items: center; padding: 20px; background: rgba(24, 28, 24, .48); }
+.knitting-report-editor .report-measurement-dialog { width: min(100%, 560px); max-height: min(84dvh, 760px); display: flex; flex-direction: column; overflow: hidden; border: 1px solid var(--color-border); border-radius: 16px; background: var(--color-surface); box-shadow: 0 12px 34px rgba(24, 28, 24, .16); }
+.knitting-report-editor .report-measurement-dialog-header { min-height: 64px; display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 8px 16px; border-bottom: 1px solid var(--color-divider); }
+.knitting-report-editor .report-measurement-dialog-header h2 { min-width: 0; margin: 0; color: var(--color-text); font-size: 18px; overflow-wrap: anywhere; }
+.knitting-report-editor .report-measurement-dialog-header > button { width: 44px; height: 44px; flex: 0 0 44px; }
+.knitting-report-editor .report-measurement-close { color: var(--color-secondary); }
+.knitting-report-editor .report-measurement-close:hover { color: var(--color-primary); background: var(--color-primary-soft); }
+.knitting-report-editor .report-measurement-dialog-content { min-height: 0; display: grid; gap: 12px; overflow-x: hidden; overflow-y: auto; padding: 14px 16px; overscroll-behavior: contain; }
+.knitting-report-editor .report-measurement-choices { display: grid; gap: 8px; }
+.knitting-report-editor .report-measurement-choice-group { min-width: 0; display: grid; grid-template-columns: minmax(88px, .9fr) minmax(0, 1.8fr); align-items: center; gap: 8px; padding: 8px 10px; border: 1px solid var(--color-border); border-radius: 12px; background: var(--color-surface); }
+.knitting-report-editor .report-measurement-choice { min-width: 0; min-height: 44px; display: flex; align-items: center; gap: 10px; color: var(--color-text); font-size: 14px; cursor: pointer; }
+.knitting-report-editor .report-measurement-choice > input { width: 18px; height: 18px; flex: 0 0 18px; accent-color: var(--color-primary); }
+.knitting-report-editor .report-measurement-choice > span { min-width: 0; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.knitting-report-editor .report-measurement-choice > small { flex: 0 0 auto; color: var(--color-text-muted); font-size: 12px; }
+.knitting-report-editor .report-measurement-choice:has(> input:disabled) { color: var(--color-text-muted); cursor: not-allowed; }
+.knitting-report-editor .report-measurement-choice-fields { min-width: 0; display: grid; grid-template-columns: minmax(0, 1fr) 76px; gap: 8px; }
+.knitting-report-editor .report-measurement-custom-row label { min-width: 0; display: grid; gap: 5px; color: var(--color-text-secondary); font-size: 12px; }
+.knitting-report-editor .report-measurement-choice-fields input,
+.knitting-report-editor .report-measurement-choice-fields select,
+.knitting-report-editor .report-measurement-custom-row input,
+.knitting-report-editor .report-measurement-custom-row select { box-sizing: border-box; width: 100%; min-width: 0; min-height: 44px; padding: 0 10px; border: 1px solid var(--color-border); border-radius: 8px; color: var(--color-text); background: var(--color-surface); font: inherit; font-size: 13px; }
+.knitting-report-editor .report-measurement-custom-row input[aria-invalid="true"] { border-color: var(--color-danger); }
+.knitting-report-editor .report-measurement-custom-list { display: grid; gap: 9px; padding: 8px 0 2px; }
+.knitting-report-editor .report-measurement-custom-row { min-width: 0; display: grid; grid-template-columns: minmax(100px, 1.2fr) minmax(80px, 1fr) 78px 44px; align-items: end; gap: 7px; }
+.knitting-report-editor .report-measurement-custom-row > button { width: 44px; min-height: 44px; }
+.knitting-report-editor .report-measurement-dialog-actions { min-height: 64px; display: flex; justify-content: flex-end; gap: 8px; padding: 10px 16px; border-top: 1px solid var(--color-divider); background: var(--color-surface); }
+.knitting-report-editor .report-measurement-dialog-actions > button { min-width: 96px; min-height: 44px; border-radius: 8px; }
+.knitting-report-editor .report-measurement-dialog-actions > .primary-button { border: 1px solid var(--color-primary); color: var(--color-surface); background: var(--color-primary); }
+.knitting-report-editor .report-measurement-dialog-actions > .primary-button:hover:not(:disabled) { background: var(--color-primary-hover); }
+.knitting-report-editor .report-measurement-dialog-actions > .primary-button:disabled { opacity: .5; cursor: not-allowed; }
 .knitting-report-editor .report-form-card .report-add-button { min-height: 44px; margin-top: 3px; }
 .knitting-report-editor .report-notes-photos > .report-field { margin-bottom: 13px; }
 .knitting-report-editor .report-photo-grid { grid-template-columns: repeat(auto-fill, minmax(132px, 1fr)); gap: 10px; }
@@ -355,9 +402,10 @@ body:has(.knitting-report-editor) .pwa-dismiss-button:focus-visible { outline: 3
 .knitting-report-editor .report-worktime-recent b { font-weight: 600; font-variant-numeric: tabular-nums; }
 .knitting-report-editor .report-worktime-open { min-height: 44px; display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-top: 3px; border-top: 1px solid var(--color-divider); color: var(--color-secondary); font-weight: 650; }
 .report-worktime-backdrop { position: fixed; z-index: 125; inset: 0; display: grid; place-items: center; padding: 24px; background: rgba(24, 28, 24, .48); }
-.report-worktime-dialog { width: min(100%, 840px); max-height: min(90dvh, 920px); display: flex; flex-direction: column; overflow: hidden; border: 1px solid var(--color-border); border-radius: 16px; background: var(--color-surface); box-shadow: 0 12px 38px rgba(24, 28, 24, .18); }
+.report-worktime-dialog { width: min(100%, 440px); max-height: min(84dvh, 760px); display: flex; flex-direction: column; overflow: hidden; border: 1px solid var(--color-border); border-radius: 16px; background: var(--color-surface); box-shadow: 0 12px 38px rgba(24, 28, 24, .18); }
 .report-worktime-dialog-header { min-height: 68px; display: flex; align-items: center; gap: 12px; padding: 10px 18px; border-bottom: 1px solid var(--color-divider); }
 .report-worktime-dialog-header > div { min-width: 0; flex: 1; }
+.report-worktime-dialog-header > h2 { min-width: 0; flex: 1; margin: 0; color: var(--color-text); font-size: 18px; overflow-wrap: anywhere; }
 .report-worktime-dialog-header small { color: var(--color-text-muted); font-size: 12px; }
 .report-worktime-dialog-header h2 { margin: 2px 0 0; color: var(--color-text); font-size: 18px; overflow-wrap: anywhere; }
 .report-worktime-back,
@@ -367,7 +415,7 @@ body:has(.knitting-report-editor) .pwa-dismiss-button:focus-visible { outline: 3
 .report-worktime-overview,
 .report-worktime-detail { min-height: 0; display: grid; align-content: start; gap: 12px; overflow: auto; padding: 16px; overscroll-behavior: contain; }
 .report-worktime-tabs { min-height: 44px; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 3px; padding: 3px; border-radius: 999px; background: var(--color-surface-subtle); }
-.report-worktime-tabs button { min-width: 0; min-height: 38px; border: 0; border-radius: 999px; color: var(--color-text-secondary); background: transparent; font: inherit; cursor: pointer; }
+.report-worktime-tabs button { min-width: 0; min-height: 44px; border: 0; border-radius: 999px; color: var(--color-text-secondary); background: transparent; font: inherit; cursor: pointer; }
 .report-worktime-tabs button.selected { color: var(--color-surface); background: var(--color-primary); }
 .report-worktime-total-card,
 .report-worktime-chart-card,
@@ -391,6 +439,9 @@ body:has(.knitting-report-editor) .pwa-dismiss-button:focus-visible { outline: 3
 .report-worktime-session-stats b { color: var(--color-text); font-size: 14px; overflow-wrap: anywhere; }
 .report-worktime-total-card > p,
 .report-worktime-unknown { margin: 0; color: var(--color-warning); font-size: 13px; }
+.report-worktime-add-button { min-height: 44px; display: inline-flex; align-items: center; justify-content: center; gap: 8px; padding: 0 13px; border: 1px solid var(--color-border); border-radius: 9px; color: var(--color-primary); background: var(--color-primary-soft); font: inherit; font-size: 13px; font-weight: 650; cursor: pointer; }
+.report-worktime-add-button:hover:not(:disabled) { border-color: var(--color-primary); }
+.report-worktime-add-button:disabled { opacity: .5; cursor: wait; }
 .report-worktime-chart-card > header,
 .report-worktime-days > header { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
 .report-worktime-chart-card h3,
@@ -398,7 +449,7 @@ body:has(.knitting-report-editor) .pwa-dismiss-button:focus-visible { outline: 3
 .report-worktime-session-list h3 { margin: 0; color: var(--color-text); font-size: 16px; }
 .report-worktime-chart-card > header > span,
 .report-worktime-days > header > span { color: var(--color-text-secondary); font-size: 12px; }
-.report-worktime-chart-card select { min-height: 40px; padding: 0 10px; border: 1px solid var(--color-border); border-radius: 8px; color: var(--color-text); background: var(--color-surface); }
+.report-worktime-chart-card select { min-height: 44px; padding: 0 10px; border: 1px solid var(--color-border); border-radius: 8px; color: var(--color-text); background: var(--color-surface); }
 .report-worktime-chart { min-width: 0; display: grid; grid-template-columns: repeat(var(--report-worktime-chart-count, 7), minmax(0, 1fr)); align-items: end; gap: 5px; min-height: 148px; }
 .report-worktime-bar-column { min-width: 0; display: grid; grid-template-rows: 20px minmax(0, 1fr) 30px; align-items: end; gap: 5px; text-align: center; }
 .report-worktime-bar-column > b { overflow: hidden; color: var(--color-text-secondary); font-size: 9px; font-weight: 500; text-overflow: clip; white-space: nowrap; }
@@ -437,6 +488,51 @@ body:has(.knitting-report-editor) .pwa-dismiss-button:focus-visible { outline: 3
 .report-worktime-save { border-color: var(--color-primary) !important; color: var(--color-surface); background: var(--color-primary); }
 .report-worktime-note > div > button:disabled { opacity: .5; cursor: wait; }
 .report-worktime-loading { min-height: 180px; display: grid; place-items: center; color: var(--color-text-secondary); }
+.worktime-record-add { min-height: 44px; display: inline-flex; align-items: center; justify-content: center; gap: 5px; padding: 0 8px; border: 0; border-radius: 9px; color: var(--color-primary); background: var(--color-primary-soft); font: inherit; font-size: 12px; font-weight: 650; white-space: nowrap; cursor: pointer; }
+.worktime-record-add:disabled { opacity: .5; cursor: wait; }
+.worktime-record-content { min-height: 0; display: grid; align-content: start; gap: 12px; overflow-x: hidden; overflow-y: auto; padding: 16px; overscroll-behavior: contain; }
+.worktime-record-total { display: grid; gap: 4px; padding: 12px 2px 16px; border-bottom: 1px solid var(--color-divider); }
+.worktime-record-total > span { color: var(--color-text-secondary); font-size: 13px; }
+.worktime-record-total > strong { color: var(--color-text); font-size: clamp(25px, 6vw, 32px); font-variant-numeric: tabular-nums; line-height: 1.2; }
+.worktime-record-form { display: grid; gap: 10px; padding: 14px; border: 1px solid var(--color-border); border-radius: 14px; background: var(--color-surface-subtle); }
+.worktime-record-form > header { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.worktime-record-form h3,
+.worktime-record-day-detail h4 { margin: 0; color: var(--color-text); font-size: 14px; }
+.worktime-record-form > header > button { width: 44px; height: 44px; flex: 0 0 44px; display: grid; place-items: center; border: 0; border-radius: 9px; color: var(--color-text-secondary); background: transparent; cursor: pointer; }
+.worktime-record-form label,
+.worktime-record-day-detail > label { min-width: 0; display: grid; gap: 5px; color: var(--color-text-secondary); font-size: 12px; }
+.worktime-record-form input,
+.worktime-record-form select { box-sizing: border-box; width: 100%; min-width: 0; min-height: 44px; padding: 0 11px; border: 1px solid var(--color-border); border-radius: 999px; color: var(--color-text); background: var(--color-surface); font: inherit; font-size: 13px; }
+.worktime-record-time-fields { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+.worktime-record-form > .report-worktime-save,
+.worktime-record-day-detail > .report-worktime-save { width: 100%; min-height: 44px; border: 1px solid var(--color-primary); border-radius: 999px; color: var(--color-surface); background: var(--color-primary); font: inherit; font-size: 13px; font-weight: 650; cursor: pointer; }
+.worktime-record-form > .report-worktime-save:disabled,
+.worktime-record-day-detail > .report-worktime-save:disabled { opacity: .5; cursor: wait; }
+.worktime-record-error { margin: 0; color: var(--color-danger); font-size: 12px; }
+.worktime-record-list-heading { min-height: 44px; display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.worktime-record-list-heading h3 { min-width: 0; margin: 0; color: var(--color-text); font-size: 14px; }
+.worktime-record-list-heading > button { min-height: 44px; display: inline-flex; align-items: center; justify-content: center; gap: 5px; padding: 0 8px; border: 1px solid var(--color-border); border-radius: 9px; color: var(--color-primary); background: var(--color-surface); font: inherit; font-size: 12px; white-space: nowrap; cursor: pointer; }
+.worktime-record-list-heading > button:disabled { opacity: .5; cursor: wait; }
+.worktime-record-days { min-width: 0; display: grid; padding: 0; margin: 0; list-style: none; }
+.worktime-record-days > li { min-width: 0; border-top: 1px solid var(--color-divider); }
+.worktime-record-day { width: 100%; min-width: 0; min-height: 54px; display: grid; grid-template-columns: minmax(0, 1fr) auto 20px; align-items: center; gap: 8px; padding: 5px 2px; border: 0; color: var(--color-text); background: transparent; text-align: left; font: inherit; cursor: pointer; }
+.worktime-record-day > span { min-width: 0; color: var(--color-text); font-size: 13px; overflow-wrap: anywhere; }
+.worktime-record-day > strong { color: var(--color-text-secondary); font-size: 13px; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.worktime-record-day > svg { color: var(--color-text-secondary); transition: transform .16s ease; }
+.worktime-record-days > li.expanded .worktime-record-day > svg { transform: rotate(180deg); }
+.worktime-record-day-detail { display: grid; gap: 10px; padding: 0 2px 14px; }
+.worktime-record-day-detail > ol { display: grid; gap: 0; padding: 0; margin: 0; list-style: none; }
+.worktime-record-day-detail > ol > li { min-width: 0; min-height: 44px; display: flex; align-items: center; justify-content: space-between; gap: 10px; border-top: 1px solid var(--color-divider); color: var(--color-text-secondary); font-size: 12px; }
+.worktime-record-day-detail > ol > li > span { min-width: 0; overflow-wrap: anywhere; }
+.worktime-record-day-detail > ol > li > strong { flex: 0 0 auto; color: var(--color-text); font-variant-numeric: tabular-nums; }
+.worktime-record-day-detail > p { margin: 0; color: var(--color-text-secondary); font-size: 12px; }
+.worktime-record-day-detail > .worktime-record-unknown-time { color: var(--color-warning); }
+.worktime-record-day-detail textarea { box-sizing: border-box; width: 100%; min-height: 76px; resize: vertical; padding: 9px; border: 1px solid var(--color-border); border-radius: 9px; color: var(--color-text); background: var(--color-surface); font: inherit; font-size: 13px; }
+.worktime-record-empty { margin: 0; padding: 18px 8px; color: var(--color-text-secondary); font-size: 13px; text-align: center; }
+.worktime-record-unknown { min-height: 48px; display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 0 4px; color: var(--color-text-secondary); font-size: 13px; }
+.worktime-record-unknown strong { color: var(--color-text); font-variant-numeric: tabular-nums; }
+.worktime-record-load-error { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 8px 14px; color: var(--color-danger); background: var(--color-danger-soft); font-size: 12px; }
+.worktime-record-load-error > button { min-height: 44px; padding: 0 10px; border: 1px solid var(--color-border); border-radius: 8px; color: var(--color-text); background: var(--color-surface); font: inherit; cursor: pointer; }
 .knitting-report-editor .report-worktime-card:focus-visible,
 .report-worktime-dialog :focus-visible { outline: 3px solid var(--color-focus-ring); outline-offset: 2px; }
 
@@ -458,22 +554,40 @@ body:has(.knitting-report-editor) .pwa-dismiss-button:focus-visible { outline: 3
   .knitting-report-editor .report-form-card h2 { font-size: 16px; }
   .knitting-report-editor .report-form-card .report-fields { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 9px; }
   .knitting-report-editor .report-form-card .report-field { font-size: 11px; }
+  .knitting-report-editor .report-measurement-edit-row { grid-template-columns: minmax(0, 1fr) 82px 44px; grid-template-areas: "label label label" "value unit delete"; gap: 4px; }
+  .knitting-report-editor .report-measurement-label-display { font-size: 13px; }
+  .knitting-report-editor .report-measurement-edit-row > input,
+  .knitting-report-editor .report-measurement-edit-row > select { padding: 0 8px; font-size: 12px; }
+  .knitting-report-editor .report-measurement-custom-row { grid-template-columns: minmax(0, 1fr) 76px 44px; }
+  .knitting-report-editor .report-measurement-custom-row > label:first-child { grid-column: 1 / -1; }
+  .knitting-report-editor .report-measurement-backdrop { place-items: end center; padding: 0; }
+  .knitting-report-editor .report-measurement-dialog { width: 100%; height: min(88dvh, 760px); max-height: 88dvh; border-right: 0; border-bottom: 0; border-left: 0; border-radius: 20px 20px 0 0; padding-bottom: env(safe-area-inset-bottom); }
+  .knitting-report-editor .report-measurement-dialog-header { min-height: 60px; padding: 8px 12px; }
+  .knitting-report-editor .report-measurement-dialog-header h2 { font-size: 16px; }
+  .knitting-report-editor .report-measurement-dialog-content { gap: 8px; padding: 10px 12px; }
+  .knitting-report-editor .report-measurement-choice-group { grid-template-columns: minmax(80px, .9fr) minmax(0, 1.8fr); gap: 6px; }
+  .knitting-report-editor .report-measurement-choice-fields { grid-template-columns: minmax(0, 1fr) 68px; gap: 6px; }
+  .knitting-report-editor .report-measurement-dialog-actions { min-height: 60px; padding: 8px 12px; }
   .knitting-report-editor .report-accessory-head,
   .knitting-report-editor .report-accessory-row { gap: 4px; padding-right: 5px; padding-left: 5px; }
   .knitting-report-editor .report-accessory-row .report-field input { font-size: 12px; }
   .knitting-report-editor .report-gauge-columns { gap: 7px; }
+  .knitting-report-editor .report-gauge-columns { grid-template-columns: minmax(0, 1fr); }
   .knitting-report-editor .report-gauge-columns > section { gap: 7px; padding: 9px; }
   .knitting-report-editor .report-gauge-columns h3 { font-size: 13px; }
   .knitting-report-editor .report-gauge-columns > section > div { grid-template-columns: minmax(0, 1fr); gap: 7px; }
-  .knitting-report-editor .report-measurement-edit-row { grid-template-columns: minmax(54px, .8fr) minmax(52px, 1fr) minmax(52px, 1fr) 56px 44px; gap: 4px; }
-  .knitting-report-editor .report-measurement-edit-row > input,
-  .knitting-report-editor .report-measurement-edit-row > select { padding: 0 5px; font-size: 11px; }
+  .knitting-report-editor .report-gauge-columns .report-gauge-counts { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .knitting-report-editor .report-gauge-columns .report-gauge-size { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) 74px; }
   .knitting-report-editor .report-photo-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .knitting-report-editor .report-worktime-card { padding: 14px; }
-  .report-worktime-backdrop { place-items: stretch; padding: 0; }
-  .report-worktime-dialog { width: 100%; height: 100dvh; max-height: 100dvh; border: 0; border-radius: 0; padding-top: env(safe-area-inset-top); padding-bottom: env(safe-area-inset-bottom); }
+  .report-worktime-backdrop { place-items: end center; padding: 0; }
+  .report-worktime-dialog { width: 100%; height: min(84dvh, 760px); max-height: min(84dvh, 760px); border-right: 0; border-bottom: 0; border-left: 0; border-radius: 20px 20px 0 0; padding-bottom: env(safe-area-inset-bottom); }
   .report-worktime-dialog-header { min-height: 60px; padding: 8px 12px; }
+  .report-worktime-dialog-header > h2 { font-size: 16px; }
   .report-worktime-dialog-header h2 { font-size: 16px; }
+  .worktime-record-content { gap: 8px; padding: 12px 16px 16px; }
+  .worktime-record-total { padding: 8px 2px 12px; }
+  .worktime-record-form { padding: 12px; }
   .report-worktime-overview,
   .report-worktime-detail { gap: 10px; padding: 12px; }
   .report-worktime-total-card,
@@ -501,7 +615,19 @@ body:has(.knitting-report-editor) .pwa-dismiss-button:focus-visible { outline: 3
   .knitting-report-editor .report-cover-card { grid-template-columns: 86px minmax(0, 1fr); }
   .knitting-report-editor .report-cover-copy { padding: 9px; }
   .knitting-report-editor .report-cover-fields { grid-template-columns: minmax(0, 1fr); }
-  .knitting-report-editor .report-measurement-edit-row { grid-template-columns: minmax(45px, .8fr) minmax(44px, 1fr) minmax(44px, 1fr) 49px 44px; gap: 3px; }
+  .knitting-report-editor .report-measurement-edit-row { grid-template-columns: minmax(0, 1fr) 76px 44px; gap: 3px; }
   .knitting-report-editor .report-measurement-edit-row > input,
   .knitting-report-editor .report-measurement-edit-row > select { padding: 0 3px; font-size: 10px; }
+}
+
+.knitting-report-editor .report-appbar-share,
+.knitting-report-editor .report-worktime-save { color: var(--color-primary-text); border-color: var(--color-primary); border-radius: 10px; background: var(--color-primary); }
+.knitting-report-editor .report-appbar-share:active:not(:disabled),
+.knitting-report-editor .report-worktime-save:active:not(:disabled) { color: #fff; background: var(--color-primary-pressed); }
+.knitting-report-editor .primary-button { color: var(--color-primary-text); border-radius: 10px; box-shadow: none; }
+.knitting-report-editor .modal-card { border-color: var(--color-border); border-radius: 16px; background: var(--color-surface); }
+@media (hover: hover) and (pointer: fine) {
+  .knitting-report-editor .report-appbar-share:hover:not(:disabled),
+  .knitting-report-editor .report-worktime-save:hover:not(:disabled),
+  .knitting-report-editor .primary-button:hover:not(:disabled) { color: #fff; background: var(--color-primary-hover); }
 }

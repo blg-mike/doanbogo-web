@@ -49,7 +49,7 @@ export default function ChartCreate() {
   return (
     <main className="chart-create-shell">
       <header className="chart-create-header">
-        <button className="chart-back" onClick={() => craft ? setCraft(null) : navigate('/')} aria-label={t("뒤로")}><ArrowLeft size={20} /></button>
+        <button className="chart-back" onClick={() => craft ? setCraft(null) : navigate('/projects')} aria-label={t("뒤로")}><ArrowLeft size={20} /></button>
         <strong>{t("차트 만들기")}</strong><span />
       </header>
       <section className="chart-create-content">

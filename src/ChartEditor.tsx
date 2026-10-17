@@ -530,13 +530,13 @@ export default function ChartEditor() {
   }
 
   if (!chart || chart.id !== id) return missing
-    ? <main className="chart-not-found"><h1>{t("차트를 찾을 수 없습니다")}</h1><button className="secondary-button" onClick={() => navigate('/')}>{t("워크스페이스로")}</button></main>
+    ? <main className="chart-not-found"><h1>{t("차트를 찾을 수 없습니다")}</h1><button className="secondary-button" onClick={() => navigate('/projects')}>{t("프로젝트")}</button></main>
     : <BrandLoading kind="chart" requestId={'chart-data:' + id} layout="screen" />
 
   return (
     <main className="chart-editor-shell">
       <header className="chart-editor-header">
-        <button className="chart-back" onClick={() => { const current = chartRef.current; if (current) void saveChart(current).then(() => navigate('/'), () => navigate('/')); else navigate('/') }} aria-label={t("워크스페이스로")}><ArrowLeft size={20} /><span>{t("워크스페이스")}</span></button>
+        <button className="chart-back" onClick={() => { const current = chartRef.current; if (current) void saveChart(current).then(() => navigate('/projects'), () => navigate('/projects')); else navigate('/projects') }} aria-label={t("프로젝트")}><ArrowLeft size={20} /><span>{t("프로젝트")}</span></button>
         <input className="chart-title-input" aria-label={t("차트 이름")} maxLength={120} value={chart.title} onChange={(event) => { chartRef.current = { ...chart, title: event.target.value }; setChart(chartRef.current) }} onBlur={(event) => updateTitle(event.currentTarget.value)} onKeyDown={(event) => { if (event.key === 'Enter') event.currentTarget.blur() }} />
         <button className="chart-icon-button" disabled={!past.length} onClick={undo} title={t("실행 취소")}><Undo2 size={17} /></button>
         <button className="chart-icon-button" disabled={!future.length} onClick={redo} title={t("다시 실행")}><Redo2 size={17} /></button>

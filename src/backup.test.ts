@@ -262,13 +262,16 @@ describe('portable workspace backup', () => {
     await saveDocumentWorkTimeNote(documentId, workDate, '소매를 완성함')
     const report: KnittingReport = {
       id: crypto.randomUUID(), documentId, title: '가디건 프로젝트', createdAt: Date.now(), updatedAt: Date.now(),
-      fields: { 'project.name': '가디건 프로젝트', 'project.status': '완성' },
+      fields: { 'project.name': '가디건 프로젝트', 'project.status': '완성', 'gauge.pattern': '꽈배기 1무늬', 'gauge.beforeStitches': '24', 'gauge.beforeRows': '16', 'gauge.beforeWidth': '8', 'gauge.beforeHeight': '5.5', 'gauge.beforeUnit': 'cm', 'gauge.afterWidth': '9', 'gauge.afterHeight': '6', 'gauge.afterUnit': 'inch' },
       representativePhoto: 'data:image/jpeg;base64,/9j/4AAQ',
       yarns: [{
         id: 'yarn-with-new-fields', photo: '', brand: '브랜드', product: '울', colorName: '오트밀', colorNumber: '03', lot: '', fiber: '', country: '',
         weightClass: '', recommendedNeedle: '', skeinWeight: '', skeinLength: '', retailer: '', purchaseLink: '', price: '', quantity: '',
         usedSkeins: '', usedWeight: '150', usedMeters: '', strandCount: '3', needleSizeMm: '5.0', memo: '', leftover: '',
-      }], needles: [], accessories: [],
+      }], needles: [
+        { id: 'needle-new', section: '소매', type: '대바늘', size: '6', sizeUnit: 'US', brand: '치아오구', cableLength: '80cm', memo: '' },
+        { id: 'needle-legacy', section: '몸판', type: '수입바늘', size: '3.5', cableLength: '', memo: '' },
+      ], accessories: [],
       measurements: [{ id: 'size-1', label: '기장', pattern: '54cm', finished: '57cm' }],
       modifications: [], finishedPhotos: [{ id: 'photo-1', label: '정면', dataUrl: 'data:image/jpeg;base64,/9j/4AAQ' }],
       workPhotos: [{ id: 'work-1', label: '소매 진행', dataUrl: 'data:image/jpeg;base64,/9j/4AAQ', uploadedAt: Date.now(), activityDate: '2026-10-01' }],
@@ -291,6 +294,10 @@ describe('portable workspace backup', () => {
     expect(restored.knittingReports.filter((item) => item.documentId === documentId)).toHaveLength(2)
     expect(restored.knittingReports).toContainEqual(expect.objectContaining({ title: report.title, representativePhoto: report.representativePhoto }))
     expect(restored.knittingReports.find((item) => item.id === report.id)?.yarns[0]).toMatchObject({ strandCount: '3', needleSizeMm: '5.0' })
+    expect(restored.knittingReports.find((item) => item.id === report.id)).toMatchObject({
+      fields: { 'gauge.pattern': '꽈배기 1무늬', 'gauge.beforeWidth': '8', 'gauge.beforeUnit': 'cm', 'gauge.afterHeight': '6', 'gauge.afterUnit': 'inch' },
+      needles: [{ id: 'needle-new', sizeUnit: 'US', brand: '치아오구' }, { id: 'needle-legacy', size: '3.5' }],
+    })
     expect(restored.documents.find((item) => item.id === documentId)).toMatchObject({ workTimeSessions: [session], workTimeNotes: { [workDate]: '소매를 완성함' } })
 
     const archiveEntries = unzipSync(new Uint8Array(await backup.arrayBuffer()))
@@ -305,12 +312,23 @@ describe('portable workspace backup', () => {
     expect(legacyRestored.knittingReports[0]).toMatchObject({ id: documentId, documentId, workPhotos: [] })
     expect(legacyRestored.documents.find((item) => item.id === documentId)).toMatchObject({ workTimeSessions: [], workTimeNotes: {} })
 
+    const invalidNeedleEntries = unzipSync(new Uint8Array(await backup.arrayBuffer()))
+    const invalidNeedleManifest = JSON.parse(strFromU8(invalidNeedleEntries['manifest.json'])) as { knittingReports: Record<string, unknown>[] }
+    const invalidNeedleReport = invalidNeedleManifest.knittingReports.find((item) => item.id === report.id)!
+    ;(invalidNeedleReport.needles as Record<string, unknown>[])[0].sizeUnit = 'us'
+    invalidNeedleEntries['manifest.json'] = strToU8(JSON.stringify(invalidNeedleManifest))
+    await expect(readWorkspaceBackup(new File([zipSync(invalidNeedleEntries, { level: 0 })], 'invalid-needle-notation.doanbogo'))).rejects.toThrow()
+
     await importWorkspaceData(restored)
     const imported = (await listDocuments('name')).find((item) => item.id !== documentId)
     expect(imported).toBeTruthy()
     expect(imported).toMatchObject({ workTimeSessions: [session], workTimeNotes: { [workDate]: '소매를 완성함' } })
     expect(await getKnittingReports(imported!.id)).toContainEqual(expect.objectContaining({ documentId: imported!.id, fields: report.fields, finishedPhotos: report.finishedPhotos, workPhotos: report.workPhotos }))
     expect(await getKnittingReports(imported!.id)).toContainEqual(expect.objectContaining({ yarns: [expect.objectContaining({ strandCount: '3', needleSizeMm: '5.0' })] }))
+    expect(await getKnittingReports(imported!.id)).toContainEqual(expect.objectContaining({
+      fields: expect.objectContaining({ 'gauge.beforeWidth': '8', 'gauge.afterUnit': 'inch' }),
+      needles: [expect.objectContaining({ sizeUnit: 'US', brand: '치아오구' }), expect.objectContaining({ size: '3.5' })],
+    }))
     await deleteDocument(documentId)
     await deleteDocument(imported!.id)
     expect(await getKnittingReport(documentId)).toBeUndefined()
@@ -370,7 +388,7 @@ describe('portable workspace backup', () => {
       pageNumber: 4,
       horizontalPosition: 0.32,
       verticalPosition: 0.72,
-      horizontalGuides: [{ id: 'h-1', position: 0.32, thickness: 36, linkedCounterId: patternCounter.id, name: patternCounter.name, color: patternCounter.color, chartRegion: { x: 0.1, y: 0.2, width: 0.8, height: 0.6, firstRow: 1, lastRow: 12, startCounterRow: 5, repeat: true, direction: 'top-to-bottom' }, focus: { enabled: true, strength: 'low', range: 1, scope: 'region', rowSpacing: 0.05, dimOpacity: 0.58, bandHeightRatio: 0.12 } }, { id: 'h-2', position: 0.68 }],
+      horizontalGuides: [{ id: 'h-1', position: 0.32, thickness: 36, linkedCounterId: patternCounter.id, name: patternCounter.name, color: patternCounter.color, chartRegion: { x: 0.1, y: 0.2, width: 0.8, height: 0.6, firstRow: 1, lastRow: 12, startCounterRow: 5, repeat: true, direction: 'top-to-bottom', rowRanges: Array.from({ length: 12 }, (_, index) => ({ x: 0.1 + index * 0.005, y: 0.2 + index * 0.04, width: 0.8 - index * 0.01, height: 0.03 })), analysisRotation: 90, autoFollow: true }, focus: { enabled: true, strength: 'low', range: 1, scope: 'region', rowSpacing: 0.05, dimOpacity: 0.58, bandHeightRatio: 0.12 } }, { id: 'h-2', position: 0.68 }],
       verticalGuides: [{ id: 'v-1', position: 0.72 }],
       regionHighlights: [
         { id: 'region-1', x: 0.15, y: 0.25, width: 0.32, height: 0.18, color: '#C85E4B', opacity: 0.3 },
@@ -455,6 +473,10 @@ describe('portable workspace backup', () => {
       colorworkGrid: { chartWidthCm: 2, chartHeightCm: 3, columns: 4, rows: 7, visible: true },
       annotations: [{ id: 'ink-1', type: 'line' }, { id: 'note-1', text: '앞판\n무늬 반복', boxWidth: 0.42, boxHeight: 0.18 }],
     })
+    const restoredChartRegion = restored.pageWork[0].horizontalGuides?.[0].chartRegion
+    expect(restoredChartRegion).toMatchObject({ analysisRotation: 90, autoFollow: true })
+    expect(restoredChartRegion?.rowRanges).toHaveLength(12)
+    expect(restoredChartRegion?.rowRanges?.[0]).toEqual({ x: 0.1, y: 0.2, width: 0.8, height: 0.03 })
     expect(restored.pageWork[0].colorworkGrid?.cells).toHaveLength(28)
     expect(restored.pageWork[0].colorworkGrid?.cells[0]).toEqual({ color: '#f1c40f', opacity: 0.25 })
     expect(restored.preferences).toContainEqual({ key: 'view', value: 'list' })
@@ -632,6 +654,8 @@ describe('portable workspace backup', () => {
       [{ id: 'h-1', position: 0.5, thickness: 37 }],
       [{ id: 'h-1', position: 0.5, focus: { enabled: true, strength: 'medium', range: 0, scope: 'page', rowSpacing: 0.03, dimOpacity: 0.81 } }],
       [{ id: 'h-1', position: 0.5, focus: { enabled: true, strength: 'medium', range: 0, scope: 'page', rowSpacing: 0.03, bandHeightRatio: 0.31 } }],
+      [{ id: 'h-1', position: 0.5, chartRegion: { x: 0.1, y: 0.2, width: 0.8, height: 0.6, firstRow: 1, lastRow: 2, startCounterRow: 1, repeat: false, direction: 'bottom-to-top', rowRanges: [{ x: 0.9, y: 0.2, width: 0.2, height: 0.1 }, { x: 0.1, y: 0.4, width: 0.6, height: 0.1 }] } }],
+      [{ id: 'h-1', position: 0.5, chartRegion: { x: 0.1, y: 0.2, width: 0.8, height: 0.6, firstRow: 1, lastRow: 2, startCounterRow: 1, repeat: false, direction: 'bottom-to-top', rowRanges: [{ x: 0.1, y: 0.2, width: 0.6, height: 0.1 }] } }],
     ]) {
       const manifest = {
         format: 'doanbogo', version: 3, exportedAt: Date.now(),

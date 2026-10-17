@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { PageRecord } from './types'
-import { compactPageThumbnails, completePageList, movePagesToThumbnailGroup, moveThumbnailRailItem, normalizeThumbnailGroups, normalizeThumbnailRailOrder, reconcileThumbnailRailOrder, removePagesFromThumbnailGroups, reorderThumbnailGroups, thumbnailPagesForDrag, visiblePageRange } from './pageManagement'
+import { compactPageThumbnails, completePageList, createThumbnailGroupFromPages, movePagesToThumbnailGroup, moveThumbnailRailItem, normalizeThumbnailGroups, normalizeThumbnailRailOrder, reconcileThumbnailRailOrder, removePagesFromThumbnailGroups, reorderThumbnailGroups, thumbnailPagesForDrag, visiblePageRange } from './pageManagement'
 
 describe('page thumbnails', () => {
   it('shows every page and supplies the default state for missing records', () => {
@@ -105,6 +105,41 @@ describe('page thumbnails', () => {
     expect(movePagesToThumbnailGroup(groups, [2, 3], 'a')).toEqual([
       { id: 'a', name: 'A', pageNumbers: [1, 2, 3] },
       { id: 'b', name: 'B', pageNumbers: [] },
+    ])
+  })
+
+  it('creates a selected-page group at the earliest selected rail position and removes emptied groups', () => {
+    const groups = [
+      { id: 'a', name: 'A', pageNumbers: [3, 4] },
+      { id: 'b', name: 'B', pageNumbers: [7] },
+    ]
+    const order = [
+      { type: 'page' as const, pageNumber: 1 },
+      { type: 'page' as const, pageNumber: 2 },
+      { type: 'group' as const, groupId: 'a' },
+      { type: 'page' as const, pageNumber: 5 },
+      { type: 'page' as const, pageNumber: 6 },
+      { type: 'group' as const, groupId: 'b' },
+      { type: 'page' as const, pageNumber: 8 },
+    ]
+
+    const result = createThumbnailGroupFromPages(groups, order, [7, 5, 4], { id: 'new', name: '새 그룹', pageNumbers: [] }, 8)
+
+    expect(result.groups).toEqual([
+      { id: 'a', name: 'A', pageNumbers: [3] },
+      { id: 'new', name: '새 그룹', pageNumbers: [4, 5, 7] },
+    ])
+    expect(result.railOrder.map((item) => item.type === 'page' ? 'page:' + item.pageNumber : 'group:' + item.groupId)).toEqual([
+      'page:1', 'page:2', 'group:new', 'group:a', 'page:6', 'page:8',
+    ])
+  })
+
+  it('places a new group where a selected group was when its last page moves', () => {
+    const groups = [{ id: 'a', name: 'A', pageNumbers: [2] }]
+    const result = createThumbnailGroupFromPages(groups, undefined, [2], { id: 'new', name: '새 그룹', pageNumbers: [] }, 3)
+    expect(result.groups).toEqual([{ id: 'new', name: '새 그룹', pageNumbers: [2] }])
+    expect(result.railOrder.map((item) => item.type === 'page' ? 'page:' + item.pageNumber : 'group:' + item.groupId)).toEqual([
+      'page:1', 'group:new', 'page:3',
     ])
   })
 

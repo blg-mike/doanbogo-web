@@ -17,6 +17,7 @@ export function createDefaultPrimaryProgressGuide(position: number): ProgressGui
     role: 'primary',
     xStartRatio: 0,
     xEndRatio: 1,
+    opacity: 0.4,
     thickness: DEFAULT_PROGRESS_LINE_THICKNESS,
   }
 }

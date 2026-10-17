@@ -111,7 +111,7 @@ export const fi: Record<string, string> = {
   "작성 중": "Kesken",
   "계속 작성": "Jatka muokkausta",
   "뜨개보고서": "Neuleraportti",
-  "도안보고  ·  뜨개보고서": "DoanBogo  ·  Neuleraportti",
+  "도안보고  ·  뜨개보고서": "KnitPeek  ·  Neuleraportti",
   "작성일  ": "Luotu  ",
   "작성한 보고서 내용이 없습니다.": "Raportissa ei ole vielä sisältöä.",
   "선택을 바꾸면 편집한 문구가 새 문구로 바뀝니다. 계속할까요?": "Valinnan muuttaminen korvaa muokatun tekstin. Jatketaanko?",

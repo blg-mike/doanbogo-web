@@ -1,10 +1,8 @@
-import { formatDate, formatNumber, languageNames, reloadLanguagePreference, t, translateMessage, type LocaleKey, useLanguagePreference } from './locales/index'
+import { formatDate, formatNumber, t, translateMessage, type LocaleKey, useLocale } from './locales/index'
 import { useCallback, useEffect, useRef, useState, type FormEvent, type ReactNode } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
-import { BookOpen, Camera, Check, ChevronDown, ChevronUp, FilePlus2, FolderPlus, Grid2X2, Grid3X3, Images, List, MoreHorizontal, Search, Settings, SlidersHorizontal, X } from 'lucide-react'
-import yyLogo from './assets/yy-logo.png'
-import { createWorkspaceBackup, readWorkspaceBackup } from './backup'
-import { addDocument, appendPhotoPages, createPhotoFolder, duplicateChart, duplicateDocument, getDocument, getHomeProject, getPhotoPage, getPreference, getStorageMode, importWorkspaceData, isQuotaError, listCharts, listDocuments, listHomeProjects, markChartOpened, renameDocument, saveChart, saveHomeProject, savePreference, storageEstimate, subscribeStorageMode, updateTags, type StorageMode } from './storage'
+import { BookOpen, Camera, Check, ChevronDown, ChevronUp, FilePlus2, FolderPlus, Grid2X2, Grid3X3, Images, List, MoreHorizontal, Search, SlidersHorizontal, X } from 'lucide-react'
+import { addDocument, appendPhotoPages, createPhotoFolder, duplicateChart, duplicateDocument, getDocument, getHomeProject, getPhotoPage, getPreference, getStorageMode, isQuotaError, listCharts, listDocuments, listHomeProjects, markChartOpened, renameDocument, saveChart, saveHomeProject, savePreference, subscribeStorageMode, updateTags, type StorageMode } from './storage'
 import { inspectPdf, pdfErrorMessage } from './pdf'
 import { PhotoPreparationError, preparePhotoFile, sortPhotoFiles, type PhotoPreparationErrorCode } from './photoImages'
 import { chartSvg } from './charts'
@@ -81,12 +79,11 @@ function Modal({ title, onClose, children }: { title: string; onClose: () => voi
 export default function Workspace() {
   const navigate = useNavigate()
   const [searchParams, setSearchParams] = useSearchParams()
-  const { preference: languagePreference, setPreference: setLanguagePreference } = useLanguagePreference()
+  useLocale()
   const fileInput = useRef<HTMLInputElement>(null)
   const photoCameraInput = useRef<HTMLInputElement>(null)
   const photoFilesInput = useRef<HTMLInputElement>(null)
   const photoFolderInput = useRef<HTMLInputElement>(null)
-  const backupInput = useRef<HTMLInputElement>(null)
   const importingRef = useRef(false)
   const [documents, setDocuments] = useState<LibraryItem[]>([])
   const [query, setQuery] = useState('')
@@ -97,7 +94,7 @@ export default function Workspace() {
   const [chartTitleDraft, setChartTitleDraft] = useState('')
   const [fileNameDraft, setFileNameDraft] = useState('')
   const [renameError, setRenameError] = useState('')
-  const [dialog, setDialog] = useState<'menu' | 'rename' | 'tags' | 'delete' | 'photos' | 'chart-menu' | 'chart-delete' | 'chart-rename' | 'settings' | null>(null)
+  const [dialog, setDialog] = useState<'menu' | 'rename' | 'tags' | 'delete' | 'photos' | 'chart-menu' | 'chart-delete' | 'chart-rename' | null>(null)
   const [photoMode, setPhotoMode] = useState<'new' | 'append'>('new')
   const [photoFolderName, setPhotoFolderName] = useState('')
   const [photoDraft, setPhotoDraft] = useState<PhotoDraftItem[]>([])
@@ -107,7 +104,6 @@ export default function Workspace() {
   const [tagDraft, setTagDraft] = useState('')
   const [loading, setLoading] = useState(false)
   const [notice, setNotice] = useState('')
-  const [estimate, setEstimate] = useState<{ usage?: number; quota?: number } | null>(null)
   const [storageMode, setStorageMode] = useState<StorageMode>('checking')
   const [undoProject, setUndoProject] = useState<HomeProject | null>(null)
   const collectionMode = searchParams.get('view') === 'archived' || searchParams.get('view') === 'trash' ? searchParams.get('view') : 'active'
@@ -145,12 +141,14 @@ export default function Workspace() {
   }, [])
   useEffect(() => {
     const add = searchParams.get('add')
-    const settings = searchParams.get('settings')
-    if (add || settings) {
+    if (add) {
       setSearchParams({}, { replace: true })
       if (add === 'pdf') window.setTimeout(() => fileInput.current?.click(), 80)
       else if (add === 'photos') startPhotoFolder()
-      else if (settings) void showSettings()
+    } else if (searchParams.has('settings')) {
+      const next = new URLSearchParams(searchParams)
+      next.delete('settings')
+      setSearchParams(next, { replace: true })
     }
   }, [searchParams, setSearchParams])
   useEffect(() => {
@@ -380,70 +378,18 @@ export default function Workspace() {
     window.setTimeout(() => URL.revokeObjectURL(url), 1000)
   }
 
-  async function showSettings() {
-    setEstimate(await storageEstimate())
-    setDialog('settings')
-  }
-
-  async function exportWorkspace() {
-    try {
-      const blob = await createWorkspaceBackup()
-      const url = URL.createObjectURL(blob)
-      const anchor = window.document.createElement('a')
-      anchor.href = url
-      anchor.download = '도안보고-작업백업-' + new Date().toISOString().slice(0, 10) + '.doanbogo'
-      anchor.click()
-      window.setTimeout(() => URL.revokeObjectURL(url), 1000)
-      setDialog(null)
-      setNotice(t('작업 파일을 내보냈습니다.'))
-    } catch (error) {
-      setNotice(error instanceof Error ? translateMessage(error.message) : t('작업 파일을 내보내지 못했습니다.'))
-    }
-  }
-
-  async function importWorkspace(file: File | undefined) {
-    if (!file || importingRef.current) return
-    importingRef.current = true
-    setLoading(true)
-    setNotice('')
-    try {
-      const data = await readWorkspaceBackup(file)
-      const importedCount = await importWorkspaceData(data)
-      await reloadLanguagePreference()
-      const [savedSort, savedView] = await Promise.all([getPreference('sort'), getPreference('view')])
-      if (savedSort === 'recent' || savedSort === 'name' || savedSort === 'upload') setSort(savedSort)
-      if (savedView === 'cover' || savedView === 'list') setView(savedView)
-      await refresh()
-      setDialog(null)
-      setNotice(t('도안 {count}개를 가져왔습니다.', { count: formatNumber(importedCount) }))
-    } catch (error) {
-      setNotice(isQuotaError(error) ? t('저장 공간이 부족해 작업 파일을 가져오지 못했습니다. 일부 자료를 삭제하거나 임시 저장을 사용할 수 있는 portable 실행 파일을 이용해 주세요.') : error instanceof Error ? translateMessage(error.message) : t('작업 파일을 가져오지 못했습니다.'))
-    } finally {
-      setLoading(false)
-      importingRef.current = false
-      if (backupInput.current) backupInput.current.value = ''
-    }
-  }
-
   return (
     <div className="workspace-app-frame"><AppNavigation active="projects" /><main className="workspace-shell">
-      <header className="topbar">
-        <a className="brand" href="#/" aria-label={t("도안보고 홈")}><span className="brand-lockup"><img src={yyLogo} alt={t("도안보고 로고")} /><small>{t("YY공동제작")}</small></span><strong>{t("도안보고")}</strong></a>
-        <div className="topbar-actions">
-          <label className="search-box"><Search size={18} /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder={t("이름 또는 태그 검색")} aria-label={t("이름 또는 태그 검색")} />{query && <button type="button" className="search-clear" aria-label={t("검색어 지우기")} onClick={() => setQuery('')}><X size={15} /></button>}</label>
-          <button className="icon-button" aria-label={t("설정")} onClick={() => void showSettings()}><Settings size={19} /></button>
-        </div>
-      </header>
       <section className="workspace-content">
         <div className="welcome-row"><div><p className="eyebrow">{t('프로젝트')}</p><h1>{collectionMode === 'trash' ? t('휴지통') : collectionMode === 'archived' ? t('보관한 프로젝트') : t('내 프로젝트')}</h1><p className="welcome-copy">{t("도안과 차트, 작업 상태를 한곳에서 관리해요.")}</p></div><div className="document-count">{formatNumber(documents.length)}<span>{t("개 프로젝트")}</span></div></div>
+        <div className="collection-search-row"><label className="search-box"><Search size={18} /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder={t("이름 또는 태그 검색")} aria-label={t("이름 또는 태그 검색")} />{query && <button type="button" className="search-clear" aria-label={t("검색어 지우기")} onClick={() => setQuery('')}><X size={15} /></button>}</label></div>
         <nav className="project-filter-tabs" aria-label={t("프로젝트 보기")}><button className={collectionMode === 'active' ? 'active' : ''} onClick={() => setSearchParams({})}>{t("전체")}</button><button className={collectionMode === 'archived' ? 'active' : ''} onClick={() => setSearchParams({ view: 'archived' })}>{t("보관")}</button><button className={collectionMode === 'trash' ? 'active' : ''} onClick={() => setSearchParams({ view: 'trash' })}>{t("휴지통")}</button></nav>
         <div className="toolbar">
           <input ref={fileInput} type="file" accept="application/pdf,.pdf" multiple hidden onChange={(event) => void importFiles(event.currentTarget.files)} />
           <input ref={photoCameraInput} type="file" accept="image/*" capture="environment" hidden onChange={(event) => { addPhotoFiles(event.currentTarget.files); event.currentTarget.value = '' }} />
           <input ref={photoFilesInput} type="file" accept="image/*" multiple hidden onChange={(event) => { addPhotoFiles(event.currentTarget.files); event.currentTarget.value = '' }} />
           <input ref={photoFolderInput} type="file" accept="image/*" multiple hidden onChange={(event) => { addPhotoFiles(event.currentTarget.files); event.currentTarget.value = '' }} />
-          <input ref={backupInput} type="file" accept=".doanbogo,application/zip" hidden onChange={(event) => void importWorkspace(event.currentTarget.files?.[0])} />
-          <button className="primary-button" onClick={() => fileInput.current?.click()} disabled={loading}><FilePlus2 size={18} />{loading ? t('추가 중…') : t('PDF 추가')}</button>
+          <button className="primary-button workspace-pdf-add-button" onClick={() => fileInput.current?.click()} disabled={loading}><FilePlus2 size={18} />{loading ? t('추가 중…') : t('PDF 추가')}</button>
           <button className="secondary-button" onClick={startPhotoFolder} disabled={loading}><Images size={18} />{t("사진 추가")}</button>
           <label className="sort-select"><SlidersHorizontal size={16} /><span className="sr-only">{t("정렬")}</span><select value={sort} onChange={(event) => void changeSort(event.target.value as SortMode)}>{Object.entries(sortLabels).map(([value, label]) => <option key={value} value={value}>{t(label)}</option>)}</select></label>
           <div className="view-toggle" aria-label={t("보기 방식")}><button className={view === 'cover' ? 'active' : ''} aria-label={t("표지 보기")} onClick={() => void changeView('cover')}><Grid2X2 size={17} /></button><button className={view === 'list' ? 'active' : ''} aria-label={t("목록 보기")} onClick={() => void changeView('list')}><List size={18} /></button></div>
@@ -479,8 +425,7 @@ export default function Workspace() {
           </section>
         )}
         <footer className="workspace-footer">
-          <span>{storageMode === 'persistent' ? t('PDF, 사진과 차트가 이 브라우저에 자동 저장됩니다.') : storageMode === 'temporary' ? t('임시 저장 중 · 종료 전에 작업 파일로 저장하세요.') : t('저장 방식을 확인하고 있습니다…')}</span>
-          {storageMode === 'temporary' && <button className="text-control" onClick={() => void exportWorkspace()}>{t("작업 파일 저장")}</button>}
+          <span>{storageMode === 'persistent' ? t('PDF, 사진과 차트가 이 브라우저에 자동 저장됩니다.') : storageMode === 'temporary' ? t('브라우저 종료 시 작업 내용이 사라질 수 있습니다.') : t('저장 방식을 확인하고 있습니다…')}</span>
         </footer>
       </section>
 
@@ -512,12 +457,6 @@ export default function Workspace() {
       {dialog === 'chart-delete' && selectedChart && <Modal title={t("차트를 휴지통으로 이동할까요?")} onClose={() => setDialog(null)}><div className="modal-form"><p className="modal-copy"><strong>{selectedChart.title}</strong>{t("과 편집 내용은 보존되며 휴지통에서 복구할 수 있습니다.")}</p><div className="modal-actions"><button className="secondary-button" onClick={() => setDialog('chart-menu')}>{t("취소")}</button><button className="danger-button" onClick={() => void getHomeProject('chart', selectedChart.id).then((project) => { if (!project) return; const trashed = { ...project, deletedAt: Date.now() }; setUndoProject(trashed); return saveHomeProject(trashed) }).then(() => { setNotice(t('차트를 휴지통으로 옮겼습니다.')); setDialog(null); setSelectedChart(null); void refresh() })}>{t("휴지통으로")}</button></div></div></Modal>}
       {dialog === 'tags' && selected && <Modal title={t("태그 편집")} onClose={() => setDialog(null)}><form className="modal-form" onSubmit={(event) => void saveTagDraft(event)}><label htmlFor="tag-draft">{t("쉼표로 구분해 입력")}</label><input id="tag-draft" autoFocus value={tagDraft} onChange={(event) => setTagDraft(event.target.value)} placeholder={t("예: 스웨터, 겨울, 선물")} /><div className="modal-actions"><button type="button" className="secondary-button" onClick={() => setDialog('menu')}>{t("취소")}</button><button className="primary-button" type="submit"><Check size={17} />{t("저장")}</button></div></form></Modal>}
       {dialog === 'delete' && selected && <Modal title={t("프로젝트를 휴지통으로 이동할까요?")} onClose={() => setDialog(null)}><div className="modal-form"><p className="modal-copy"><strong>{selected.fileName}</strong>{t("과 작업 기록·보고서를 보존합니다. 휴지통에서 언제든 복구할 수 있어요.")}</p><div className="modal-actions"><button className="secondary-button" onClick={() => setDialog('menu')}>{t("취소")}</button><button className="danger-button" onClick={() => void getHomeProject('document', selected.id).then((project) => { if (!project) return; const trashed = { ...project, deletedAt: Date.now() }; setUndoProject(trashed); return saveHomeProject(trashed) }).then(() => { setNotice(t('프로젝트를 휴지통으로 옮겼습니다.')); setDialog(null); setSelected(null); void refresh() })}>{t("휴지통으로")}</button></div></div></Modal>}
-      {dialog === 'settings' && <Modal title={t("설정")} onClose={() => setDialog(null)}><div className="settings-copy">
-        <label className="settings-language-control" htmlFor="language-preference">{t('앱 언어')}<select id="language-preference" value={languagePreference} onChange={(event) => void setLanguagePreference(event.currentTarget.value as 'auto' | keyof typeof languageNames)}><option value="auto">{t('기기 언어 사용')}</option>{Object.entries(languageNames).map(([code, name]) => <option key={code} value={code}>{name}</option>)}</select></label>
-        <p>{storageMode === 'persistent' ? t('PDF, 사진, 차트와 페이지 설정이 이 브라우저에 자동 저장됩니다. 다른 브라우저나 기기로 옮기려면 작업 파일을 내보내세요.') : storageMode === 'temporary' ? t('이 브라우저에서는 자동 저장을 사용할 수 없습니다. 작업 파일을 내보내야 창을 닫은 뒤에도 자료를 복원할 수 있습니다.') : t('브라우저의 자동 저장 가능 여부를 확인하고 있습니다.')}</p>
-        {storageMode === 'persistent' && (estimate?.quota ? <p className="storage-estimate">{t("저장 한도 추정: ")}{formatSize(estimate.usage ?? 0)}{t(" 사용 / ")}{formatSize(estimate.quota)}{t(" 한도")}</p> : <p className="storage-estimate">{t("브라우저가 저장 공간 추정치를 제공하지 않습니다.")}</p>)}
-        <div className="backup-actions"><button className="secondary-button" onClick={() => void exportWorkspace()}>{t("작업 파일 내보내기")}</button><button className="secondary-button" disabled={loading} onClick={() => backupInput.current?.click()}>{t("작업 파일 가져오기")}</button></div>
-      </div></Modal>}
     </main></div>
   )
 }

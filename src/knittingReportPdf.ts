@@ -2,6 +2,7 @@ import { makeRasterPdf } from './charts'
 import { formatDate, formatNumber, t, translateMessage } from './locales'
 import type { LocaleKey } from './locales'
 import type { DocumentWorkTimeDay, KnittingReport, ReportAccessory, ReportMeasurement, ReportModification, ReportNeedle, ReportYarn } from './types'
+import { formatNeedleSize, getGaugeMeasurement } from './reportFormatting'
 import { formatWorkTime, formatWorkTimeHoursMinutes } from './workTime'
 
 const PAGE_WIDTH = 1240
@@ -260,20 +261,26 @@ export async function exportKnittingReportPdf(report: KnittingReport, totalWorkT
     for (const [index, yarn] of printableYarns.entries()) await drawCard(yarn.product || yarn.brand || t('실') + ' ' + formatNumber(index + 1), yarn.photo, yarnFields.map(([key, label]) => [label, reportFieldValue(key, String(yarn[key] ?? '')) ?? ''] as [string, string]))
   }
 
-  const needleFields: [keyof ReportNeedle, string][] = [['section', '구간'], ['type', '바늘 종류'], ['size', '사이즈'], ['cableLength', '케이블 길이'], ['memo', '메모']]
-  const printableNeedles = report.needles.filter((row) => needleFields.some(([key]) => row[key].trim()))
+  const needleFields: [keyof ReportNeedle, string][] = [['section', '사용 부위'], ['type', '바늘 종류'], ['brand', '브랜드'], ['size', '사이즈'], ['cableLength', '케이블 길이'], ['memo', '메모']]
+  const printableNeedles = report.needles.filter((row) => needleFields.some(([key]) => String(row[key] ?? '').trim()))
   const accessoryFields: [keyof ReportAccessory, string][] = [['type', '종류'], ['size', '크기'], ['quantity', '수량'], ['detail', '상세']]
   const printableAccessories = report.accessories.filter((row) => row.photo || accessoryFields.some(([key]) => row[key].trim()))
   if (printableNeedles.length || printableAccessories.length) {
     drawSection('04', '바늘 · 부자재')
-    for (const [index, row] of printableNeedles.entries()) await drawCard(row.section || t('바늘') + ' ' + (index + 1), '', needleFields.map(([key, label]) => [label, row[key]]))
+    for (const [index, row] of printableNeedles.entries()) await drawCard(row.section || t('바늘') + ' ' + (index + 1), '', needleFields.map(([key, label]) => [label, key === 'size' ? formatNeedleSize(row) : String(row[key] ?? '')]))
     for (const [index, row] of printableAccessories.entries()) await drawCard(row.type || t('부자재') + ' ' + (index + 1), row.photo, accessoryFields.map(([key, label]) => [label, row[key]]))
   }
 
+  const formatGaugeSide = (side: 'before' | 'after') => {
+    const gauge = getGaugeMeasurement(values, side)
+    const counts = [gauge.stitches && formatNumericText(gauge.stitches) + t('코'), gauge.rows && formatNumericText(gauge.rows) + t('단')].filter(Boolean).join(' × ')
+    const size = gauge.width || gauge.height ? `${formatNumericText(gauge.width) || '—'} × ${formatNumericText(gauge.height) || '—'} ${gauge.unit === 'inch' ? t('inch') : 'cm'}` : ''
+    return [counts, size].filter(Boolean).join(' / ')
+  }
   const gaugePairs: [string, string][] = [
-    ['측정 기준', values['gauge.unit']], ['도안 게이지', [values['gauge.patternStitches'] && formatNumericText(values['gauge.patternStitches']) + t('코'), values['gauge.patternRows'] && formatNumericText(values['gauge.patternRows']) + t('단')].filter(Boolean).join(' × ')],
-    ['세탁 전 게이지', [values['gauge.beforeStitches'] && formatNumericText(values['gauge.beforeStitches']) + t('코'), values['gauge.beforeRows'] && formatNumericText(values['gauge.beforeRows']) + t('단')].filter(Boolean).join(' × ')],
-    ['세탁 후 게이지', [values['gauge.afterStitches'] && formatNumericText(values['gauge.afterStitches']) + t('코'), values['gauge.afterRows'] && formatNumericText(values['gauge.afterRows']) + t('단')].filter(Boolean).join(' × ')],
+    ['측정 기준', values['gauge.unit']], ['무늬', values['gauge.pattern']], ['도안 게이지', [values['gauge.patternStitches'] && formatNumericText(values['gauge.patternStitches']) + t('코'), values['gauge.patternRows'] && formatNumericText(values['gauge.patternRows']) + t('단')].filter(Boolean).join(' × ')],
+    ['세탁 전 게이지', formatGaugeSide('before')],
+    ['세탁 후 게이지', formatGaugeSide('after')],
     ['손땀', values['gauge.tension'] ? t((['많이 널손', '널손', '보통', '쫀손', '많이 쫀손'][Number(values['gauge.tension']) - 1] ?? '보통') as LocaleKey) : ''], ['메모', values['gauge.memo']],
   ]
   if (nonEmpty(gaugePairs)) {

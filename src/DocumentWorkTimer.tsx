@@ -2,16 +2,19 @@ import { Pause, Play } from 'lucide-react'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { t } from './locales'
-import { addDocumentWorkSessions } from './storage'
+import { addDocumentWorkSessions, addDocumentWorkTime } from './storage'
 import type { DocumentWorkTimeDay, DocumentWorkTimeSession } from './types'
-import { formatWorkTime, localWorkDateKey, splitWorkTimeSession } from './workTime'
+import { formatWorkTime, localWorkDateKey, persistedWorkTimeBase, splitWorkTimeSession } from './workTime'
+import WorkTimeRecordPanel from './WorkTimeRecordPanel'
 
-export type DocumentTimerClock = { sessionId: string; elapsedNow: () => number; todayElapsedNow: () => number; isRunning: () => boolean; startIfNotStartedToday: () => boolean; pauseAndSave: () => Promise<void> }
+export type DocumentTimerClock = { sessionId: string; elapsedNow: () => number; todayElapsedNow: () => number; isRunning: () => boolean; startIfNotStartedToday: () => boolean; pauseAndSave: () => Promise<void>; addWorkTime: (workDate: string, elapsedMs: number) => Promise<DocumentWorkTimeTotals> }
 
 export type DocumentWorkTimeTotals = { totalWorkTimeMs: number; todayWorkDate: string; todayWorkTimeMs: number; workTimeDays: DocumentWorkTimeDay[] }
 
 type Props = {
   documentId: string
+  initialTotalWorkTimeMs: number
+  initialWorkTimeDays: DocumentWorkTimeDay[]
   initialTodayWorkDate?: string
   initialTodayWorkTimeMs?: number
   portalTarget: HTMLElement | null
@@ -22,7 +25,7 @@ type Props = {
   onClockChange: (clock: DocumentTimerClock | null) => void
 }
 
-export default function DocumentWorkTimer({ documentId, initialTodayWorkDate, initialTodayWorkTimeMs = 0, portalTarget, onWorkTimeChange, onTodayWorkTimeChange, onUnsavedChange, onSavingChange, onClockChange }: Props) {
+export default function DocumentWorkTimer({ documentId, initialTotalWorkTimeMs, initialWorkTimeDays, initialTodayWorkDate, initialTodayWorkTimeMs = 0, portalTarget, onWorkTimeChange, onTodayWorkTimeChange, onUnsavedChange, onSavingChange, onClockChange }: Props) {
   const [sessionId] = useState(() => crypto.randomUUID())
   const elapsedBaseRef = useRef(0)
   const initialTodayBase = initialTodayWorkDate === localWorkDateKey() ? initialTodayWorkTimeMs : 0
@@ -34,6 +37,9 @@ export default function DocumentWorkTimer({ documentId, initialTodayWorkDate, in
   const workSessionStartedAtRef = useRef<number | null>(null)
   const lastAutoSavedBoundaryRef = useRef<number | null>(null)
   const pendingSessionsRef = useRef<DocumentWorkTimeSession[]>([])
+  const savedSessionIdsRef = useRef(new Set<string>())
+  const savedSessionTimeByDateRef = useRef(new Map<string, number>())
+  const manualWorkTimePromiseRef = useRef<Promise<DocumentWorkTimeTotals> | null>(null)
   const runningRef = useRef(false)
   const savingRef = useRef(false)
   const savePromiseRef = useRef<Promise<boolean> | null>(null)
@@ -42,6 +48,7 @@ export default function DocumentWorkTimer({ documentId, initialTodayWorkDate, in
   const [running, setRunning] = useState(false)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState(false)
+  const [recordOpen, setRecordOpen] = useState(false)
 
   useEffect(() => {
     if (runningRef.current || startedAtRef.current !== null || elapsedBaseRef.current > 0) return
@@ -87,11 +94,11 @@ export default function DocumentWorkTimer({ documentId, initialTodayWorkDate, in
     return startTimer()
   }, [startTimer, todayElapsedNow])
 
-  const saveSessions = useCallback(async function saveSessionsInternal(sessions: DocumentWorkTimeSession[], elapsed: number, final: boolean): Promise<boolean> {
+  const saveSessions = useCallback(async function saveSessionsInternal(sessions: DocumentWorkTimeSession[], final: boolean): Promise<boolean> {
     const pending = savePromiseRef.current
     if (pending) {
       if (!await pending) return false
-      return saveSessionsInternal(sessions, elapsed, final)
+      return saveSessionsInternal(sessions, final)
     }
     if (!sessions.length) {
       if (final) {
@@ -111,7 +118,13 @@ export default function DocumentWorkTimer({ documentId, initialTodayWorkDate, in
     const operation = (async () => {
       try {
         const totals = await addDocumentWorkSessions(documentId, sessions)
-        if (totals.todayWorkDate === localWorkDateKey()) todayBaseRef.current = Math.max(0, totals.todayWorkTimeMs - Math.max(0, elapsed - todaySessionStartElapsedRef.current))
+        for (const session of sessions) {
+          if (savedSessionIdsRef.current.has(session.id)) continue
+          savedSessionIdsRef.current.add(session.id)
+          savedSessionTimeByDateRef.current.set(session.workDate, (savedSessionTimeByDateRef.current.get(session.workDate) ?? 0) + session.elapsedMs)
+        }
+        const currentDate = localWorkDateKey()
+        if (totals.todayWorkDate === currentDate) todayBaseRef.current = persistedWorkTimeBase(totals.todayWorkTimeMs, savedSessionTimeByDateRef.current.get(currentDate) ?? 0)
         pendingSessionsRef.current = []
         if (final) {
           workSessionIdRef.current = null
@@ -143,7 +156,57 @@ export default function DocumentWorkTimer({ documentId, initialTodayWorkDate, in
     return operation
   }, [documentId, onSavingChange, onWorkTimeChange, onUnsavedChange])
 
+  const addWorkTime = useCallback(async (workDate: string, milliseconds: number) => {
+    const previousAdd = manualWorkTimePromiseRef.current
+    if (previousAdd) await previousAdd.catch(() => {})
+    const previousSave = savePromiseRef.current
+    if (previousSave && !await previousSave) throw new Error('작업시간을 저장하지 못했습니다.')
+    if (savingRef.current) throw new Error('작업시간을 저장하지 못했습니다.')
+
+    savingRef.current = true
+    setSaving(true)
+    onSavingChange(true)
+    const operation = (async () => {
+      try {
+        const totals = await addDocumentWorkTime(documentId, milliseconds, workDate)
+        if (activeRef.current) {
+          const currentDate = localWorkDateKey()
+          const currentDateTotal = totals.workTimeDays.find((day) => day.date === currentDate)?.elapsedMs ?? 0
+          if (workDate === currentDate) {
+            if (todayWorkDateRef.current !== currentDate) {
+              const now = Date.now()
+              const todayStart = new Date(new Date(now).getFullYear(), new Date(now).getMonth(), new Date(now).getDate()).getTime()
+              todayWorkDateRef.current = currentDate
+              todaySessionStartElapsedRef.current = runningRef.current
+                ? elapsedBaseRef.current + Math.max(0, todayStart - (startedAtRef.current ?? todayStart))
+                : elapsedNow()
+            }
+            const savedSessionTime = savedSessionTimeByDateRef.current.get(currentDate) ?? 0
+            todayBaseRef.current = persistedWorkTimeBase(currentDateTotal, savedSessionTime)
+            setElapsedMs(todayElapsedNow())
+          }
+          onWorkTimeChange({ ...totals, todayWorkDate: currentDate, todayWorkTimeMs: currentDateTotal })
+        }
+        return totals
+      } finally {
+        savingRef.current = false
+        if (activeRef.current) {
+          setSaving(false)
+          onSavingChange(false)
+        }
+      }
+    })()
+    manualWorkTimePromiseRef.current = operation
+    try {
+      return await operation
+    } finally {
+      if (manualWorkTimePromiseRef.current === operation) manualWorkTimePromiseRef.current = null
+    }
+  }, [documentId, elapsedNow, onSavingChange, onWorkTimeChange, todayElapsedNow])
+
   const pauseAndSave = useCallback(async () => {
+    const manualAdd = manualWorkTimePromiseRef.current
+    if (manualAdd) await manualAdd.catch(() => {})
     const elapsed = elapsedNow()
     let sessions = pendingSessionsRef.current
     if (runningRef.current) {
@@ -158,13 +221,13 @@ export default function DocumentWorkTimer({ documentId, initialTodayWorkDate, in
       setRunning(false)
     }
     pendingSessionsRef.current = sessions
-    if (!await saveSessions(sessions, elapsedBaseRef.current, true)) throw new Error('작업시간을 저장하지 못했습니다.')
+    if (!await saveSessions(sessions, true)) throw new Error('작업시간을 저장하지 못했습니다.')
   }, [elapsedNow, saveSessions, todayElapsedNow])
 
   useEffect(() => {
-    onClockChange({ sessionId, elapsedNow, todayElapsedNow, isRunning: () => runningRef.current, startIfNotStartedToday, pauseAndSave })
+    onClockChange({ sessionId, elapsedNow, todayElapsedNow, isRunning: () => runningRef.current, startIfNotStartedToday, pauseAndSave, addWorkTime })
     return () => onClockChange(null)
-  }, [elapsedNow, onClockChange, pauseAndSave, sessionId, startIfNotStartedToday, todayElapsedNow])
+  }, [addWorkTime, elapsedNow, onClockChange, pauseAndSave, sessionId, startIfNotStartedToday, todayElapsedNow])
 
   useEffect(() => {
     activeRef.current = true
@@ -183,8 +246,7 @@ export default function DocumentWorkTimer({ documentId, initialTodayWorkDate, in
         if (sessionStartedAt < todayStart && lastAutoSavedBoundaryRef.current !== todayStart) {
           lastAutoSavedBoundaryRef.current = todayStart
           const segments = splitWorkTimeSession(workSessionIdRef.current, sessionStartedAt, todayStart)
-          const elapsedAtBoundary = elapsedBaseRef.current + Math.max(0, todayStart - (startedAtRef.current ?? todayStart))
-          void saveSessions(segments, elapsedAtBoundary, false)
+          void saveSessions(segments, false)
         }
       }
       if (todayWorkDateRef.current !== currentDate) {
@@ -216,7 +278,7 @@ export default function DocumentWorkTimer({ documentId, initialTodayWorkDate, in
       return
     }
     if (pendingSessionsRef.current.length) {
-      await saveSessions(pendingSessionsRef.current, elapsedBaseRef.current, true)
+      await saveSessions(pendingSessionsRef.current, true)
       return
     }
     startTimer()
@@ -227,6 +289,10 @@ export default function DocumentWorkTimer({ documentId, initialTodayWorkDate, in
     <button type="button" className="viewer-work-timer-toggle" aria-label={error ? t('저장 재시도') : running ? t('일시정지') : t('재생')} title={error ? t('저장 재시도') : running ? t('일시정지') : t('재생')} disabled={saving} onClick={() => void toggle()}>
       {running ? <Pause size={17} /> : <Play size={17} />}
     </button>
-    <span className="viewer-work-timer-elapsed" role="timer" aria-label={t('오늘 누적 작업시간')} title={t('오늘 누적 작업시간')} aria-live="off">{formatWorkTime(elapsedMs)}</span>
+    <button type="button" className="viewer-work-timer-elapsed" aria-haspopup="dialog" aria-expanded={recordOpen} aria-label={`${t('오늘 누적 작업시간')} ${formatWorkTime(elapsedMs)} · ${t('작업 기록')}`} title={t('작업 기록')} aria-live="off" onClick={() => setRecordOpen(true)}>{formatWorkTime(elapsedMs)}</button>
+    {recordOpen && <WorkTimeRecordPanel documentId={documentId} initialTotalWorkTimeMs={initialTotalWorkTimeMs} initialWorkTimeDays={initialWorkTimeDays} onClose={() => setRecordOpen(false)} onAddWorkTime={addWorkTime} onTotalsChange={(total, days) => {
+      const currentDate = localWorkDateKey()
+      onWorkTimeChange({ totalWorkTimeMs: total, todayWorkDate: currentDate, todayWorkTimeMs: days.find((day) => day.date === currentDate)?.elapsedMs ?? 0, workTimeDays: days })
+    }} />}
   </div>, portalTarget)
 }

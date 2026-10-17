@@ -1,7 +1,8 @@
 import { formatNumber, t, translateMessage, type LocaleKey } from './locales/index'
-import { useEffect, useId, useRef, useState, type KeyboardEvent as ReactKeyboardEvent, type PointerEvent as ReactPointerEvent } from 'react'
-import { Ellipsis } from 'lucide-react'
-import { focusBandHeightRatio, focusDimOpacity, pageRectToDisplayRect } from './focusGeometry'
+import { useEffect, useId, useRef, useState, type CSSProperties, type KeyboardEvent as ReactKeyboardEvent, type PointerEvent as ReactPointerEvent } from 'react'
+import { createPortal } from 'react-dom'
+import { Ellipsis, X } from 'lucide-react'
+import { focusBandHeightRatio, focusDimOpacity, guideGeometryForRotation, pageRectToDisplayRect } from './focusGeometry'
 import type { CounterSnapshot, PageRotation, PageWorkRecord, ProgressGuide, ProgressGuideScreenPosition } from './types'
 import { ColorPresetButtons } from './ColorPresetButtons'
 import { PROGRESS_LINE_COLOR_PRESETS } from './designTokens'
@@ -110,6 +111,9 @@ function updateGuideWork(work: PageWorkRecord, guideId: string, changes: Partial
   if (Object.hasOwn(changes, 'rowSpacingStartRow')) nextGuide.rowSpacingStartRow = rowSpacingStartRow
   if (Object.hasOwn(changes, 'rowSpacingDirection')) nextGuide.rowSpacingDirection = rowSpacingDirection
   if (Object.hasOwn(changes, 'positionOffset')) nextGuide.positionOffset = positionOffset
+  if (!Object.hasOwn(changes, 'chartRegion') && original.chartRegion?.rowRanges?.length && (position !== undefined || xStartRatio !== undefined || xEndRatio !== undefined)) {
+    nextGuide.chartRegion = { ...original.chartRegion, autoFollow: false }
+  }
   if (Object.hasOwn(changes, 'rowSpacing') && rowSpacing === undefined && nextGuide.rotationPositions) {
     nextGuide.rotationPositions = Object.fromEntries(Object.entries(nextGuide.rotationPositions).map(([key, entry]) => [key, entry ? { ...entry, rowSpacing: undefined, rowSpacingStartRow: undefined, rowSpacingDirection: undefined, positionOffset: undefined } : entry])) as ProgressGuide['rotationPositions']
   }
@@ -135,7 +139,7 @@ function updateGuideWork(work: PageWorkRecord, guideId: string, changes: Partial
   }
 }
 
-export function ProgressLineOverlay({ width, height, cssWidth, cssHeight, renderedZoom, work, counters, rotation, active, disabled, defaultColor, defaultOpacity, defaultThickness, onActivate, onWorkChange }: {
+export function ProgressLineOverlay({ width, height, cssWidth, cssHeight, renderedZoom, work, counters, rotation, active, disabled, defaultColor, defaultOpacity, defaultThickness, onActivate, onWorkChange, onRecognizeChart }: {
   width: number
   height: number
   cssWidth: number
@@ -151,6 +155,7 @@ export function ProgressLineOverlay({ width, height, cssWidth, cssHeight, render
   defaultThickness: number
   onActivate: () => void
   onWorkChange: (work: PageWorkRecord, immediate: boolean, recordHistory?: boolean, historyBefore?: PageWorkRecord) => void
+  onRecognizeChart: (guideId: string) => void
 }) {
   const svgId = useId().replace(/:/g, '')
   const dragRef = useRef<Drag | null>(null)
@@ -169,8 +174,17 @@ export function ProgressLineOverlay({ width, height, cssWidth, cssHeight, render
   const [connectingGuideId, setConnectingGuideId] = useState<string | null>(null)
   const [connectingCounterId, setConnectingCounterId] = useState('')
   const [calibration, setCalibration] = useState<Calibration | null>(null)
+  const [calibrationPortalTarget, setCalibrationPortalTarget] = useState<Element | null>(null)
   const [deletedGuide, setDeletedGuide] = useState<ProgressGuide | null>(null)
   const [notice, setNotice] = useState('')
+  useEffect(() => {
+    if (!notice) return
+    const timeout = window.setTimeout(() => {
+      setNotice('')
+      setDeletedGuide(null)
+    }, 5000)
+    return () => window.clearTimeout(timeout)
+  }, [notice])
   const [styleDraft, setStyleDraft] = useState<{ id: string; field: StyleField; value: number } | null>(null)
   const styleBeforeRef = useRef<{ work: PageWorkRecord; guideId: string; field: StyleField; value: number } | null>(null)
   const styleRangeChangedRef = useRef(false)
@@ -185,11 +199,15 @@ export function ProgressLineOverlay({ width, height, cssWidth, cssHeight, render
   const displayedGuides = sourceGuides.map((guide) => {
     const preview = previewGuide?.id === guide.id ? previewGuide : guide
     const displayed = guideForDisplay(preview, rotation)
-    if (styleDraft?.id !== guide.id) return displayed
+    const linked = preview.linkedCounterId ? counters.find((counter) => counter.id === preview.linkedCounterId) : undefined
+    const row = counterRow(linked)
+    const geometry = preview.chartRegion?.rowRanges?.length ? guideGeometryForRotation(preview, row, rotation) : null
+    const withGeometry = geometry ? { ...displayed, ...geometry } : displayed
+    if (styleDraft?.id !== guide.id) return withGeometry
     if (styleDraft.field === 'dimOpacity' || styleDraft.field === 'bandHeightRatio') {
-      return { ...displayed, focus: { ...(displayed.focus ?? initialFocusSettings(displayed)), [styleDraft.field]: styleDraft.value } }
+      return { ...withGeometry, focus: { ...(withGeometry.focus ?? initialFocusSettings(withGeometry)), [styleDraft.field]: styleDraft.value } }
     }
-    return { ...displayed, [styleDraft.field]: styleDraft.value }
+    return { ...withGeometry, [styleDraft.field]: styleDraft.value }
   })
   const currentCalibrationCounter = calibration ? counters.find((counter) => counter.id === calibration.counterId) : undefined
 
@@ -432,6 +450,7 @@ export function ProgressLineOverlay({ width, height, cssWidth, cssHeight, render
   function startCalibration(guide: ProgressGuide, counterId = connectingCounterId) {
     const counter = counters.find((item) => item.id === counterId)
     if (!counter) return
+    setCalibrationPortalTarget(overlayRef.current?.closest('.viewer-shell') ?? null)
     setCalibration({ guideId: guide.id, counterId: counter.id, counterRow: counterRow(counter), rotation, phase: 'current', beforeWork: work })
     selectGuide(guide.id)
     setPreviewGuide(null)
@@ -569,6 +588,7 @@ export function ProgressLineOverlay({ width, height, cssWidth, cssHeight, render
       step="1"
       aria-label={t(ariaLabel)}
       value={inputValue}
+      style={{ '--range-progress': `${((inputValue - min) / (max - min)) * 100}%` } as CSSProperties}
       disabled={disabled}
       onPointerDown={(event) => beginStyleRange(event, guide, field)}
       onChange={(event) => {
@@ -706,20 +726,21 @@ export function ProgressLineOverlay({ width, height, cssWidth, cssHeight, render
         ? clamp(anchorLeft + menuWidth <= cssWidth - 6 ? anchorLeft : styleMenuAnchor.x - menuWidth - 14, 6, Math.max(6, cssWidth - menuWidth - 6))
         : clamp((guide.xEndRatio ?? 0.85) * cssWidth, 6, Math.max(6, cssWidth - menuWidth - 6))
       const top = stylePanelOpen
-        ? clamp(styleMenuAnchor.y - 18, 6, Math.max(6, cssHeight - (guide.role === 'primary' ? 430 : 285) - 6))
+        ? clamp(styleMenuAnchor.y - 18, 6, Math.max(6, cssHeight - (guide.role === 'primary' ? 388 : 285) - 6))
         : clamp(guide.position * cssHeight + 28, 6, Math.max(6, cssHeight - 220))
       return <div ref={menuPanelRef} className={'progress-line-menu' + (stylePanelOpen ? ' progress-line-style-menu' : '')} role="menu" style={{ left, top }} onPointerDown={(event) => event.stopPropagation()}>
         {styleGuideId === menuGuideId ? <>
-          <strong>{t("표시 스타일")}</strong>
+          <div className="progress-line-style-header"><strong>{t("표시 스타일")}</strong><button type="button" aria-label={t("닫기")} title={t("닫기")} onClick={() => { setStyleGuideId(null); setMenuGuideId(null); setStyleMenuAnchor(null); menuTriggerRef.current?.focus?.() }}><X size={17} /></button></div>
           <ColorPresetButtons label={t("진행선 색상")} className="progress-color-presets" value={guide.color ?? defaultColor} presets={PROGRESS_LINE_COLOR_PRESETS} includeCurrentColor={false} onChange={(color) => updateGuide(menuGuideId, { color })} />
           {renderStyleRange(menuGuide, 'thickness', '두께')}
           {renderStyleRange(menuGuide, 'opacity', '투명도')}
           {guide.role === 'primary' && <>
             <label className="progress-focus-toggle"><input type="checkbox" checked={Boolean(menuGuide.focus?.enabled)} onChange={(event) => updateFocus(menuGuide, event.currentTarget.checked)} />{t('집중선')}</label>
-            {renderStyleRange(menuGuide, 'dimOpacity', '집중 강도', !menuGuide.focus?.enabled)}
-            {renderStyleRange(menuGuide, 'bandHeightRatio', '집중선 두께', !menuGuide.focus?.enabled)}
+            <div className="progress-focus-ranges">
+              {renderStyleRange(menuGuide, 'dimOpacity', '집중 강도', !menuGuide.focus?.enabled)}
+              {renderStyleRange(menuGuide, 'bandHeightRatio', '집중선 두께', !menuGuide.focus?.enabled)}
+            </div>
           </>}
-          <button type="button" role="menuitem" onClick={() => { setStyleGuideId(null); setMenuGuideId(null); setStyleMenuAnchor(null); menuTriggerRef.current?.focus?.() }}>{t("닫기")}</button>
         </> : <>
           {guide.role === 'primary' && <>
             <button type="button" role="menuitem" onClick={() => addMarker(menuGuide)}>{guide.markerProgress === undefined ? t('마커 표시') : t('마커 지우기')}</button>
@@ -736,13 +757,18 @@ export function ProgressLineOverlay({ width, height, cssWidth, cssHeight, render
               }}>{t("카운터 연결 해제")}</button>}
             </div> : <button type="button" role="menuitem" onClick={() => { setConnectingGuideId(guide.id); setConnectingCounterId(guide.linkedCounterId ?? counters[0]?.id ?? '') }}>{t("카운터와 연결")}</button>}
             {guide.linkedCounterId && <button type="button" role="menuitem" onClick={() => startCalibration(menuGuide, menuGuide.linkedCounterId)}>{t("단 간격 다시 맞추기")}</button>}
+            {guide.chartRegion?.rowRanges?.length && guide.chartRegion.autoFollow === false && <button type="button" role="menuitem" onClick={() => {
+              updateGuide(menuGuide.id, { chartRegion: { ...menuGuide.chartRegion!, autoFollow: true }, counterRowOffset: 0, positionOffset: undefined })
+              setMenuGuideId(null)
+            }}>{t('자동 따라가기 재개')}</button>}
+            <button type="button" role="menuitem" onClick={() => { setMenuGuideId(null); onRecognizeChart(menuGuide.id) }}>{t('차트 행 인식')}</button>
           </>}
           {guide.role === 'primary' && <button type="button" role="menuitem" disabled={references.length >= 2} onClick={addReference}>{t("참고선 추가")}{references.length ? ' · ' + references.length + '/2' : ''}</button>}
           <button type="button" role="menuitem" className="progress-delete-action" onClick={() => removeGuide(menuGuide)}>{t("삭제")}</button>
         </>}
       </div>
     })()}
-    {calibration && <div className="progress-calibration-prompt" role="status" onPointerDown={(event) => event.stopPropagation()}>
+    {calibration && calibrationPortalTarget && createPortal(<div className="progress-calibration-prompt" role="status" onPointerDown={(event) => event.stopPropagation()}>
       <span>{calibration.phase === 'current' ? t('현재 단 가운데에 선을 맞춰 주세요.') : calibration.phase === 'next' ? t('같은 선을 바로 다음 단 가운데로 옮겨 주세요.') : t('예상 위치를 확인하고 연결해 주세요.')}</span>
       {calibration.phase === 'current' && <button type="button" onClick={saveCalibrationCurrent}>{t("다음 단 위치")}</button>}
       {calibration.phase === 'next' && <button type="button" onClick={previewCalibration}>{t("예상 위치 보기")}</button>}
@@ -751,8 +777,8 @@ export function ProgressLineOverlay({ width, height, cssWidth, cssHeight, render
         <button type="button" onClick={confirmCalibration}>{t("연결하기")}</button>
       </>}
       <button type="button" className="progress-calibration-cancel" onClick={cancelCalibration}>{t("취소")}</button>
-    </div>}
-    {deletedGuide && notice === '진행선을 삭제했습니다.' && <div className="progress-line-notice" role="status"><span>{translateMessage(notice)}</span><button type="button" onClick={undoDelete}>{t("실행 취소")}</button><button type="button" aria-label={t("알림 닫기")} onClick={() => { setNotice(''); setDeletedGuide(null) }}>×</button></div>}
-    {notice && notice !== '진행선을 삭제했습니다.' && !calibration && <div className="progress-line-notice" role="status">{translateMessage(notice)}</div>}
+    </div>, calibrationPortalTarget)}
+    {deletedGuide && notice === '진행선을 삭제했습니다.' && <div className="progress-line-notice" role="status" onPointerDown={(event) => event.stopPropagation()}><span>{translateMessage(notice)}</span><button type="button" onClick={undoDelete}>{t("실행 취소")}</button><button type="button" aria-label={t("알림 닫기")} onClick={() => { setNotice(''); setDeletedGuide(null) }}>×</button></div>}
+    {notice && notice !== '진행선을 삭제했습니다.' && !calibration && <div className="progress-line-notice" role="status" onPointerDown={(event) => event.stopPropagation()}>{translateMessage(notice)}</div>}
   </div>
 }

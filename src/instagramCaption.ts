@@ -1,5 +1,6 @@
 import type { KnittingReport } from './types'
 import { formatNumber, t, translateMessage } from './locales'
+import { formatNeedleSize, getGaugeMeasurement } from './reportFormatting'
 
 export type InstagramCaptionField = 'pattern' | 'size' | 'yarn' | 'usage' | 'needles' | 'modifications' | 'oneLine' | 'gauge' | 'measurements' | 'fit' | 'yarnMemo'
 
@@ -39,12 +40,30 @@ export function buildInstagramCaption(report: KnittingReport, selected: Instagra
     }).filter(Boolean).join('\n'))
   }
   if (include.has('needles')) {
-    sections.push(line(t('Needles'), report.needles.map((needle) => [needle.section, needle.size && needle.size + (needle.size.toLowerCase().includes('mm') ? '' : 'mm')].filter(Boolean).join(' ')).filter(Boolean).join(' / ')))
+    sections.push(line(t('Needles'), report.needles.map((needle) => [needle.section, needle.type, needle.brand, formatNeedleSize(needle)].filter(Boolean).join(' ')).filter(Boolean).join(' / ')))
   }
   if (include.has('modifications')) sections.push(line(t('Modifications'), report.modifications.map((item) => `- ${[item.section, item.changed || item.memo].filter(Boolean).join(' ')}`).filter((item) => item !== '- ').join('\n')))
   if (include.has('oneLine')) sections.push(fields['review.nextChanges']?.trim() ?? '')
-  if (include.has('gauge')) sections.push(line(t('Gauge'), [fields['gauge.afterStitches'] && `${formatNumericText(fields['gauge.afterStitches'])}${t('코')}`, fields['gauge.afterRows'] && `${formatNumericText(fields['gauge.afterRows'])}${t('단')}`].filter(Boolean).join(' × ')))
-  if (include.has('measurements')) sections.push(line(t('Measurements'), report.measurements.map((row) => row.finished.trim() ? `${row.label}: ${formatNumericText(row.finished)}` : '').filter(Boolean).join('\n')))
+  if (include.has('gauge')) {
+    const sideText = (side: 'before' | 'after') => {
+      const gauge = getGaugeMeasurement(fields, side)
+      const counts = [gauge.stitches && `${formatNumericText(gauge.stitches)}${t('코')}`, gauge.rows && `${formatNumericText(gauge.rows)}${t('단')}`].filter(Boolean).join(' · ')
+      const size = gauge.width || gauge.height ? `${formatNumericText(gauge.width) || '—'} × ${formatNumericText(gauge.height) || '—'} ${gauge.unit === 'inch' ? t('inch') : 'cm'}` : ''
+      return [counts, size].filter(Boolean).join(' / ')
+    }
+    sections.push(line(t('Gauge'), [
+      fields['gauge.pattern']?.trim() && `${t('무늬')}: ${fields['gauge.pattern'].trim()}`,
+      sideText('before') && `${t('세탁 전')}: ${sideText('before')}`,
+      sideText('after') && `${t('세탁 후')}: ${sideText('after')}`,
+    ].filter(Boolean).join('\n')))
+  }
+  if (include.has('measurements')) sections.push(line(t('Measurements'), report.measurements.map((row) => {
+    const value = row.finished.trim()
+    if (!value) return ''
+    if (/(?:cm|inch|in)\s*$/i.test(value)) return `${row.label}: ${value}`
+    const unit = row.unit === 'inch' ? t('inch') : 'cm'
+    return `${row.label}: ${formatNumericText(value)} ${unit}`
+  }).filter(Boolean).join('\n')))
   if (include.has('fit')) sections.push(line(t('Fit'), translateMessage(fields['review.fit'] ?? '')))
   if (include.has('yarnMemo')) {
     const notes = [fields['private.yarnMemo'], ...report.yarns.map((yarn) => yarn.memo)].filter((value): value is string => Boolean(value?.trim()))

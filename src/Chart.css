@@ -218,3 +218,16 @@
 @media (any-pointer: coarse) and (max-width: 800px) {
   .chart-palette { grid-template-columns: repeat(2, 44px); }
 }
+
+.chart-create-header, .chart-editor-header { border-color: var(--color-divider); background: var(--color-surface); }
+.chart-create-header > strong, .chart-create-content h1, .chart-editor-header, .chart-panel-heading { color: var(--color-text); }
+.chart-create-content h1, .chart-editor-header .chart-title-input { font-weight: 600; }
+.craft-card, .chart-choice, .chart-settings-panel, .chart-export-menu > div { border-color: var(--color-border); border-radius: 12px; background: var(--color-surface); }
+.chart-choice.selected { border-color: var(--color-primary); background: var(--color-primary-soft); box-shadow: none; }
+.chart-back, .chart-icon-button { color: var(--color-secondary); }
+.chart-number-grid input, .chart-unit-field select { border-color: var(--color-border); border-radius: 10px; background: var(--color-surface); }
+.chart-row-dialog { border-color: var(--color-border); background: var(--color-surface); box-shadow: 0 12px 32px rgba(17,17,17,.12); }
+@media (hover: hover) and (pointer: fine) {
+  .craft-card:hover { box-shadow: 0 3px 12px rgba(17,17,17,.08); transform: none; }
+  .chart-back:hover, .chart-icon-button:hover:not(:disabled) { color: var(--color-primary); background: var(--color-primary-soft); }
+}

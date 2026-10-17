@@ -71,9 +71,10 @@ describe('progress line migration', () => {
     expect(migrated.legacyProgressGuides).toEqual({ horizontalGuides: [], verticalGuides: [] })
   })
 
-  it('creates new primary guides at full page width with the enlarged default thickness', () => {
+  it('creates new primary guides at full page width with lighter default opacity and enlarged thickness', () => {
     expect(createDefaultPrimaryProgressGuide(0.62)).toMatchObject({
       role: 'primary', position: 0.62, xStartRatio: 0, xEndRatio: 1,
+      opacity: 0.4,
       thickness: DEFAULT_PROGRESS_LINE_THICKNESS,
     })
   })

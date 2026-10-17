@@ -59,6 +59,16 @@ export interface ProgressChartRegion {
   direction: 'top-to-bottom' | 'bottom-to-top'
   rowPositions?: number[]
   rowLayout?: { top: number; height: number }
+  rowRanges?: ProgressChartRow[]
+  analysisRotation?: PageRotation
+  autoFollow?: boolean
+}
+
+export interface ProgressChartRow {
+  x: number
+  y: number
+  width: number
+  height: number
 }
 
 export interface ProgressFocusSettings {
@@ -456,6 +466,8 @@ export interface ReportNeedle {
   section: string
   type: string
   size: string
+  sizeUnit?: 'mm' | 'US' | 'JP'
+  brand?: string
   cableLength: string
   memo: string
 }

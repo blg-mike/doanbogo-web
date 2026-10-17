@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { displayRectToPageRect, focusBandHeightRatio, focusDimOpacity, focusRowSpacing, formatFocusSpacingPercent, guidePositionForRotation, pageRectToDisplayRect, parseFocusSpacingPercent } from './focusGeometry'
+import { displayRectToPageRect, focusBandHeightRatio, focusDimOpacity, focusRowSpacing, formatFocusSpacingPercent, guideGeometryForRotation, guidePositionForRotation, isChartAutoFollowRotationCompatible, pageRectToDisplayRect, parseFocusSpacingPercent } from './focusGeometry'
 import type { ProgressFocusSettings, ProgressGuide } from './types'
 
 describe('focus view rotation geometry', () => {
@@ -38,6 +38,33 @@ describe('focus view rotation geometry', () => {
     const adjusted = { ...guide, chartRegion: { ...guide.chartRegion!, rowLayout: { top: 0.25, height: 0.5 } } }
     expect(guidePositionForRotation(adjusted, 5, 90)).toBeCloseTo(0.75)
     expect(focusRowSpacing(adjusted.chartRegion, 0.03, 90)).toBeCloseTo(0.125)
+  })
+
+  it('maps each recognized row range and its width, and pauses outside compatible rotations', () => {
+    const guide: ProgressGuide = {
+      id: 'chart-guide', position: 0.5, linkedCounterId: 'rows',
+      chartRegion: {
+        x: 0.1, y: 0.2, width: 0.8, height: 0.6, firstRow: 1, lastRow: 3, startCounterRow: 10,
+        repeat: false, direction: 'bottom-to-top', analysisRotation: 0, autoFollow: true,
+        rowRanges: [
+          { x: 0.2, y: 0.7, width: 0.3, height: 0.05 },
+          { x: 0.1, y: 0.4, width: 0.6, height: 0.04 },
+          { x: 0.5, y: 0.2, width: 0.4, height: 0.03 },
+        ],
+      },
+    }
+
+    expect(guideGeometryForRotation(guide, 10, 0)).toMatchObject({ position: 0.725, xStartRatio: 0.2, xEndRatio: 0.5 })
+    const secondRow = guideGeometryForRotation(guide, 11, 0)
+    expect(secondRow.position).toBeCloseTo(0.42)
+    expect(secondRow).toMatchObject({ xStartRatio: 0.1, xEndRatio: 0.7 })
+    const rotatedRow = guideGeometryForRotation(guide, 10, 180)
+    expect(rotatedRow.position).toBeCloseTo(0.275)
+    expect(rotatedRow).toMatchObject({ xStartRatio: 0.5, xEndRatio: 0.8 })
+    expect(isChartAutoFollowRotationCompatible(guide, 180)).toBe(true)
+    expect(isChartAutoFollowRotationCompatible(guide, 90)).toBe(false)
+    expect(guideGeometryForRotation(guide, 11, 90)).toMatchObject({ position: 0.5, xStartRatio: 0.15, xEndRatio: 0.85 })
+    expect(guideGeometryForRotation({ ...guide, chartRegion: { ...guide.chartRegion!, autoFollow: false } }, 11, 0)).toMatchObject({ position: 0.5, xStartRatio: 0.15, xEndRatio: 0.85 })
   })
 })
 

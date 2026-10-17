@@ -1,4 +1,4 @@
-import type { AnnotationTool } from './types'
+import type { AnnotationTool, PaneId } from './types'
 
 export type WheelInput = {
   deltaX: number
@@ -9,13 +9,17 @@ export type WheelInput = {
 
 export type ZoomFocus = { x: number; y: number; clientX: number; clientY: number; zoom: number }
 
-export function regionHighlightPointerAction(tool: AnnotationTool, hitsRegion: boolean) {
+export function regionHighlightPointerAction(tool: AnnotationTool, hitsRegion: boolean, selected = false) {
   if (hitsRegion) {
-    if (tool === 'region-highlight') return 'move' as const
-    if (tool === 'pan') return 'select' as const
+    if (tool === 'region-highlight') return selected ? 'move' as const : 'select' as const
+    if (tool === 'pan') return selected ? 'move' as const : 'select' as const
     return 'ignore' as const
   }
   return tool === 'region-highlight' ? 'create' as const : 'ignore' as const
+}
+
+export function canStartPaneGesture(owner: PaneId | null, paneId: PaneId) {
+  return owner === null || owner === paneId
 }
 
 function clamp(value: number, minimum: number, maximum: number) {
@@ -61,6 +65,23 @@ export function pagePositionAtClientPoint(rect: Pick<DOMRect, 'left' | 'top' | '
     x: clamp(0.5 + localX / Math.max(pageWidth, 1), 0, 1),
     y: clamp(0.5 + localY / Math.max(pageHeight, 1), 0, 1),
   }
+}
+
+export function visiblePageCrop(pageRect: Pick<DOMRect, 'left' | 'top' | 'width' | 'height'>, viewportRect: Pick<DOMRect, 'left' | 'top' | 'right' | 'bottom'>, pageWidth: number, pageHeight: number, rotation: number, scale: number) {
+  const left = Math.max(pageRect.left, viewportRect.left)
+  const top = Math.max(pageRect.top, viewportRect.top)
+  const right = Math.min(pageRect.left + pageRect.width, viewportRect.right)
+  const bottom = Math.min(pageRect.top + pageRect.height, viewportRect.bottom)
+  if (right <= left || bottom <= top) return null
+  const points = [
+    pagePositionAtClientPoint(pageRect, pageWidth, pageHeight, rotation, scale, left, top),
+    pagePositionAtClientPoint(pageRect, pageWidth, pageHeight, rotation, scale, right, top),
+    pagePositionAtClientPoint(pageRect, pageWidth, pageHeight, rotation, scale, left, bottom),
+    pagePositionAtClientPoint(pageRect, pageWidth, pageHeight, rotation, scale, right, bottom),
+  ]
+  const x = Math.min(...points.map((point) => point.x))
+  const y = Math.min(...points.map((point) => point.y))
+  return { x, y, width: Math.max(...points.map((point) => point.x)) - x, height: Math.max(...points.map((point) => point.y)) - y }
 }
 
 export function clientPointForPagePosition(rect: Pick<DOMRect, 'left' | 'top' | 'width' | 'height'>, pageWidth: number, pageHeight: number, rotation: number, scale: number, x: number, y: number) {
