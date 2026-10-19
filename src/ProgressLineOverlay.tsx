@@ -671,6 +671,8 @@ export function ProgressLineOverlay({ width, height, cssWidth, cssHeight, render
         const color = guide.color ?? defaultColor
         const selected = selectedId === guide.id
         const markerX = guide.markerProgress === undefined ? null : (start + (end - start) * guide.markerProgress) * width
+        const markerScale = renderedZoom / 3
+        const markerHeight = 32 * 1.15
         const stroke = guide.thickness === undefined
           ? guide.role === 'reference'
             ? Math.max(1, progressLineStrokeWidth(defaultThickness * 0.5, width, cssWidth, renderedZoom))
@@ -680,9 +682,9 @@ export function ProgressLineOverlay({ width, height, cssWidth, cssHeight, render
           <line x1={x1} x2={x2} y1={y} y2={y} stroke={color} strokeWidth={stroke} strokeOpacity={guide.opacity ?? (guide.role === 'reference' ? Math.min(defaultOpacity, 0.45) : defaultOpacity)} strokeLinecap="round" pointerEvents="none" />
           <line data-guide-id={guide.id} data-progress-action="body" x1={x1} x2={x2} y1={y} y2={y} stroke="transparent" strokeWidth={Math.max(stroke, 44 * sy)} pointerEvents={disabled ? 'none' : 'stroke'} role="button" tabIndex={disabled ? -1 : 0} aria-label={guide.role === 'primary' ? t('진행선 표시 스타일') : t('참고선 표시 스타일')} aria-pressed={selected} onKeyDown={(event) => openStyleMenuFromKeyboard(event, guide)} />
           {markerX !== null && <g>
-            <ellipse data-guide-id={guide.id} data-progress-action="marker" cx={markerX} cy={y - 16 * sy * renderedZoom} rx={Math.max(hitX, 11 * sx * renderedZoom)} ry={Math.max(hitY, 16 * sy * renderedZoom)} fill="transparent" pointerEvents={disabled ? 'none' : 'all'} role="button" tabIndex={disabled ? -1 : 0} aria-label={guide.role === 'primary' ? t('진행선 표시 스타일') : t('참고선 표시 스타일')} aria-pressed={selected} onKeyDown={(event) => openStyleMenuFromKeyboard(event, guide)} />
-            <svg x={markerX - 11 * sx * renderedZoom} y={y - 32 * sy * renderedZoom} width={22 * sx * renderedZoom} height={32 * sy * renderedZoom} viewBox="0 0 22 32" preserveAspectRatio="none" overflow="visible" pointerEvents="none" aria-hidden="true">
-              <path d="M 11 32 C 10 29 0.5 17 0.5 11 C 0.5 5 4.5 2 8 2 C 9.5 2 10.5 4.5 11 7 C 11.5 4.5 12.5 2 14 2 C 17.5 2 21.5 5 21.5 11 C 21.5 17 12 29 11 32 Z" fill="none" stroke={color} strokeWidth={2.5 * renderedZoom} vectorEffect="non-scaling-stroke" strokeLinecap="round" strokeLinejoin="miter" strokeMiterlimit={6} />
+            <ellipse data-guide-id={guide.id} data-progress-action="marker" cx={markerX} cy={y - markerHeight * sy * markerScale / 2} rx={Math.max(hitX, 13 * sx * markerScale)} ry={Math.max(hitY, markerHeight * sy * markerScale / 2)} fill="transparent" pointerEvents={disabled ? 'none' : 'all'} role="button" tabIndex={disabled ? -1 : 0} aria-label={guide.role === 'primary' ? t('진행선 표시 스타일') : t('참고선 표시 스타일')} aria-pressed={selected} onKeyDown={(event) => openStyleMenuFromKeyboard(event, guide)} />
+            <svg x={markerX - 13 * sx * markerScale} y={y - markerHeight * sy * markerScale} width={26 * sx * markerScale} height={markerHeight * sy * markerScale} viewBox="0 0 26 32" preserveAspectRatio="none" overflow="visible" pointerEvents="none" aria-hidden="true">
+              <path d="M 13 32 C 10.5 27 0.7 16 0.7 9 C 0.7 3.8 4.4 1 8 1 C 10.5 1 12 2.8 13 6.5 C 14 2.8 15.5 1 18 1 C 21.6 1 25.3 3.8 25.3 9 C 25.3 16 15.5 27 13 32 Z" fill="none" stroke={color} strokeWidth={1.5 * markerScale} vectorEffect="non-scaling-stroke" strokeLinecap="round" strokeLinejoin="miter" strokeMiterlimit={6} />
             </svg>
           </g>}
           {selected && <g>
