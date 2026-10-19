@@ -14,12 +14,15 @@ export function progressLineStrokeWidth(thickness: number, pageWidth: number, cs
   return thickness * pageWidth / Math.max(cssWidth, 1) * renderedZoom
 }
 
-export function progressMarkerGeometry(thickness: number, lineY: number, lineStroke: number, renderedZoom: number) {
-  const boundedThickness = Math.min(36, Math.max(1, thickness))
+export function progressMarkerGeometry(lineY: number, lineStroke: number) {
   return {
-    scale: renderedZoom / 12 * (1 + 2 * (boundedThickness - 1) / 35),
-    tipY: lineY - lineStroke / 2,
+    top: lineY - lineStroke / 2,
+    triangleSize: lineStroke * 3 / 8,
   }
+}
+
+export function progressMarkerOpacity(lineOpacity: number) {
+  return Math.min(1, Math.max(0, lineOpacity) * 2)
 }
 
 export function createDefaultPrimaryProgressGuide(position: number): ProgressGuide {

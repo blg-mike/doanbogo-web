@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { createDefaultPrimaryProgressGuide, DEFAULT_PROGRESS_LINE_THICKNESS, ensurePrimaryProgressGuide, guideRowPosition, migrateProgressGuides, prepareProgressGuidesForDirectInteraction, progressGuideCandidates, progressGuideMoveExceededThreshold, progressLineStrokeWidth, progressMarkerGeometry, progressMarkerProgressFromPointer } from './progressLines'
+import { createDefaultPrimaryProgressGuide, DEFAULT_PROGRESS_LINE_THICKNESS, ensurePrimaryProgressGuide, guideRowPosition, migrateProgressGuides, prepareProgressGuidesForDirectInteraction, progressGuideCandidates, progressGuideMoveExceededThreshold, progressLineStrokeWidth, progressMarkerGeometry, progressMarkerOpacity, progressMarkerProgressFromPointer } from './progressLines'
 import type { PageWorkRecord } from './types'
 
 function legacyWork(): PageWorkRecord {
@@ -114,23 +114,24 @@ describe('progress line zoom thickness', () => {
     expect(previewCssWidth).toBeCloseTo(8)
     expect(settledCssWidth).toBeCloseTo(previewCssWidth)
 
-    const previewMarker = progressMarkerGeometry(4, 100, previewSvgWidth, initialZoom)
-    const settledMarker = progressMarkerGeometry(4, 100, settledSvgWidth, nextZoom)
-    expect(previewMarker.scale * previewScale).toBeCloseTo(settledMarker.scale)
-    expect(previewMarker.tipY * initialCssWidth / pageWidth * previewScale).toBeCloseTo(settledMarker.tipY * finalCssWidth / pageWidth)
+    const previewMarker = progressMarkerGeometry(100, previewSvgWidth)
+    const settledMarker = progressMarkerGeometry(100, settledSvgWidth)
+    expect(previewMarker.triangleSize * initialCssWidth / pageWidth * previewScale).toBeCloseTo(settledMarker.triangleSize * finalCssWidth / pageWidth)
+    expect(previewMarker.top * initialCssWidth / pageWidth * previewScale).toBeCloseTo(settledMarker.top * finalCssWidth / pageWidth)
   })
 
-  it('scales the marker from one to three times and anchors its tip to the line top', () => {
-    const minimum = progressMarkerGeometry(1, 200, 12, 2)
-    const middle = progressMarkerGeometry(12, 200, 12, 2)
-    const maximum = progressMarkerGeometry(36, 200, 12, 2)
+  it('keeps the top triangle inside the guide stroke and scales it with its width', () => {
+    const strokes = [1, 12, 36]
+    const markers = strokes.map((lineStroke) => progressMarkerGeometry(200, lineStroke))
 
-    expect(minimum.scale).toBeCloseTo(2 / 12)
-    expect(middle.scale).toBeCloseTo((2 / 12) * (1 + 2 * 11 / 35))
-    expect(maximum.scale).toBeCloseTo(minimum.scale * 3)
-    expect([minimum.tipY, middle.tipY, maximum.tipY]).toEqual([194, 194, 194])
-    expect(progressMarkerGeometry(0, 200, 12, 2).scale).toBeCloseTo(minimum.scale)
-    expect(progressMarkerGeometry(40, 200, 12, 2).scale).toBeCloseTo(maximum.scale)
+    expect(markers.map(({ triangleSize }) => triangleSize)).toEqual([0.375, 4.5, 13.5])
+    expect(markers.every(({ top, triangleSize }, index) => top < top + triangleSize && top + triangleSize < 200 + strokes[index] / 2)).toBe(true)
+    expect(markers.map(({ top }) => top)).toEqual([199.5, 194, 182])
+  })
+
+  it('renders the marker at twice the line opacity, capped at full opacity', () => {
+    expect([0, 0.2, 0.4, 0.6, 1].map(progressMarkerOpacity)).toEqual([0, 0.4, 0.8, 1, 1])
+    expect(progressMarkerOpacity(-0.2)).toBe(0)
   })
 })
 

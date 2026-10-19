@@ -5,9 +5,9 @@ import { Ellipsis, X } from 'lucide-react'
 import { focusBandHeightRatio, focusDimOpacity, guideGeometryForRotation, pageRectToDisplayRect } from './focusGeometry'
 import type { CounterSnapshot, PageRotation, PageWorkRecord, ProgressGuide, ProgressGuideScreenPosition } from './types'
 import { ColorPresetButtons } from './ColorPresetButtons'
-import { PROGRESS_LINE_COLOR_PRESETS } from './designTokens'
+import { DESIGN_SYSTEM_COLORS, PROGRESS_LINE_COLOR_PRESETS } from './designTokens'
 import { useDismissiblePopover } from './useDismissiblePopover'
-import { progressGuideMoveExceededThreshold, progressLineStrokeWidth, progressMarkerGeometry, progressMarkerProgressFromPointer } from './progressLines'
+import { progressGuideMoveExceededThreshold, progressLineStrokeWidth, progressMarkerGeometry, progressMarkerOpacity, progressMarkerProgressFromPointer } from './progressLines'
 const minimumLength = 0.2
 type StyleField = 'opacity' | 'thickness' | 'dimOpacity' | 'bandHeightRatio'
 
@@ -665,24 +665,22 @@ export function ProgressLineOverlay({ width, height, cssWidth, cssHeight, render
         const color = guide.color ?? defaultColor
         const selected = selectedId === guide.id
         const markerX = guide.markerProgress === undefined ? null : (start + (end - start) * guide.markerProgress) * width
-        const markerThickness = guideThickness(guide, defaultThickness)
-        const markerHeight = 32 * 1.15
         const stroke = guide.thickness === undefined
           ? guide.role === 'reference'
             ? Math.max(1, progressLineStrokeWidth(defaultThickness * 0.5, width, cssWidth, renderedZoom))
             : Math.max(2, progressLineStrokeWidth(defaultThickness, width, cssWidth, renderedZoom))
           : Math.max(0.5, progressLineStrokeWidth(guide.thickness, width, cssWidth, renderedZoom))
-        const markerGeometry = progressMarkerGeometry(markerThickness, y, stroke, renderedZoom)
-        const markerScale = markerGeometry.scale
-        const markerTipY = markerGeometry.tipY
+        const markerGeometry = progressMarkerGeometry(y, stroke)
+        const markerSize = markerGeometry.triangleSize
+        const lineOpacity = guide.opacity ?? (guide.role === 'reference' ? Math.min(defaultOpacity, 0.45) : defaultOpacity)
         return <g key={guide.id}>
-          <line x1={x1} x2={x2} y1={y} y2={y} stroke={color} strokeWidth={stroke} strokeOpacity={guide.opacity ?? (guide.role === 'reference' ? Math.min(defaultOpacity, 0.45) : defaultOpacity)} strokeLinecap="round" pointerEvents="none" />
+          <line x1={x1} x2={x2} y1={y} y2={y} stroke={color} strokeWidth={stroke} strokeOpacity={lineOpacity} strokeLinecap="round" pointerEvents="none" />
           <line data-guide-id={guide.id} data-progress-action="body" x1={x1} x2={x2} y1={y} y2={y} stroke="transparent" strokeWidth={Math.max(stroke, 44 * sy)} pointerEvents={disabled ? 'none' : 'stroke'} role="button" tabIndex={disabled ? -1 : 0} aria-label={guide.role === 'primary' ? t('진행선 표시 스타일') : t('참고선 표시 스타일')} aria-pressed={selected} onKeyDown={(event) => openStyleMenuFromKeyboard(event, guide)} />
           {markerX !== null && <g>
-            <ellipse data-guide-id={guide.id} data-progress-action="marker" cx={markerX} cy={markerTipY - markerHeight * sy * markerScale / 2} rx={Math.max(hitX, 13 * sx * markerScale)} ry={Math.max(hitY, markerHeight * sy * markerScale / 2)} fill="transparent" pointerEvents={disabled ? 'none' : 'all'} role="button" tabIndex={disabled ? -1 : 0} aria-label={guide.role === 'primary' ? t('진행선 표시 스타일') : t('참고선 표시 스타일')} aria-pressed={selected} onKeyDown={(event) => openStyleMenuFromKeyboard(event, guide)} />
-            <svg x={markerX - 13 * sx * markerScale} y={markerTipY - markerHeight * sy * markerScale} width={26 * sx * markerScale} height={markerHeight * sy * markerScale} viewBox="0 0 26 32" preserveAspectRatio="none" overflow="visible" pointerEvents="none" aria-hidden="true">
-              <path d="M 13 32 C 10.5 27 0.7 16 0.7 9 C 0.7 3.8 4.4 1 8 1 C 10.5 1 12 2.8 13 6.5 C 14 2.8 15.5 1 18 1 C 21.6 1 25.3 3.8 25.3 9 C 25.3 16 15.5 27 13 32 Z" fill="none" stroke={color} strokeWidth={3 * markerScale} vectorEffect="non-scaling-stroke" strokeLinecap="round" strokeLinejoin="miter" strokeMiterlimit={6} />
-            </svg>
+            <ellipse data-guide-id={guide.id} data-progress-action="marker" cx={markerX} cy={y} rx={hitX} ry={Math.max(hitY, stroke / 2)} fill="transparent" pointerEvents={disabled ? 'none' : 'all'} role="button" tabIndex={disabled ? -1 : 0} aria-label={guide.role === 'primary' ? t('진행선 표시 스타일') : t('참고선 표시 스타일')} aria-pressed={selected} onKeyDown={(event) => openStyleMenuFromKeyboard(event, guide)} />
+            <g opacity={progressMarkerOpacity(lineOpacity)} pointerEvents="none">
+              <path d={`M ${markerX - markerSize / 2} ${markerGeometry.top} L ${markerX + markerSize / 2} ${markerGeometry.top} L ${markerX} ${markerGeometry.top + markerSize} Z`} fill={DESIGN_SYSTEM_COLORS.primary} stroke="#fff" strokeWidth={1.5} vectorEffect="non-scaling-stroke" strokeLinejoin="round" />
+            </g>
           </g>}
           {selected && <g>
             <ellipse data-guide-id={guide.id} data-progress-action="start" cx={x1} cy={y} rx={hitX} ry={hitY} fill="transparent" pointerEvents={disabled ? 'none' : 'all'} role="button" tabIndex={disabled ? -1 : 0} aria-label={guide.role === 'primary' ? t('진행선 표시 스타일') : t('참고선 표시 스타일')} aria-pressed={selected} onKeyDown={(event) => openStyleMenuFromKeyboard(event, guide)} />
