@@ -13,6 +13,7 @@ type Props = {
   onClose: () => void
   onAddWorkTime: (date: string, elapsedMs: number) => Promise<{ totalWorkTimeMs: number; workTimeDays: DocumentWorkTimeDay[] }>
   onTotalsChange?: (totalWorkTimeMs: number, workTimeDays: DocumentWorkTimeDay[]) => void
+  onInteractionBlockingChange?: (blocked: boolean) => void
 }
 
 type WorkTimeRecord = {
@@ -31,7 +32,7 @@ function dayDate(date: string) {
   return new Date(date + 'T12:00:00')
 }
 
-export default function WorkTimeRecordPanel({ documentId, initialTotalWorkTimeMs, initialWorkTimeDays, onClose, onAddWorkTime, onTotalsChange }: Props) {
+export default function WorkTimeRecordPanel({ documentId, initialTotalWorkTimeMs, initialWorkTimeDays, onClose, onAddWorkTime, onTotalsChange, onInteractionBlockingChange }: Props) {
   const [record, setRecord] = useState<WorkTimeRecord>(() => ({ totalWorkTimeMs: initialTotalWorkTimeMs, workTimeDays: initialWorkTimeDays, sessions: [], notes: {} }))
   const [loading, setLoading] = useState(true)
   const [loadError, setLoadError] = useState(false)
@@ -99,9 +100,14 @@ export default function WorkTimeRecordPanel({ documentId, initialTotalWorkTimeMs
   const sortedDays = [...displayDays].sort((left, right) => right.date.localeCompare(left.date))
   const ordinals = new Map(displayDays.map((day, index) => [day.date, index + 1]))
   const activeNote = noteDraft.date === expandedDate ? noteDraft.value : record.notes[expandedDate] ?? ''
+  const noteHasDraft = Boolean(noteDraft.date && noteDraft.date === expandedDate && noteDraft.value !== (record.notes[expandedDate] ?? ''))
   const bucketCount = mode === 'day' ? dailyRange : mode === 'week' ? 8 : 12
   const buckets = workTimeChartBuckets(displayDays, mode, bucketCount)
   const chartMax = Math.max(1, ...buckets.map((bucket) => bucket.elapsedMs))
+
+  useEffect(() => {
+    onInteractionBlockingChange?.(adding || closeLocked || noteHasDraft)
+  }, [adding, closeLocked, noteHasDraft, onInteractionBlockingChange])
 
   function handleKeyDown(event: KeyboardEvent<HTMLElement>) {
     if (event.key === 'Escape') {

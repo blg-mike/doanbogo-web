@@ -6,6 +6,10 @@ export function progressGuideMoveExceededThreshold(startX: number, startY: numbe
   return Math.hypot(nextX - startX, nextY - startY) > 8
 }
 
+export function progressMarkerProgressFromPointer(pointerX: number, start: number, end: number, grabOffset = 0) {
+  return Math.min(1, Math.max(0, (pointerX - grabOffset - start) / Math.max(0.001, end - start)))
+}
+
 export function progressLineStrokeWidth(thickness: number, pageWidth: number, cssWidth: number, renderedZoom: number) {
   return thickness * pageWidth / Math.max(cssWidth, 1) * renderedZoom
 }

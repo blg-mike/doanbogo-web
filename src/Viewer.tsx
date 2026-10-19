@@ -2,7 +2,7 @@ import { formatNumber, t, translateMessage } from './locales/index'
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type DragEvent as ReactDragEvent, type FormEvent as ReactFormEvent, type MouseEvent as ReactMouseEvent, type PointerEvent as ReactPointerEvent, type ReactNode, type UIEvent as ReactUIEvent } from 'react'
 import type { PDFDocumentProxy } from 'pdfjs-dist'
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
-import { ArrowLeft, Bookmark, Check, ChevronDown, ChevronLeft, ChevronRight, ChevronUp, Columns2, Eraser, Eye, EyeClosed, EyeOff, Files, Grid3X3, GripVertical, Highlighter, Maximize2, Minus, MousePointer2, Pencil, Plus, Redo2, RefreshCw, ScanLine, Settings2, SlidersHorizontal, Square, Type, Undo2, X } from 'lucide-react'
+import { ArrowLeft, Bookmark, Check, ChevronDown, ChevronLeft, ChevronRight, ChevronUp, Columns2, Eraser, Eye, EyeClosed, EyeOff, Files, Focus, Grid3X3, GripVertical, Highlighter, Maximize2, Minus, Minimize2, MoreHorizontal, MousePointer2, Pencil, Plus, Redo2, RefreshCw, ScanLine, Settings2, SlidersHorizontal, Square, Type, Undo2, X } from 'lucide-react'
 import { createPortal } from 'react-dom'
 import BrandLoading from './BrandLoading'
 import yyLogo from './assets/yy-logo.png'
@@ -334,6 +334,31 @@ export default function Viewer() {
   const [viewerExitSaving, setViewerExitSaving] = useState(false)
   const [viewerExitError, setViewerExitError] = useState('')
   const viewerExitInFlightRef = useRef(false)
+  const [workTimePanelBlockUi, setWorkTimePanelBlockUi] = useState(() => ({ documentId: id, blocked: false }))
+  if (workTimePanelBlockUi.documentId !== id) setWorkTimePanelBlockUi({ documentId: id, blocked: false })
+  const workTimePanelBlocking = workTimePanelBlockUi.documentId === id && workTimePanelBlockUi.blocked
+  const onWorkTimePanelBlockingChange = useCallback((blocked: boolean) => setWorkTimePanelBlockUi({ documentId: id, blocked }), [id])
+  const [workTimeRecordUi, setWorkTimeRecordUi] = useState(() => ({ documentId: id, open: false }))
+  if (workTimeRecordUi.documentId !== id) setWorkTimeRecordUi({ documentId: id, open: false })
+  const workTimeRecordOpen = workTimeRecordUi.documentId === id && workTimeRecordUi.open
+  const onWorkTimeRecordOpenChange = useCallback((open: boolean) => setWorkTimeRecordUi({ documentId: id, open }), [id])
+  const [focusViewUi, setFocusViewUi] = useState(() => ({ documentId: id, enabled: false }))
+  if (focusViewUi.documentId !== id) setFocusViewUi({ documentId: id, enabled: false })
+  const focusView = focusViewUi.documentId === id && focusViewUi.enabled && !reportMode
+  const headerMoreTriggerRef = useRef<HTMLButtonElement>(null)
+  const headerMorePanelRef = useRef<HTMLDivElement>(null)
+  const desktopFocusTriggerRef = useRef<HTMLButtonElement>(null)
+  const focusRestoreButtonRef = useRef<HTMLButtonElement>(null)
+  const footerMoreTriggerRef = useRef<HTMLButtonElement>(null)
+  const footerMorePanelRef = useRef<HTMLDivElement>(null)
+  const zoomMenuTriggerRef = useRef<HTMLButtonElement>(null)
+  const zoomMenuPanelRef = useRef<HTMLDivElement>(null)
+  const timerMoreTriggerRef = useRef<HTMLButtonElement>(null)
+  const timerMorePanelRef = useRef<HTMLDivElement>(null)
+  const [headerMoreOpen, setHeaderMoreOpen] = useState(false)
+  const [footerMoreOpen, setFooterMoreOpen] = useState(false)
+  const [zoomMenuOpen, setZoomMenuOpen] = useState(false)
+  const [timerMoreOpen, setTimerMoreOpen] = useState(false)
   const requestViewerExit = useCallback(async () => {
     if (viewerExitInFlightRef.current) return
     viewerExitInFlightRef.current = true
@@ -913,12 +938,12 @@ export default function Viewer() {
   }, [timerHasUnsaved])
 
   useEffect(() => {
-    if (!pdf || suspended || thumbnailCollapsed) return
+    if (!pdf || suspended || thumbnailCollapsed || focusView) return
     const frame = requestAnimationFrame(() => {
       if (thumbnailRailRef.current) thumbnailRailRef.current.scrollLeft = thumbnailScrollRef.current
     })
     return () => cancelAnimationFrame(frame)
-  }, [pdf, suspended, thumbnailCollapsed])
+  }, [pdf, suspended, thumbnailCollapsed, focusView])
 
   useEffect(() => () => {
     window.clearTimeout(thumbnailScrollTimerRef.current)
@@ -938,6 +963,36 @@ export default function Viewer() {
       window.removeEventListener('resize', measure)
     }
   }, [pdf, loading])
+
+  useEffect(() => {
+    if (!timerBarPositioned || reportMode) return
+    const shell = viewerShellRef.current
+    const bar = shell?.querySelector<HTMLElement>('.viewer-timer-bar')
+    if (!shell || !bar) return
+    const clampPosition = () => {
+      const shellRect = shell.getBoundingClientRect()
+      const barRect = bar.getBoundingClientRect()
+      const maxLeft = Math.max(0, shellRect.width - barRect.width)
+      const maxTop = Math.max(0, shellRect.height - barRect.height)
+      const minTop = window.matchMedia('(max-width: 600px)').matches ? focusView ? 100 : 44 : 0
+      setTimerBarState((current) => {
+        if (current.documentId !== id || current.left === null) return current
+        const left = clamp(current.left, 0, maxLeft)
+        const top = clamp(current.top, minTop, Math.max(minTop, maxTop))
+        return left === current.left && top === current.top ? current : { ...current, left, top }
+      })
+    }
+    const observer = new ResizeObserver(clampPosition)
+    observer.observe(shell)
+    observer.observe(bar)
+    window.addEventListener('resize', clampPosition)
+    window.visualViewport?.addEventListener('resize', clampPosition)
+    return () => {
+      observer.disconnect()
+      window.removeEventListener('resize', clampPosition)
+      window.visualViewport?.removeEventListener('resize', clampPosition)
+    }
+  }, [focusView, id, reportMode, timerBarPositioned])
 
   const orientation = areaSize.width >= areaSize.height ? 'wide' : 'tall'
   const ratio = snapshot ? (orientation === 'wide' ? snapshot.wideRatio : snapshot.tallRatio) : 0.5
@@ -963,13 +1018,16 @@ export default function Viewer() {
   const secondaryPage = snapshot?.secondary.page
   const isSplit = snapshot?.split
   const activePaneId = snapshot?.activePane
+  const focusViewBlocked = timerSaving || viewerExitSaving || counterActionSaving || thumbnailGroupSaving || thumbnailGroupSavingRef.current || Boolean(thumbnailGroupSavePromiseRef.current) || renameDialog || thumbnailGroupDialog || colorworkDialog || counterTimerPromptOpen || counterTimerPromptSaving || exitPromptOpen || counterRowEditing || workTimePanelBlocking || thumbnailGroupPopover?.mode === 'rename' || thumbnailGroupPopover?.mode === 'order' || thumbnailGroupPopover?.mode === 'rail-order'
   useEffect(() => {
     if (!miniBarOpen) return
     const closeOnEscape = (event: KeyboardEvent) => {
       if (event.key !== 'Escape') return
       if (event.target instanceof Element && event.target.closest('.counter-modal-backdrop')) return
-      event.preventDefault()
-      event.stopPropagation()
+      if (!focusView) {
+        event.preventDefault()
+        event.stopPropagation()
+      }
       closeMiniBarOnPdfActionRef.current = false
       setMiniBarState((current) => current.documentId === id ? { ...current, open: false } : current)
       setMiniBarSettingsOpen(false)
@@ -977,8 +1035,24 @@ export default function Viewer() {
     }
     document.addEventListener('keydown', closeOnEscape, true)
     return () => document.removeEventListener('keydown', closeOnEscape, true)
-  }, [miniBarOpen, id, setMiniBarSettingsOpen])
+  }, [focusView, miniBarOpen, id, setMiniBarSettingsOpen])
   useDismissiblePopover(miniBarSettingsOpen, miniBarSettingsPanelRef, miniBarSettingsTriggerRef, () => setMiniBarSettingsOpen(false))
+  useDismissiblePopover(headerMoreOpen, headerMorePanelRef, headerMoreTriggerRef, () => setHeaderMoreOpen(false))
+  useDismissiblePopover(footerMoreOpen, footerMorePanelRef, footerMoreTriggerRef, () => setFooterMoreOpen(false))
+  useDismissiblePopover(zoomMenuOpen, zoomMenuPanelRef, zoomMenuTriggerRef, () => setZoomMenuOpen(false))
+  useDismissiblePopover(timerMoreOpen, timerMorePanelRef, timerMoreTriggerRef, () => setTimerMoreOpen(false))
+
+  useEffect(() => {
+    if (!focusView) return
+    const exitOnEscape = (event: KeyboardEvent) => {
+      if (event.key !== 'Escape' || event.defaultPrevented) return
+      event.preventDefault()
+      setFocusViewUi({ documentId: id, enabled: false })
+      window.requestAnimationFrame(() => (window.matchMedia('(max-width: 600px)').matches ? headerMoreTriggerRef.current : desktopFocusTriggerRef.current)?.focus())
+    }
+    window.addEventListener('keydown', exitOnEscape)
+    return () => window.removeEventListener('keydown', exitOnEscape)
+  }, [focusView, id])
 
   useEffect(() => {
     const root = document.documentElement
@@ -2159,6 +2233,28 @@ export default function Viewer() {
     setPages(await getPages(id))
   }
 
+  function toggleFocusView() {
+    if (focusView) {
+      setFocusViewUi({ documentId: id, enabled: false })
+      window.requestAnimationFrame(() => (window.matchMedia('(max-width: 600px)').matches ? headerMoreTriggerRef.current : desktopFocusTriggerRef.current)?.focus())
+      return
+    }
+    if (focusViewBlocked) return
+    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }))
+    setHeaderMoreOpen(false)
+    setFooterMoreOpen(false)
+    setZoomMenuOpen(false)
+    setTimerMoreOpen(false)
+    setSavedCounterSession({ documentId: id, visible: false })
+    setCounterDetailsExpanded(false)
+    setMiniBarSettingsOpen(false)
+    setThumbnailGroupPopover(null)
+    onWorkTimeRecordOpenChange(false)
+    onWorkTimePanelBlockingChange(false)
+    setFocusViewUi({ documentId: id, enabled: true })
+    window.requestAnimationFrame(() => focusRestoreButtonRef.current?.focus())
+  }
+
   function toggleSplit() {
     if (!snapshot) return
     mutateSnapshot((current) => ({
@@ -2188,7 +2284,8 @@ export default function Viewer() {
     const shellRect = shell.getBoundingClientRect()
     const barRect = bar.getBoundingClientRect()
     const left = clamp(barRect.left - shellRect.left, 0, Math.max(0, shellRect.width - barRect.width))
-    const top = clamp(barRect.top - shellRect.top, 0, Math.max(0, shellRect.height - barRect.height))
+    const minTop = window.matchMedia('(max-width: 600px)').matches ? focusView ? 100 : 44 : 0
+    const top = clamp(barRect.top - shellRect.top, minTop, Math.max(minTop, shellRect.height - barRect.height))
     setTimerBarState({ documentId: id, left, top })
     timerBarDragRef.current = { pointerId: event.pointerId, offsetX: event.clientX - barRect.left, offsetY: event.clientY - barRect.top }
     event.currentTarget.setPointerCapture(event.pointerId)
@@ -2201,7 +2298,8 @@ export default function Viewer() {
     if (!drag || drag.pointerId !== event.pointerId || !shell || !bar) return
     const shellRect = shell.getBoundingClientRect()
     const left = clamp(event.clientX - shellRect.left - drag.offsetX, 0, Math.max(0, shellRect.width - bar.offsetWidth))
-    const top = clamp(event.clientY - shellRect.top - drag.offsetY, 0, Math.max(0, shellRect.height - bar.offsetHeight))
+    const minTop = window.matchMedia('(max-width: 600px)').matches ? focusView ? 100 : 44 : 0
+    const top = clamp(event.clientY - shellRect.top - drag.offsetY, minTop, Math.max(minTop, shellRect.height - bar.offsetHeight))
     bar.style.left = left + 'px'
     bar.style.top = top + 'px'
     bar.style.right = 'auto'
@@ -2213,34 +2311,15 @@ export default function Viewer() {
     const bar = event.currentTarget.closest<HTMLElement>('.viewer-timer-bar')
     if (shell && bar) {
       const shellRect = shell.getBoundingClientRect()
+      const minTop = window.matchMedia('(max-width: 600px)').matches ? focusView ? 100 : 44 : 0
       setTimerBarState({
         documentId: id,
         left: clamp(Number.parseFloat(bar.style.left) || 0, 0, Math.max(0, shellRect.width - bar.offsetWidth)),
-        top: clamp(Number.parseFloat(bar.style.top) || 0, 0, Math.max(0, shellRect.height - bar.offsetHeight)),
+        top: clamp(Number.parseFloat(bar.style.top) || 0, minTop, Math.max(minTop, shellRect.height - bar.offsetHeight)),
       })
     }
     timerBarDragRef.current = null
   }
-
-  useEffect(() => {
-    if (!timerBarPositioned) return
-    const shell = viewerShellRef.current
-    const bar = shell?.querySelector<HTMLElement>('.viewer-timer-bar')
-    if (!shell || !bar) return
-    const keepBarInBounds = () => {
-      const shellRect = shell.getBoundingClientRect()
-      setTimerBarState((current) => {
-        if (current.documentId !== id || current.left === null) return current
-        const left = clamp(current.left, 0, Math.max(0, shellRect.width - bar.offsetWidth))
-        const top = clamp(current.top, 0, Math.max(0, shellRect.height - bar.offsetHeight))
-        return left === current.left && top === current.top ? current : { ...current, left, top }
-      })
-    }
-    const observer = new ResizeObserver(keepBarInBounds)
-    observer.observe(shell)
-    observer.observe(bar)
-    return () => observer.disconnect()
-  }, [id, timerBarPositioned])
 
   function moveDivider(event: ReactPointerEvent<HTMLButtonElement>) {
     const drag = dragRef.current
@@ -2761,7 +2840,7 @@ export default function Viewer() {
   }
 
   const timerPortalTarget = loadError?.id === id || suspended || loading || loadedId !== id || !pdf || !snapshot ? null : timerPortalHost
-  const timerElement = <DocumentWorkTimer key={id + ':' + timerSessionKey} documentId={id} initialTotalWorkTimeMs={documentWorkTimeMs} initialWorkTimeDays={documentWorkTimeDays} initialTodayWorkDate={todayWorkDate} initialTodayWorkTimeMs={todayWorkTimeMs} portalTarget={timerPortalTarget} onWorkTimeChange={onTimerWorkTimeChange} onTodayWorkTimeChange={onTimerTodayWorkTimeChange} onUnsavedChange={onTimerUnsavedChange} onSavingChange={onTimerSavingChange} onClockChange={onTimerClockChange} />
+  const timerElement = <DocumentWorkTimer key={id + ':' + timerSessionKey} documentId={id} initialTotalWorkTimeMs={documentWorkTimeMs} initialWorkTimeDays={documentWorkTimeDays} initialTodayWorkDate={todayWorkDate} initialTodayWorkTimeMs={todayWorkTimeMs} portalTarget={timerPortalTarget} onWorkTimeChange={onTimerWorkTimeChange} onTodayWorkTimeChange={onTimerTodayWorkTimeChange} onUnsavedChange={onTimerUnsavedChange} onSavingChange={onTimerSavingChange} onClockChange={onTimerClockChange} recordPanelOpen={workTimeRecordOpen} onRecordPanelOpenChange={onWorkTimeRecordOpenChange} onRecordPanelBlockingChange={onWorkTimePanelBlockingChange} />
   const requestReportExit = () => {
     if (timerSaving) return
     if (timerHasUnsaved) {
@@ -2783,21 +2862,31 @@ export default function Viewer() {
   return (
     <>
     {timerElement}
-    <main ref={viewerShellRef} className={'viewer-shell' + (reportMode ? ' report-mode' : '') + (thumbnailCollapsed ? ' thumbnail-collapsed' : '') + (selectedThumbnailPages.length > 0 || thumbnailGroupError ? ' thumbnail-feedback-visible' : '') + (counterPanelVisible && !reportMode ? ' counter-panel-visible' : '')} onContextMenu={reportMode ? undefined : preventViewerContextMenu}>
+    <main ref={viewerShellRef} className={'viewer-shell' + (reportMode ? ' report-mode' : '') + (focusView && !reportMode ? ' focus-view' : '') + (thumbnailCollapsed ? ' thumbnail-collapsed' : '') + (selectedThumbnailPages.length > 0 || thumbnailGroupError ? ' thumbnail-feedback-visible' : '') + (counterPanelVisible && !reportMode ? ' counter-panel-visible' : '')} onContextMenu={reportMode ? undefined : preventViewerContextMenu}>
       {suspendError && <div className="viewer-save-warning" role="alert"><span>{translateMessage(suspendError)}</span><button type="button" aria-label={t("저장 알림 닫기")} onClick={() => setSuspendError('')}><X size={14} /></button></div>}
       {annotationLimitNotice && <div className="viewer-limit-notice" role="status" aria-live="polite">{annotationLimitNotice}</div>}
       {showZoomHint && !reportMode && <aside className="viewer-zoom-hint" role="status"><span>{t("마우스 휠로 확대 · 이동 도구에서 드래그로 이동")}</span><button type="button" aria-label={t("확대·이동 안내 닫기")} onClick={() => setShowZoomHint(false)}><X size={15} /></button></aside>}
+      {focusView && !reportMode && <button ref={focusRestoreButtonRef} type="button" className="viewer-focus-restore" aria-label={t('UI 복원')} title={t('UI 복원')} onClick={toggleFocusView}><Minimize2 size={20} /><span>{t('UI 복원')}</span></button>}
       <header className="viewer-header">
         <div className="viewer-brand"><img src={yyLogo} alt={t("도안보고 로고")} /><small>{t("YY공동제작")}</small></div>
         <button className="viewer-back" aria-label={t('저장하고 나가기')} disabled={timerSaving || viewerExitSaving} onClick={() => void requestViewerExit()}><ArrowLeft size={20} /><span>{t('저장하고 나가기')}</span></button>
-        <div className="viewer-title"><div className="viewer-title-name"><strong title={displayDocumentName}>{displayDocumentName}</strong><button type="button" className="viewer-title-edit" aria-label={t("이름 변경")} title={t("이름 변경")} onClick={() => { setRenameDraft(displayDocumentName); setRenameError(''); setRenameDialog(true) }}><Pencil size={14} /></button></div>{reportMode && <span>{t('뜨개보고서')}</span>}</div>
+        <div className="viewer-title"><div className="viewer-title-name"><button type="button" className="viewer-title-name-button" title={displayDocumentName} onClick={() => { setRenameDraft(displayDocumentName); setRenameError(''); setRenameDialog(true) }}><strong>{displayDocumentName}</strong></button><button type="button" className="viewer-title-edit" aria-label={t("이름 변경")} title={t("이름 변경")} onClick={() => { setRenameDraft(displayDocumentName); setRenameError(''); setRenameDialog(true) }}><Pencil size={14} /></button></div>{reportMode && <span>{t('뜨개보고서')}</span>}</div>
         <div className="viewer-header-actions">
           {!reportMode && <>
             <div className="viewer-header-history" role="group" aria-label={t('실행 취소') + ' / ' + t('다시 실행')}>
               <button type="button" className="viewer-action viewer-header-icon-action" aria-label={t('실행 취소')} title={t('실행 취소')} disabled={!canUndo} onClick={() => undoRedo('undo')}><Undo2 size={18} /></button>
               <button type="button" className="viewer-action viewer-header-icon-action" aria-label={t('다시 실행')} title={t('다시 실행')} disabled={!canRedo} onClick={() => undoRedo('redo')}><Redo2 size={18} /></button>
             </div>
-            <button className={'viewer-action ' + (snapshot.split ? 'selected' : '')} onClick={toggleSplit}><Columns2 size={18} /><span>{snapshot.split ? t('한 영역 보기') : t('두 영역 보기')}</span></button>
+            <button className={'viewer-action viewer-split-toggle ' + (snapshot.split ? 'selected' : '')} aria-label={snapshot.split ? t('한 영역 보기') : t('두 영역 보기')} title={snapshot.split ? t('한 영역 보기') : t('두 영역 보기')} aria-pressed={snapshot.split} onClick={toggleSplit}><Columns2 size={18} /><span>{snapshot.split ? t('한 영역 보기') : t('두 영역 보기')}</span></button>
+            <button ref={desktopFocusTriggerRef} type="button" className={'viewer-action viewer-focus-toggle' + (focusView ? ' selected' : '')} aria-label={t('집중 보기 켜기')} title={t('집중 보기 켜기')} disabled={focusViewBlocked} onClick={toggleFocusView}><Focus size={19} /></button>
+            <div className="viewer-header-more-anchor">
+              <button ref={headerMoreTriggerRef} type="button" className="viewer-action viewer-header-more" aria-label={t('더보기')} title={t('더보기')} aria-haspopup="menu" aria-expanded={headerMoreOpen} onClick={() => setHeaderMoreOpen((open) => !open)}><MoreHorizontal size={20} /></button>
+              {headerMoreOpen && <div ref={headerMorePanelRef} className="viewer-compact-menu viewer-header-menu" role="menu" aria-label={t('더보기')}>
+                <button type="button" role="menuitem" disabled={!canRedo} onClick={() => { setHeaderMoreOpen(false); undoRedo('redo') }}><Redo2 size={18} /><span>{t('다시 실행')}</span></button>
+                <button type="button" role="menuitem" className={snapshot.split ? 'selected' : ''} aria-pressed={snapshot.split} onClick={() => { setHeaderMoreOpen(false); toggleSplit() }}><Columns2 size={18} /><span>{snapshot.split ? t('한 영역 보기') : t('두 영역 보기')}</span></button>
+                <button type="button" role="menuitem" disabled={focusViewBlocked} onClick={toggleFocusView}><Focus size={18} /><span>{t('집중 보기 켜기')}</span></button>
+              </div>}
+            </div>
           </>}
           {reportMode && <button className="viewer-action" onClick={() => setSearchParams({})}><ArrowLeft size={16} /><span>{t("도안으로 돌아가기")}</span></button>}
         </div>
@@ -2813,8 +2902,8 @@ export default function Viewer() {
         {!reportMode && counterPanelVisible && <CounterPanel snapshot={snapshot} counters={counters} timerLinkMode={counterTimerMode} onChange={updateCounterPanel} onUndo={undoCounterAction} onRewind={rewindCounter} onCounterValue={setCounterValue} onSettingsSave={saveCounterSettings} onTimerLinkModeChange={changeCounterTimerLinkMode} onSnapshotUpdate={updateCounterSnapshot} onClose={() => setSavedCounterSession({ documentId: id, visible: false })} />}
       </section>
       <section className={'viewer-footer' + (thumbnailCollapsed ? ' thumbnail-collapsed' : '')}>
-        <div id={thumbnailContentId} className="thumbnail-content" hidden={thumbnailCollapsed}>
-        {!thumbnailCollapsed && <>
+        <div id={thumbnailContentId} className="thumbnail-content" hidden={thumbnailCollapsed || focusView}>
+        {!thumbnailCollapsed && !focusView && <>
         <div className="thumbnail-group-section">
           <button type="button" className="thumbnail-group-add" disabled={thumbnailGroupSaving} onClick={() => openThumbnailGroupDialog()}><Plus size={15} /><span>{t('그룹 추가')}</span></button>
           <div className="thumbnail-group-list" ref={thumbnailGroupListRef} aria-label={t('썸네일 그룹')}>
@@ -2904,6 +2993,27 @@ export default function Viewer() {
             <button type="button" className="viewer-page-control-button" aria-label={t('다음')} title={t('다음')} disabled={activeVisiblePageIndex < 0 || activeVisiblePageIndex >= visiblePageNumbers.length - 1} onClick={() => navigateVisiblePage(1)}><ChevronRight size={18} /></button>
           </div>
         </div>}
+        {!reportMode && <div className="viewer-footer-mobile-controls">
+          <button type="button" className="viewer-page-control-button" aria-label={t('이전')} title={t('이전')} disabled={activeVisiblePageIndex <= 0} onClick={() => navigateVisiblePage(-1)}><ChevronLeft size={20} /></button>
+          <span className="viewer-footer-page-count" aria-label={t('페이지') + ' ' + activePage + ' / ' + pdf.numPages} title={t('페이지') + ' ' + activePage + ' / ' + pdf.numPages}>{formatNumber(activePage)} / {formatNumber(pdf.numPages)}</span>
+          <button type="button" className="viewer-page-control-button" aria-label={t('다음')} title={t('다음')} disabled={activeVisiblePageIndex < 0 || activeVisiblePageIndex >= visiblePageNumbers.length - 1} onClick={() => navigateVisiblePage(1)}><ChevronRight size={20} /></button>
+          <div className="viewer-mobile-menu-anchor">
+            <button ref={zoomMenuTriggerRef} type="button" className="viewer-mobile-zoom-trigger" aria-haspopup="menu" aria-expanded={zoomMenuOpen} aria-label={t('확대 배율 {zoom}%', { zoom: Math.round(activeZoom * 100) })} title={t('확대 배율 {zoom}%', { zoom: Math.round(activeZoom * 100) })} onClick={() => setZoomMenuOpen((open) => !open)}>{Math.round(activeZoom * 100)}%</button>
+            {zoomMenuOpen && <div ref={zoomMenuPanelRef} className="viewer-compact-menu viewer-zoom-menu" role="menu" aria-label={t('확대 배율 {zoom}%', { zoom: Math.round(activeZoom * 100) })}>
+              <button type="button" role="menuitem" aria-label={t('축소')} disabled={activeZoom <= 1} onClick={() => { changePane(snapshot.activePane, (pane) => ({ ...pane, zoom: Math.max(1, Math.round((pane.zoom - 0.25) * 100) / 100) }), true); setZoomMenuOpen(false) }}><Minus size={18} /><span>{t('축소')}</span></button>
+              <button type="button" role="menuitem" aria-label={t('확대')} disabled={activeZoom >= 5} onClick={() => { changePane(snapshot.activePane, (pane) => ({ ...pane, zoom: Math.min(5, Math.round((pane.zoom + 0.25) * 100) / 100) }), true); setZoomMenuOpen(false) }}><Plus size={18} /><span>{t('확대')}</span></button>
+              <button type="button" role="menuitem" aria-label={t('화면 맞춤')} title={t('100% 확대와 페이지 중앙으로 맞춤')} onClick={() => { changePane(snapshot.activePane, (pane) => ({ ...pane, zoom: 1, centerX: 0.5, centerY: 0.5 }), true); setZoomMenuOpen(false) }}><Maximize2 size={18} /><span>{t('화면 맞춤')}</span></button>
+            </div>}
+          </div>
+          <div className="viewer-mobile-menu-anchor">
+            <button ref={footerMoreTriggerRef} type="button" className="viewer-page-control-button" aria-label={t('더보기')} title={t('더보기')} aria-haspopup="menu" aria-expanded={footerMoreOpen} onClick={() => setFooterMoreOpen((open) => !open)}><MoreHorizontal size={20} /></button>
+            {footerMoreOpen && <div ref={footerMorePanelRef} className="viewer-compact-menu viewer-footer-more-menu" role="menu" aria-label={t('더보기')}>
+              <button type="button" role="menuitem" disabled={!pageWorks[activePage]} onClick={() => { setFooterMoreOpen(false); rotatePage(snapshot.activePane, activePage) }}><RefreshCw size={18} /><span>{t('시계 방향 90도 회전')}</span></button>
+              <button type="button" role="menuitem" className={isBookmarked ? 'selected' : ''} aria-pressed={isBookmarked} onClick={() => { setFooterMoreOpen(false); void toggleBookmark() }}><Bookmark size={18} fill={isBookmarked ? 'currentColor' : 'none'} /><span>{isBookmarked ? t('북마크 해제') : t('북마크')}</span></button>
+              <button type="button" role="menuitem" className={!thumbnailCollapsed ? 'selected' : ''} aria-pressed={!thumbnailCollapsed} onClick={() => { setFooterMoreOpen(false); toggleThumbnailAccordion() }}>{thumbnailCollapsed ? <ChevronDown size={18} /> : <ChevronUp size={18} />}<span>{thumbnailCollapsed ? t('썸네일 펼치기') : t('썸네일 접기')}</span></button>
+            </div>}
+          </div>
+        </div>}
       </section>
       <div className="viewer-floating-layer">
         <div className={'viewer-floating-bar viewer-timer-bar' + (counterDetailsExpanded ? ' counter-details-expanded' : '') + (timerBarPosition.left === null ? '' : ' positioned')} style={timerBarPosition.left === null ? undefined : { left: timerBarPosition.left, top: timerBarPosition.top, right: 'auto' }} role="group" aria-label={`${t('카운터')} · ${t('작업 타이머')}`}>
@@ -2933,6 +3043,13 @@ export default function Viewer() {
           </section>}
           {!reportMode && <span className="viewer-timer-divider" aria-hidden="true" />}
           <div className="viewer-timer-portal-host" ref={setTimerPortalHost} />
+          {!reportMode && <div className="viewer-timer-more-anchor">
+            <button ref={timerMoreTriggerRef} type="button" className="viewer-counter-mobile-more" aria-label={t('더보기')} title={t('더보기')} aria-haspopup="menu" aria-expanded={timerMoreOpen} onClick={() => setTimerMoreOpen((open) => !open)}><MoreHorizontal size={20} />{counterAlertPending && <i className="counter-notification-dot" aria-hidden="true" />}</button>
+            {timerMoreOpen && <div ref={timerMorePanelRef} className="viewer-compact-menu viewer-timer-more-menu" role="menu" aria-label={t('더보기')}>
+              <button type="button" role="menuitem" className={counterPanelVisible ? 'selected' : ''} aria-pressed={counterPanelVisible} onClick={() => { setSavedCounterSession({ documentId: id, visible: !counterPanelVisible }); setTimerMoreOpen(false) }}><SlidersHorizontal size={18} /><span>{counterPanelVisible ? t('타임랩') + ' · ' + t('닫기') : t('타임랩')}</span>{counterAlertPending && <i className="counter-notification-dot" aria-hidden="true" />}</button>
+              <button type="button" role="menuitem" className={counterDetailsExpanded ? 'selected' : ''} aria-pressed={counterDetailsExpanded} onClick={() => { setCounterDetailsExpanded((expanded) => !expanded); setTimerMoreOpen(false) }}>{counterDetailsExpanded ? <ChevronUp size={18} /> : <ChevronDown size={18} />}<span>{counterDetailsExpanded ? t('보조 카운터 정보 접기') : t('보조 카운터 정보 펼치기')}</span></button>
+            </div>}
+          </div>}
         </div>
         {!reportMode && <div className={'viewer-floating-bar viewer-mini-bar' + (miniBarOpen ? ' expanded' : '')}>
           <button ref={miniBarAccordionButtonRef} type="button" className="viewer-mini-accordion-button" aria-label={t('뷰어 도구')} title={t('뷰어 도구')} aria-expanded={miniBarOpen} aria-controls={miniBarControlsId} onClick={() => { const open = !miniBarOpen; if (!open) closeMiniBarOnPdfActionRef.current = false; setMiniBarState({ documentId: id, open }); if (!open) setMiniBarSettingsOpen(false) }}>

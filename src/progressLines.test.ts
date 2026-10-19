@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { createDefaultPrimaryProgressGuide, DEFAULT_PROGRESS_LINE_THICKNESS, guideRowPosition, migrateProgressGuides, prepareProgressGuidesForDirectInteraction, progressGuideCandidates, progressGuideMoveExceededThreshold, progressLineStrokeWidth } from './progressLines'
+import { createDefaultPrimaryProgressGuide, DEFAULT_PROGRESS_LINE_THICKNESS, guideRowPosition, migrateProgressGuides, prepareProgressGuidesForDirectInteraction, progressGuideCandidates, progressGuideMoveExceededThreshold, progressLineStrokeWidth, progressMarkerProgressFromPointer } from './progressLines'
 import type { PageWorkRecord } from './types'
 
 function legacyWork(): PageWorkRecord {
@@ -103,5 +103,20 @@ describe('progress line zoom thickness', () => {
 
     expect(previewCssWidth).toBeCloseTo(8)
     expect(settledCssWidth).toBeCloseTo(previewCssWidth)
+  })
+})
+
+describe('progress line marker dragging', () => {
+  it('preserves the pointer grab offset and clamps the marker to the line', () => {
+    const start = 0.1
+    const end = 0.9
+    const currentMarker = 0.6
+    const pointer = 0.65
+    const grabOffset = pointer - (start + (end - start) * currentMarker)
+
+    expect(progressMarkerProgressFromPointer(pointer, start, end, grabOffset)).toBeCloseTo(currentMarker)
+    expect(progressMarkerProgressFromPointer(pointer + 0.08, start, end, grabOffset)).toBeCloseTo(0.7)
+    expect(progressMarkerProgressFromPointer(-1, start, end, grabOffset)).toBe(0)
+    expect(progressMarkerProgressFromPointer(2, start, end, grabOffset)).toBe(1)
   })
 })

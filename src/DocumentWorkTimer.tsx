@@ -23,9 +23,12 @@ type Props = {
   onUnsavedChange: (unsaved: boolean) => void
   onSavingChange: (saving: boolean) => void
   onClockChange: (clock: DocumentTimerClock | null) => void
+  recordPanelOpen: boolean
+  onRecordPanelOpenChange: (open: boolean) => void
+  onRecordPanelBlockingChange?: (blocked: boolean) => void
 }
 
-export default function DocumentWorkTimer({ documentId, initialTotalWorkTimeMs, initialWorkTimeDays, initialTodayWorkDate, initialTodayWorkTimeMs = 0, portalTarget, onWorkTimeChange, onTodayWorkTimeChange, onUnsavedChange, onSavingChange, onClockChange }: Props) {
+export default function DocumentWorkTimer({ documentId, initialTotalWorkTimeMs, initialWorkTimeDays, initialTodayWorkDate, initialTodayWorkTimeMs = 0, portalTarget, onWorkTimeChange, onTodayWorkTimeChange, onUnsavedChange, onSavingChange, onClockChange, recordPanelOpen, onRecordPanelOpenChange, onRecordPanelBlockingChange }: Props) {
   const [sessionId] = useState(() => crypto.randomUUID())
   const elapsedBaseRef = useRef(0)
   const initialTodayBase = initialTodayWorkDate === localWorkDateKey() ? initialTodayWorkTimeMs : 0
@@ -48,7 +51,6 @@ export default function DocumentWorkTimer({ documentId, initialTotalWorkTimeMs, 
   const [running, setRunning] = useState(false)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState(false)
-  const [recordOpen, setRecordOpen] = useState(false)
 
   useEffect(() => {
     if (runningRef.current || startedAtRef.current !== null || elapsedBaseRef.current > 0) return
@@ -289,8 +291,8 @@ export default function DocumentWorkTimer({ documentId, initialTotalWorkTimeMs, 
     <button type="button" className="viewer-work-timer-toggle" aria-label={error ? t('저장 재시도') : running ? t('일시정지') : t('재생')} title={error ? t('저장 재시도') : running ? t('일시정지') : t('재생')} disabled={saving} onClick={() => void toggle()}>
       {running ? <Pause size={17} /> : <Play size={17} />}
     </button>
-    <button type="button" className="viewer-work-timer-elapsed" aria-haspopup="dialog" aria-expanded={recordOpen} aria-label={`${t('오늘 누적 작업시간')} ${formatWorkTime(elapsedMs)} · ${t('작업 기록')}`} title={t('작업 기록')} aria-live="off" onClick={() => setRecordOpen(true)}>{formatWorkTime(elapsedMs)}</button>
-    {recordOpen && <WorkTimeRecordPanel documentId={documentId} initialTotalWorkTimeMs={initialTotalWorkTimeMs} initialWorkTimeDays={initialWorkTimeDays} onClose={() => setRecordOpen(false)} onAddWorkTime={addWorkTime} onTotalsChange={(total, days) => {
+    <button type="button" className="viewer-work-timer-elapsed" aria-haspopup="dialog" aria-expanded={recordPanelOpen} aria-label={`${t('오늘 누적 작업시간')} ${formatWorkTime(elapsedMs)} · ${t('작업 기록')}`} title={t('작업 기록')} aria-live="off" onClick={() => onRecordPanelOpenChange(true)}>{formatWorkTime(elapsedMs)}</button>
+    {recordPanelOpen && <WorkTimeRecordPanel documentId={documentId} initialTotalWorkTimeMs={initialTotalWorkTimeMs} initialWorkTimeDays={initialWorkTimeDays} onClose={() => { onRecordPanelOpenChange(false); onRecordPanelBlockingChange?.(false) }} onAddWorkTime={addWorkTime} onInteractionBlockingChange={onRecordPanelBlockingChange} onTotalsChange={(total, days) => {
       const currentDate = localWorkDateKey()
       onWorkTimeChange({ totalWorkTimeMs: total, todayWorkDate: currentDate, todayWorkTimeMs: days.find((day) => day.date === currentDate)?.elapsedMs ?? 0, workTimeDays: days })
     }} />}

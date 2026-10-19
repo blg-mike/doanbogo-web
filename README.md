@@ -1,37 +1,33 @@
 # 니트피크 웹
 
-React·TypeScript·Vite·PDF.js 기반 뜨개 작업 도구. PDF·사진 도안·차트와 작업 기록을 브라우저 로컬에 저장한다.
+React·TypeScript·Vite·PDF.js 기반 뜨개 작업 도구. 한국어는 니트피크, 그 외 언어는 KnitPeek다. PDF·사진·독립 차트와 작업 기록을 브라우저 로컬에 저장한다.
 
-## 시작
-Node.js 24 기준으로 실행한다.
+## 실행·검사
+Node.js 24 기준. 웹 폴더에서 실행한다.
 
 ```powershell
 npm ci
-npm run build:portable
-```
-
-사용자 실행 파일은 `portable/index.html`, 홍보 홈페이지는 `portable/homepage.html`이다. 원본 수정 후 재생성하고 생성 HTML은 직접 편집하지 않는다.
-
-## 개발·검사
-```powershell
 npm run dev
 npm run typecheck
 npm run lint
 npm test
 npm run check:design-system
 npm run build
-npm run preview
 npm run build:portable
 ```
 
-브라우저 저장 사용 여부를 확인하고 임시 저장 상태에서는 .doanbogo 작업 파일을 내보낸다. 현재 백업은 v14이며 v1~v14 가져오기를 지원한다.
+- 사용자 실행 파일: `portable/index.html`; 홈페이지: `portable/homepage.html`. 생성 HTML 대신 원본을 수정한다.
+- 홈페이지 빌드는 상위 프로젝트 `../docs/terms-*.md`, `privacy-*.md`를 읽는다. 독립 checkout의 단위 테스트는 상위 문서에 의존하지 않는다.
+- 일반 웹은 `dist/`로 생성하고 `npm run preview`로 확인한다.
+- 저장은 기기·브라우저·출처별로 분리된다. 임시 메모리 모드에서는 브라우저 종료 시 작업이 사라질 수 있다. 중요한 원본과 출력물은 별도 보관한다.
 
 ## 문서
-- [작업 규칙](AGENTS.md) · [화면 요약](DESIGN.md) · [기술 구조](Architecture.md) · [디자인시스템](design_system.md)
-- [검증 목록](docs/WEB_MIGRATION_CHECKLIST.md) · [진행선](docs/PROGRESS_LINE_DIRECT_DRAG_PHASE_PLAN.md)
-- [편집·그룹](docs/FEATURE_IMPROVEMENT_PHASE_PLAN.md) · [보고서](docs/KNITTING_REPORT_PHASE_PLAN.md) · [차트](docs/CHART_CREATION_PHASE_PLAN.md)
-- [홈페이지 생성](HOMEPAGE_PORTABLE.md)
+- [작업 기준](AGENTS.md) · [화면·기능](DESIGN.md) · [소스·저장 계약](Architecture.md) · [디자인시스템](design_system.md)
+- [진행선·행 인식](docs/PROGRESS_LINE_DIRECT_DRAG_PHASE_PLAN.md) · [편집·그룹](docs/FEATURE_IMPROVEMENT_PHASE_PLAN.md)
+- [보고서·시간](docs/KNITTING_REPORT_PHASE_PLAN.md) · [독립 차트](docs/CHART_CREATION_PHASE_PLAN.md)
+- [검증 목록](docs/WEB_MIGRATION_CHECKLIST.md) · [실행·전달](docs/WEB_MIGRATION_PHASE_PLAN.md) · [홈페이지](HOMEPAGE_PORTABLE.md)
 
-## 공개 웹
+## 공개 웹·Android
 [니트피크](https://blg-mike.github.io/doanbogo-web/) · [저장소](https://github.com/blg-mike/doanbogo-web).
-main 변경은 `.github/workflows/pages.yml`에서 검사·일반 빌드 후 GitHub Pages로 배포한다. 공개 반영은 워크플로와 실제 서비스 상태를 확인한다.
+main push는 검사·일반 빌드 후 Pages를 자동 배포한다. 실제 서비스 상태는 별도 확인한다.
+Android 테스트 앱은 형제 폴더 `doanbogo-app`에서 웹 portable을 다시 빌드해 내장한다. 기존 APK가 최신 웹을 자동 반영하지 않는다.

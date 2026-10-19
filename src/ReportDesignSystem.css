@@ -271,25 +271,29 @@ body:has(.knitting-report-editor) .pwa-dismiss-button:focus-visible { outline: 3
 }
 
 /* Direct-entry report form and work-time history dialog. */
-.knitting-report-editor .knitting-report-content { width: 100%; max-width: 1320px; box-sizing: border-box; gap: 16px; padding: 18px clamp(14px, 2.6vw, 34px) 24px; }
-.knitting-report-editor .report-cover-card { grid-template-columns: 168px minmax(0, 1fr); gap: 0; border-radius: 16px; box-shadow: none; }
+.knitting-report-editor { --color-report-editor-background: #F5F6F5; }
+.knitting-report-editor .report-workspace,
+.knitting-report-editor .report-scroll { background: var(--color-report-editor-background); }
+.knitting-report-editor .knitting-report-content { width: 100%; max-width: 1320px; box-sizing: border-box; gap: 12px; padding: 18px clamp(14px, 2.6vw, 34px) 24px; }
+.knitting-report-editor .report-cover-card { display: grid; grid-template-columns: 132px minmax(0, 1fr) minmax(220px, 260px); gap: 0; border-radius: 16px; box-shadow: none; }
 .knitting-report-editor .report-cover-card > .report-photo-field { position: relative; min-height: 136px; height: auto; align-self: stretch; background: var(--color-surface-subtle); }
 .knitting-report-editor .report-cover-card > .report-photo-field > .report-photo-preview,
 .knitting-report-editor .report-cover-card > .report-photo-field > img { width: 100%; height: 100%; min-height: 136px; max-height: none; object-fit: cover; }
 .knitting-report-editor .report-cover-copy { min-width: 0; align-content: start; gap: 9px; padding: 16px 20px; }
 .knitting-report-editor .report-cover-title-line { display: flex; align-items: center; gap: 10px; }
 .knitting-report-editor .report-cover-eyebrow { color: var(--color-text-muted); font-size: 12px; letter-spacing: 0; }
-.knitting-report-editor .report-cover-status select { min-height: 32px; padding: 0 10px; border: 1px solid var(--color-border); border-radius: 999px; color: var(--color-secondary); background: var(--color-secondary-soft); font: inherit; font-size: 12px; }
+.knitting-report-editor .report-cover-status select { min-height: 44px; padding: 0 10px; border: 1px solid var(--color-border); border-radius: 8px; color: var(--color-secondary); background: var(--color-secondary-soft); font: inherit; font-size: 12px; }
 .knitting-report-editor .report-title-row { min-width: 0; display: flex; align-items: center; gap: 8px; }
 .knitting-report-editor .report-cover-copy .report-title-row h1 { min-width: 0; overflow-wrap: anywhere; font-size: clamp(20px, 2vw, 28px); }
-.knitting-report-editor .report-title-edit-trigger { width: 36px; height: 36px; flex: 0 0 36px; }
+.knitting-report-editor .report-title-edit-trigger { width: 44px; height: 44px; flex: 0 0 44px; }
 .knitting-report-editor .report-cover-fields { display: grid; grid-template-columns: minmax(0, 1.5fr) minmax(0, 1fr) repeat(2, minmax(118px, .8fr)); gap: 9px 12px; }
 .knitting-report-editor .report-cover-fields .report-field { font-size: 12px; }
-.knitting-report-editor .report-main-layout { min-width: 0; display: grid; grid-template-columns: minmax(0, 1fr) minmax(252px, 304px); align-items: start; gap: 16px; }
-.knitting-report-editor .report-form-main { min-width: 0; display: grid; align-content: start; gap: 14px; }
-.knitting-report-editor .report-form-card { min-width: 0; padding: 17px 18px; border: 1px solid var(--color-border); border-radius: 16px; background: var(--color-surface); }
-.knitting-report-editor .report-form-card > header { min-height: 32px; display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 12px; }
+.knitting-report-editor .report-form-main { min-width: 0; display: grid; align-content: start; gap: 12px; }
+.knitting-report-editor .report-yarn-needle-grid { min-width: 0; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.knitting-report-editor .report-form-card { min-width: 0; padding: 16px; border: 1px solid var(--color-border); border-radius: 12px; background: var(--color-surface); }
+.knitting-report-editor .report-form-card > header { min-height: 44px; display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 8px; }
 .knitting-report-editor .report-form-card > header > div { min-width: 0; }
+.knitting-report-editor .report-form-card > header > small { color: var(--color-text-muted); font-size: 12px; }
 .knitting-report-editor .report-form-card h2 { margin: 0; color: var(--color-text); font-size: 18px; line-height: 1.35; }
 .knitting-report-editor .report-form-card > header p { margin: 4px 0 0; color: var(--color-text-secondary); font-size: 12px; line-height: 1.5; }
 .knitting-report-editor .report-add-action { min-height: 44px; display: inline-flex; flex: 0 0 auto; align-items: center; justify-content: center; gap: 6px; padding: 0 9px; border: 1px solid transparent; border-radius: 8px; color: var(--color-primary); background: transparent; font: inherit; font-size: 13px; font-weight: 650; cursor: pointer; }
@@ -373,11 +377,11 @@ body:has(.knitting-report-editor) .pwa-dismiss-button:focus-visible { outline: 3
 .knitting-report-editor .report-measurement-dialog-actions > .primary-button:hover:not(:disabled) { background: var(--color-primary-hover); }
 .knitting-report-editor .report-measurement-dialog-actions > .primary-button:disabled { opacity: .5; cursor: not-allowed; }
 .knitting-report-editor .report-form-card .report-add-button { min-height: 44px; margin-top: 3px; }
-.knitting-report-editor .report-notes-photos > .report-field { margin-bottom: 13px; }
+.knitting-report-editor .report-notes-photos-content { min-width: 0; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); align-items: start; gap: 12px; }
+.knitting-report-editor .report-notes-photos-content > .report-field { margin: 0; }
 .knitting-report-editor .report-photo-grid { grid-template-columns: repeat(auto-fill, minmax(132px, 1fr)); gap: 10px; }
 .knitting-report-editor .report-photo-tile { padding: 6px; }
 .knitting-report-editor .report-photo-open > img { height: 118px; }
-.knitting-report-editor .report-right-column { min-width: 0; display: grid; align-content: start; gap: 10px; }
 .knitting-report-editor .report-share-note { display: flex; align-items: flex-start; gap: 10px; margin: 0; padding: 14px; border-radius: 12px; color: var(--color-text-secondary); background: var(--color-surface-subtle); font-size: 13px; line-height: 1.5; }
 .knitting-report-editor .report-share-note svg { flex: 0 0 auto; color: var(--color-secondary); }
 .knitting-report-editor .report-extra-info { border: 1px solid var(--color-border); border-radius: 12px; background: var(--color-surface); }
@@ -393,6 +397,8 @@ body:has(.knitting-report-editor) .pwa-dismiss-button:focus-visible { outline: 3
 
 .knitting-report-editor .report-worktime-card { width: 100%; min-width: 0; display: grid; gap: 10px; padding: 17px 18px; border: 1px solid var(--color-border); border-radius: 16px; color: var(--color-text); background: var(--color-surface); text-align: left; cursor: pointer; }
 .knitting-report-editor .report-worktime-card:hover { border-color: var(--color-primary); background: var(--color-surface); }
+.knitting-report-editor .report-cover-card > .report-worktime-card { align-content: start; align-self: stretch; padding: 16px; border: 0; border-left: 1px solid var(--color-divider); border-radius: 0; }
+.knitting-report-editor .report-cover-card > .report-worktime-card:hover { background: var(--color-primary-soft); }
 .knitting-report-editor .report-worktime-title { color: var(--color-text); font-size: 18px; font-weight: 700; }
 .knitting-report-editor .report-worktime-total { color: var(--color-primary); font-size: clamp(22px, 2.3vw, 30px); font-variant-numeric: tabular-nums; line-height: 1.2; }
 .knitting-report-editor .report-worktime-hint,
@@ -537,8 +543,16 @@ body:has(.knitting-report-editor) .pwa-dismiss-button:focus-visible { outline: 3
 .report-worktime-dialog :focus-visible { outline: 3px solid var(--color-focus-ring); outline-offset: 2px; }
 
 @media (max-width: 1023px) {
-  .knitting-report-editor .report-main-layout { grid-template-columns: minmax(0, 1fr); }
-  .knitting-report-editor .report-right-column { grid-row: 1; }
+  .knitting-report-editor .report-yarn-needle-grid,
+  .knitting-report-editor .report-notes-photos-content { grid-template-columns: minmax(0, 1fr); }
+}
+@media (min-width: 768px) and (max-width: 1023px) {
+  .knitting-report-editor .report-cover-card { grid-template-columns: 104px minmax(0, 1fr); }
+  .knitting-report-editor .report-cover-card > .report-worktime-card { grid-column: 1 / -1; border: 0; border-top: 1px solid var(--color-divider); }
+}
+@media (max-width: 767px) {
+  .knitting-report-editor .report-cover-card { display: block; }
+  .knitting-report-editor .report-cover-card > .report-worktime-card { border: 0; border-top: 1px solid var(--color-divider); }
 }
 @media (max-width: 640px) {
   .knitting-report-editor .knitting-report-content { gap: 12px; padding: 12px 12px 20px; }
@@ -546,11 +560,11 @@ body:has(.knitting-report-editor) .pwa-dismiss-button:focus-visible { outline: 3
   .knitting-report-editor .report-cover-card > .report-photo-field,
   .knitting-report-editor .report-cover-card > .report-photo-field > .report-photo-preview,
   .knitting-report-editor .report-cover-card > .report-photo-field > img { min-height: 100%; height: auto; }
-  .knitting-report-editor .report-cover-copy { gap: 7px; padding: 11px; }
+  .knitting-report-editor .report-cover-copy { gap: 7px; padding: 16px; }
   .knitting-report-editor .report-cover-title-line { flex-wrap: wrap; gap: 6px; }
   .knitting-report-editor .report-cover-fields { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 7px; }
   .knitting-report-editor .report-cover-fields .report-field { font-size: 11px; }
-  .knitting-report-editor .report-form-card { padding: 14px 12px; border-radius: 14px; }
+  .knitting-report-editor .report-form-card { padding: 16px; border-radius: 12px; }
   .knitting-report-editor .report-form-card h2 { font-size: 16px; }
   .knitting-report-editor .report-form-card .report-fields { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 9px; }
   .knitting-report-editor .report-form-card .report-field { font-size: 11px; }
@@ -613,7 +627,7 @@ body:has(.knitting-report-editor) .pwa-dismiss-button:focus-visible { outline: 3
 }
 @media (max-width: 370px) {
   .knitting-report-editor .report-cover-card { grid-template-columns: 86px minmax(0, 1fr); }
-  .knitting-report-editor .report-cover-copy { padding: 9px; }
+  .knitting-report-editor .report-cover-copy { padding: 16px; }
   .knitting-report-editor .report-cover-fields { grid-template-columns: minmax(0, 1fr); }
   .knitting-report-editor .report-measurement-edit-row { grid-template-columns: minmax(0, 1fr) 76px 44px; gap: 3px; }
   .knitting-report-editor .report-measurement-edit-row > input,

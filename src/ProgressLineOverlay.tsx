@@ -7,7 +7,7 @@ import type { CounterSnapshot, PageRotation, PageWorkRecord, ProgressGuide, Prog
 import { ColorPresetButtons } from './ColorPresetButtons'
 import { PROGRESS_LINE_COLOR_PRESETS } from './designTokens'
 import { useDismissiblePopover } from './useDismissiblePopover'
-import { createDefaultPrimaryProgressGuide, progressGuideMoveExceededThreshold, progressLineStrokeWidth } from './progressLines'
+import { createDefaultPrimaryProgressGuide, progressGuideMoveExceededThreshold, progressLineStrokeWidth, progressMarkerProgressFromPointer } from './progressLines'
 const minimumLength = 0.2
 type StyleField = 'opacity' | 'thickness' | 'dimOpacity' | 'bandHeightRatio'
 
@@ -18,6 +18,7 @@ type Drag = {
   pointerId: number
   startX: number
   startY: number
+  markerGrabOffset: number
   moved: boolean
   axis: 'x' | 'y' | null
   base: ProgressGuide
@@ -278,6 +279,9 @@ export function ProgressLineOverlay({ width, height, cssWidth, cssHeight, render
     const action = target.dataset.progressAction === 'start' || target.dataset.progressAction === 'end' || target.dataset.progressAction === 'marker'
       ? target.dataset.progressAction
       : 'body'
+    const markerStart = guide.xStartRatio ?? 0.15
+    const markerEnd = guide.xEndRatio ?? 0.85
+    const markerX = markerStart + (markerEnd - markerStart) * (guide.markerProgress ?? 0.5)
     try { event.currentTarget.setPointerCapture(event.pointerId) } catch { /* Local pointer movement still works without capture. */ }
     const workingWork = previewGuide?.id === guide.id
       ? { ...work, horizontalGuides: work.horizontalGuides?.map((item) => item.id === guide.id ? previewGuide : item) }
@@ -289,6 +293,7 @@ export function ProgressLineOverlay({ width, height, cssWidth, cssHeight, render
       pointerId: event.pointerId,
       startX: pos.x,
       startY: pos.y,
+      markerGrabOffset: action === 'marker' ? pos.x - markerX : 0,
       moved: false,
       axis: null,
       base: guide,
@@ -320,7 +325,7 @@ export function ProgressLineOverlay({ width, height, cssWidth, cssHeight, render
     const end = drag.base.xEndRatio ?? 0.85
     if (!drag.axis) return null
     if (drag.action === 'marker') {
-      return { markerProgress: clamp((x - start) / Math.max(0.001, end - start), 0, 1) }
+      return { markerProgress: progressMarkerProgressFromPointer(x, start, end, drag.markerGrabOffset) }
     }
     if (drag.action === 'start') return { xStartRatio: clamp(x, 0, end - minimumLength) }
     if (drag.action === 'end') return { xEndRatio: clamp(x, start + minimumLength, 1) }
@@ -675,9 +680,10 @@ export function ProgressLineOverlay({ width, height, cssWidth, cssHeight, render
           <line x1={x1} x2={x2} y1={y} y2={y} stroke={color} strokeWidth={stroke} strokeOpacity={guide.opacity ?? (guide.role === 'reference' ? Math.min(defaultOpacity, 0.45) : defaultOpacity)} strokeLinecap="round" pointerEvents="none" />
           <line data-guide-id={guide.id} data-progress-action="body" x1={x1} x2={x2} y1={y} y2={y} stroke="transparent" strokeWidth={Math.max(stroke, 44 * sy)} pointerEvents={disabled ? 'none' : 'stroke'} role="button" tabIndex={disabled ? -1 : 0} aria-label={guide.role === 'primary' ? t('진행선 표시 스타일') : t('참고선 표시 스타일')} aria-pressed={selected} onKeyDown={(event) => openStyleMenuFromKeyboard(event, guide)} />
           {markerX !== null && <g>
-            <ellipse data-guide-id={guide.id} data-progress-action="marker" cx={markerX} cy={y} rx={hitX} ry={hitY} fill="transparent" pointerEvents={disabled ? 'none' : 'all'} role="button" tabIndex={disabled ? -1 : 0} aria-label={guide.role === 'primary' ? t('진행선 표시 스타일') : t('참고선 표시 스타일')} aria-pressed={selected} onKeyDown={(event) => openStyleMenuFromKeyboard(event, guide)} />
-            <circle cx={markerX} cy={y} r={Math.max(6, 6 * sx)} fill={color} stroke="white" strokeWidth={Math.max(2, 2 * sx)} pointerEvents="none" />
-            <path d={'M ' + (markerX - 5 * sx) + ' ' + (y + 8 * sy) + ' L ' + (markerX + 5 * sx) + ' ' + (y + 8 * sy) + ' L ' + markerX + ' ' + (y + 15 * sy) + ' Z'} fill={color} pointerEvents="none" />
+            <ellipse data-guide-id={guide.id} data-progress-action="marker" cx={markerX} cy={y - 16 * sy * renderedZoom} rx={Math.max(hitX, 11 * sx * renderedZoom)} ry={Math.max(hitY, 16 * sy * renderedZoom)} fill="transparent" pointerEvents={disabled ? 'none' : 'all'} role="button" tabIndex={disabled ? -1 : 0} aria-label={guide.role === 'primary' ? t('진행선 표시 스타일') : t('참고선 표시 스타일')} aria-pressed={selected} onKeyDown={(event) => openStyleMenuFromKeyboard(event, guide)} />
+            <svg x={markerX - 11 * sx * renderedZoom} y={y - 32 * sy * renderedZoom} width={22 * sx * renderedZoom} height={32 * sy * renderedZoom} viewBox="0 0 22 32" preserveAspectRatio="none" overflow="visible" pointerEvents="none" aria-hidden="true">
+              <path d="M 11 32 C 10 29 0.5 17 0.5 11 C 0.5 5 4.5 2 8 2 C 9.5 2 10.5 4.5 11 7 C 11.5 4.5 12.5 2 14 2 C 17.5 2 21.5 5 21.5 11 C 21.5 17 12 29 11 32 Z" fill="none" stroke={color} strokeWidth={2.5 * renderedZoom} vectorEffect="non-scaling-stroke" strokeLinecap="round" strokeLinejoin="miter" strokeMiterlimit={6} />
+            </svg>
           </g>}
           {selected && <g>
             <ellipse data-guide-id={guide.id} data-progress-action="start" cx={x1} cy={y} rx={hitX} ry={hitY} fill="transparent" pointerEvents={disabled ? 'none' : 'all'} role="button" tabIndex={disabled ? -1 : 0} aria-label={guide.role === 'primary' ? t('진행선 표시 스타일') : t('참고선 표시 스타일')} aria-pressed={selected} onKeyDown={(event) => openStyleMenuFromKeyboard(event, guide)} />
