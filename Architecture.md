@@ -23,7 +23,7 @@ React·TypeScript·Vite·PDF.js·IndexedDB 기반이다. `App.tsx`는 시작·�
 ## 저장 계약
 - IndexedDB `doanbogo-web` v11: documents·pages·viewers·pageWorks·charts·knittingReportEntries·photoPages·pageRecognition·homeProjects·homeReports·preferences.
 - 문서는 원본·표지·총/오늘/일별 작업시간·세션·날짜별 메모를 보관한다. 문서와 프로젝트 요약의 시간 합계는 같은 트랜잭션에서 갱신한다.
-- 페이지 작업은 진행선·마커·필기·구간 강조·컬러워크를 원본 페이지 기준 정규화 좌표로 저장한다.
+- 페이지 작업은 진행선·마커·필기·구간 강조·컬러워크를 원본 페이지 기준 정규화 좌표로 저장한다. Viewer가 페이지 작업을 처음 불러올 때 주 진행선이 없으면 기본선을 만들어 같은 경로로 저장한다.
 - `ProgressGuide.chartRegion`은 행별 양끝 좌표·진행 순서·분석 회전·따라가기 상태를 선택 필드로 저장한다. 화면 표시와 카운터 저장이 공통 행 좌표 계산을 사용한다.
 - `ViewerSnapshot`은 영역별 페이지·배율·중심·회전, 카운터·이력·타임랩, 라벨·레일 순서를 보관한다.
 - `thumbnailGroups`는 라벨 순서, `thumbnailRailOrder`는 최상위 페이지·그룹 위치다. 소속 변경과 순서를 함께 정리·저장한다.

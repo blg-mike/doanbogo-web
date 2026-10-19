@@ -27,7 +27,7 @@ import { enqueuePdfRecognition, pausePdfRecognitionForReport, releasePdfRecognit
 import { getViewerResourcePolicy, setThumbnailPagesExcluded } from './pdfRenderResources'
 import { guidePositionForRotation, isChartAutoFollowRotationCompatible } from './focusGeometry'
 import { compactPageThumbnails, completePageList, createThumbnailGroupFromPages, createThumbnailGroupId, movePagesToThumbnailGroup, moveThumbnailRailItem, normalizeThumbnailRailOrder, reconcileThumbnailRailOrder, removePagesFromThumbnailGroups, reorderThumbnailGroups, thumbnailPagesForDrag, thumbnailRailOrderKey, visiblePageRange, type PageThumbnailItem } from './pageManagement'
-import { createDefaultPrimaryProgressGuide, migrateProgressGuides, prepareProgressGuidesForDirectInteraction, progressGuideCandidates } from './progressLines'
+import { ensurePrimaryProgressGuide, prepareProgressGuidesForDirectInteraction } from './progressLines'
 import { ColorPresetButtons } from './ColorPresetButtons'
 import { ANNOTATION_COLOR_PRESETS, DEFAULT_VERTICAL_GUIDE_COLOR } from './designTokens'
 import { addedLimitedAnnotations, applyLimitedAnnotationAdditions, exceededAnnotationLimit, isAnnotationLimitReached, PAGE_ANNOTATION_LIMITS, type LimitedAnnotationKind } from './annotationLimits'
@@ -1009,6 +1009,7 @@ export default function Viewer() {
   const activeAnnotationStyle = tool === 'pen' || tool === 'line' || tool === 'highlight' || tool === 'text' ? annotationSettings[tool] : null
   const activeHistory = histories[activePage] ?? { actions: [], cursor: 0, byteCosts: [] }
   const activeWork = pageWorks[activePage] ?? blankWork(id, activePage)
+  const activeHasPrimaryGuide = activeWork.horizontalGuides?.some((guide) => guide.role === 'primary') ?? false
   const activeZoom = snapshot ? snapshot[snapshot.activePane].zoom : 1
   const activeRotation = snapshot ? snapshot[snapshot.activePane].rotations?.[activePage] ?? activeWork.rotation ?? 0 : 0
   const activeColorworkGrid = colorworkEnabled ? activeWork.colorworkGrid ?? null : null
@@ -1197,7 +1198,7 @@ export default function Viewer() {
         updatePageWorkLoadUi(page, requestId, null)
         return current
       }
-      const loaded = prepareProgressGuidesForDirectInteraction(savedWork)
+      const loaded = ensurePrimaryProgressGuide(prepareProgressGuidesForDirectInteraction(savedWork))
       workRef.current = { ...workRef.current, [page]: loaded }
       touchPageWork(page)
       setPageWorks(workRef.current)
@@ -1462,15 +1463,10 @@ export default function Viewer() {
       if (right <= left || bottom <= top) return null
       return { x: ((left + right) / 2 - pageRect.left) / Math.max(1, pageRect.width), y: ((top + bottom) / 2 - pageRect.top) / Math.max(1, pageRect.height) }
     })()
-    let next: PageWorkRecord
-    if (before.progressMigration === 'pending') {
-      const candidates = progressGuideCandidates(before)
-      const preferred = candidates.find(({ axis, guide }) => axis === 'horizontal' && guide.linkedCounterId) ?? candidates.find(({ axis }) => axis === 'horizontal') ?? candidates[0]
-      next = migrateProgressGuides(before, preferred ? preferred.axis + ':' + preferred.guide.id : '', [])
-    } else {
-      const guide = createDefaultPrimaryProgressGuide(clamp(visibleRect?.y ?? 0.5, 0, 1))
-      next = { ...before, progressMigration: 'complete', horizontalGuides: [...(before.horizontalGuides ?? []), guide] }
-    }
+    const next = ensurePrimaryProgressGuide(prepareProgressGuidesForDirectInteraction({
+      ...before,
+      horizontalPosition: clamp(visibleRect?.y ?? before.horizontalPosition ?? 0.5, 0, 1),
+    }))
     setPageWork(next, true, true, before)
     if (!settings.horizontal.visible) mutateSnapshot((snapshot) => ({ ...snapshot, progressSettings: { ...settings, horizontal: { ...settings.horizontal, visible: true } } }), true)
   }
@@ -3072,7 +3068,7 @@ export default function Viewer() {
               </>}
               {!activeColorworkGrid?.visible && <>
                 <span className="control-separator" aria-hidden="true" />
-                <button type="button" className="viewer-tool progress-toggle-tool" aria-label={!activeWork.horizontalGuides?.some((guide) => guide.role === 'primary') ? t('진행선 시작') : progressSettings.horizontal.visible ? t('진행선 숨기기') : t('진행선 표시')} title={!activeWork.horizontalGuides?.some((guide) => guide.role === 'primary') ? t('진행선 시작') : progressSettings.horizontal.visible ? t('진행선 숨기기') : t('진행선 표시')} aria-pressed={Boolean(activeWork.horizontalGuides?.some((guide) => guide.role === 'primary')) && progressSettings.horizontal.visible} disabled={!pageWorks[activePage]} onClick={toggleProgressLines}>{progressSettings.horizontal.visible ? <ScanLine size={17} /> : <EyeClosed size={17} />}<span>{t('진행선')}</span></button>
+                <button type="button" className="viewer-tool progress-toggle-tool" aria-label={!activeHasPrimaryGuide ? t('진행선 표시') : progressSettings.horizontal.visible ? t('진행선 숨기기') : t('진행선 표시')} title={!activeHasPrimaryGuide ? t('진행선 표시') : progressSettings.horizontal.visible ? t('진행선 숨기기') : t('진행선 표시')} aria-pressed={activeHasPrimaryGuide && progressSettings.horizontal.visible} disabled={!pageWorks[activePage]} onClick={toggleProgressLines}>{progressSettings.horizontal.visible ? <ScanLine size={17} /> : <EyeClosed size={17} />}<span>{t('진행선')}</span></button>
               </>}
               {(activeAnnotationStyle || activeColorworkGrid) && <button ref={miniBarSettingsTriggerRef} type="button" className={'viewer-tool compact-tool ' + (miniBarSettingsOpen ? 'active' : '')} aria-label={t('도구 설정')} title={t('도구 설정')} aria-expanded={miniBarSettingsOpen} onClick={() => setMiniBarSettingsOpen((open) => !open)}><Settings2 size={17} /></button>}
             </div>

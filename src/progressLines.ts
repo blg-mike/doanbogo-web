@@ -14,6 +14,14 @@ export function progressLineStrokeWidth(thickness: number, pageWidth: number, cs
   return thickness * pageWidth / Math.max(cssWidth, 1) * renderedZoom
 }
 
+export function progressMarkerGeometry(thickness: number, lineY: number, lineStroke: number, renderedZoom: number) {
+  const boundedThickness = Math.min(36, Math.max(1, thickness))
+  return {
+    scale: renderedZoom / 12 * (1 + 2 * (boundedThickness - 1) / 35),
+    tipY: lineY - lineStroke / 2,
+  }
+}
+
 export function createDefaultPrimaryProgressGuide(position: number): ProgressGuide {
   return {
     id: crypto.randomUUID(),
@@ -45,6 +53,15 @@ export function prepareProgressGuidesForDirectInteraction(work: PageWorkRecord):
   const preferred = candidates.find(({ axis, guide }) => axis === 'horizontal' && guide.linkedCounterId) ??
     candidates.find(({ axis }) => axis === 'horizontal') ?? candidates[0]
   return migrateProgressGuides(work, preferred ? preferred.axis + ':' + preferred.guide.id : '', [])
+}
+
+export function ensurePrimaryProgressGuide(work: PageWorkRecord): PageWorkRecord {
+  if (work.horizontalGuides?.some((guide) => guide.role === 'primary')) return work
+  return {
+    ...work,
+    progressMigration: 'complete',
+    horizontalGuides: [...(work.horizontalGuides ?? []), createDefaultPrimaryProgressGuide(work.horizontalPosition ?? 0.5)],
+  }
 }
 
 export function migrateProgressGuides(work: PageWorkRecord, primaryKey: string, referenceKeys: string[]): PageWorkRecord {

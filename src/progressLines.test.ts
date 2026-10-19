@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { createDefaultPrimaryProgressGuide, DEFAULT_PROGRESS_LINE_THICKNESS, guideRowPosition, migrateProgressGuides, prepareProgressGuidesForDirectInteraction, progressGuideCandidates, progressGuideMoveExceededThreshold, progressLineStrokeWidth, progressMarkerProgressFromPointer } from './progressLines'
+import { createDefaultPrimaryProgressGuide, DEFAULT_PROGRESS_LINE_THICKNESS, ensurePrimaryProgressGuide, guideRowPosition, migrateProgressGuides, prepareProgressGuidesForDirectInteraction, progressGuideCandidates, progressGuideMoveExceededThreshold, progressLineStrokeWidth, progressMarkerGeometry, progressMarkerProgressFromPointer } from './progressLines'
 import type { PageWorkRecord } from './types'
 
 function legacyWork(): PageWorkRecord {
@@ -80,6 +80,16 @@ describe('progress line migration', () => {
   })
 })
 
+describe('default progress line', () => {
+  it('adds one centered primary guide only when the page has none', () => {
+    const work: PageWorkRecord = { documentId: 'doc', pageNumber: 1, horizontalPosition: 0.37, verticalPosition: 0.5, annotations: [], horizontalGuides: [], verticalGuides: [], progressMigration: 'complete' }
+    const initialized = ensurePrimaryProgressGuide(work)
+
+    expect(initialized.horizontalGuides).toEqual([expect.objectContaining({ role: 'primary', position: 0.37 })])
+    expect(ensurePrimaryProgressGuide(initialized)).toBe(initialized)
+  })
+})
+
 describe('progress line zoom thickness', () => {
   it('keeps the eight-pixel gesture threshold for line dragging', () => {
     expect(progressGuideMoveExceededThreshold(10, 20, 17, 20)).toBe(false)
@@ -103,6 +113,24 @@ describe('progress line zoom thickness', () => {
 
     expect(previewCssWidth).toBeCloseTo(8)
     expect(settledCssWidth).toBeCloseTo(previewCssWidth)
+
+    const previewMarker = progressMarkerGeometry(4, 100, previewSvgWidth, initialZoom)
+    const settledMarker = progressMarkerGeometry(4, 100, settledSvgWidth, nextZoom)
+    expect(previewMarker.scale * previewScale).toBeCloseTo(settledMarker.scale)
+    expect(previewMarker.tipY * initialCssWidth / pageWidth * previewScale).toBeCloseTo(settledMarker.tipY * finalCssWidth / pageWidth)
+  })
+
+  it('scales the marker from one to three times and anchors its tip to the line top', () => {
+    const minimum = progressMarkerGeometry(1, 200, 12, 2)
+    const middle = progressMarkerGeometry(12, 200, 12, 2)
+    const maximum = progressMarkerGeometry(36, 200, 12, 2)
+
+    expect(minimum.scale).toBeCloseTo(2 / 12)
+    expect(middle.scale).toBeCloseTo((2 / 12) * (1 + 2 * 11 / 35))
+    expect(maximum.scale).toBeCloseTo(minimum.scale * 3)
+    expect([minimum.tipY, middle.tipY, maximum.tipY]).toEqual([194, 194, 194])
+    expect(progressMarkerGeometry(0, 200, 12, 2).scale).toBeCloseTo(minimum.scale)
+    expect(progressMarkerGeometry(40, 200, 12, 2).scale).toBeCloseTo(maximum.scale)
   })
 })
 
