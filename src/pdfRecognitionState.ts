@@ -12,3 +12,7 @@ export function withRecentPdfLinks(current: Record<number, PdfQrLink[]>, pageNum
   const entries = Object.entries(current).filter(([page]) => Number(page) !== pageNumber)
   return { ...Object.fromEntries(entries.slice(-(limit - 1))), [pageNumber]: links }
 }
+
+export function orderVisibleRecognitionPages(activePage: number, visiblePages: number[]) {
+  return [...new Set([activePage, ...visiblePages])]
+}

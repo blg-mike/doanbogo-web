@@ -14,10 +14,10 @@ import type { AnnotationRecord, AnnotationStyle, AnnotationTool, ColorworkCell, 
 import { createColorworkGrid, resizeColorworkGridDisplay } from './colorwork'
 import { appendInkPoint, createInkAnnotation, createInkId, type ActiveInkStroke, type InkPoint } from './inkStroke'
 import { shouldPreventTextNotePointerDefault, textNoteBoxAt, textNoteCounterRotation, textNoteGestureExceededThreshold } from './textNote'
-import type { PdfQrLink } from './qr'
+import { safeQrHref, shouldOpenLinkAfterGesture, type PdfQrLink } from './qr'
 import { rotatedPageSize } from './pageGeometry'
 import { displayRectToPageRect, focusBandHeightRatio, focusDimOpacity, focusRowSpacing, guideGeometryForRotation, pageRectToDisplayRect } from './focusGeometry'
-import { canStartPaneGesture, clientPointForPagePosition, classifyWheelInput, isEditableTarget, pagePositionAtClientPoint, pinchPreviewTranslation, regionHighlightPointerAction, scrollOffsetForZoomFocus, visiblePageCrop, wheelActionForBurst, wheelZoom, type WheelInput, type ZoomFocus } from './viewerInteraction'
+import { canStartPaneGesture, clientPointForPagePosition, classifyWheelInput, isEditableTarget, nearestZoomLevel, pagePositionAtClientPoint, pinchPreviewTranslation, regionHighlightPointerAction, scrollOffsetForZoomFocus, visiblePageCrop, wheelActionForBurst, wheelZoom, type WheelInput, type ZoomFocus } from './viewerInteraction'
 import { acquireThumbnailCache, getViewerResourcePolicy, MAX_PDF_CANVAS_PIXELS, pdfRasterScale, releaseCanvasWhenSettled, viewerCanvasMemory } from './pdfRenderResources'
 import { pdfPageRenderQueue } from './pdfPageRenderQueue'
 import type { LimitedAnnotationKind } from './annotationLimits'
@@ -426,7 +426,7 @@ function withTextBox(annotation: AnnotationRecord, pageHeight: number): Annotati
   return { ...annotation, points: [{ x: box.x, y: box.y }], boxWidth: box.width, boxHeight: box.height }
 }
 
-export function PdfPage({ pdf, page, paneId, pane, paneGestureOwnerRef, splitView, rotation, active, tool, lineSettings, counters, mainCounterId, annotationStyle, work, colorworkEnabled, workReady, canCreateLimitedAnnotation, pageWorkLoadError, onRetryPageWork, colorworkBrushColor, colorworkBrushOpacity, colorworkEraser, createColorworkRequest, pageLinks, qrLinks, onPageRendered, onActivate, onWorkChange, onChartRowsApply, onZoom, onCenter, onColorworkRequestHandled, onTextToolConsumed, onRegionHighlightToolConsumed }: {
+export function PdfPage({ pdf, page, paneId, pane, paneGestureOwnerRef, splitView, rotation, active, tool, lineSettings, counters, mainCounterId, annotationStyle, work, colorworkEnabled, workReady, canCreateLimitedAnnotation, pageWorkLoadError, onRetryPageWork, recognitionError, onRetryRecognition, colorworkBrushColor, colorworkBrushOpacity, colorworkEraser, createColorworkRequest, pageLinks, qrLinks, onPageRendered, onActivate, onWorkChange, onChartRowsApply, onZoom, onCenter, onColorworkRequestHandled, onTextToolConsumed, onRegionHighlightToolConsumed }: {
   pdf: PDFDocumentProxy
   page: number
   paneId: PaneId
@@ -446,6 +446,8 @@ export function PdfPage({ pdf, page, paneId, pane, paneGestureOwnerRef, splitVie
   canCreateLimitedAnnotation: (kind: LimitedAnnotationKind) => boolean
   pageWorkLoadError?: string
   onRetryPageWork?: () => void
+  recognitionError?: boolean
+  onRetryRecognition?: () => void
   colorworkBrushColor: string
   colorworkBrushOpacity: number
   colorworkEraser: boolean
@@ -507,6 +509,7 @@ export function PdfPage({ pdf, page, paneId, pane, paneGestureOwnerRef, splitVie
   const [renderError, setRenderError] = useState<{ key: string; message: string } | null>(null)
   const [retry, setRetry] = useState(0)
   const pinchZoom = useRef<number | null>(null)
+  const linkGesturesRef = useRef(new Map<number, { href: string; startX: number; startY: number; moved: boolean; pinched: boolean }>())
   const [draft, setDraft] = useState<Point[]>([])
   const [pendingStrokePreviews, setPendingStrokePreviews] = useState<Array<{ documentId: string; pageNumber: number; annotation: AnnotationRecord }>>([])
   const [strokeError, setStrokeError] = useState(false)
@@ -1066,7 +1069,7 @@ export function PdfPage({ pdf, page, paneId, pane, paneGestureOwnerRef, splitVie
     if (readyKey !== renderKey) return
     const canvas = canvasRef.current
     if (canvas) onPageRendered(page, canvas)
-  }, [readyKey, renderKey, page, onPageRendered])
+  }, [readyKey, renderKey, page, active, onPageRendered])
 
   useLayoutEffect(() => {
     const element = scrollRef.current
@@ -1546,6 +1549,9 @@ export function PdfPage({ pdf, page, paneId, pane, paneGestureOwnerRef, splitVie
     if (!area) return
     if (!canStartPaneGesture(paneGestureOwnerRef.current, paneId)) return
     paneGestureOwnerRef.current = paneId
+    const link = target instanceof Element ? target.closest<HTMLAnchorElement>('.page-pdf-link, .page-qr-link') : null
+    const href = link ? safeQrHref(link.href) : null
+    if (href) linkGesturesRef.current.set(event.pointerId, { href, startX: event.clientX, startY: event.clientY, moved: false, pinched: false })
     event.currentTarget.setPointerCapture(event.pointerId)
     pointers.current.set(event.pointerId, { x: event.clientX, y: event.clientY })
     const current = gesture.current
@@ -1554,6 +1560,7 @@ export function PdfPage({ pdf, page, paneId, pane, paneGestureOwnerRef, splitVie
     } else if (current.kind === 'pan') {
       const first = pointers.current.get(current.pointerId)
       if (!first) return
+      linkGesturesRef.current.forEach((gesture) => { gesture.pinched = true })
       const midpointX = (first.x + event.clientX) / 2
       const midpointY = (first.y + event.clientY) / 2
       const layer = rotationLayerRef.current
@@ -1576,6 +1583,8 @@ export function PdfPage({ pdf, page, paneId, pane, paneGestureOwnerRef, splitVie
   function pointerMove(event: ReactPointerEvent<HTMLDivElement>) {
     const area = scrollRef.current
     const current = gesture.current
+    const linkGesture = linkGesturesRef.current.get(event.pointerId)
+    if (linkGesture && !shouldOpenLinkAfterGesture(linkGesture.startX, linkGesture.startY, event.clientX, event.clientY)) linkGesture.moved = true
     if (tool !== 'pan' || !area || !current || !pointers.current.has(event.pointerId)) return
     pointers.current.set(event.pointerId, { x: event.clientX, y: event.clientY })
     if (current.kind === 'pan' && current.pointerId === event.pointerId) {
@@ -1587,7 +1596,7 @@ export function PdfPage({ pdf, page, paneId, pane, paneGestureOwnerRef, splitVie
       const first = pointers.current.get(current.firstId)
       const second = pointers.current.get(current.secondId)
       if (!first || !second) return
-      const zoom = Math.min(5, Math.max(1, current.zoom * Math.hypot(second.x - first.x, second.y - first.y) / current.distance))
+      const zoom = Math.min(5, Math.max(0.5, current.zoom * Math.hypot(second.x - first.x, second.y - first.y) / current.distance))
       pinchZoom.current = zoom
       const layer = rotationLayerRef.current
       if (layer) {
@@ -1604,6 +1613,7 @@ export function PdfPage({ pdf, page, paneId, pane, paneGestureOwnerRef, splitVie
     if (!pointers.current.has(event.pointerId)) return
     if (event.type === 'pointercancel') {
       pointers.current.clear()
+      linkGesturesRef.current.clear()
       gesture.current = null
       pinchZoom.current = null
       zoomFocusRef.current = null
@@ -1613,11 +1623,16 @@ export function PdfPage({ pdf, page, paneId, pane, paneGestureOwnerRef, splitVie
       return
     }
     pointers.current.set(event.pointerId, { x: event.clientX, y: event.clientY })
+    const linkGesture = linkGesturesRef.current.get(event.pointerId)
+    if (tool === 'pan' && linkGesture && !linkGesture.moved && shouldOpenLinkAfterGesture(linkGesture.startX, linkGesture.startY, event.clientX, event.clientY, linkGesture.pinched)) {
+      window.open(linkGesture.href, '_blank', 'noopener,noreferrer')
+    }
+    linkGesturesRef.current.delete(event.pointerId)
     if (tool === 'pan' && current?.kind === 'pinch' && area) {
       const first = pointers.current.get(current.firstId)
       const second = pointers.current.get(current.secondId)
       if (first && second) {
-        const zoom = Math.min(5, Math.max(1, current.zoom * Math.hypot(second.x - first.x, second.y - first.y) / current.distance))
+        const zoom = nearestZoomLevel(Math.min(5, Math.max(0.5, current.zoom * Math.hypot(second.x - first.x, second.y - first.y) / current.distance)))
         const midpointX = (first.x + second.x) / 2
         const midpointY = (first.y + second.y) / 2
         const focus: ZoomFocus = { ...current.pagePoint, clientX: midpointX, clientY: midpointY, zoom }
@@ -1646,6 +1661,7 @@ export function PdfPage({ pdf, page, paneId, pane, paneGestureOwnerRef, splitVie
   function pointerCaptureLost(event: ReactPointerEvent<HTMLDivElement>) {
     if (!pointers.current.has(event.pointerId)) return
     pointers.current.clear()
+    linkGesturesRef.current.clear()
     gesture.current = null
     pinchZoom.current = null
     zoomFocusRef.current = null
@@ -2529,6 +2545,7 @@ export function PdfPage({ pdf, page, paneId, pane, paneGestureOwnerRef, splitVie
     <>
     <div className={'pdf-pane ' + (active ? 'is-active' : '')}>
       <div className="pane-label">{active ? t('현재 작업 영역') : t('보조 영역')}</div>
+      {recognitionError && <div className="pdf-recognition-retry" role="status"><span>{t('페이지 링크를 인식하지 못했습니다. 다시 시도해 주세요.')}</span><button type="button" onClick={onRetryRecognition}>{t('다시 시도')}</button></div>}
       {strokeError && <div className="ink-save-error" role="alert"><span>{t("필기를 반영하지 못했습니다.")}</span><button type="button" onClick={retryStrokeSave}>{t("다시 시도")}</button></div>}
       <div className={'pdf-scroll-area' + (splitView && pane.zoom <= 1 ? ' is-fit-zoom' : '')} ref={scrollRef} onScroll={recordCenter} onPointerDownCapture={beginChartSelectionCapture} onPointerDown={pointerDown} onPointerMove={pointerMove} onPointerUp={pointerEnd} onPointerCancel={pointerEnd} onLostPointerCapture={pointerCaptureLost} onDoubleClick={doubleTap}>
         <div className="pdf-page-wrap" style={pageWrapStyle}>
@@ -2776,9 +2793,15 @@ export function PdfPage({ pdf, page, paneId, pane, paneGestureOwnerRef, splitVie
                 target="_blank"
                 rel="noopener noreferrer"
                 style={{ left: link.x * cssSize.width, top: link.y * cssSize.height, width: link.width * cssSize.width, height: link.height * cssSize.height }}
-                onPointerDown={(event) => event.stopPropagation()}
+                onClick={(event: ReactMouseEvent<HTMLAnchorElement>) => {
+                  event.preventDefault()
+                  if (event.detail === 0) {
+                    const href = safeQrHref(link.href)
+                    if (href) window.open(href, '_blank', 'noopener,noreferrer')
+                  }
+                }}
               />)}
-              {pageLinks !== undefined && qrLinks?.filter((link) => !pageLinks.some((pageLink) => regionsOverlap(pageLink, link))).map((link, index) => <a
+              {tool === 'pan' && qrLinks?.filter((link) => !(pageLinks ?? []).some((pageLink) => regionsOverlap(pageLink, link))).map((link, index) => <a
                 key={index}
                 className="page-qr-link"
                 aria-label={t('QR 링크 열기 {count}', { count: formatNumber(index + 1) })}
@@ -2787,7 +2810,13 @@ export function PdfPage({ pdf, page, paneId, pane, paneGestureOwnerRef, splitVie
                 target="_blank"
                 rel="noopener noreferrer"
                 style={{ left: link.x * cssSize.width, top: link.y * cssSize.height, width: link.width * cssSize.width, height: link.height * cssSize.height }}
-                onPointerDown={(event) => event.stopPropagation()}
+                onClick={(event: ReactMouseEvent<HTMLAnchorElement>) => {
+                  event.preventDefault()
+                  if (event.detail === 0) {
+                    const href = safeQrHref(link.href)
+                    if (href) window.open(href, '_blank', 'noopener,noreferrer')
+                  }
+                }}
               />)}
             </div>
             {colorworkGrid && <div

@@ -9,6 +9,17 @@ export type WheelInput = {
 
 export type ZoomFocus = { x: number; y: number; clientX: number; clientY: number; zoom: number }
 
+export const ZOOM_LEVELS = [0.5, 0.75, 1, 1.25, 1.5, 2, 3, 4, 5] as const
+
+export function stepZoomLevel(zoom: number, direction: -1 | 1) {
+  if (direction > 0) return ZOOM_LEVELS.find((level) => level > zoom + 0.0001) ?? ZOOM_LEVELS[ZOOM_LEVELS.length - 1]
+  return [...ZOOM_LEVELS].reverse().find((level) => level < zoom - 0.0001) ?? ZOOM_LEVELS[0]
+}
+
+export function nearestZoomLevel(zoom: number) {
+  return ZOOM_LEVELS.reduce((nearest, level) => Math.abs(level - zoom) < Math.abs(nearest - zoom) ? level : nearest, ZOOM_LEVELS[0])
+}
+
 export function regionHighlightPointerAction(tool: AnnotationTool, hitsRegion: boolean, selected = false) {
   if (hitsRegion) {
     if (tool === 'region-highlight') return selected ? 'move' as const : 'select' as const
@@ -43,9 +54,11 @@ export function wheelActionForBurst(action: 'pan' | 'zoom', now: number, burstUn
 }
 
 export function wheelZoom(zoom: number, input: WheelInput) {
-  if (input.ctrlKey) return Math.min(5, Math.max(1, zoom * Math.exp(-(input.deltaY || input.deltaX) * 0.002)))
+  if (input.ctrlKey) return nearestZoomLevel(Math.min(5, Math.max(0.5, zoom * Math.exp(-(input.deltaY || input.deltaX) * 0.002))))
   const steps = Math.max(1, Math.min(3, input.deltaMode === 0 ? Math.round(Math.abs(input.deltaY) / 100) : Math.ceil(Math.abs(input.deltaY) / (input.deltaMode === 1 ? 3 : 1))))
-  return Math.min(5, Math.max(1, zoom * Math.pow(1.1, (input.deltaY < 0 ? 1 : -1) * steps)))
+  let nextZoom = zoom
+  for (let index = 0; index < steps; index += 1) nextZoom = stepZoomLevel(nextZoom, input.deltaY < 0 ? 1 : -1)
+  return nextZoom
 }
 
 export function anchoredScrollOffset(pageOffset: number, pageSize: number, pagePosition: number, pointerOffset: number, scrollSize: number, viewportSize: number) {

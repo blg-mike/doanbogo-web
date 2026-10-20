@@ -195,6 +195,67 @@ export const specializedTranslations: Record<'en' | 'ja' | 'de' | 'da' | 'nb' | 
   },
 }
 
+const progressLineMenuTranslations: typeof specializedTranslations = {
+  en: {
+    '진행선 메뉴': 'Progress line menu',
+    '참고선 메뉴': 'Reference line menu',
+    '진행선 스타일': 'Progress line style',
+    '참고선 스타일': 'Reference line style',
+    '진행선 추가': 'Add progress line',
+    '진행선 삭제': 'Delete progress line',
+    '삭제할 진행선을 선택하세요.': 'Select the progress line to delete.',
+  },
+  ja: {
+    '진행선 메뉴': '進行線メニュー',
+    '참고선 메뉴': '補助線メニュー',
+    '진행선 스타일': '進行線のスタイル',
+    '참고선 스타일': '補助線のスタイル',
+    '진행선 추가': '進行線を追加',
+    '진행선 삭제': '進行線を削除',
+    '삭제할 진행선을 선택하세요.': '削除する進行線を選択してください。',
+  },
+  de: {
+    '진행선 메뉴': 'Menü der Fortschrittslinie',
+    '참고선 메뉴': 'Menü der Referenzlinie',
+    '진행선 스타일': 'Stil der Fortschrittslinie',
+    '참고선 스타일': 'Stil der Referenzlinie',
+    '진행선 추가': 'Fortschrittslinie hinzufügen',
+    '진행선 삭제': 'Fortschrittslinie löschen',
+    '삭제할 진행선을 선택하세요.': 'Wählen Sie die zu löschende Fortschrittslinie aus.',
+  },
+  da: {
+    '진행선 메뉴': 'Menu for fremdriftslinje',
+    '참고선 메뉴': 'Menu for referencelinje',
+    '진행선 스타일': 'Fremdriftslinjens stil',
+    '참고선 스타일': 'Referencelinjens stil',
+    '진행선 추가': 'Tilføj fremdriftslinje',
+    '진행선 삭제': 'Slet fremdriftslinje',
+    '삭제할 진행선을 선택하세요.': 'Vælg den fremdriftslinje, der skal slettes.',
+  },
+  nb: {
+    '진행선 메뉴': 'Meny for fremdriftslinje',
+    '참고선 메뉴': 'Meny for referanselinje',
+    '진행선 스타일': 'Stil for fremdriftslinje',
+    '참고선 스타일': 'Stil for referanselinje',
+    '진행선 추가': 'Legg til fremdriftslinje',
+    '진행선 삭제': 'Slett fremdriftslinje',
+    '삭제할 진행선을 선택하세요.': 'Velg fremdriftslinjen som skal slettes.',
+  },
+  fi: {
+    '진행선 메뉴': 'Edistymisviivan valikko',
+    '참고선 메뉴': 'Viiteviivan valikko',
+    '진행선 스타일': 'Edistymisviivan tyyli',
+    '참고선 스타일': 'Viiteviivan tyyli',
+    '진행선 추가': 'Lisää edistymisviiva',
+    '진행선 삭제': 'Poista edistymisviiva',
+    '삭제할 진행선을 선택하세요.': 'Valitse poistettava edistymisviiva.',
+  },
+}
+
+for (const locale of Object.keys(progressLineMenuTranslations) as (keyof typeof progressLineMenuTranslations)[]) {
+  Object.assign(specializedTranslations[locale], progressLineMenuTranslations[locale])
+}
+
 const chartRowTranslations: typeof specializedTranslations = {
   en: {
     '차트 행 인식': 'Detect chart rows',

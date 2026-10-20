@@ -1,9 +1,13 @@
 import { describe, expect, it } from 'vitest'
-import { samePdfLinks, withRecentPdfLinks } from './pdfRecognitionState'
+import { orderVisibleRecognitionPages, samePdfLinks, withRecentPdfLinks } from './pdfRecognitionState'
 
 const link = { x: 0.1, y: 0.2, width: 0.3, height: 0.1, href: 'https://example.com/' }
 
 describe('PDF recognition view state', () => {
+  it('deduplicates visible pages and puts the active page first', () => {
+    expect(orderVisibleRecognitionPages(4, [2, 4, 2])).toEqual([4, 2])
+  })
+
   it('reuses the current page map when cached links have the same coordinates', () => {
     const current = { 2: [link] }
     expect(samePdfLinks(current[2], [{ ...link }])).toBe(true)

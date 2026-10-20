@@ -294,6 +294,8 @@ html.viewer-viewport-locked .viewer-shell { height: 100dvh; min-height: 0; flex:
 .pdf-pane.is-active { border-color: rgba(75,99,52,.35); }
 .ink-save-error { position: absolute; z-index: 16; top: 36px; left: 50%; display: flex; align-items: center; gap: 10px; max-width: calc(100% - 20px); padding: 8px 11px; border: 1px solid #f1c9ce; border-radius: 8px; color: #9f2f3d; background: #fff8f8; box-shadow: 0 3px 12px rgba(27,35,51,.12); font-size: 11px; transform: translateX(-50%); }
 .ink-save-error button { flex: 0 0 auto; padding: 4px 8px; border: 1px solid #e9aeb6; border-radius: 6px; color: #8f2736; background: #fff; font: inherit; cursor: pointer; white-space: nowrap; }
+.pdf-recognition-retry { position: absolute; z-index: 15; top: 36px; left: 50%; display: flex; align-items: center; gap: 10px; max-width: calc(100% - 20px); padding: 5px 8px 5px 11px; border: 1px solid var(--color-border); border-radius: 8px; color: var(--color-text); background: var(--color-surface); box-shadow: 0 3px 12px rgba(27,35,51,.12); font-size: 11px; transform: translateX(-50%); }
+.pdf-recognition-retry button { flex: 0 0 auto; min-width: 44px; min-height: 44px; padding: 4px 8px; border: 1px solid var(--color-primary); border-radius: 6px; color: var(--color-primary); background: var(--color-surface); font: inherit; cursor: pointer; white-space: nowrap; }
 .pane-label { height: 25px; display: flex; align-items: center; justify-content: center; flex: 0 0 25px; color: #969eaa; background: #fff; font-size: 9px; }
 .is-active .pane-label { color: var(--color-primary); background: var(--color-primary-soft); font-weight: 600; }
 .pdf-scroll-area { position: relative; flex: 1; min-width: 0; min-height: 0; overflow: auto; overscroll-behavior: contain; touch-action: none; cursor: grab; }
@@ -416,6 +418,7 @@ html.viewer-viewport-locked .viewer-shell { height: 100dvh; min-height: 0; flex:
 .pdf-image-layer canvas { width: 100%; height: 100%; box-shadow: none; }
 .pdf-image-layer .pdf-detail-canvas { position: absolute; z-index: 0; pointer-events: none; }
 .pdf-svg-overlay { position: absolute; z-index: 2; inset: 0; width: 100%; height: 100%; overflow: visible; touch-action: none; }
+.pdf-svg-overlay.pan-mode { pointer-events: none; }
 .pdf-svg-overlay.draw-mode { cursor: crosshair; }
 .pdf-svg-overlay.text-mode { cursor: text; }
 .pdf-svg-overlay text { user-select: none; }
@@ -429,15 +432,19 @@ html.viewer-viewport-locked .viewer-shell { height: 100dvh; min-height: 0; flex:
 .progress-line-overlay { position: absolute; inset: 0; pointer-events: none; -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
 .progress-line-overlay > svg { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; pointer-events: none; touch-action: none; }
 .progress-line-overlay button, .progress-line-overlay input, .progress-line-overlay select { pointer-events: auto; }
-.progress-line-actions { position: absolute; z-index: 5; display: flex; align-items: center; gap: 4px; transform: translateY(-50%); }
-.progress-line-menu-trigger { width: 44px; height: 44px; display: grid; place-items: center; padding: 0; border: 1px solid var(--color-border); border-radius: 50%; color: var(--color-text); background: rgba(255,255,255,.97); box-shadow: 0 2px 9px rgba(44,43,39,.14); line-height: 1; cursor: pointer; }
-.progress-line-menu-trigger:hover { color: var(--color-primary); background: var(--color-primary-soft); }
 .progress-line-menu { position: absolute; z-index: 7; box-sizing: border-box; width: min(244px, calc(100% - 12px)); max-height: min(430px, calc(100% - 12px)); display: grid; gap: 3px; overflow: auto; padding: 8px; border: 1px solid #e6eaf1; border-radius: 14px; color: #1f2a3c; background: rgba(255,255,255,.98); box-shadow: 0 8px 28px rgba(27,35,51,.2); pointer-events: auto; }
 .progress-line-menu > button, .progress-line-menu > label { min-height: 44px; display: flex; align-items: center; gap: 8px; padding: 4px 9px; border: 0; border-radius: 8px; color: inherit; background: transparent; font: inherit; font-size: 12px; text-align: left; cursor: pointer; }
 .progress-line-menu > button:hover:not(:disabled) { background: #f1f4fa; }
 .progress-line-menu > button:disabled { opacity: .45; cursor: not-allowed; }
+.progress-menu-icon { flex: 0 0 16px; color: var(--color-primary); }
+.progress-line-menu > button > span:nth-child(2) { min-width: 0; flex: 1 1 auto; }
+.progress-menu-switch { width: 30px; height: 18px; flex: 0 0 30px; display: flex; align-items: center; justify-content: flex-start; margin-left: auto; padding: 2px; border-radius: 10px; background: var(--color-border); }
+.progress-menu-switch.is-on { justify-content: flex-end; background: var(--color-primary); }
+.progress-menu-switch > span { width: 14px; height: 14px; border-radius: 50%; background: #fff; }
+.progress-menu-color { width: 11px; height: 11px; flex: 0 0 11px; margin-left: auto; border-radius: 50%; box-shadow: 0 0 0 1px rgba(31,42,60,.12); }
 .progress-line-menu > strong { padding: 5px 8px; font-size: 13px; }
 .progress-line-menu .progress-delete-action { color: var(--color-danger); }
+.progress-line-menu .progress-delete-action .progress-menu-icon { color: inherit; }
 .progress-color-presets, .counter-color-presets { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; }
 .annotation-color-presets { width: max-content; display: grid; grid-template-columns: repeat(5, 44px); gap: 0; padding: 0; }
 .progress-color-presets { justify-content: flex-start; gap: 4px; padding: 7px; }
@@ -449,7 +456,7 @@ html.viewer-viewport-locked .viewer-shell { height: 100dvh; min-height: 0; flex:
 .progress-line-menu > label:has(input[type="range"]) { display: grid; grid-template-columns: auto minmax(0, 1fr); }
 .progress-line-menu input[type="range"] { width: 100%; min-width: 0; min-height: 44px; accent-color: var(--color-primary); touch-action: pan-x; }
 .progress-line-menu input[type="range"]:disabled { cursor: not-allowed; opacity: .45; }
-.progress-line-style-menu { max-height: none; gap: 3px; overflow: hidden; padding: 8px; }
+.progress-line-style-menu { max-height: min(430px, calc(100% - 12px)); gap: 3px; overflow-x: hidden; overflow-y: auto; padding: 8px; }
 .progress-line-style-header { min-height: 44px; display: flex; align-items: center; justify-content: space-between; gap: 8px; }
 .progress-line-style-header > strong { padding: 0 4px; font-size: 13px; }
 .progress-line-style-header > button { width: 44px; height: 44px; flex: 0 0 44px; display: grid; place-items: center; padding: 0; border: 0; border-radius: 8px; color: inherit; background: transparent; cursor: pointer; }
@@ -469,6 +476,7 @@ html.viewer-viewport-locked .viewer-shell { height: 100dvh; min-height: 0; flex:
 .progress-calibration-prompt { z-index: 31; bottom: calc(var(--viewer-footer-controls-height) + 8px); }
 .progress-calibration-prompt > span { flex: 1 1 100%; text-align: center; }
 .progress-calibration-prompt button, .progress-line-notice button { min-height: 34px; padding: 0 9px; border: 0; border-radius: 18px; color: var(--color-primary-pressed); background: #fff; font: inherit; cursor: pointer; }
+.progress-line-delete-prompt button { min-height: 44px; }
 .progress-calibration-prompt .progress-calibration-cancel { color: #647087; background: #f0f2f6; }
 
 .chart-row-select-hint { position: absolute; z-index: 28; left: 50%; bottom: 14px; display: flex; align-items: center; gap: 10px; max-width: calc(100% - 24px); min-height: 44px; padding: 6px 10px 6px 14px; transform: translateX(-50%); border: 1px solid var(--color-border); border-radius: 22px; color: var(--color-text); background: var(--color-surface); box-shadow: 0 3px 14px rgba(44,43,39,.17); font-size: 13px; }
@@ -548,7 +556,7 @@ html.viewer-viewport-locked .viewer-shell { height: 100dvh; min-height: 0; flex:
 .colorwork-resize-both { position: absolute; z-index: 1; right: -6px; bottom: -6px; width: 18px; height: 18px; padding: 0; border: 1px solid #fff; border-radius: 5px; background: var(--color-primary); box-shadow: 0 1px 4px rgba(23,56,105,.35); touch-action: none; cursor: nwse-resize; }
 .page-note { position: absolute; z-index: 3; display: flex; flex-direction: column; overflow: visible; pointer-events: auto; touch-action: none; }
 .page-note.selected { z-index: 4; outline: 1px dashed var(--color-primary); background: rgba(255,255,255,.86); box-shadow: 0 1px 5px rgba(25,55,95,.16); }
-.text-style-toolbar.viewer-mini-settings-panel { z-index: 6; top: auto; left: auto; width: min(246px, calc(100% - 8px)); max-width: calc(100% - 8px); max-height: min(420px, calc(var(--viewer-viewport-height, 100dvh) - var(--viewer-header-height) - 72px)); overflow-x: hidden; }
+.text-style-toolbar.viewer-mini-settings-panel { z-index: 6; top: auto; left: auto; width: min(246px, calc(100% - 8px)); max-width: calc(100% - 8px); max-height: min(420px, calc(var(--viewer-viewport-height, 100dvh) - var(--viewer-header-height) - 72px)); overflow-x: hidden; pointer-events: auto; touch-action: auto; }
 .text-style-toolbar .text-style-color { display: grid; gap: 2px; min-width: 0; color: var(--color-text-muted); font-size: 10px; }
 .text-style-toolbar .text-style-color-presets { flex: 0 0 auto; }
 .text-style-toolbar.viewer-mini-settings-panel .annotation-style-section > label.text-style-size { display: grid; grid-template-columns: minmax(0, 1fr) 52px; align-items: center; }
@@ -1853,6 +1861,10 @@ html.viewer-viewport-locked .viewer-shell { height: 100dvh; min-height: 0; flex:
 .viewer-compact-menu > button { width: 100%; min-width: 0; min-height: 44px; display: flex; align-items: center; gap: 10px; padding: 0 10px; border: 0; border-radius: 8px; color: var(--color-text-secondary); background: transparent; font: inherit; font-size: 12px; text-align: left; cursor: pointer; }
 .viewer-compact-menu > button:hover:not(:disabled), .viewer-compact-menu > button.selected { color: var(--color-primary); background: var(--color-primary-soft); }
 .viewer-compact-menu > button:disabled { opacity: .45; cursor: not-allowed; }
+.viewer-zoom-menu { right: 0; bottom: calc(100% + 8px); width: 184px; max-height: min(420px, calc(100dvh - 96px)); overflow-y: auto; overscroll-behavior: contain; }
+.viewer-zoom-presets { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 2px; }
+.viewer-zoom-presets > button { min-width: 0; min-height: 44px; padding: 0 4px; border: 0; border-radius: 8px; color: var(--color-text-secondary); background: transparent; font: inherit; font-size: 12px; font-variant-numeric: tabular-nums; cursor: pointer; }
+.viewer-zoom-presets > button:hover, .viewer-zoom-presets > button.selected { color: var(--color-primary); background: var(--color-primary-soft); }
 .viewer-header-menu { top: calc(100% + 6px); right: 0; }
 .viewer-focus-restore { position: absolute; z-index: 35; top: max(8px, env(safe-area-inset-top, 0px)); left: 76px; min-width: 44px; min-height: 44px; display: inline-flex; align-items: center; justify-content: center; gap: 7px; padding: 0 12px; border: 1px solid var(--color-border); border-radius: 10px; color: var(--color-text-secondary); background: var(--color-surface); box-shadow: 0 3px 12px rgba(17,17,17,.12); font: inherit; font-size: 12px; cursor: pointer; }
 .viewer-focus-restore:hover { border-color: var(--color-primary); color: var(--color-primary); background: var(--color-primary-soft); }

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { anchoredScrollOffset, canStartPaneGesture, classifyWheelInput, clientPointForPagePosition, isEditableTarget, pagePositionAtClientPoint, pinchPreviewTranslation, regionHighlightPointerAction, scrollOffsetForZoomFocus, visiblePageCrop, wheelActionForBurst, wheelZoom } from './viewerInteraction'
+import { anchoredScrollOffset, canStartPaneGesture, classifyWheelInput, clientPointForPagePosition, isEditableTarget, nearestZoomLevel, pagePositionAtClientPoint, pinchPreviewTranslation, regionHighlightPointerAction, scrollOffsetForZoomFocus, stepZoomLevel, visiblePageCrop, wheelActionForBurst, wheelZoom, ZOOM_LEVELS } from './viewerInteraction'
 
 describe('PDF viewer input helpers', () => {
   it('selects a region on first contact and allows a later drag to move it with either selection tool', () => {
@@ -32,11 +32,19 @@ describe('PDF viewer input helpers', () => {
     expect(wheelActionForBurst('zoom', 300, 300)).toEqual({ action: 'zoom', burstUntil: 300 })
   })
 
-  it('changes zoom by wheel direction and clamps to the viewer limits', () => {
-    expect(wheelZoom(1, { deltaX: 0, deltaY: -100, deltaMode: 0, ctrlKey: false })).toBeCloseTo(1.1)
-    expect(wheelZoom(2, { deltaX: 0, deltaY: 100, deltaMode: 0, ctrlKey: false })).toBeCloseTo(2 / 1.1)
+  it('steps zoom through the fixed viewer levels and snaps pinch results to the nearest level', () => {
+    expect(ZOOM_LEVELS).toEqual([0.5, 0.75, 1, 1.25, 1.5, 2, 3, 4, 5])
+    expect(stepZoomLevel(1, -1)).toBe(0.75)
+    expect(stepZoomLevel(1, 1)).toBe(1.25)
+    expect(stepZoomLevel(1.1, -1)).toBe(1)
+    expect(stepZoomLevel(1.1, 1)).toBe(1.25)
+    expect(nearestZoomLevel(1.38)).toBe(1.5)
+    expect(nearestZoomLevel(1.36)).toBe(1.25)
+    expect(wheelZoom(1, { deltaX: 0, deltaY: -100, deltaMode: 0, ctrlKey: false })).toBe(1.25)
+    expect(wheelZoom(2, { deltaX: 0, deltaY: 100, deltaMode: 0, ctrlKey: false })).toBe(1.5)
     expect(wheelZoom(4.9, { deltaX: 0, deltaY: -300, deltaMode: 0, ctrlKey: false })).toBe(5)
-    expect(wheelZoom(1.1, { deltaX: 0, deltaY: 300, deltaMode: 0, ctrlKey: false })).toBe(1)
+    expect(wheelZoom(1.1, { deltaX: 0, deltaY: 300, deltaMode: 0, ctrlKey: false })).toBe(0.5)
+    expect(wheelZoom(1, { deltaX: 0, deltaY: -100, deltaMode: 0, ctrlKey: true })).toBe(1.25)
   })
 
   it('keeps the selected page point under the pointer within scroll bounds', () => {

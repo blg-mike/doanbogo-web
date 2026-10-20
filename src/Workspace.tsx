@@ -2,7 +2,7 @@ import { formatDate, formatNumber, t, translateMessage, type LocaleKey, useLocal
 import { useCallback, useEffect, useRef, useState, type FormEvent, type ReactNode } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { BookOpen, Camera, Check, ChevronDown, ChevronUp, FilePlus2, FolderPlus, Grid2X2, Grid3X3, Images, List, MoreHorizontal, Search, SlidersHorizontal, X } from 'lucide-react'
-import { addDocument, appendPhotoPages, createPhotoFolder, duplicateChart, duplicateDocument, getDocument, getHomeProject, getPhotoPage, getPreference, getStorageMode, isQuotaError, listCharts, listDocuments, listHomeProjects, markChartOpened, renameDocument, saveChart, saveHomeProject, savePreference, subscribeStorageMode, updateTags, type StorageMode } from './storage'
+import { addDocument, appendPhotoPages, createPhotoFolder, duplicateChart, duplicateDocument, getHomeProject, getPhotoPage, getPreference, getStorageMode, isQuotaError, listCharts, listDocuments, listHomeProjects, markChartOpened, renameDocument, saveChart, saveHomeProject, savePreference, subscribeStorageMode, updateTags, type StorageMode } from './storage'
 import { inspectPdf, pdfErrorMessage } from './pdf'
 import { PhotoPreparationError, preparePhotoFile, sortPhotoFiles, type PhotoPreparationErrorCode } from './photoImages'
 import { chartSvg } from './charts'
@@ -193,9 +193,6 @@ export default function Workspace() {
         }
         try {
           await addDocument(record)
-          void import('./pdfRecognition').then(({ enqueuePdfRecognition }) => enqueuePdfRecognition(record)).catch((error: unknown) => {
-            console.warn('[PDF] Background link analysis could not start.', error)
-          })
           added++
         } catch (error) {
           if (isQuotaError(error)) throw error
@@ -277,13 +274,10 @@ export default function Workspace() {
       }
       currentPhoto = undefined
       setPhotoProgress(t('사진 저장 중…'))
-      let saved: DocumentRecord
-      if (photoMode === 'new') saved = await createPhotoFolder(photoFolderName, prepared)
+      if (photoMode === 'new') await createPhotoFolder(photoFolderName, prepared)
       else if (selected?.kind === 'photos') {
         await appendPhotoPages(selected.id, prepared)
-        saved = await getDocument(selected.id) ?? selected
       } else throw new Error('사진 폴더를 찾을 수 없습니다.')
-      void import('./pdfRecognition').then(({ enqueuePdfRecognition }) => enqueuePdfRecognition(saved, null, true)).catch(() => {})
       await refresh()
       setDialog(null)
       setSelected(null)

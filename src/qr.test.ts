@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { extractPdfPageLinks, isCurrentQrScanGeneration, safeQrHref } from './qr'
+import { extractPdfPageLinks, isCurrentQrScanGeneration, safeQrHref, shouldOpenLinkAfterGesture } from './qr'
 
 describe('PDF QR link targets', () => {
   it('rejects delayed scans from an older document generation', () => {
@@ -16,6 +16,12 @@ describe('PDF QR link targets', () => {
     expect(safeQrHref('javascript:alert(1)')).toBeNull()
     expect(safeQrHref('mailto:maker@example.com')).toBeNull()
     expect(safeQrHref('not a url')).toBeNull()
+  })
+
+  it('opens links only for a short tap, not a drag or pinch', () => {
+    expect(shouldOpenLinkAfterGesture(0, 0, 8, 0)).toBe(true)
+    expect(shouldOpenLinkAfterGesture(0, 0, 8.1, 0)).toBe(false)
+    expect(shouldOpenLinkAfterGesture(0, 0, 0, 0, true)).toBe(false)
   })
 
   it('extracts PDF link annotations and URLs split across adjacent text runs', () => {

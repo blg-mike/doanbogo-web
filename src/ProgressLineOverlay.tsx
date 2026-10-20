@@ -1,7 +1,7 @@
 import { formatNumber, t, translateMessage, type LocaleKey } from './locales/index'
 import { useEffect, useId, useRef, useState, type CSSProperties, type KeyboardEvent as ReactKeyboardEvent, type PointerEvent as ReactPointerEvent } from 'react'
 import { createPortal } from 'react-dom'
-import { Ellipsis, X } from 'lucide-react'
+import { ChevronRight, Heart, Palette, Plus, Trash2, X } from 'lucide-react'
 import { focusBandHeightRatio, focusDimOpacity, guideGeometryForRotation, pageRectToDisplayRect } from './focusGeometry'
 import type { CounterSnapshot, PageRotation, PageWorkRecord, ProgressGuide, ProgressGuideScreenPosition } from './types'
 import { ColorPresetButtons } from './ColorPresetButtons'
@@ -163,6 +163,8 @@ export function ProgressLineOverlay({ width, height, cssWidth, cssHeight, render
   const overlayRef = useRef<HTMLDivElement | null>(null)
   const menuPanelRef = useRef<HTMLDivElement | null>(null)
   const menuTriggerRef = useRef<(Element & { focus?: () => void }) | null>(null)
+  const deleteCancelRef = useRef<HTMLButtonElement | null>(null)
+  const deleteCandidateRef = useRef<{ id: string; pointerId: number; startClientX: number; startClientY: number; moved: boolean } | null>(null)
   const longPressTimerRef = useRef<number | undefined>(undefined)
   const [previewGuide, setPreviewGuide] = useState<ProgressGuide | null>(null)
   const [selectedId, setSelectedId] = useState<string | null>(null)
@@ -171,6 +173,7 @@ export function ProgressLineOverlay({ width, height, cssWidth, cssHeight, render
   }
   const [menuGuideId, setMenuGuideId] = useState<string | null>(null)
   const [styleGuideId, setStyleGuideId] = useState<string | null>(null)
+  const [deleteMode, setDeleteMode] = useState(false)
   const [styleMenuAnchor, setStyleMenuAnchor] = useState<{ x: number; y: number } | null>(null)
   const [connectingGuideId, setConnectingGuideId] = useState<string | null>(null)
   const [connectingCounterId, setConnectingCounterId] = useState('')
@@ -216,29 +219,61 @@ export function ProgressLineOverlay({ width, height, cssWidth, cssHeight, render
     if (longPressTimerRef.current !== undefined) window.clearTimeout(longPressTimerRef.current)
   }, [])
 
-  function openStyleMenu(guide: ProgressGuide, clientX: number, clientY: number, trigger: HTMLElement | SVGElement) {
+  function openGuideMenu(guide: ProgressGuide, clientX: number, clientY: number, trigger: HTMLElement | SVGElement, showStyle = false) {
     const overlay = overlayRef.current?.getBoundingClientRect()
     if (!overlay) return
     menuTriggerRef.current = trigger
     selectGuide(guide.id)
     setConnectingGuideId(null)
     setMenuGuideId(guide.id)
-    setStyleGuideId(guide.id)
+    setStyleGuideId(showStyle ? guide.id : null)
     setStyleMenuAnchor({ x: clientX - overlay.left, y: clientY - overlay.top })
   }
 
   function openStyleMenuFromKeyboard(event: ReactKeyboardEvent<SVGElement>, guide: ProgressGuide) {
     if (event.key !== 'Enter' && event.key !== ' ') return
     event.preventDefault()
+    event.stopPropagation()
+    if (deleteMode) {
+      setDeleteMode(false)
+      removeGuide(guide)
+      return
+    }
     const rect = event.currentTarget.getBoundingClientRect()
-    openStyleMenu(guide, rect.left + rect.width / 2, rect.top + rect.height / 2, event.currentTarget)
+    openGuideMenu(guide, rect.left + rect.width / 2, rect.top + rect.height / 2, event.currentTarget)
   }
+
+  useEffect(() => {
+    if (!deleteMode) return
+    const cancelOnEscape = (event: KeyboardEvent) => {
+      if (event.key !== 'Escape') return
+      event.preventDefault()
+      event.stopPropagation()
+      deleteCandidateRef.current = null
+      setDeleteMode(false)
+      menuTriggerRef.current?.focus?.()
+    }
+    window.addEventListener('keydown', cancelOnEscape)
+    return () => window.removeEventListener('keydown', cancelOnEscape)
+  }, [deleteMode])
+
+  useEffect(() => {
+    if (deleteMode) deleteCancelRef.current?.focus()
+  }, [deleteMode])
+
+  useEffect(() => {
+    if (!active) {
+      deleteCandidateRef.current = null
+      // oxlint-disable-next-line react/set-state-in-effect -- Leave this pane's temporary delete mode when it is no longer active.
+      setDeleteMode(false)
+    }
+  }, [active])
 
   useDismissiblePopover(menuGuideId !== null, menuPanelRef, menuTriggerRef, () => {
     setStyleGuideId(null)
     setMenuGuideId(null)
     setStyleMenuAnchor(null)
-  })
+  }, true)
 
   useEffect(() => {
     if (!calibration) return
@@ -270,9 +305,14 @@ export function ProgressLineOverlay({ width, height, cssWidth, cssHeight, render
     const id = target?.dataset.guideId
     const guide = displayedGuides.find((item) => item.id === id)
     if (!target || !guide || calibration && calibration.guideId !== guide.id) return
-    if (!active) onActivate()
     event.preventDefault()
     event.stopPropagation()
+    if (deleteMode) {
+      try { event.currentTarget.setPointerCapture(event.pointerId) } catch { /* Pointer capture can fail after browser cancellation. */ }
+      deleteCandidateRef.current = { id: guide.id, pointerId: event.pointerId, startClientX: event.clientX, startClientY: event.clientY, moved: false }
+      return
+    }
+    if (!active) onActivate()
     const original = work.horizontalGuides?.find((item) => item.id === guide.id)
     if (!original) return
     const pos = point(event, event.currentTarget)
@@ -316,7 +356,7 @@ export function ProgressLineOverlay({ width, height, cssWidth, cssHeight, render
       const drag = dragRef.current
       if (!drag || drag.pointerId !== pointerId || drag.moved) return
       drag.longPressed = true
-      openStyleMenu(guide, drag.startClientX, drag.startClientY, drag.focusTarget)
+      openGuideMenu(guide, drag.startClientX, drag.startClientY, drag.focusTarget, true)
     }, 450)
   }
 
@@ -338,6 +378,14 @@ export function ProgressLineOverlay({ width, height, cssWidth, cssHeight, render
   }
 
   function move(event: ReactPointerEvent<SVGSVGElement>) {
+    if (deleteCandidateRef.current?.pointerId === event.pointerId) {
+      event.preventDefault()
+      event.stopPropagation()
+      if (progressGuideMoveExceededThreshold(deleteCandidateRef.current.startClientX, deleteCandidateRef.current.startClientY, event.clientX, event.clientY)) {
+        deleteCandidateRef.current.moved = true
+      }
+      return
+    }
     const drag = dragRef.current
     if (!drag || drag.pointerId !== event.pointerId) return
     event.preventDefault()
@@ -360,6 +408,20 @@ export function ProgressLineOverlay({ width, height, cssWidth, cssHeight, render
   }
 
   function finish(event: ReactPointerEvent<SVGSVGElement>, cancelled = false) {
+    const deleteCandidate = deleteCandidateRef.current
+    if (deleteCandidate?.pointerId === event.pointerId) {
+      event.preventDefault()
+      event.stopPropagation()
+      deleteCandidateRef.current = null
+      if (!cancelled && !deleteCandidate.moved) {
+        const target = guides.find((guide) => guide.id === deleteCandidate.id)
+        if (target) {
+          setDeleteMode(false)
+          removeGuide(target)
+        }
+      }
+      return
+    }
     const drag = dragRef.current
     if (!drag || drag.pointerId !== event.pointerId) return
     clearLongPressTimer()
@@ -376,7 +438,7 @@ export function ProgressLineOverlay({ width, height, cssWidth, cssHeight, render
     }
     const pos = point(event, event.currentTarget)
     if (!drag.moved) {
-      openStyleMenu(drag.base, event.clientX, event.clientY, drag.focusTarget)
+      openGuideMenu(drag.base, event.clientX, event.clientY, drag.focusTarget)
       dragRef.current = null
       return
     }
@@ -402,6 +464,8 @@ export function ProgressLineOverlay({ width, height, cssWidth, cssHeight, render
   function addMarker(guide: ProgressGuide) {
     updateGuide(guide.id, { markerProgress: guide.markerProgress === undefined ? 0.5 : undefined })
     setMenuGuideId(null)
+    setStyleMenuAnchor(null)
+    menuTriggerRef.current?.focus?.()
   }
 
   function addReference() {
@@ -428,6 +492,7 @@ export function ProgressLineOverlay({ width, height, cssWidth, cssHeight, render
     onWorkChange({ ...work, horizontalGuides: [...guides, reference] }, true, true, work)
     selectGuide(reference.id)
     setMenuGuideId(null)
+    setStyleMenuAnchor(null)
   }
 
   function removeGuide(guide: ProgressGuide) {
@@ -675,64 +740,34 @@ export function ProgressLineOverlay({ width, height, cssWidth, cssHeight, render
         const lineOpacity = guide.opacity ?? (guide.role === 'reference' ? Math.min(defaultOpacity, 0.45) : defaultOpacity)
         return <g key={guide.id}>
           <line x1={x1} x2={x2} y1={y} y2={y} stroke={color} strokeWidth={stroke} strokeOpacity={lineOpacity} strokeLinecap="round" pointerEvents="none" />
-          <line data-guide-id={guide.id} data-progress-action="body" x1={x1} x2={x2} y1={y} y2={y} stroke="transparent" strokeWidth={Math.max(stroke, 44 * sy)} pointerEvents={disabled ? 'none' : 'stroke'} role="button" tabIndex={disabled ? -1 : 0} aria-label={guide.role === 'primary' ? t('진행선 표시 스타일') : t('참고선 표시 스타일')} aria-pressed={selected} onKeyDown={(event) => openStyleMenuFromKeyboard(event, guide)} />
+          <line data-guide-id={guide.id} data-progress-action="body" x1={x1} x2={x2} y1={y} y2={y} stroke="transparent" strokeWidth={Math.max(stroke, 44 * sy)} pointerEvents={disabled ? 'none' : 'stroke'} role="button" tabIndex={disabled ? -1 : 0} aria-label={guide.role === 'primary' ? t('진행선 메뉴') : t('참고선 메뉴')} aria-pressed={selected} onKeyDown={(event) => openStyleMenuFromKeyboard(event, guide)} />
           {markerX !== null && <g>
-            <ellipse data-guide-id={guide.id} data-progress-action="marker" cx={markerX} cy={y} rx={hitX} ry={Math.max(hitY, stroke / 2)} fill="transparent" pointerEvents={disabled ? 'none' : 'all'} role="button" tabIndex={disabled ? -1 : 0} aria-label={guide.role === 'primary' ? t('진행선 표시 스타일') : t('참고선 표시 스타일')} aria-pressed={selected} onKeyDown={(event) => openStyleMenuFromKeyboard(event, guide)} />
+            <ellipse data-guide-id={guide.id} data-progress-action="marker" cx={markerX} cy={y} rx={hitX} ry={Math.max(hitY, stroke / 2)} fill="transparent" pointerEvents={disabled ? 'none' : 'all'} role="button" tabIndex={disabled ? -1 : 0} aria-label={guide.role === 'primary' ? t('진행선 메뉴') : t('참고선 메뉴')} aria-pressed={selected} onKeyDown={(event) => openStyleMenuFromKeyboard(event, guide)} />
             <g opacity={progressMarkerOpacity(lineOpacity)} pointerEvents="none">
               <path d={`M ${markerX - markerSize / 2} ${markerGeometry.top} L ${markerX + markerSize / 2} ${markerGeometry.top} L ${markerX} ${markerGeometry.top + markerSize} Z`} fill={DESIGN_SYSTEM_COLORS.primary} stroke="#fff" strokeWidth={1.5} vectorEffect="non-scaling-stroke" strokeLinejoin="round" />
             </g>
           </g>}
           {selected && <g>
-            <ellipse data-guide-id={guide.id} data-progress-action="start" cx={x1} cy={y} rx={hitX} ry={hitY} fill="transparent" pointerEvents={disabled ? 'none' : 'all'} role="button" tabIndex={disabled ? -1 : 0} aria-label={guide.role === 'primary' ? t('진행선 표시 스타일') : t('참고선 표시 스타일')} aria-pressed={selected} onKeyDown={(event) => openStyleMenuFromKeyboard(event, guide)} />
-            <ellipse data-guide-id={guide.id} data-progress-action="end" cx={x2} cy={y} rx={hitX} ry={hitY} fill="transparent" pointerEvents={disabled ? 'none' : 'all'} role="button" tabIndex={disabled ? -1 : 0} aria-label={guide.role === 'primary' ? t('진행선 표시 스타일') : t('참고선 표시 스타일')} aria-pressed={selected} onKeyDown={(event) => openStyleMenuFromKeyboard(event, guide)} />
-            <circle cx={x1} cy={y} r={Math.max(6, 6 * sx)} fill="white" stroke={color} strokeWidth={Math.max(2, 2 * sx)} pointerEvents="none" />
-            <circle cx={x2} cy={y} r={Math.max(6, 6 * sx)} fill="white" stroke={color} strokeWidth={Math.max(2, 2 * sx)} pointerEvents="none" />
+            <ellipse data-guide-id={guide.id} data-progress-action="start" cx={x1} cy={y} rx={hitX} ry={hitY} fill="transparent" pointerEvents={disabled ? 'none' : 'all'} role="button" tabIndex={disabled ? -1 : 0} aria-label={guide.role === 'primary' ? t('진행선 메뉴') : t('참고선 메뉴')} aria-pressed={selected} onKeyDown={(event) => openStyleMenuFromKeyboard(event, guide)} />
+            <ellipse data-guide-id={guide.id} data-progress-action="end" cx={x2} cy={y} rx={hitX} ry={hitY} fill="transparent" pointerEvents={disabled ? 'none' : 'all'} role="button" tabIndex={disabled ? -1 : 0} aria-label={guide.role === 'primary' ? t('진행선 메뉴') : t('참고선 메뉴')} aria-pressed={selected} onKeyDown={(event) => openStyleMenuFromKeyboard(event, guide)} />
           </g>}
         </g>
       })}
     </svg>
-    {displayedGuides.map((guide) => <div
-      key={'menu-' + guide.id}
-      className="progress-line-actions"
-      style={{ left: clamp((guide.xEndRatio ?? 0.85) * cssWidth + 4, 4, Math.max(4, cssWidth - 48)), top: guide.position * cssHeight }}
-    >
-      <button
-        type="button"
-        className="progress-line-menu-trigger"
-        aria-label={guide.role === 'primary' ? t('진행선 옵션') : t('참고선 옵션')}
-        title={guide.role === 'primary' ? t('진행선 옵션') : t('참고선 옵션')}
-        onPointerDown={(event) => { event.preventDefault(); event.stopPropagation(); if (!active) onActivate() }}
-        onClick={(event) => {
-          menuTriggerRef.current = event.currentTarget
-          selectGuide(guide.id)
-          setConnectingGuideId(null)
-          setStyleMenuAnchor(null)
-          if (menuGuideId === guide.id && styleGuideId !== guide.id) {
-            setMenuGuideId(null)
-            setStyleGuideId(null)
-          } else {
-            setMenuGuideId(guide.id)
-            setStyleGuideId(null)
-          }
-        }}
-      ><Ellipsis size={19} /></button>
-    </div>)}
     {menuGuideId && displayedGuides.find((guide) => guide.id === menuGuideId) && (() => {
       const guide = displayedGuides.find((item) => item.id === menuGuideId)!
       const menuGuide = guides.find((item) => item.id === menuGuideId) ?? guide
       const connectedCounter = counters.find((counter) => counter.id === guide.linkedCounterId)
       const stylePanelOpen = styleGuideId === menuGuideId && styleMenuAnchor !== null
       const menuWidth = 244
-      const anchorLeft = styleMenuAnchor ? styleMenuAnchor.x + 14 : 0
-      const left = stylePanelOpen
-        ? clamp(anchorLeft + menuWidth <= cssWidth - 6 ? anchorLeft : styleMenuAnchor.x - menuWidth - 14, 6, Math.max(6, cssWidth - menuWidth - 6))
-        : clamp((guide.xEndRatio ?? 0.85) * cssWidth, 6, Math.max(6, cssWidth - menuWidth - 6))
-      const top = stylePanelOpen
-        ? clamp(styleMenuAnchor.y - 18, 6, Math.max(6, cssHeight - (guide.role === 'primary' ? 388 : 285) - 6))
-        : clamp(guide.position * cssHeight + 28, 6, Math.max(6, cssHeight - 220))
+      const anchor = styleMenuAnchor ?? { x: (guide.xEndRatio ?? 0.85) * cssWidth, y: guide.position * cssHeight }
+      const rightLeft = anchor.x + menuWidth + 12 <= cssWidth - 6 ? anchor.x + 12 : anchor.x - menuWidth - 12
+      const left = clamp(rightLeft, 6, Math.max(6, cssWidth - menuWidth - 6))
+      const estimatedHeight = stylePanelOpen ? 430 : guide.role === 'primary' ? 203 : 156
+      const top = clamp(anchor.y + 10, 6, Math.max(6, cssHeight - estimatedHeight - 6))
       return <div ref={menuPanelRef} className={'progress-line-menu' + (stylePanelOpen ? ' progress-line-style-menu' : '')} role="menu" style={{ left, top }} onPointerDown={(event) => event.stopPropagation()}>
         {styleGuideId === menuGuideId ? <>
-          <div className="progress-line-style-header"><strong>{t("표시 스타일")}</strong><button type="button" aria-label={t("닫기")} title={t("닫기")} onClick={() => { setStyleGuideId(null); setMenuGuideId(null); setStyleMenuAnchor(null); menuTriggerRef.current?.focus?.() }}><X size={17} /></button></div>
+          <div className="progress-line-style-header"><strong>{t(guide.role === 'primary' ? "진행선 스타일" : "참고선 스타일")}</strong><button type="button" aria-label={t("닫기")} title={t("닫기")} onClick={() => { setStyleGuideId(null); setMenuGuideId(null); setStyleMenuAnchor(null); menuTriggerRef.current?.focus?.() }}><X size={17} /></button></div>
           <ColorPresetButtons label={t("진행선 색상")} className="progress-color-presets" value={guide.color ?? defaultColor} presets={PROGRESS_LINE_COLOR_PRESETS} includeCurrentColor={false} onChange={(color) => updateGuide(menuGuideId, { color })} />
           {renderStyleRange(menuGuide, 'thickness', '두께')}
           {renderStyleRange(menuGuide, 'opacity', '투명도')}
@@ -743,10 +778,9 @@ export function ProgressLineOverlay({ width, height, cssWidth, cssHeight, render
               {renderStyleRange(menuGuide, 'bandHeightRatio', '집중선 두께', !menuGuide.focus?.enabled)}
             </div>
           </>}
-        </> : <>
           {guide.role === 'primary' && <>
-            <button type="button" role="menuitem" onClick={() => addMarker(menuGuide)}>{guide.markerProgress === undefined ? t('마커 표시') : t('마커 지우기')}</button>
-            {connectingGuideId === guide.id ? <div className="progress-connect-options">
+            <button type="button" role="menuitem" onClick={() => { setConnectingGuideId(guide.id); setConnectingCounterId(guide.linkedCounterId ?? counters[0]?.id ?? '') }}>{t("카운터와 연결")}</button>
+            {connectingGuideId === guide.id && <div className="progress-connect-options">
               <select aria-label={t("연결할 카운터")} value={connectingCounterId} onChange={(event) => setConnectingCounterId(event.currentTarget.value)}>
                 <option value="">{t("카운터 선택")}</option>
                 {counters.map((counter) => <option key={counter.id} value={counter.id}>{counter.name} · {counterRow(counter)}{t("단")}</option>)}
@@ -754,10 +788,11 @@ export function ProgressLineOverlay({ width, height, cssWidth, cssHeight, render
               <button type="button" role="menuitem" disabled={!connectingCounterId} onClick={() => startCalibration(menuGuide)}>{connectedCounter ? t('간격 다시 맞추기') : t('두 위치 맞추기')}</button>
               {connectedCounter && <button type="button" role="menuitem" onClick={() => {
                 updateGuide(menuGuide.id, { linkedCounterId: undefined, counterRowOffset: undefined, positionOffset: undefined, name: undefined, color: undefined, chartRegion: undefined, rowSpacing: undefined, rowSpacingStartRow: undefined, rowSpacingDirection: undefined })
+                setConnectingCounterId('')
                 setConnectingGuideId(null)
                 setMenuGuideId(null)
               }}>{t("카운터 연결 해제")}</button>}
-            </div> : <button type="button" role="menuitem" onClick={() => { setConnectingGuideId(guide.id); setConnectingCounterId(guide.linkedCounterId ?? counters[0]?.id ?? '') }}>{t("카운터와 연결")}</button>}
+            </div>}
             {guide.linkedCounterId && <button type="button" role="menuitem" onClick={() => startCalibration(menuGuide, menuGuide.linkedCounterId)}>{t("단 간격 다시 맞추기")}</button>}
             {guide.chartRegion?.rowRanges?.length && guide.chartRegion.autoFollow === false && <button type="button" role="menuitem" onClick={() => {
               updateGuide(menuGuide.id, { chartRegion: { ...menuGuide.chartRegion!, autoFollow: true }, counterRowOffset: 0, positionOffset: undefined })
@@ -765,8 +800,27 @@ export function ProgressLineOverlay({ width, height, cssWidth, cssHeight, render
             }}>{t('자동 따라가기 재개')}</button>}
             <button type="button" role="menuitem" onClick={() => { setMenuGuideId(null); onRecognizeChart(menuGuide.id) }}>{t('차트 행 인식')}</button>
           </>}
-          {guide.role === 'primary' && <button type="button" role="menuitem" disabled={references.length >= 2} onClick={addReference}>{t("참고선 추가")}{references.length ? ' · ' + references.length + '/2' : ''}</button>}
-          <button type="button" role="menuitem" className="progress-delete-action" onClick={() => removeGuide(menuGuide)}>{t("삭제")}</button>
+        </> : <>
+          <button type="button" role="menuitemcheckbox" aria-checked={guide.markerProgress !== undefined} onClick={() => addMarker(menuGuide)}>
+            <Heart className="progress-menu-icon" size={16} aria-hidden="true" />
+            <span>{t('마커 표시')}</span>
+            <span className={'progress-menu-switch' + (guide.markerProgress !== undefined ? ' is-on' : '')} aria-hidden="true"><span /></span>
+          </button>
+          <button type="button" role="menuitem" onClick={() => { setConnectingGuideId(null); setStyleGuideId(guide.id) }}>
+            <Palette className="progress-menu-icon" size={16} aria-hidden="true" />
+            <span>{t(guide.role === 'primary' ? '진행선 스타일' : '참고선 스타일')}</span>
+            <span className="progress-menu-color" style={{ backgroundColor: guide.color ?? defaultColor }} aria-hidden="true" />
+            <ChevronRight size={15} aria-hidden="true" />
+          </button>
+          {guide.role === 'primary' && <button type="button" role="menuitem" disabled={references.length >= 2} onClick={addReference}>
+            <Plus className="progress-menu-icon" size={16} aria-hidden="true" />
+            <span>{t('진행선 추가')}</span>
+          </button>}
+          <button type="button" role="menuitem" className="progress-delete-action" onClick={() => {
+            setMenuGuideId(null)
+            setStyleGuideId(null)
+            setDeleteMode(true)
+          }}><Trash2 className="progress-menu-icon" size={16} aria-hidden="true" /><span>{t('진행선 삭제')}</span></button>
         </>}
       </div>
     })()}
@@ -780,6 +834,7 @@ export function ProgressLineOverlay({ width, height, cssWidth, cssHeight, render
       </>}
       <button type="button" className="progress-calibration-cancel" onClick={cancelCalibration}>{t("취소")}</button>
     </div>, calibrationPortalTarget)}
+    {deleteMode && <div className="progress-line-notice progress-line-delete-prompt" role="status" onPointerDown={(event) => event.stopPropagation()}><span>{t('삭제할 진행선을 선택하세요.')}</span><button ref={deleteCancelRef} type="button" onClick={() => { deleteCandidateRef.current = null; setDeleteMode(false); menuTriggerRef.current?.focus?.() }}>{t('취소')}</button></div>}
     {deletedGuide && notice === '진행선을 삭제했습니다.' && <div className="progress-line-notice" role="status" onPointerDown={(event) => event.stopPropagation()}><span>{translateMessage(notice)}</span><button type="button" onClick={undoDelete}>{t("실행 취소")}</button><button type="button" aria-label={t("알림 닫기")} onClick={() => { setNotice(''); setDeletedGuide(null) }}>×</button></div>}
     {notice && notice !== '진행선을 삭제했습니다.' && !calibration && <div className="progress-line-notice" role="status" onPointerDown={(event) => event.stopPropagation()}>{translateMessage(notice)}</div>}
   </div>

@@ -493,3 +493,16 @@ const counterDeleteTranslations = {
 for (const locale of Object.keys(counterDeleteTranslations) as (keyof typeof counterDeleteTranslations)[]) {
   extendedTranslations[locale]['카운터를 삭제할까요?'] = counterDeleteTranslations[locale]
 }
+
+const recognitionRetryTranslations = {
+  en: 'Could not recognize links on this page. Try again.',
+  ja: 'このページのリンクを認識できませんでした。もう一度お試しください。',
+  de: 'Links auf dieser Seite konnten nicht erkannt werden. Bitte versuchen Sie es erneut.',
+  da: 'Linkene på siden kunne ikke genkendes. Prøv igen.',
+  nb: 'Fant ikke lenker på denne siden. Prøv igjen.',
+  fi: 'Sivun linkkejä ei voitu tunnistaa. Yritä uudelleen.',
+} satisfies Record<'en' | 'ja' | 'de' | 'da' | 'nb' | 'fi', string>
+
+for (const locale of Object.keys(recognitionRetryTranslations) as (keyof typeof recognitionRetryTranslations)[]) {
+  extendedTranslations[locale]['페이지 링크를 인식하지 못했습니다. 다시 시도해 주세요.'] = recognitionRetryTranslations[locale]
+}

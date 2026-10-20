@@ -8,14 +8,17 @@ import { openPdf } from './pdf'
 import { openPhotoDocument } from './photoDocument'
 
 type RecognitionJob = {
+  key: string
   record: Pick<DocumentRecord, 'id' | 'pageCount' | 'pdf' | 'kind'>
+  pageNumber: number
   viewerPdf: PDFDocumentProxy | null
   cancelled: boolean
-  restartPages: boolean
+  yielded: boolean
   cancelCurrent?: () => void
 }
 
-type RecognitionListener = (documentId: string, pageNumber: number, result: PageRecognitionRecord) => void
+export type PdfRecognitionEvent = { kind: 'result'; result: PageRecognitionRecord } | { kind: 'error' }
+type RecognitionListener = (documentId: string, pageNumber: number, event: PdfRecognitionEvent) => void
 type RecognitionResult = { id: number; links: PdfQrLink[]; error?: true }
 type QrRaster = { pixels: ImageData; release: () => void }
 
@@ -32,37 +35,35 @@ class RecognitionYieldError extends Error {
 }
 
 const jobs = new Map<string, RecognitionJob>()
-const pausedRecords = new Map<string, RecognitionJob['record']>()
 const reportPausedDocuments = new Set<string>()
 const queue: RecognitionJob[] = []
 const listeners = new Set<RecognitionListener>()
 const pdfOperations = new Map<PDFDocumentProxy, Set<Promise<unknown>>>()
 let active = false
 let nextScanId = 0
-const visibilityWaiters = new Map<string, Set<() => void>>()
 
-function delay(ms: number) {
-  return new Promise<void>((resolve) => window.setTimeout(resolve, ms))
+function publish(job: RecognitionJob, event: PdfRecognitionEvent) {
+  if (job.cancelled || jobs.get(job.key) !== job) return
+  listeners.forEach((listener) => listener(job.record.id, job.pageNumber, event))
 }
 
-function waitUntilVisible(job: RecognitionJob) {
-  if (document.visibilityState === 'visible' || job.cancelled) return Promise.resolve()
-  return new Promise<void>((resolve) => {
-    const resume = () => {
-      if (document.visibilityState !== 'visible' && !job.cancelled) return
-      document.removeEventListener('visibilitychange', resume)
-      visibilityWaiters.get(job.record.id)?.delete(resume)
-      resolve()
-    }
-    const waiters = visibilityWaiters.get(job.record.id) ?? new Set<() => void>()
-    waiters.add(resume)
-    visibilityWaiters.set(job.record.id, waiters)
-    document.addEventListener('visibilitychange', resume)
-  })
+function resultFor(job: RecognitionJob, pdfLinksDone: boolean, pdfLinks: PdfQrLink[], qrLinksDone: boolean, qrLinks: PdfQrLink[], qrInputMaxDimension: number): PageRecognitionRecord {
+  return { documentId: job.record.id, pageNumber: job.pageNumber, version: 1, pdfLinksDone, pdfLinks, qrLinksDone, qrLinks, qrInputMaxDimension }
 }
 
-function publish(job: RecognitionJob, pageNumber: number, result: PageRecognitionRecord) {
-  listeners.forEach((listener) => listener(job.record.id, pageNumber, result))
+async function saveResult(job: RecognitionJob, result: PageRecognitionRecord) {
+  try {
+    await savePageRecognition(job.record.id, job.pageNumber, {
+      pdfLinksDone: result.pdfLinksDone,
+      pdfLinks: result.pdfLinks,
+      qrLinksDone: result.qrLinksDone,
+      qrLinks: result.qrLinks,
+      qrInputMaxDimension: result.qrInputMaxDimension,
+    })
+  } catch (error) {
+    console.warn(`[PDF] Page ${job.pageNumber} recognition could not be saved.`, error)
+    publish(job, { kind: 'error' })
+  }
 }
 
 function trackPdfOperation<T>(pdf: PDFDocumentProxy, operation: () => Promise<T>) {
@@ -194,136 +195,97 @@ async function runJob(job: RecognitionJob) {
   let owned: Awaited<ReturnType<typeof openPdf>> | null = null
   let worker: Worker | null = null
   try {
-    await delay(1000)
     if (job.cancelled) return
-    do {
-      job.restartPages = false
-      for (let pageNumber = 1; pageNumber <= job.record.pageCount && !job.cancelled; pageNumber++) {
-        await waitUntilVisible(job)
-        if (job.cancelled) break
-        const cached = await getPageRecognition(job.record.id, pageNumber).catch(() => undefined)
-        if (job.cancelled) break
-        if (cached?.pdfLinksDone && cached.qrLinksDone) {
-          publish(job, pageNumber, cached)
-          continue
-        }
-        await delay(700)
-        if (job.cancelled) break
+    let cached: PageRecognitionRecord | undefined
+    try {
+      cached = await getPageRecognition(job.record.id, job.pageNumber)
+    } catch (error) {
+      publish(job, { kind: 'error' })
+      console.warn(`[PDF] Page ${job.pageNumber} recognition cache could not be read.`, error)
+      return
+    }
+    if (job.cancelled) return
+    if (cached?.version !== 1) cached = undefined
+    if (cached?.version === 1 && cached.pdfLinksDone && cached.qrLinksDone) {
+      publish(job, { kind: 'result', result: cached })
+      return
+    }
 
-        let pdf: PDFDocumentProxy
-        if (job.viewerPdf) {
-          if (owned) {
-            const previous = owned
-            await Promise.allSettled([...(pdfOperations.get(previous.document) ?? [])])
-            await previous.dispose()
-            if (owned === previous) owned = null
-          }
-          pdf = job.viewerPdf
-        } else {
-          const opened = owned ??= job.record.kind === 'photos'
-            ? await openPhotoDocument(job.record.id)
-            : job.record.pdf ? await openPdf(job.record.pdf) : (() => { throw new Error('PDF 자료를 찾을 수 없습니다.') })()
-          if (job.viewerPdf) {
-            await opened.dispose()
-            if (owned === opened) owned = null
-            pdf = job.viewerPdf
-          } else pdf = opened.document
-        }
-        const usingViewerPdf = job.viewerPdf === pdf
-        const page = await trackPdfOperation(pdf, () => pdf.getPage(pageNumber))
-        if (job.cancelled) break
-        if (usingViewerPdf && job.viewerPdf !== pdf) {
-          pageNumber--
-          continue
-        }
-        let pdfLinks = cached?.pdfLinks ?? []
-        if (!cached?.pdfLinksDone) {
-          try {
-            const [annotations, content] = await trackPdfOperation(pdf, () => Promise.all([
-              page.getAnnotations({ intent: 'display' }),
-              page.getTextContent(),
-            ]))
-            if (job.cancelled) break
-            if (usingViewerPdf && job.viewerPdf !== pdf) {
-              pageNumber--
-              continue
-            }
-            const textRuns = content.items.flatMap((item) => 'str' in item ? [item] : [])
-            pdfLinks = extractPdfPageLinks(annotations, textRuns, page.getViewport({ scale: 1 }))
-            await savePageRecognition(job.record.id, pageNumber, { pdfLinksDone: true, pdfLinks })
-          } catch (error) {
-            if (job.cancelled) break
-            console.warn(`[PDF] Page ${pageNumber} link recognition failed and can resume when the document is reopened.`, error)
-            continue
-          }
-        }
-        if (usingViewerPdf && job.viewerPdf !== pdf) {
-          pageNumber--
-          continue
-        }
-        let qrLinks = cached?.qrLinks ?? []
-        let qrLinksDone = cached?.qrLinksDone ?? false
-        let qrRaster: QrRaster | null = null
-        if (!qrLinksDone) {
-          try {
-            qrRaster = await renderQrRecognition(page, (cancel) => { job.cancelCurrent = cancel }).finally(() => { job.cancelCurrent = undefined })
-          } catch (error) {
-            if (error instanceof RecognitionYieldError) {
-              pageNumber--
-              await delay(500)
-              continue
-            }
-            if (job.cancelled) break
-            console.warn(`[PDF] Page ${pageNumber} QR image rendering failed and can resume when the document is reopened.`, error)
-          }
-        }
-        if (job.cancelled) {
-          qrRaster?.release()
-          break
-        }
-        if (!qrLinksDone && qrRaster) {
-          try {
-            worker ??= await createQrWorker()
-            if (job.cancelled) {
-              worker.terminate()
-              worker = null
-              break
-            }
-            qrLinks = await decodeQr(worker, qrRaster.pixels, (cancel) => { job.cancelCurrent = cancel }).finally(() => { job.cancelCurrent = undefined })
-            if (job.cancelled) break
-            qrLinksDone = true
-            await savePageRecognition(job.record.id, pageNumber, { qrLinksDone: true, qrLinks, qrInputMaxDimension: Math.max(qrRaster.pixels.width, qrRaster.pixels.height) })
-          } catch (error) {
-            if (job.cancelled) break
-            if (error instanceof RecognitionYieldError) {
-              worker = null
-              pageNumber--
-              await delay(500)
-              continue
-            }
-            console.warn(`[PDF] Page ${pageNumber} QR recognition failed and can resume when the document is reopened.`, error)
-          } finally {
-            qrRaster.release()
-          }
-        }
-        publish(job, pageNumber, {
-          documentId: job.record.id,
-          pageNumber,
-          version: 1,
-          pdfLinksDone: true,
-          pdfLinks,
-          qrLinksDone,
-          qrLinks,
-          qrInputMaxDimension: cached?.qrInputMaxDimension ?? (qrRaster ? Math.max(qrRaster.pixels.width, qrRaster.pixels.height) : 0),
-        })
+    let pdf: PDFDocumentProxy
+    if (job.viewerPdf) pdf = job.viewerPdf
+    else {
+      owned = job.record.kind === 'photos'
+        ? await openPhotoDocument(job.record.id)
+        : job.record.pdf ? await openPdf(job.record.pdf) : (() => { throw new Error('PDF 자료를 찾을 수 없습니다.') })()
+      pdf = owned.document
+    }
+    const page = await trackPdfOperation(pdf, () => pdf.getPage(job.pageNumber))
+    if (job.cancelled) return
+
+    let pdfLinksDone = cached?.pdfLinksDone ?? false
+    let pdfLinks = cached?.pdfLinks ?? []
+    let qrLinksDone = cached?.qrLinksDone ?? false
+    let qrLinks = cached?.qrLinks ?? []
+    let qrInputMaxDimension = cached?.qrInputMaxDimension ?? 0
+    if (!pdfLinksDone) {
+      try {
+        const [annotations, content] = await trackPdfOperation(pdf, () => Promise.all([
+          page.getAnnotations({ intent: 'display' }),
+          page.getTextContent(),
+        ]))
+        if (job.cancelled) return
+        const textRuns = content.items.flatMap((item) => 'str' in item ? [item] : [])
+        pdfLinks = extractPdfPageLinks(annotations, textRuns, page.getViewport({ scale: 1 }))
+        pdfLinksDone = true
+        const partial = resultFor(job, pdfLinksDone, pdfLinks, qrLinksDone, qrLinks, qrInputMaxDimension)
+        publish(job, { kind: 'result', result: partial })
+        await saveResult(job, partial)
+      } catch (error) {
+        if (job.cancelled) return
+        console.warn(`[PDF] Page ${job.pageNumber} link recognition failed and can be retried.`, error)
+        publish(job, { kind: 'error' })
       }
-    } while (job.restartPages && !job.cancelled)
+    }
+
+    if (!qrLinksDone && !job.cancelled) {
+      let qrRaster: QrRaster | null = null
+      try {
+        qrRaster = await renderQrRecognition(page, (cancel) => { job.cancelCurrent = cancel }).finally(() => { job.cancelCurrent = undefined })
+        if (job.cancelled) return
+        if (!qrRaster) throw new Error('QR analysis memory is temporarily unavailable.')
+        worker = await createQrWorker()
+        if (job.cancelled) return
+        qrLinks = await decodeQr(worker, qrRaster.pixels, (cancel) => { job.cancelCurrent = cancel }).finally(() => { job.cancelCurrent = undefined })
+        if (job.cancelled) return
+        qrLinksDone = true
+        qrInputMaxDimension = Math.max(qrRaster.pixels.width, qrRaster.pixels.height)
+        const result = resultFor(job, pdfLinksDone, pdfLinks, qrLinksDone, qrLinks, qrInputMaxDimension)
+        publish(job, { kind: 'result', result })
+        await saveResult(job, result)
+      } catch (error) {
+        if (error instanceof RecognitionYieldError && !job.cancelled) {
+          job.yielded = true
+          return
+        }
+        if (!job.cancelled) {
+          const partial = resultFor(job, pdfLinksDone, pdfLinks, qrLinksDone, qrLinks, qrInputMaxDimension)
+          publish(job, { kind: 'result', result: partial })
+          publish(job, { kind: 'error' })
+          console.warn(`[PDF] Page ${job.pageNumber} QR recognition failed and can be retried.`, error)
+        }
+      } finally {
+        qrRaster?.release()
+      }
+    }
   } catch (error) {
-    if (!job.cancelled) console.warn('[PDF] Background link analysis stopped and can resume when the document is reopened.', error)
+    if (!job.cancelled) {
+      publish(job, { kind: 'error' })
+      console.warn(`[PDF] Page ${job.pageNumber} link analysis stopped and can be retried.`, error)
+    }
   } finally {
     worker?.terminate()
     if (owned) await owned.dispose()
-    if (jobs.get(job.record.id) === job) jobs.delete(job.record.id)
+    if (!job.yielded && jobs.get(job.key) === job) jobs.delete(job.key)
   }
 }
 
@@ -333,6 +295,10 @@ function pump() {
   if (!job) return
   active = true
   void runJob(job).finally(() => {
+    if (job.yielded && !job.cancelled && jobs.get(job.key) === job) {
+      job.yielded = false
+      queue.push(job)
+    }
     active = false
     pump()
   })
@@ -341,79 +307,67 @@ function pump() {
 function stopJob(job: RecognitionJob) {
   job.cancelled = true
   job.cancelCurrent?.()
-  visibilityWaiters.get(job.record.id)?.forEach((resume) => resume())
-  visibilityWaiters.delete(job.record.id)
-  if (jobs.get(job.record.id) === job) jobs.delete(job.record.id)
+  if (jobs.get(job.key) === job) jobs.delete(job.key)
   const index = queue.indexOf(job)
   if (index >= 0) queue.splice(index, 1)
 }
 
 document.addEventListener('visibilitychange', () => {
-  if (document.visibilityState === 'hidden') {
-    for (const job of [...jobs.values()]) {
-      pausedRecords.set(job.record.id, job.record)
-      stopJob(job)
-    }
-    return
-  }
-  for (const [documentId, record] of [...pausedRecords]) {
-    if (reportPausedDocuments.has(documentId)) continue
-    pausedRecords.delete(documentId)
-    enqueuePdfRecognition(record)
-  }
+  if (document.visibilityState === 'hidden') for (const job of [...jobs.values()]) stopJob(job)
 })
 
-export function enqueuePdfRecognition(record: Pick<DocumentRecord, 'id' | 'pageCount' | 'pdf' | 'kind'>, viewerPdf: PDFDocumentProxy | null = null, restart = false) {
-  const existing = jobs.get(record.id)
-  if (reportPausedDocuments.has(record.id)) {
-    pausedRecords.set(record.id, record)
-    if (existing) stopJob(existing)
-    return
-  }
-  if (document.visibilityState !== 'visible') {
-    pausedRecords.set(record.id, record)
-    if (existing) stopJob(existing)
-    return
-  }
+export function requestPdfPageRecognition(record: Pick<DocumentRecord, 'id' | 'pageCount' | 'pdf' | 'kind'>, pageNumber: number, viewerPdf: PDFDocumentProxy, activePage = false) {
+  if (pageNumber < 1 || pageNumber > record.pageCount || reportPausedDocuments.has(record.id) || document.visibilityState !== 'visible') return false
+  const key = record.id + ':' + pageNumber
+  const existing = jobs.get(key)
   if (existing) {
     existing.record = record
-    if (viewerPdf) existing.viewerPdf = viewerPdf
-    if (restart) existing.restartPages = true
-    return
+    existing.viewerPdf = viewerPdf
+    if (activePage) {
+      const index = queue.indexOf(existing)
+      if (index > 0) queue.unshift(...queue.splice(index, 1))
+    }
+    return true
   }
-  const job: RecognitionJob = { record, viewerPdf, cancelled: false, restartPages: false }
-  jobs.set(record.id, job)
-  queue.push(job)
+  const job: RecognitionJob = { key, record, pageNumber, viewerPdf, cancelled: false, yielded: false }
+  jobs.set(key, job)
+  if (activePage) queue.unshift(job)
+  else queue.push(job)
   pump()
+  return true
+}
+
+export function cancelPdfPageRecognition(documentId: string, pageNumber: number) {
+  const job = jobs.get(documentId + ':' + pageNumber)
+  if (job) stopJob(job)
+}
+
+export function cancelPdfRecognitionPages(documentId: string) {
+  for (const job of [...jobs.values()]) if (job.record.id === documentId) stopJob(job)
+}
+
+export function cancelPdfRecognitionExceptPages(documentId: string, visiblePages: number[]) {
+  const visible = new Set(visiblePages)
+  for (const job of [...jobs.values()]) if (job.record.id === documentId && !visible.has(job.pageNumber)) cancelPdfPageRecognition(documentId, job.pageNumber)
 }
 
 export function pausePdfRecognitionForReport(record: Pick<DocumentRecord, 'id' | 'pageCount' | 'pdf' | 'kind'>) {
   reportPausedDocuments.add(record.id)
-  pausedRecords.set(record.id, record)
-  const job = jobs.get(record.id)
-  if (job) stopJob(job)
+  cancelPdfRecognitionPages(record.id)
 }
 
-export function resumePdfRecognitionFromReport(record: Pick<DocumentRecord, 'id' | 'pageCount' | 'pdf' | 'kind'>, viewerPdf: PDFDocumentProxy | null) {
+export function resumePdfRecognitionFromReport(record: Pick<DocumentRecord, 'id' | 'pageCount' | 'pdf' | 'kind'>) {
   reportPausedDocuments.delete(record.id)
-  if (document.visibilityState !== 'visible') return
-  const savedRecord = pausedRecords.get(record.id) ?? record
-  pausedRecords.delete(record.id)
-  enqueuePdfRecognition(savedRecord, viewerPdf)
 }
 
 export function releasePdfRecognitionViewer(documentId: string, viewerPdf: PDFDocumentProxy) {
-  const job = jobs.get(documentId)
-  if (job?.viewerPdf === viewerPdf) job.viewerPdf = null
+  for (const job of [...jobs.values()]) if (job.record.id === documentId && job.viewerPdf === viewerPdf) stopJob(job)
   return Promise.allSettled([...(pdfOperations.get(viewerPdf) ?? [])]).then(() => {})
 }
 
 export function cancelPdfRecognition(documentId: string) {
-  pausedRecords.delete(documentId)
   reportPausedDocuments.delete(documentId)
-  const job = jobs.get(documentId)
-  if (!job) return
-  stopJob(job)
+  cancelPdfRecognitionPages(documentId)
 }
 
 export function subscribePdfRecognition(listener: RecognitionListener) {

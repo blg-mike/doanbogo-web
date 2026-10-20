@@ -20,10 +20,10 @@ import CounterPanel from './CounterPanel'
 import DocumentWorkTimer, { type DocumentTimerClock, type DocumentWorkTimeTotals } from './DocumentWorkTimer'
 import { isCounterTimerLinkMode, resolveCounterTimerAction, type CounterTimerChoice } from './timerCounterLink'
 import type { PdfQrLink } from './qr'
-import { withRecentPdfLinks } from './pdfRecognitionState'
+import { orderVisibleRecognitionPages, withRecentPdfLinks } from './pdfRecognitionState'
 import { applyColorworkCellChanges, type ColorworkCellChange } from './colorworkHistory'
 import { PageWorkPersistence } from './pageWorkPersistence'
-import { enqueuePdfRecognition, pausePdfRecognitionForReport, releasePdfRecognitionViewer, resumePdfRecognitionFromReport, subscribePdfRecognition } from './pdfRecognition'
+import { cancelPdfRecognitionExceptPages, cancelPdfRecognitionPages, pausePdfRecognitionForReport, releasePdfRecognitionViewer, requestPdfPageRecognition, resumePdfRecognitionFromReport, subscribePdfRecognition } from './pdfRecognition'
 import { getViewerResourcePolicy, setThumbnailPagesExcluded } from './pdfRenderResources'
 import { guidePositionForRotation, isChartAutoFollowRotationCompatible } from './focusGeometry'
 import { compactPageThumbnails, completePageList, createThumbnailGroupFromPages, createThumbnailGroupId, movePagesToThumbnailGroup, moveThumbnailRailItem, normalizeThumbnailRailOrder, reconcileThumbnailRailOrder, removePagesFromThumbnailGroups, reorderThumbnailGroups, thumbnailPagesForDrag, thumbnailRailOrderKey, visiblePageRange, type PageThumbnailItem } from './pageManagement'
@@ -34,6 +34,7 @@ import { addedLimitedAnnotations, applyLimitedAnnotationAdditions, exceededAnnot
 import { useDismissiblePopover } from './useDismissiblePopover'
 import { getRequiredPageWorkPages, loadPageWorkWithTimeout, PageWorkLoadTimeoutError } from './pageWorkLoading'
 import { normalizeWorkTimeDays } from './workTime'
+import { nearestZoomLevel, stepZoomLevel, ZOOM_LEVELS } from './viewerInteraction'
 
 type Size = { width: number; height: number }
 type WorkAction = { before?: PageWorkRecord; after?: PageWorkRecord; cellChanges?: ColorworkCellChange[] }
@@ -506,6 +507,10 @@ export default function Viewer() {
   const [qrLinksByPage, setQrLinksByPage] = useState<Record<number, PdfQrLink[]>>({})
   const qrLinksRef = useRef(new Map<number, PdfQrLink[]>())
   const recognitionRecordRef = useRef<Pick<DocumentRecord, 'id' | 'pageCount' | 'pdf' | 'kind'> | null>(null)
+  const recognitionRequestTimerRef = useRef<number | undefined>(undefined)
+  const recognitionRequestViewKeyRef = useRef('')
+  const [recognitionErrorPages, setRecognitionErrorPages] = useState<Record<number, true>>({})
+  const [recognitionVisible, setRecognitionVisible] = useState(false)
   const [loading, setLoading] = useState(true)
   const [loadError, setLoadError] = useState<{ id: string; message: string } | null>(null)
   const [splitPreview, setSplitPreview] = useState<number | null>(null)
@@ -679,23 +684,47 @@ export default function Viewer() {
     setHistories(Object.fromEntries(historyRef.current))
   }, [])
 
+  const requestVisibleRecognition = useCallback(() => {
+    const record = recognitionRecordRef.current
+    const viewerPdf = pdfSessionRef.current?.pdf
+    const current = snapshotRef.current
+    if (reportMode || !record || record.id !== id || !viewerPdf || !current || viewerLifecycleRef.current !== 'active' || document.visibilityState !== 'visible') return
+    const activePage = current[current.activePane].page
+    const otherPane = current.activePane === 'primary' ? 'secondary' : 'primary'
+    const visiblePages = orderVisibleRecognitionPages(activePage, current.split ? [current[otherPane].page] : [])
+    for (const pageNumber of visiblePages) {
+      if (pdfLinkPagesRef.current.has(pageNumber) && qrLinksRef.current.has(pageNumber)) continue
+      requestPdfPageRecognition(record, pageNumber, viewerPdf, pageNumber === activePage)
+    }
+  }, [id, reportMode])
+
+  const scheduleVisibleRecognition = useCallback(() => {
+    if (recognitionRequestTimerRef.current !== undefined) window.clearTimeout(recognitionRequestTimerRef.current)
+    const current = snapshotRef.current
+    recognitionRequestViewKeyRef.current = [id, reportMode, current?.primary.page, current?.primary.zoom, current?.secondary.page, current?.secondary.zoom, current?.activePane, current?.split].join(':')
+    recognitionRequestTimerRef.current = window.setTimeout(() => {
+      recognitionRequestTimerRef.current = undefined
+      requestVisibleRecognition()
+    }, 300)
+  }, [id, reportMode, requestVisibleRecognition])
+
   const onPageRendered = useCallback((pageNumber: number) => {
     const scanKey = id + ':' + pageNumber
-    const hasPdfLinks = pdfLinkPagesRef.current.has(pageNumber)
-    const hasQrLinks = qrLinksRef.current.has(pageNumber)
-    if (reportMode || viewerLifecycleRef.current !== 'active' || hasPdfLinks && hasQrLinks || recognitionLoadPendingRef.current.has(scanKey)) return
+    if (reportMode || viewerLifecycleRef.current !== 'active') return
+    scheduleVisibleRecognition()
+    if (pdfLinkPagesRef.current.has(pageNumber) && qrLinksRef.current.has(pageNumber) || recognitionLoadPendingRef.current.has(scanKey)) return
     recognitionLoadPendingRef.current.add(scanKey)
     const task = (async () => {
       const storedRecognition = await getPageRecognition(id, pageNumber).catch(() => undefined)
       const cached = storedRecognition?.version === 1 ? storedRecognition : undefined
-      if (viewerLifecycleRef.current !== 'active') return
+      if (viewerLifecycleRef.current !== 'active' || recognitionRecordRef.current?.id !== id) return
 
-      if (!hasPdfLinks && cached?.pdfLinksDone) {
+      if (!pdfLinkPagesRef.current.has(pageNumber) && cached?.pdfLinksDone) {
         rememberRecentPage(pdfLinkPagesRef.current, pageNumber, true)
         setPdfLinksByPage((current) => withRecentPdfLinks(current, pageNumber, cached.pdfLinks))
       }
 
-      if (!hasQrLinks && cached?.qrLinksDone) {
+      if (!qrLinksRef.current.has(pageNumber) && cached?.qrLinksDone) {
         rememberRecentPage(qrLinksRef.current, pageNumber, cached.qrLinks)
         setQrLinksByPage((current) => withRecentPdfLinks(current, pageNumber, cached.qrLinks))
       }
@@ -704,17 +733,29 @@ export default function Viewer() {
     })
     linkTasksRef.current.add(task)
     void task.finally(() => linkTasksRef.current.delete(task)).catch(() => {})
-  }, [id, reportMode])
+  }, [id, reportMode, scheduleVisibleRecognition])
 
   useEffect(() => subscribePdfRecognition((documentId, pageNumber, result) => {
     if (documentId !== id || viewerLifecycleRef.current !== 'active') return
-    if (result.pdfLinksDone) {
-      rememberRecentPage(pdfLinkPagesRef.current, pageNumber, true)
-      setPdfLinksByPage((current) => withRecentPdfLinks(current, pageNumber, result.pdfLinks))
+    if (result.kind === 'error') {
+      setRecognitionErrorPages((current) => ({ ...current, [pageNumber]: true }))
+      return
     }
-    if (result.qrLinksDone) {
-      rememberRecentPage(qrLinksRef.current, pageNumber, result.qrLinks)
-      setQrLinksByPage((current) => withRecentPdfLinks(current, pageNumber, result.qrLinks))
+    if (result.result.pdfLinksDone) {
+      rememberRecentPage(pdfLinkPagesRef.current, pageNumber, true)
+      setPdfLinksByPage((current) => withRecentPdfLinks(current, pageNumber, result.result.pdfLinks))
+    }
+    if (result.result.qrLinksDone) {
+      rememberRecentPage(qrLinksRef.current, pageNumber, result.result.qrLinks)
+      setQrLinksByPage((current) => withRecentPdfLinks(current, pageNumber, result.result.qrLinks))
+    }
+    if (result.result.pdfLinksDone && result.result.qrLinksDone) {
+      setRecognitionErrorPages((current) => {
+        if (!current[pageNumber]) return current
+        const next = { ...current }
+        delete next[pageNumber]
+        return next
+      })
     }
   }), [id])
 
@@ -760,6 +801,15 @@ export default function Viewer() {
           setSuspendError(viewerSaveErrorMessage)
         }
       }
+      const primaryZoom = nearestZoomLevel(restored.primary.zoom)
+      const secondaryZoom = nearestZoomLevel(restored.secondary.zoom)
+      if (primaryZoom !== restored.primary.zoom || secondaryZoom !== restored.secondary.zoom) {
+        restored = { ...restored, primary: { ...restored.primary, zoom: primaryZoom }, secondary: { ...restored.secondary, zoom: secondaryZoom } }
+        try { await saveViewer(restored) } catch (error) {
+          console.warn('[PDF] Viewer zoom could not be normalized.', error)
+          setSuspendError(viewerSaveErrorMessage)
+        }
+      }
       restored.primary.page = clamp(restored.primary.page, 1, record.pageCount)
       restored.secondary.page = clamp(restored.secondary.page, 1, record.pageCount)
       const opened = record.kind === 'photos'
@@ -774,6 +824,7 @@ export default function Viewer() {
       pdfLinkPagesRef.current.clear()
       recognitionLoadPendingRef.current.clear()
       qrLinksRef.current.clear()
+      setRecognitionErrorPages({})
       session = { pdf: opened.document, dispose: opened.dispose, released: false }
       pdfSessionRef.current = session
       if (firstOpen) {
@@ -796,8 +847,6 @@ export default function Viewer() {
       setSnapshot(restored)
       snapshotRef.current = restored
       setPdf(opened.document)
-      const recognitionRecord = { id, pageCount: record.pageCount, pdf: record.pdf, kind: record.kind }
-      enqueuePdfRecognition(recognitionRecord, opened.document)
       setLoadedId(id)
       initializedDocumentRef.current = id
       setLoadError(null)
@@ -821,6 +870,9 @@ export default function Viewer() {
     })
     return () => {
       disposed = true
+      if (recognitionRequestTimerRef.current !== undefined) window.clearTimeout(recognitionRequestTimerRef.current)
+      recognitionRequestTimerRef.current = undefined
+      cancelPdfRecognitionPages(id)
       const recognitionRelease = recognitionPdf ? releasePdfRecognitionViewer(id, recognitionPdf) : Promise.resolve()
       if (saveTimer.current !== undefined) window.clearTimeout(saveTimer.current)
       const current = snapshotRef.current
@@ -845,7 +897,7 @@ export default function Viewer() {
     const record = recognitionRecordRef.current
     if (loadedId !== id || !pdf || !record) return
     if (reportMode) pausePdfRecognitionForReport(record)
-    else resumePdfRecognitionFromReport(record, pdf)
+    else resumePdfRecognitionFromReport(record)
   }, [id, loadedId, pdf, reportMode])
 
   useEffect(() => {
@@ -901,7 +953,10 @@ export default function Viewer() {
 
   useEffect(() => {
     const handleVisibilityChange = () => {
+      setRecognitionVisible(document.visibilityState === 'visible')
       if (document.visibilityState === 'hidden') {
+        if (recognitionRequestTimerRef.current !== undefined) window.clearTimeout(recognitionRequestTimerRef.current)
+        recognitionRequestTimerRef.current = undefined
         if (tabletResourcePolicy) requestPdfSuspend()
         else {
           void pageWorkPersistence.flushAll().catch(() => {})
@@ -1032,6 +1087,38 @@ export default function Viewer() {
   const isSplit = snapshot?.split
   const activePaneId = snapshot?.activePane
   const focusViewBlocked = timerSaving || viewerExitSaving || counterActionSaving || thumbnailGroupSaving || thumbnailGroupSavingRef.current || Boolean(thumbnailGroupSavePromiseRef.current) || renameDialog || thumbnailGroupDialog || colorworkDialog || counterTimerPromptOpen || counterTimerPromptSaving || exitPromptOpen || counterRowEditing || workTimePanelBlocking || thumbnailGroupPopover?.mode === 'rename' || thumbnailGroupPopover?.mode === 'order' || thumbnailGroupPopover?.mode === 'rail-order'
+  useEffect(() => {
+    const currentViewKey = [id, reportMode, snapshot?.primary.page, snapshot?.primary.zoom, snapshot?.secondary.page, snapshot?.secondary.zoom, snapshot?.activePane, snapshot?.split].join(':')
+    if (recognitionRequestTimerRef.current !== undefined && recognitionRequestViewKeyRef.current !== currentViewKey) {
+      window.clearTimeout(recognitionRequestTimerRef.current)
+      recognitionRequestTimerRef.current = undefined
+    }
+    const current = snapshotRef.current
+    const activePage = current?.[current.activePane].page
+    const otherPane = current?.activePane === 'primary' ? 'secondary' : 'primary'
+    const visiblePages = !reportMode && current && activePage !== undefined
+      ? orderVisibleRecognitionPages(activePage, current.split ? [current[otherPane].page] : [])
+      : []
+    cancelPdfRecognitionExceptPages(id, visiblePages)
+  }, [id, loadedId, reportMode, primaryPage, secondaryPage, isSplit, activePaneId, snapshot?.primary.page, snapshot?.primary.zoom, snapshot?.secondary.page, snapshot?.secondary.zoom, snapshot?.activePane, snapshot?.split])
+
+  useEffect(() => {
+    if (!recognitionVisible || !pdf || loadedId !== id || reportMode) return
+    scheduleVisibleRecognition()
+  }, [recognitionVisible, pdf, loadedId, id, reportMode, scheduleVisibleRecognition])
+
+  const retryPageRecognition = useCallback((pageNumber: number) => {
+    const record = recognitionRecordRef.current
+    const viewerPdf = pdfSessionRef.current?.pdf
+    const current = snapshotRef.current
+    if (!record || record.id !== id || !viewerPdf || !current) return
+    setRecognitionErrorPages((errors) => {
+      const next = { ...errors }
+      delete next[pageNumber]
+      return next
+    })
+    requestPdfPageRecognition(record, pageNumber, viewerPdf, current[current.activePane].page === pageNumber)
+  }, [id])
   useEffect(() => {
     if (!miniBarOpen) return
     const closeOnEscape = (event: KeyboardEvent) => {
@@ -2506,6 +2593,8 @@ export default function Viewer() {
       canCreateLimitedAnnotation={(kind) => canCreateLimitedAnnotation(pane.page, kind)}
       pageWorkLoadError={loadState?.status === 'error' ? loadState.message : undefined}
       onRetryPageWork={() => { void ensurePageWork(pane.page) }}
+      recognitionError={Boolean(recognitionErrorPages[pane.page])}
+      onRetryRecognition={() => retryPageRecognition(pane.page)}
       createColorworkRequest={colorworkEnabled && colorworkRequest?.paneId === paneId && colorworkRequest.pageNumber === pane.page ? colorworkRequest : null}
       colorworkBrushColor={colorworkBrushColor}
       colorworkBrushOpacity={colorworkBrushOpacity}
@@ -3061,9 +3150,9 @@ export default function Viewer() {
         {!reportMode && <div className="viewer-footer-controls">
           <div className="viewer-footer-primary-controls">
           <div className="viewer-footer-zoom-controls" role="group" aria-label={t('축소') + ' / ' + t('확대')}>
-            <button type="button" className="viewer-page-control-button" aria-label={t("축소")} title={t("25% 축소")} disabled={activeZoom <= 1} onClick={() => changePane(snapshot.activePane, (pane) => ({ ...pane, zoom: Math.max(1, Math.round((pane.zoom - 0.25) * 100) / 100) }), true)}><Minus size={17} /></button>
+            <button type="button" className="viewer-page-control-button" aria-label={t("축소")} title={t("축소")} disabled={activeZoom <= ZOOM_LEVELS[0]} onClick={() => changePane(snapshot.activePane, (pane) => ({ ...pane, zoom: stepZoomLevel(pane.zoom, -1) }), true)}><Minus size={17} /></button>
             <span className="viewer-footer-zoom" aria-label={Math.round(activeZoom * 100) + '%'}>{Math.round(activeZoom * 100)}%</span>
-            <button type="button" className="viewer-page-control-button" aria-label={t("확대")} title={t("25% 확대")} disabled={activeZoom >= 5} onClick={() => changePane(snapshot.activePane, (pane) => ({ ...pane, zoom: Math.min(5, Math.round((pane.zoom + 0.25) * 100) / 100) }), true)}><Plus size={17} /></button>
+            <button type="button" className="viewer-page-control-button" aria-label={t("확대")} title={t("확대")} disabled={activeZoom >= ZOOM_LEVELS[ZOOM_LEVELS.length - 1]} onClick={() => changePane(snapshot.activePane, (pane) => ({ ...pane, zoom: stepZoomLevel(pane.zoom, 1) }), true)}><Plus size={17} /></button>
             <button type="button" className="viewer-page-control-button" aria-label={t("화면 맞춤")} title={t("100% 확대와 페이지 중앙으로 맞춤")} onClick={() => changePane(snapshot.activePane, (pane) => ({ ...pane, zoom: 1, centerX: 0.5, centerY: 0.5 }), true)}><Maximize2 size={16} /></button>
           </div>
           <button type="button" className="viewer-page-control-button" aria-label={t('시계 방향 90도 회전')} title={t('90도 회전 · 현재 {angle}도', { angle: activeRotation })} disabled={!pageWorks[activePage]} onClick={() => rotatePage(snapshot.activePane, activePage)}><RefreshCw size={17} /></button>
@@ -3093,8 +3182,9 @@ export default function Viewer() {
           <div className="viewer-mobile-menu-anchor">
             <button ref={zoomMenuTriggerRef} type="button" className="viewer-mobile-zoom-trigger" aria-haspopup="menu" aria-expanded={zoomMenuOpen} aria-label={t('확대 배율 {zoom}%', { zoom: Math.round(activeZoom * 100) })} title={t('확대 배율 {zoom}%', { zoom: Math.round(activeZoom * 100) })} onClick={() => setZoomMenuOpen((open) => !open)}>{Math.round(activeZoom * 100)}%</button>
             {zoomMenuOpen && <div ref={zoomMenuPanelRef} className="viewer-compact-menu viewer-zoom-menu" role="menu" aria-label={t('확대 배율 {zoom}%', { zoom: Math.round(activeZoom * 100) })}>
-              <button type="button" role="menuitem" aria-label={t('축소')} disabled={activeZoom <= 1} onClick={() => { changePane(snapshot.activePane, (pane) => ({ ...pane, zoom: Math.max(1, Math.round((pane.zoom - 0.25) * 100) / 100) }), true); setZoomMenuOpen(false) }}><Minus size={18} /><span>{t('축소')}</span></button>
-              <button type="button" role="menuitem" aria-label={t('확대')} disabled={activeZoom >= 5} onClick={() => { changePane(snapshot.activePane, (pane) => ({ ...pane, zoom: Math.min(5, Math.round((pane.zoom + 0.25) * 100) / 100) }), true); setZoomMenuOpen(false) }}><Plus size={18} /><span>{t('확대')}</span></button>
+              <div className="viewer-zoom-presets" role="group" aria-label={t('확대 배율 {zoom}%', { zoom: Math.round(activeZoom * 100) })}>
+                {ZOOM_LEVELS.map((zoom) => <button key={zoom} type="button" role="menuitemradio" aria-checked={Math.abs(activeZoom - zoom) < 0.0001} aria-label={t('확대 배율 {zoom}%', { zoom: zoom * 100 })} className={Math.abs(activeZoom - zoom) < 0.0001 ? 'selected' : ''} onClick={() => { changePane(snapshot.activePane, (pane) => ({ ...pane, zoom }), true); setZoomMenuOpen(false) }}>{zoom * 100}%</button>)}
+              </div>
               <button type="button" role="menuitem" aria-label={t('화면 맞춤')} title={t('100% 확대와 페이지 중앙으로 맞춤')} onClick={() => { changePane(snapshot.activePane, (pane) => ({ ...pane, zoom: 1, centerX: 0.5, centerY: 0.5 }), true); setZoomMenuOpen(false) }}><Maximize2 size={18} /><span>{t('화면 맞춤')}</span></button>
             </div>}
           </div>

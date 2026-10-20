@@ -40,6 +40,10 @@ export function safeQrHref(value: string) {
   }
 }
 
+export function shouldOpenLinkAfterGesture(startX: number, startY: number, endX: number, endY: number, pinched = false) {
+  return !pinched && Math.hypot(endX - startX, endY - startY) <= 8
+}
+
 function normalizeRect(rect: number[], viewport: PdfLinkViewport): PdfQrLink | null {
   const [a, b, c, d, e, f] = viewport.transform
   const points = [[rect[0], rect[1]], [rect[0], rect[3]], [rect[2], rect[1]], [rect[2], rect[3]]]
