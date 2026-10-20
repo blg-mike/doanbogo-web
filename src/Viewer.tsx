@@ -85,7 +85,8 @@ type ThumbnailReorderGesture = {
 }
 type CounterGuideAction = { kind: 'advance' | 'correct'; pageNumber: number; guideId: string }
 type CounterTimeLapAction = Omit<CounterTimeLap, 'historyEntryId'>
-type TimerBarDrag = { pointerId: number; offsetX: number; offsetY: number }
+type TimerBarDrag = { pointerId: number; offsetX: number; offsetY: number; bar: HTMLElement; shell: HTMLElement; clientX: number; clientY: number; frameId: number | null }
+type TimerBarPress = { pointerId: number; startX: number; startY: number; bar: HTMLElement; shell: HTMLElement; timerId: number; active: boolean; cleanup: () => void }
 function createCounterSession(documentId: string) { return { documentId, visible: false } }
 
 const defaultProgressSettings: ProgressSettings = {
@@ -304,9 +305,19 @@ export default function Viewer() {
   const timerBarPosition = timerBarState.documentId === id ? timerBarState : { documentId: id, left: null, top: 12 }
   const timerBarPositioned = timerBarPosition.left !== null
   const timerBarDragRef = useRef<TimerBarDrag | null>(null)
+  const timerBarPressRef = useRef<TimerBarPress | null>(null)
+  const timerBarClickSuppressUntilRef = useRef(0)
+  useEffect(() => () => {
+    timerBarPressRef.current?.cleanup()
+    const drag = timerBarDragRef.current
+    if (drag?.frameId !== null && drag?.frameId !== undefined) cancelAnimationFrame(drag.frameId)
+    drag?.bar.classList.remove('is-dragging')
+    timerBarDragRef.current = null
+  }, [])
   const [timerHasUnsaved, setTimerHasUnsaved] = useState(false)
   const [timerSaving, setTimerSaving] = useState(false)
   const [counterActionSaving, setCounterActionSaving] = useState(false)
+  const [counterSettingsSaving, setCounterSettingsSaving] = useState(false)
   const [exitPromptOpen, setExitPromptOpen] = useState(false)
   const [exitPromptTarget, setExitPromptTarget] = useState<'home' | 'report'>('home')
   const [timerSessionKey, setTimerSessionKey] = useState(0)
@@ -355,6 +366,7 @@ export default function Viewer() {
   const zoomMenuPanelRef = useRef<HTMLDivElement>(null)
   const timerMoreTriggerRef = useRef<HTMLButtonElement>(null)
   const timerMorePanelRef = useRef<HTMLDivElement>(null)
+  const counterPanelFocusRef = useRef<HTMLButtonElement>(null)
   const [headerMoreOpen, setHeaderMoreOpen] = useState(false)
   const [footerMoreOpen, setFooterMoreOpen] = useState(false)
   const [zoomMenuOpen, setZoomMenuOpen] = useState(false)
@@ -1400,28 +1412,28 @@ export default function Viewer() {
     }
   }
 
-  function updateCounterPanel(nextCounters: CounterSnapshot[], label: string) {
+  function updateCounterPanel(nextCounters: CounterSnapshot[], label: string): Promise<boolean> | boolean {
     const current = snapshotRef.current
-    if (!current) return
+    if (!current) return false
     if (label.startsWith('sound:')) {
       pushSnapshot({ ...current, counterSoundEnabled: label.slice(6) === 'true' }, true)
-      return
+      return true
     }
     if (label.startsWith('preview:')) {
       pushSnapshot({ ...current, counterPreviewEnabled: label.slice(8) === 'true' }, true)
-      return
+      return true
     }
     if (label.startsWith('collapse:')) {
       const [, kind, value] = label.split(':')
       if (kind === 'simple' || kind === 'pattern' || kind === 'task') pushSnapshot({ ...current, collapsedCounterKinds: { ...current.collapsedCounterKinds, [kind]: value === 'true' } }, true)
-      return
+      return true
     }
     if (label.startsWith('panel:')) {
       pushSnapshot({ ...current, counterPanelCollapsed: label.slice(6) === 'true' }, true)
-      return
+      return true
     }
     if (label.endsWith(' 진행') || label.endsWith(' 감소')) handleCounterTimerInteraction()
-    commitCounterTransaction(nextCounters, label, 0, undefined, true, undefined, undefined, undefined, counterGuideCorrection(current, nextCounters))
+    return commitCounterTransaction(nextCounters, label, 0, undefined, true, undefined, undefined, undefined, counterGuideCorrection(current, nextCounters))
   }
 
   function counterGuideCorrection(current: ViewerSnapshot, nextCounters: CounterSnapshot[]): CounterGuideAction | undefined {
@@ -1471,10 +1483,10 @@ export default function Viewer() {
     if (!settings.horizontal.visible) mutateSnapshot((snapshot) => ({ ...snapshot, progressSettings: { ...settings, horizontal: { ...settings.horizontal, visible: true } } }), true)
   }
 
-  function saveCounterSettings(nextCounters: CounterSnapshot[], changes: Partial<ViewerSnapshot>, label: string) {
+  function saveCounterSettings(nextCounters: CounterSnapshot[], changes: Partial<ViewerSnapshot>, label: string): Promise<boolean> {
     const current = snapshotRef.current
-    if (!current) return
-    commitCounterTransaction(nextCounters, label, 0, undefined, false, undefined, undefined, changes, counterGuideCorrection(current, nextCounters))
+    if (!current) return Promise.resolve(false)
+    return commitCounterTransaction(nextCounters, label, 0, undefined, false, undefined, undefined, changes, counterGuideCorrection(current, nextCounters))
   }
 
   function updateCounterSnapshot(changes: Partial<ViewerSnapshot>) {
@@ -2272,7 +2284,7 @@ export default function Viewer() {
   }
 
   function beginTimerBarDrag(event: ReactPointerEvent<HTMLButtonElement>) {
-    if (event.pointerType === 'mouse' && event.button !== 0) return
+    if (event.pointerType === 'touch' || event.pointerType === 'mouse' && event.button !== 0) return
     const shell = viewerShellRef.current
     const bar = event.currentTarget.closest<HTMLElement>('.viewer-timer-bar')
     if (!shell || !bar) return
@@ -2283,38 +2295,123 @@ export default function Viewer() {
     const minTop = window.matchMedia('(max-width: 600px)').matches ? focusView ? 100 : 44 : 0
     const top = clamp(barRect.top - shellRect.top, minTop, Math.max(minTop, shellRect.height - barRect.height))
     setTimerBarState({ documentId: id, left, top })
-    timerBarDragRef.current = { pointerId: event.pointerId, offsetX: event.clientX - barRect.left, offsetY: event.clientY - barRect.top }
+    bar.style.left = left + 'px'
+    bar.style.top = top + 'px'
+    bar.style.right = 'auto'
+    timerBarDragRef.current = { pointerId: event.pointerId, offsetX: event.clientX - barRect.left, offsetY: event.clientY - barRect.top, bar, shell, clientX: event.clientX, clientY: event.clientY, frameId: null }
+    bar.classList.add('is-dragging')
     event.currentTarget.setPointerCapture(event.pointerId)
   }
 
   function moveTimerBarDrag(event: ReactPointerEvent<HTMLButtonElement>) {
     const drag = timerBarDragRef.current
-    const shell = viewerShellRef.current
-    const bar = event.currentTarget.closest<HTMLElement>('.viewer-timer-bar')
-    if (!drag || drag.pointerId !== event.pointerId || !shell || !bar) return
-    const shellRect = shell.getBoundingClientRect()
-    const left = clamp(event.clientX - shellRect.left - drag.offsetX, 0, Math.max(0, shellRect.width - bar.offsetWidth))
-    const minTop = window.matchMedia('(max-width: 600px)').matches ? focusView ? 100 : 44 : 0
-    const top = clamp(event.clientY - shellRect.top - drag.offsetY, minTop, Math.max(minTop, shellRect.height - bar.offsetHeight))
-    bar.style.left = left + 'px'
-    bar.style.top = top + 'px'
-    bar.style.right = 'auto'
+    if (!drag || drag.pointerId !== event.pointerId) return
+    scheduleTimerBarPosition(drag, event.clientX, event.clientY)
   }
 
   function finishTimerBarDrag(event: ReactPointerEvent<HTMLButtonElement>) {
-    if (timerBarDragRef.current?.pointerId !== event.pointerId) return
-    const shell = viewerShellRef.current
-    const bar = event.currentTarget.closest<HTMLElement>('.viewer-timer-bar')
-    if (shell && bar) {
-      const shellRect = shell.getBoundingClientRect()
-      const minTop = window.matchMedia('(max-width: 600px)').matches ? focusView ? 100 : 44 : 0
-      setTimerBarState({
-        documentId: id,
-        left: clamp(Number.parseFloat(bar.style.left) || 0, 0, Math.max(0, shellRect.width - bar.offsetWidth)),
-        top: clamp(Number.parseFloat(bar.style.top) || 0, minTop, Math.max(minTop, shellRect.height - bar.offsetHeight)),
-      })
-    }
+    finishTimerBarDragById(event.pointerId, event.clientX, event.clientY)
+  }
+
+  function applyTimerBarPosition(drag: TimerBarDrag, clientX: number, clientY: number) {
+    const shellRect = drag.shell.getBoundingClientRect()
+    const left = clamp(clientX - shellRect.left - drag.offsetX, 0, Math.max(0, shellRect.width - drag.bar.offsetWidth))
+    const minTop = window.matchMedia('(max-width: 600px)').matches ? focusView ? 100 : 44 : 0
+    const top = clamp(clientY - shellRect.top - drag.offsetY, minTop, Math.max(minTop, shellRect.height - drag.bar.offsetHeight))
+    drag.bar.style.left = left + 'px'
+    drag.bar.style.top = top + 'px'
+    drag.bar.style.right = 'auto'
+    return { left, top }
+  }
+
+  function scheduleTimerBarPosition(drag: TimerBarDrag, clientX: number, clientY: number) {
+    drag.clientX = clientX
+    drag.clientY = clientY
+    if (drag.frameId !== null) return
+    drag.frameId = requestAnimationFrame(() => {
+      drag.frameId = null
+      if (timerBarDragRef.current === drag) applyTimerBarPosition(drag, drag.clientX, drag.clientY)
+    })
+  }
+
+  function startTimerBarDrag(pointerId: number, bar: HTMLElement, shell: HTMLElement, clientX: number, clientY: number) {
+    const shellRect = shell.getBoundingClientRect()
+    const barRect = bar.getBoundingClientRect()
+    const left = clamp(barRect.left - shellRect.left, 0, Math.max(0, shellRect.width - barRect.width))
+    const minTop = window.matchMedia('(max-width: 600px)').matches ? focusView ? 100 : 44 : 0
+    const top = clamp(barRect.top - shellRect.top, minTop, Math.max(minTop, shellRect.height - barRect.height))
+    setTimerBarState({ documentId: id, left, top })
+    bar.style.left = left + 'px'
+    bar.style.top = top + 'px'
+    bar.style.right = 'auto'
+    bar.classList.add('is-dragging')
+    timerBarDragRef.current = { pointerId, offsetX: clientX - barRect.left, offsetY: clientY - barRect.top, bar, shell, clientX, clientY, frameId: null }
+  }
+
+  function finishTimerBarDragById(pointerId: number, clientX?: number, clientY?: number) {
+    const drag = timerBarDragRef.current
+    if (!drag || drag.pointerId !== pointerId) return
+    if (drag.frameId !== null) cancelAnimationFrame(drag.frameId)
+    drag.frameId = null
+    const pointX = clientX ?? drag.clientX
+    const pointY = clientY ?? drag.clientY
+    const position = applyTimerBarPosition(drag, pointX, pointY)
+    drag.bar.classList.remove('is-dragging')
+    setTimerBarState({ documentId: id, ...position })
     timerBarDragRef.current = null
+  }
+
+  function beginTimerBarTouchPress(event: ReactPointerEvent<HTMLDivElement>) {
+    if (event.pointerType !== 'touch') return
+    const target = event.target instanceof HTMLElement ? event.target : null
+    if (!target || target.closest('input,textarea,select,[contenteditable="true"],.viewer-timer-more-menu,.viewer-counter-details')) return
+    const shell = viewerShellRef.current
+    if (!shell) return
+    const bar = event.currentTarget
+    const press: TimerBarPress = { pointerId: event.pointerId, startX: event.clientX, startY: event.clientY, bar, shell, timerId: 0, active: false, cleanup: () => undefined }
+    const cleanup = () => {
+      window.clearTimeout(press.timerId)
+      window.removeEventListener('pointermove', move, true)
+      window.removeEventListener('pointerup', finish, true)
+      window.removeEventListener('pointercancel', finish, true)
+      window.removeEventListener('resize', cancel, true)
+      bar.removeEventListener('lostpointercapture', finish)
+      if (timerBarPressRef.current === press) timerBarPressRef.current = null
+    }
+    const move = (pointer: PointerEvent) => {
+      if (pointer.pointerId !== press.pointerId) return
+      if (!press.active && Math.hypot(pointer.clientX - press.startX, pointer.clientY - press.startY) > 8) {
+        cleanup()
+        return
+      }
+      if (press.active) {
+        const drag = timerBarDragRef.current
+        if (drag?.pointerId === press.pointerId) scheduleTimerBarPosition(drag, pointer.clientX, pointer.clientY)
+      }
+    }
+    const finish = (pointer: Event) => {
+      if ('pointerId' in pointer && pointer.pointerId !== press.pointerId) return
+      if (press.active) {
+        const point = pointer instanceof PointerEvent ? pointer : undefined
+        finishTimerBarDragById(press.pointerId, point?.clientX, point?.clientY)
+      }
+      cleanup()
+    }
+    const cancel = () => finish(new Event('cancel'))
+    press.cleanup = cleanup
+    timerBarPressRef.current = press
+    press.timerId = window.setTimeout(() => {
+      if (timerBarPressRef.current !== press) return
+      press.active = true
+      timerBarClickSuppressUntilRef.current = Date.now() + 700
+      startTimerBarDrag(press.pointerId, bar, shell, press.startX, press.startY)
+      try { bar.setPointerCapture(press.pointerId) } catch { /* Window listeners retain the drag if capture is unavailable. */ }
+    }, 450)
+    window.addEventListener('pointermove', move, true)
+    window.addEventListener('pointerup', finish, true)
+    window.addEventListener('pointercancel', finish, true)
+    window.addEventListener('resize', cancel, true)
+    bar.addEventListener('lostpointercapture', finish)
   }
 
   function moveDivider(event: ReactPointerEvent<HTMLButtonElement>) {
@@ -2895,7 +2992,7 @@ export default function Viewer() {
           <div className="split-section split-section-secondary" style={orientation === 'wide' ? { flex: '0 0 ' + splitBasis(1 - displayedRatio) } : { width: '100%', flex: '0 0 ' + splitBasis(1 - displayedRatio) }}>{renderPane('secondary', snapshot.secondary, snapshot.activePane === 'secondary')}</div>
         </> : renderPane(snapshot.activePane, snapshot[snapshot.activePane], true)}
         </div>
-        {!reportMode && counterPanelVisible && <CounterPanel snapshot={snapshot} counters={counters} timerLinkMode={counterTimerMode} onChange={updateCounterPanel} onUndo={undoCounterAction} onRewind={rewindCounter} onCounterValue={setCounterValue} onSettingsSave={saveCounterSettings} onTimerLinkModeChange={changeCounterTimerLinkMode} onSnapshotUpdate={updateCounterSnapshot} onClose={() => setSavedCounterSession({ documentId: id, visible: false })} />}
+        {!reportMode && counterPanelVisible && <CounterPanel snapshot={snapshot} counters={counters} timerLinkMode={counterTimerMode} onChange={updateCounterPanel} onUndo={undoCounterAction} onRewind={rewindCounter} onCounterValue={setCounterValue} onSettingsSave={saveCounterSettings} onTimerLinkModeChange={changeCounterTimerLinkMode} onSnapshotUpdate={updateCounterSnapshot} triggerRef={counterPanelFocusRef} onSavingChange={setCounterSettingsSaving} onClose={() => { setSavedCounterSession({ documentId: id, visible: false }); setCounterSettingsSaving(false); requestAnimationFrame(() => counterPanelFocusRef.current?.focus()) }} />}
       </section>
       <section className={'viewer-footer' + (thumbnailCollapsed ? ' thumbnail-collapsed' : '')}>
         <div id={thumbnailContentId} className="thumbnail-content" hidden={thumbnailCollapsed || focusView}>
@@ -3012,7 +3109,7 @@ export default function Viewer() {
         </div>}
       </section>
       <div className="viewer-floating-layer">
-        <div className={'viewer-floating-bar viewer-timer-bar' + (counterDetailsExpanded ? ' counter-details-expanded' : '') + (timerBarPosition.left === null ? '' : ' positioned')} style={timerBarPosition.left === null ? undefined : { left: timerBarPosition.left, top: timerBarPosition.top, right: 'auto' }} role="group" aria-label={`${t('카운터')} · ${t('작업 타이머')}`}>
+        <div className={'viewer-floating-bar viewer-timer-bar' + (counterDetailsExpanded ? ' counter-details-expanded' : '') + (timerBarPosition.left === null ? '' : ' positioned')} style={timerBarPosition.left === null ? undefined : { left: timerBarPosition.left, top: timerBarPosition.top, right: 'auto' }} role="group" aria-label={`${t('카운터')} · ${t('작업 타이머')}`} onPointerDown={beginTimerBarTouchPress} onClickCapture={(event) => { if (Date.now() > timerBarClickSuppressUntilRef.current) return; timerBarClickSuppressUntilRef.current = 0; event.preventDefault(); event.stopPropagation() }}>
           <button type="button" className="viewer-floating-drag-handle" aria-label={t('작업 타이머 이동')} title={t('작업 타이머 이동')} onPointerDown={beginTimerBarDrag} onPointerMove={moveTimerBarDrag} onPointerUp={finishTimerBarDrag} onPointerCancel={finishTimerBarDrag} onLostPointerCapture={finishTimerBarDrag}><GripVertical size={17} /></button>
           {!reportMode && <div className="viewer-counter-tools" role="group" aria-label={t('카운터')}>
             <button type="button" className="viewer-mini-counter-step" aria-label={t('이전 단으로 되돌리기')} title={mainCounterCanStepBack ? t('이전 단으로 되돌리기') : t('정확한 복원 이력이 없습니다')} disabled={!mainCounterCanStepBack || counterActionSaving} onClick={() => { if (mainCounter && mainCounter.value > 1) rewindCounter(mainCounter.id, mainCounter.value - 1, true) }}>−</button>
@@ -3024,7 +3121,7 @@ export default function Viewer() {
               : <button type="button" className="viewer-mini-counter-row" aria-label={t('현재 단 입력')} title={t('현재 단 입력')} disabled={counterActionSaving} onClick={beginCounterRowEdit}><strong>{formatNumber(mainCounter.value)}</strong><span>{t('단')}</span><small>{counterSideForRow(mainCounter, mainCounter.value).toUpperCase()}</small></button>)}
             <button type="button" className="viewer-mini-counter-step" aria-label={t('현재 단 완료 후 다음 단으로 이동')} disabled={!mainCounter || counterActionSaving || mainCounter.goalCompleted === true || mainCounter.value >= MAX_COUNTER_ROW && mainCounter.goalRow !== mainCounter.value} onClick={() => { if (mainCounter) advanceCounterGroup(mainCounter.id) }}>+</button>
             <button type="button" className={'viewer-counter-details-toggle' + (counterDetailsExpanded ? ' active' : '')} aria-label={counterDetailsExpanded ? t('보조 카운터 정보 접기') : t('보조 카운터 정보 펼치기')} title={counterDetailsExpanded ? t('보조 카운터 정보 접기') : t('보조 카운터 정보 펼치기')} aria-expanded={counterDetailsExpanded} aria-controls={'viewer-counter-details-' + id.replace(/[^a-zA-Z0-9_-]/g, '-')} onClick={() => setCounterDetailsExpanded((expanded) => !expanded)}>{counterDetailsExpanded ? <ChevronUp size={16} /> : <ChevronDown size={16} />}</button>
-            <button type="button" className={'viewer-mini-lap-toggle' + (counterPanelVisible ? ' active' : '')} aria-label={counterAlertPending ? t('카운터 · 확인할 알림 있음') : t('타임랩')} title={t('타임랩')} aria-pressed={counterPanelVisible} onClick={() => setSavedCounterSession({ documentId: id, visible: !counterPanelVisible })}><SlidersHorizontal size={16} />{counterAlertPending && <i className="counter-notification-dot" aria-hidden="true" />}</button>
+            <button ref={counterPanelFocusRef} type="button" className={'viewer-mini-lap-toggle' + (counterPanelVisible ? ' active' : '')} aria-label={counterAlertPending ? t('카운터 · 확인할 알림 있음') : t('타임랩')} title={t('타임랩')} aria-pressed={counterPanelVisible} disabled={counterSettingsSaving} onClick={(event) => { counterPanelFocusRef.current = event.currentTarget; setSavedCounterSession({ documentId: id, visible: !counterPanelVisible }) }}><SlidersHorizontal size={16} />{counterAlertPending && <i className="counter-notification-dot" aria-hidden="true" />}</button>
           </div>}
           {!reportMode && counterDetailsExpanded && <section id={'viewer-counter-details-' + id.replace(/[^a-zA-Z0-9_-]/g, '-')} className="viewer-counter-details" aria-label={t('보조 카운터 정보')}>
             {auxiliaryCounters.length ? auxiliaryCounters.map((counter) => <div className="viewer-counter-detail-item" key={counter.id}>
@@ -3042,7 +3139,7 @@ export default function Viewer() {
           {!reportMode && <div className="viewer-timer-more-anchor">
             <button ref={timerMoreTriggerRef} type="button" className="viewer-counter-mobile-more" aria-label={t('더보기')} title={t('더보기')} aria-haspopup="menu" aria-expanded={timerMoreOpen} onClick={() => setTimerMoreOpen((open) => !open)}><MoreHorizontal size={20} />{counterAlertPending && <i className="counter-notification-dot" aria-hidden="true" />}</button>
             {timerMoreOpen && <div ref={timerMorePanelRef} className="viewer-compact-menu viewer-timer-more-menu" role="menu" aria-label={t('더보기')}>
-              <button type="button" role="menuitem" className={counterPanelVisible ? 'selected' : ''} aria-pressed={counterPanelVisible} onClick={() => { setSavedCounterSession({ documentId: id, visible: !counterPanelVisible }); setTimerMoreOpen(false) }}><SlidersHorizontal size={18} /><span>{counterPanelVisible ? t('타임랩') + ' · ' + t('닫기') : t('타임랩')}</span>{counterAlertPending && <i className="counter-notification-dot" aria-hidden="true" />}</button>
+              <button type="button" role="menuitem" className={counterPanelVisible ? 'selected' : ''} aria-pressed={counterPanelVisible} disabled={counterSettingsSaving} onClick={() => { counterPanelFocusRef.current = timerMoreTriggerRef.current; setSavedCounterSession({ documentId: id, visible: !counterPanelVisible }); setTimerMoreOpen(false) }}><SlidersHorizontal size={18} /><span>{counterPanelVisible ? t('타임랩') + ' · ' + t('닫기') : t('타임랩')}</span>{counterAlertPending && <i className="counter-notification-dot" aria-hidden="true" />}</button>
               <button type="button" role="menuitem" className={counterDetailsExpanded ? 'selected' : ''} aria-pressed={counterDetailsExpanded} onClick={() => { setCounterDetailsExpanded((expanded) => !expanded); setTimerMoreOpen(false) }}>{counterDetailsExpanded ? <ChevronUp size={18} /> : <ChevronDown size={18} />}<span>{counterDetailsExpanded ? t('보조 카운터 정보 접기') : t('보조 카운터 정보 펼치기')}</span></button>
             </div>}
           </div>}

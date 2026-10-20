@@ -480,3 +480,16 @@ Object.assign(extendedTranslations.de, photoImportTranslations.de)
 Object.assign(extendedTranslations.da, photoImportTranslations.da)
 Object.assign(extendedTranslations.nb, photoImportTranslations.nb)
 Object.assign(extendedTranslations.fi, photoImportTranslations.fi)
+
+const counterDeleteTranslations = {
+  en: 'Delete this counter?',
+  ja: 'このカウンターを削除しますか？',
+  de: 'Diesen Zähler löschen?',
+  da: 'Vil du slette denne tæller?',
+  nb: 'Vil du slette denne telleren?',
+  fi: 'Poistetaanko tämä laskuri?',
+} satisfies Record<'en' | 'ja' | 'de' | 'da' | 'nb' | 'fi', string>
+
+for (const locale of Object.keys(counterDeleteTranslations) as (keyof typeof counterDeleteTranslations)[]) {
+  extendedTranslations[locale]['카운터를 삭제할까요?'] = counterDeleteTranslations[locale]
+}

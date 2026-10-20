@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { advanceLinkedCounters, counterAlertState, counterSideForRow, counterTimeLapTiming, createCounter, createDefaultCounters, findCounterRewindCheckpoint, guidePositionForRow, isCounterSnapshots, isCurrentCounterSnapshots, isLegacyCounterSnapshots, maxCountersForType, nextPatternAlertRow, normalizeCounterSnapshots, normalizeCounterTimeLaps, patternRowAfterCompletion, progressGuideForCounter, reanchorProgressGuideForCounter, restoreCounterGroup, setCounterGroupRow, shouldPlayCounterTaskSound, taskSchedule } from './smartCounter'
+import { advanceLinkedCounters, counterAlertState, counterSideForRow, counterTimeLapTiming, createCounter, createDefaultCounters, findCounterRewindCheckpoint, groupCounterTimeLaps, guidePositionForRow, isCounterSnapshots, isCurrentCounterSnapshots, isLegacyCounterSnapshots, maxCountersForType, nextPatternAlertRow, normalizeCounterSnapshots, normalizeCounterTimeLaps, patternRowAfterCompletion, progressGuideForCounter, reanchorProgressGuideForCounter, restoreCounterGroup, setCounterGroupRow, shouldPlayCounterTaskSound, taskSchedule } from './smartCounter'
 import type { CounterSnapshot, ProgressGuide } from './types'
 
 describe('counter model', () => {
@@ -44,6 +44,21 @@ describe('counter model', () => {
     expect(counterTimeLapTiming(laps, 'body', 'viewer', 40_000)).toEqual({ elapsedMs: 30_000, durationMs: 30_000 })
     expect(counterTimeLapTiming(laps, 'sleeve', 'viewer', 20_000)).toEqual({ elapsedMs: 10_000, durationMs: 5_000 })
     expect(counterTimeLapTiming([], 'body', 'viewer', 50_000)).toEqual({ elapsedMs: 0, durationMs: 0 })
+  })
+
+  it('groups lap records by counter and session, preserves zero-time records, and sorts newest sessions first', () => {
+    const laps = [
+      { id: 'old-1', counterId: 'body', sessionId: 'old', historyEntryId: 'h1', elapsedMs: 0, durationMs: 0, rowDelta: 1 as const, rowNumber: 4, recordedAt: 100 },
+      { id: 'new-2', counterId: 'body', sessionId: 'new', historyEntryId: 'h3', elapsedMs: 90, durationMs: 60, rowDelta: -1 as const, recordedAt: 320 },
+      { id: 'new-1', counterId: 'body', sessionId: 'new', historyEntryId: 'h2', elapsedMs: 30, durationMs: 0, rowDelta: 1 as const, recordedAt: 200 },
+      { id: 'same-session-other-counter', counterId: 'sleeve', sessionId: 'new', historyEntryId: 'h4', elapsedMs: 0, durationMs: 0, rowDelta: 1 as const, recordedAt: 150 },
+    ]
+
+    expect(groupCounterTimeLaps(laps)).toMatchObject([
+      { counterId: 'body', sessionId: 'new', startedAt: 200, endedAt: 320, rowCount: 0, laps: [{ id: 'new-1' }, { id: 'new-2' }] },
+      { counterId: 'sleeve', sessionId: 'new', rowCount: 1 },
+      { counterId: 'body', sessionId: 'old', startedAt: 100, endedAt: 100, rowCount: 1, laps: [{ id: 'old-1', durationMs: 0 }] },
+    ])
   })
 
   it('migrates old repeat and task data without losing counts or work records', () => {

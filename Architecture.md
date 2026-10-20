@@ -26,6 +26,7 @@ React·TypeScript·Vite·PDF.js·IndexedDB 기반이다. `App.tsx`는 시작·�
 - 페이지 작업은 진행선·마커·필기·구간 강조·컬러워크를 원본 페이지 기준 정규화 좌표로 저장한다. Viewer가 페이지 작업을 처음 불러올 때 주 진행선이 없으면 기본선을 만들어 같은 경로로 저장한다.
 - `ProgressGuide.chartRegion`은 행별 양끝 좌표·진행 순서·분석 회전·따라가기 상태를 선택 필드로 저장한다. 화면 표시와 카운터 저장이 공통 행 좌표 계산을 사용한다.
 - `ViewerSnapshot`은 영역별 페이지·배율·중심·회전, 카운터·이력·타임랩, 라벨·레일 순서를 보관한다.
+- 카운터 팝오버는 기존 snapshot의 카운터·이력·타임랩을 탭별로 보여 준다. 타임랩 목록은 `groupCounterTimeLaps`에서 `counterId + sessionId`별 파생하며 저장 형식은 바꾸지 않는다. 설정은 기존 저장 트랜잭션을 자동 호출하고 실패 시 현재 입력 초안에서 재시도한다.
 - `thumbnailGroups`는 라벨 순서, `thumbnailRailOrder`는 최상위 페이지·그룹 위치다. 소속 변경과 순서를 함께 정리·저장한다.
 - 선택·팝오버·드래그·Floating Bar 위치와 집중 보기는 세션 UI 상태다. 집중 보기는 Viewer 재진입 때 기본 UI로 시작한다.
 - Viewer 가용 너비 600px 이하에서만 모바일 헤더·푸터·카운터/타이머 배치를 압축한다. CSS 동적 뷰포트 갱신과 safe area를 사용하며 저장 형식은 바꾸지 않는다.
@@ -42,6 +43,7 @@ React·TypeScript·Vite·PDF.js·IndexedDB 기반이다. `App.tsx`는 시작·�
 - `addDocumentWorkTime`은 날짜별 수동 증가분만 합산하고 타이머 세션을 만들지 않는다.
 - 표시 시간 = 저장된 오늘 합계 − 현재 Viewer에서 이미 저장한 세션 시간 + 현재 Viewer의 오늘 측정 시간. 수동 추가 후 일시정지에서도 중복 합산하지 않는다.
 - 타임랩은 `counterTimeLapTiming`에서 같은 카운터·Viewer 세션의 직전 `recordedAt`과 현재 시각 차이로 계산한다. 첫 기록은 0이며 타이머 재생 상태와 독립적이다.
+- Floating Bar 터치 이동은 450ms 롱프레스 후 포인터 캡처와 단일 animation frame으로 위치를 갱신하고 종료 시 한 번 저장한다. 8px 초과 선이동은 예약을 취소한다.
 - 카운터 타이머 시작 모드는 `auto/ask-once/independent`이며 기본은 `ask-once`다. 모드·확인 선택은 preference에 저장한다.
 - 저장하고 나가기는 조작을 잠그고 진행 중 저장→타이머→최신 페이지·카운터·뷰어 저장을 완료한 뒤 `/projects`로 이동한다.
 

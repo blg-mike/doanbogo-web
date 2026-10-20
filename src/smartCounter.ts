@@ -11,6 +11,38 @@ export const MAX_COUNTERS = 80
 export const MAX_COUNTER_HISTORY = 200
 const MAX_COUNTER_TASK_OCCURRENCES = MAX_COUNTER_ROW * MAX_COUNTER_TASK_RULES
 
+export type CounterTimeLapSession = {
+  counterId: string
+  sessionId: string
+  laps: CounterTimeLap[]
+  startedAt: number
+  endedAt: number
+  rowCount: number
+}
+
+export function groupCounterTimeLaps(laps: readonly CounterTimeLap[]): CounterTimeLapSession[] {
+  const sessions = new Map<string, CounterTimeLap[]>()
+  for (const lap of laps) {
+    const key = `${lap.counterId}\0${lap.sessionId}`
+    const session = sessions.get(key) ?? []
+    session.push(lap)
+    sessions.set(key, session)
+  }
+  return [...sessions.values()].map((session) => {
+    session.sort((first, second) => first.recordedAt - second.recordedAt || first.id.localeCompare(second.id))
+    const first = session[0]
+    const last = session[session.length - 1]
+    return {
+      counterId: first.counterId,
+      sessionId: first.sessionId,
+      laps: session,
+      startedAt: first.recordedAt - first.durationMs,
+      endedAt: last.recordedAt,
+      rowCount: Math.max(0, session.reduce((total, lap) => total + lap.rowDelta, 0)),
+    }
+  }).sort((first, second) => second.endedAt - first.endedAt)
+}
+
 export function normalizeCounterTimeLaps(value: unknown, history: CounterHistoryEntry[] = []): CounterTimeLap[] {
   if (!Array.isArray(value)) return []
   const ids = new Set<string>()
