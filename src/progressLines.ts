@@ -14,10 +14,65 @@ export function progressLineStrokeWidth(thickness: number, pageWidth: number, cs
   return thickness * pageWidth / Math.max(cssWidth, 1) * renderedZoom
 }
 
-export function progressMarkerGeometry(lineY: number, lineStroke: number) {
+export function progressGuidePositionAfterNudge(position: number, strokeWidth: number, pageHeight: number, direction: 'up' | 'down') {
+  const distance = strokeWidth / Math.max(pageHeight, 1)
+  return Math.min(1, Math.max(0, position + (direction === 'up' ? -distance : distance)))
+}
+
+export function progressLinePopoverPageAnchor(xRatio: number, yOffset: number, guidePosition: number) {
+  return { x: Math.min(1, Math.max(0, xRatio)), y: Math.min(1, Math.max(0, guidePosition + yOffset)) }
+}
+
+export function progressLinePopoverScreenPoint(anchor: { x: number; y: number }, pageWidth: number, pageHeight: number, matrix: { a: number; b: number; c: number; d: number; e: number; f: number }) {
+  const x = anchor.x * pageWidth
+  const y = anchor.y * pageHeight
+  return { x: matrix.a * x + matrix.c * y + matrix.e, y: matrix.b * x + matrix.d * y + matrix.f }
+}
+
+export function keepProgressLinePopoverOpenDuringZoom(pointerType: string, isZoomControl: boolean, isPdfPage: boolean) {
+  return isZoomControl || (pointerType === 'touch' && isPdfPage)
+}
+
+export interface ProgressPopoverRect {
+  left: number
+  top: number
+  right: number
+  bottom: number
+}
+
+export function progressLinePopoverPlacement(anchor: { x: number; y: number }, size: { width: number; height: number }, bounds: ProgressPopoverRect, controls: ProgressPopoverRect) {
+  const margin = 8
+  const candidates = [
+    { left: anchor.x - size.width - margin, top: anchor.y - size.height / 2 },
+    { left: anchor.x + margin, top: anchor.y - size.height / 2 },
+    { left: anchor.x - size.width / 2, top: controls.bottom + margin },
+    { left: anchor.x - size.width / 2, top: controls.top - size.height - margin },
+  ]
+  const maxLeft = bounds.right - margin - size.width
+  const maxTop = bounds.bottom - margin - size.height
+  const overlapsControls = (left: number, top: number) => {
+    const width = Math.max(0, Math.min(left + size.width, controls.right) - Math.max(left, controls.left))
+    const height = Math.max(0, Math.min(top + size.height, controls.bottom) - Math.max(top, controls.top))
+    return width * height > 0
+  }
+  const fits = (left: number, top: number) => left >= bounds.left + margin && top >= bounds.top + margin && left <= maxLeft && top <= maxTop
+  const preferred = candidates.find(({ left, top }) => fits(left, top) && !overlapsControls(left, top))
+  if (preferred) return { ...preferred, overlapsControls: false }
+
+  const constrained = candidates.map(({ left, top }, order) => {
+    const constrainedLeft = Math.max(bounds.left + margin, Math.min(left, maxLeft))
+    const constrainedTop = Math.max(bounds.top + margin, Math.min(top, maxTop))
+    return { left: constrainedLeft, top: constrainedTop, overlapsControls: overlapsControls(constrainedLeft, constrainedTop), order }
+  })
+  const { left, top, overlapsControls: isOverlapping } = constrained.sort((first, second) => Number(first.overlapsControls) - Number(second.overlapsControls) || first.order - second.order)[0]
+  return { left, top, overlapsControls: isOverlapping }
+}
+
+export function progressMarkerGeometry(lineY: number, lineStroke: number, svgUnitsPerCssPixel = 1) {
+  const extension = 4 * svgUnitsPerCssPixel
   return {
-    top: lineY - lineStroke / 2,
-    triangleSize: lineStroke * 3 / 8,
+    top: lineY - lineStroke / 2 - extension,
+    bottom: lineY + lineStroke / 2 + extension,
   }
 }
 

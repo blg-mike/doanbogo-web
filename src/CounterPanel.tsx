@@ -5,7 +5,6 @@ import { ArrowDownUp, Bell, Check, ChevronDown, ChevronLeft, ChevronRight, Chevr
 import type { CounterKind, CounterSnapshot, CounterTimerLinkMode, CounterUnit, ViewerSnapshot } from './types'
 import { MAX_COUNTER_ROW, MAX_COUNTERS_PER_TYPE, counterAlertState, createCounter, findCounterRewindCheckpoint, groupCounterTimeLaps, maxCountersForType, taskSchedule } from './smartCounter'
 import { ColorPresetButtons } from './ColorPresetButtons'
-import { formatWorkTime } from './workTime'
 
 const kinds: CounterKind[] = ['simple', 'pattern', 'task']
 const kindLabels: Record<CounterKind, LocaleKey> = { simple: '자유 카운터', pattern: '무늬 카운터', task: '줄임·늘림 카운터' }
@@ -477,7 +476,6 @@ export default function CounterPanel({
   const [newCounterDraft, setNewCounterDraft] = useState<CounterSnapshot | null>(null)
   const [rewindOpen, setRewindOpen] = useState(false)
   const [rewindRow, setRewindRow] = useState('')
-  const [expandedLapSession, setExpandedLapSession] = useState('')
   function closePanel() {
     if (panelSaving) return
     onClose()
@@ -707,21 +705,15 @@ export default function CounterPanel({
       {activeTab === 'counter' && pendingAlert && <section className="counter-pending-alert" role="status"><div><Bell size={17} /><strong>{alertState.messages.map(translateCounterAlert).join(' ')}</strong></div><button type="button" onClick={() => onSnapshotUpdate({ counterAlertAcknowledged: alertState.key })}>{t('확인')}</button></section>}
       {activeTab === 'counter' && <CounterSettings view="main" snapshot={snapshot} counters={counters} timerLinkMode={timerLinkMode} onSave={onSettingsSave} onTimerLinkModeChange={onTimerLinkModeChange} onEdit={editCounter} onAdd={add} addButtonRef={addButtonRef} onSavingChange={(saving) => { setPanelSaving(saving); onSavingChange(saving) }} />}
       {activeTab === 'laps' && <section className="counter-lap-sessions" aria-label={t('타임랩')}>
-        <header><h2>{t('타임랩')}</h2><span>{formatNumber(timeLapSessions.length)}</span></header>
+        <header><h2>{t('타임랩')}</h2></header>
         {timeLapSessions.length ? <div className="counter-lap-session-list">{timeLapSessions.map((session) => {
           const counter = counters.find((item) => item.id === session.counterId)
           const key = session.counterId + '\0' + session.sessionId
-          const expanded = expandedLapSession === key
           const time = (timestamp: number) => formatDateTime(timestamp, { hour: '2-digit', minute: '2-digit', hourCycle: 'h23' })
-          const timeRange = `${time(session.startedAt)} ~ ${time(session.endedAt)}`
-          return <article className="counter-lap-session" key={key}>
-            <button type="button" className="counter-lap-session-summary" aria-label={`${counter?.name ?? t('카운터')}, ${timeRange}, ${formatNumber(session.rowCount)}${t('단')}`} aria-expanded={expanded} onClick={() => setExpandedLapSession(expanded ? '' : key)}>
-              <span className="counter-aux-color" style={{ background: counter?.color ?? 'var(--color-primary)' }} />
-              <span className="counter-lap-session-time">{timeRange}</span>
-              <strong>{formatNumber(session.rowCount)}{t('단')}</strong>
-              {expanded ? <ChevronUp size={18} /> : <ChevronRight size={18} />}
-            </button>
-            {expanded && <ol className="counter-lap-session-details">{session.laps.map((lap) => <li key={lap.id}><time>{formatWorkTime(lap.durationMs)}</time><span>{lap.rowNumber === undefined ? t('단수 미기록') : formatNumber(lap.rowNumber) + t('단')}</span><strong>{lap.rowDelta > 0 ? '+1' : '−1'}{t('단')}</strong></li>)}</ol>}
+          const timeRange = `${time(session.startedAt)}~${time(session.endedAt)}`
+          return <article className="counter-lap-session" key={key} aria-label={`${counter?.name ?? t('카운터')} · ${timeRange} · ${formatNumber(session.rowCount)}${t('단')}`}>
+            <span className="counter-lap-session-time">{timeRange}</span>
+            <strong>{formatNumber(session.rowCount)}{t('단')}</strong>
           </article>
         })}</div> : <p className="counter-laps-empty">{t('타임랩 기록이 없습니다.')}</p>}
       </section>}

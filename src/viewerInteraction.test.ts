@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { anchoredScrollOffset, canStartPaneGesture, classifyWheelInput, clientPointForPagePosition, isEditableTarget, nearestZoomLevel, pagePositionAtClientPoint, pinchPreviewTranslation, regionHighlightPointerAction, scrollOffsetForZoomFocus, stepZoomLevel, visiblePageCrop, wheelActionForBurst, wheelZoom, ZOOM_LEVELS } from './viewerInteraction'
+import { anchoredScrollOffset, canStartPaneGesture, classifyWheelInput, clientPointForPagePosition, isEditableTarget, isZoomFocusCurrent, nearestZoomLevel, pagePositionAtClientPoint, pinchPreviewTranslation, regionHighlightPointerAction, scrollOffsetForZoomFocus, stepZoomLevel, visiblePageCrop, visiblePageFocus, wheelActionForBurst, wheelZoom, ZOOM_LEVELS } from './viewerInteraction'
 
 describe('PDF viewer input helpers', () => {
   it('selects a region on first contact and allows a later drag to move it with either selection tool', () => {
@@ -90,6 +90,24 @@ describe('PDF viewer input helpers', () => {
       expect(crop?.width).toBeCloseTo(0.5)
       expect(crop?.height).toBeCloseTo(0.5)
     }
+  })
+
+  it('chooses the visible page center for button zoom and clamps margin focus to the nearest page edge', () => {
+    const page = { left: 100, top: 100, right: 500, bottom: 900, width: 400, height: 800 } as DOMRect
+    expect(visiblePageFocus(page, { left: 0, top: 0, right: 600, bottom: 1000 } as DOMRect, 400, 800, 0, 1)).toMatchObject({ x: 0.5, y: 0.5, clientX: 300, clientY: 500 })
+    expect(visiblePageFocus(page, { left: 300, top: 200, right: 600, bottom: 500 } as DOMRect, 400, 800, 0, 1)).toMatchObject({ x: 0.75, y: 0.3125, clientX: 400, clientY: 350 })
+    const marginFocus = visiblePageFocus(page, { left: 0, top: 100, right: 60, bottom: 180 } as DOMRect, 400, 800, 0, 1)
+    expect(marginFocus).toMatchObject({ x: 0, clientX: 100, clientY: 140 })
+    expect(marginFocus.y).toBeCloseTo(0.05)
+  })
+
+  it('keeps delayed zoom focus attached to its originating pane, page, rotation and zoom', () => {
+    const focus = { x: 0.3, y: 0.7, clientX: 200, clientY: 300, zoom: 2, paneId: 'primary' as const, page: 3, rotation: 90 }
+    expect(isZoomFocusCurrent(focus, 'primary', 3, 90, 2)).toBe(true)
+    expect(isZoomFocusCurrent(focus, 'secondary', 3, 90, 2)).toBe(false)
+    expect(isZoomFocusCurrent(focus, 'primary', 4, 90, 2)).toBe(false)
+    expect(isZoomFocusCurrent(focus, 'primary', 3, 0, 2)).toBe(false)
+    expect(isZoomFocusCurrent(focus, 'primary', 3, 90, 1)).toBe(false)
   })
 
   it('keeps the pinch anchor under the moving midpoint for both page orientations', () => {

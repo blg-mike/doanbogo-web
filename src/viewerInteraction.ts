@@ -7,7 +7,7 @@ export type WheelInput = {
   ctrlKey: boolean
 }
 
-export type ZoomFocus = { x: number; y: number; clientX: number; clientY: number; zoom: number }
+export type ZoomFocus = { x: number; y: number; clientX: number; clientY: number; zoom: number; paneId: PaneId; page: number; rotation: number }
 
 export const ZOOM_LEVELS = [0.5, 0.75, 1, 1.25, 1.5, 2, 3, 4, 5] as const
 
@@ -78,6 +78,22 @@ export function pagePositionAtClientPoint(rect: Pick<DOMRect, 'left' | 'top' | '
     x: clamp(0.5 + localX / Math.max(pageWidth, 1), 0, 1),
     y: clamp(0.5 + localY / Math.max(pageHeight, 1), 0, 1),
   }
+}
+
+export function visiblePageFocus(pageRect: Pick<DOMRect, 'left' | 'top' | 'right' | 'bottom' | 'width' | 'height'>, viewportRect: Pick<DOMRect, 'left' | 'top' | 'right' | 'bottom'>, pageWidth: number, pageHeight: number, rotation: number, scale: number) {
+  const left = Math.max(pageRect.left, viewportRect.left)
+  const top = Math.max(pageRect.top, viewportRect.top)
+  const right = Math.min(pageRect.right, viewportRect.right)
+  const bottom = Math.min(pageRect.bottom, viewportRect.bottom)
+  const viewportCenterX = (viewportRect.left + viewportRect.right) / 2
+  const viewportCenterY = (viewportRect.top + viewportRect.bottom) / 2
+  const clientX = right > left && bottom > top ? (left + right) / 2 : clamp(viewportCenterX, pageRect.left, pageRect.right)
+  const clientY = right > left && bottom > top ? (top + bottom) / 2 : clamp(viewportCenterY, pageRect.top, pageRect.bottom)
+  return { ...pagePositionAtClientPoint(pageRect, pageWidth, pageHeight, rotation, scale, clientX, clientY), clientX, clientY }
+}
+
+export function isZoomFocusCurrent(focus: ZoomFocus, paneId: PaneId, page: number, rotation: number, zoom: number) {
+  return focus.paneId === paneId && focus.page === page && focus.rotation === rotation && Math.abs(focus.zoom - zoom) < 0.001
 }
 
 export function visiblePageCrop(pageRect: Pick<DOMRect, 'left' | 'top' | 'width' | 'height'>, viewportRect: Pick<DOMRect, 'left' | 'top' | 'right' | 'bottom'>, pageWidth: number, pageHeight: number, rotation: number, scale: number) {

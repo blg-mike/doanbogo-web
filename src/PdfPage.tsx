@@ -17,7 +17,7 @@ import { shouldPreventTextNotePointerDefault, textNoteBoxAt, textNoteCounterRota
 import { safeQrHref, shouldOpenLinkAfterGesture, type PdfQrLink } from './qr'
 import { rotatedPageSize } from './pageGeometry'
 import { displayRectToPageRect, focusBandHeightRatio, focusDimOpacity, focusRowSpacing, guideGeometryForRotation, pageRectToDisplayRect } from './focusGeometry'
-import { canStartPaneGesture, clientPointForPagePosition, classifyWheelInput, isEditableTarget, nearestZoomLevel, pagePositionAtClientPoint, pinchPreviewTranslation, regionHighlightPointerAction, scrollOffsetForZoomFocus, visiblePageCrop, wheelActionForBurst, wheelZoom, type WheelInput, type ZoomFocus } from './viewerInteraction'
+import { canStartPaneGesture, clientPointForPagePosition, classifyWheelInput, isEditableTarget, isZoomFocusCurrent, nearestZoomLevel, pagePositionAtClientPoint, pinchPreviewTranslation, regionHighlightPointerAction, scrollOffsetForZoomFocus, visiblePageCrop, visiblePageFocus, wheelActionForBurst, wheelZoom, type WheelInput, type ZoomFocus } from './viewerInteraction'
 import { acquireThumbnailCache, getViewerResourcePolicy, MAX_PDF_CANVAS_PIXELS, pdfRasterScale, releaseCanvasWhenSettled, viewerCanvasMemory } from './pdfRenderResources'
 import { pdfPageRenderQueue } from './pdfPageRenderQueue'
 import type { LimitedAnnotationKind } from './annotationLimits'
@@ -493,7 +493,6 @@ export function PdfPage({ pdf, page, paneId, pane, paneGestureOwnerRef, splitVie
   const regionDrawing = useRef<RegionHighlightDrawing | null>(null)
   const regionTransform = useRef<RegionHighlightTransform | null>(null)
   const regionStyleEditBefore = useRef<{ id: string; before: PageWorkRecord } | null>(null)
-  const centerRef = useRef({ x: pane.centerX, y: pane.centerY })
   const onCenterRef = useRef(onCenter)
   const zoomFocusRef = useRef<ZoomFocus | null>(null)
   const trackpadBurstUntilRef = useRef(0)
@@ -620,13 +619,12 @@ export function PdfPage({ pdf, page, paneId, pane, paneGestureOwnerRef, splitVie
       trackpadBurstUntilRef.current = decision.burstUntil
       const layer = rotationLayerRef.current
       const rect = layer?.getBoundingClientRect()
-      const insideDocument = event.target instanceof Element && Boolean(event.target.closest('.pdf-rotation-content'))
-      if (decision.action === 'zoom' && insideDocument && layer && rect?.width && rect.height) {
+      if (decision.action === 'zoom' && layer && rect?.width && rect.height) {
         event.preventDefault()
         onActivate()
         const targetZoom = wheelZoom(pane.zoom, input)
         const position = pagePositionAtClientPoint(rect, layer.clientWidth, layer.clientHeight, rotation, zoomPreviewScale, event.clientX, event.clientY)
-        const focus = { ...position, clientX: event.clientX, clientY: event.clientY, zoom: targetZoom }
+        const focus: ZoomFocus = { ...position, clientX: event.clientX, clientY: event.clientY, zoom: targetZoom, paneId, page, rotation }
         if (targetZoom !== pane.zoom) zoomFocusRef.current = focus
         onZoom(targetZoom, focus)
         return
@@ -638,7 +636,7 @@ export function PdfPage({ pdf, page, paneId, pane, paneGestureOwnerRef, splitVie
     }
     area.addEventListener('wheel', onWheel, { passive: false })
     return () => area.removeEventListener('wheel', onWheel)
-  }, [onActivate, onZoom, pane.zoom, rotation, zoomPreviewScale])
+  }, [onActivate, onZoom, pane.zoom, paneId, page, rotation, zoomPreviewScale])
 
   useEffect(() => {
     const area = scrollRef.current
@@ -1044,7 +1042,7 @@ export function PdfPage({ pdf, page, paneId, pane, paneGestureOwnerRef, splitVie
     const area = scrollRef.current
     const layer = rotationLayerRef.current
     if (!area || !layer) return false
-    if (Math.abs(focus.zoom - pane.zoom) > 0.001) {
+    if (!isZoomFocusCurrent(focus, paneId, page, rotation, pane.zoom)) {
       zoomFocusRef.current = null
       return false
     }
@@ -1053,17 +1051,23 @@ export function PdfPage({ pdf, page, paneId, pane, paneGestureOwnerRef, splitVie
     area.scrollLeft = scrollOffsetForZoomFocus(area.scrollLeft, point.x, focus.clientX, area.scrollWidth, area.clientWidth)
     area.scrollTop = scrollOffsetForZoomFocus(area.scrollTop, point.y, focus.clientY, area.scrollHeight, area.clientHeight)
     return true
-  }, [pane.zoom, rotation, zoomPreviewScale])
+  }, [paneId, page, pane.zoom, rotation, zoomPreviewScale])
 
   const recordCenter = useCallback(() => {
     const element = scrollRef.current
-    if (!element) return
-    const x = element.scrollWidth > element.clientWidth ? (element.scrollLeft + element.clientWidth / 2) / element.scrollWidth : 0.5
-    const y = element.scrollHeight > element.clientHeight ? (element.scrollTop + element.clientHeight / 2) / element.scrollHeight : 0.5
-    centerRef.current = { x, y }
-    onCenterRef.current(x, y)
+    const layer = rotationLayerRef.current
+    if (!element || !layer) return
+    const bounds = element.getBoundingClientRect()
+    const viewport = {
+      left: bounds.left + element.clientLeft,
+      top: bounds.top + element.clientTop,
+      right: bounds.left + element.clientLeft + element.clientWidth,
+      bottom: bounds.top + element.clientTop + element.clientHeight,
+    }
+    const focus = visiblePageFocus(layer.getBoundingClientRect(), viewport, layer.clientWidth, layer.clientHeight, rotation, zoomPreviewScale)
+    onCenterRef.current(focus.x, focus.y)
     scheduleDetailRender()
-  }, [scheduleDetailRender])
+  }, [rotation, zoomPreviewScale, scheduleDetailRender])
 
   useEffect(() => {
     if (readyKey !== renderKey) return
@@ -1075,25 +1079,31 @@ export function PdfPage({ pdf, page, paneId, pane, paneGestureOwnerRef, splitVie
     const element = scrollRef.current
     if (!element) return
     const rasterReady = readyKey === renderKey
-    const focus = zoomFocusRef.current
-    if (focus) {
-      if (applyZoomFocus(focus)) {
+    const pendingFocus = zoomFocusRef.current
+    if (pendingFocus) {
+      if (applyZoomFocus(pendingFocus)) {
         if (rasterReady) {
           zoomFocusRef.current = null
-          recordCenter()
         }
+        recordCenter()
         return
       }
       if (!rasterReady) return
     }
     if (!rasterReady && !canPreviewZoom) return
-    element.scrollLeft = Math.max(0, pane.centerX * element.scrollWidth - element.clientWidth / 2)
-    element.scrollTop = Math.max(0, pane.centerY * element.scrollHeight - element.clientHeight / 2)
-  }, [readyKey, renderKey, page, pane.zoom, pane.centerX, pane.centerY, rotation, zoomPreviewScale, canPreviewZoom, applyZoomFocus, recordCenter])
-
-  useEffect(() => {
-    centerRef.current = { x: pane.centerX, y: pane.centerY }
-  }, [page, pane.zoom, pane.centerX, pane.centerY])
+    const bounds = element.getBoundingClientRect()
+    const centerFocus: ZoomFocus = {
+      x: pane.centerX,
+      y: pane.centerY,
+      clientX: bounds.left + element.clientLeft + element.clientWidth / 2,
+      clientY: bounds.top + element.clientTop + element.clientHeight / 2,
+      zoom: pane.zoom,
+      paneId,
+      page,
+      rotation,
+    }
+    if (applyZoomFocus(centerFocus)) recordCenter()
+  }, [readyKey, renderKey, page, paneId, pane.zoom, pane.centerX, pane.centerY, rotation, zoomPreviewScale, canPreviewZoom, applyZoomFocus, recordCenter])
 
   useEffect(() => {
     if (editingNoteId !== null) textInputRef.current?.focus()
@@ -1113,6 +1123,7 @@ export function PdfPage({ pdf, page, paneId, pane, paneGestureOwnerRef, splitVie
   }
 
   function beginChartSelectionCapture(event: ReactPointerEvent<HTMLDivElement>) {
+    if (event.target instanceof Element && event.target.closest('.progress-line-popover-layer')) return
     if (chartRecognition?.stage !== 'select') {
       handlePanePointerDownCapture(event)
       return
@@ -1635,7 +1646,7 @@ export function PdfPage({ pdf, page, paneId, pane, paneGestureOwnerRef, splitVie
         const zoom = nearestZoomLevel(Math.min(5, Math.max(0.5, current.zoom * Math.hypot(second.x - first.x, second.y - first.y) / current.distance)))
         const midpointX = (first.x + second.x) / 2
         const midpointY = (first.y + second.y) / 2
-        const focus: ZoomFocus = { ...current.pagePoint, clientX: midpointX, clientY: midpointY, zoom }
+        const focus: ZoomFocus = { ...current.pagePoint, clientX: midpointX, clientY: midpointY, zoom, paneId, page, rotation }
         if (zoom !== pane.zoom) {
           zoomFocusRef.current = focus
           onZoom(zoom)
@@ -1815,22 +1826,19 @@ export function PdfPage({ pdf, page, paneId, pane, paneGestureOwnerRef, splitVie
     gesture.current = null
     pinchZoom.current = null
     zoomFocusRef.current = null
-  }, [pdf, page, rotation, work.documentId])
+  }, [pdf, page, paneId, rotation, work.documentId])
 
   function doubleTap(event: React.MouseEvent<HTMLDivElement>) {
     if (tool !== 'pan') return
-    const area = scrollRef.current
-    if (!area) return
+    const layer = rotationLayerRef.current
+    if (!layer) return
     if (pane.zoom === 1) {
-      const rect = area.getBoundingClientRect()
-      const x = Math.min(1, Math.max(0, (area.scrollLeft + event.clientX - rect.left) / Math.max(area.scrollWidth, 1)))
-      const y = Math.min(1, Math.max(0, (area.scrollTop + event.clientY - rect.top) / Math.max(area.scrollHeight, 1)))
-      centerRef.current = { x, y }
-      onCenter(x, y)
-      onZoom(2)
+      const point = pagePositionAtClientPoint(layer.getBoundingClientRect(), layer.clientWidth, layer.clientHeight, rotation, zoomPreviewScale, event.clientX, event.clientY)
+      const focus: ZoomFocus = { ...point, clientX: event.clientX, clientY: event.clientY, zoom: 2, paneId, page, rotation }
+      zoomFocusRef.current = focus
+      onZoom(2, focus)
     } else {
       zoomFocusRef.current = null
-      centerRef.current = { x: 0.5, y: 0.5 }
       onCenter(0.5, 0.5)
       onZoom(1)
     }
@@ -2880,6 +2888,7 @@ export function PdfPage({ pdf, page, paneId, pane, paneGestureOwnerRef, splitVie
                 cssWidth={rotatedCssSize.width}
                 cssHeight={rotatedCssSize.height}
                 renderedZoom={displayedRaster?.zoom ?? pane.zoom}
+                previewScale={zoomPreviewScale}
                 work={work}
                 counters={counters}
                 rotation={rotation}
