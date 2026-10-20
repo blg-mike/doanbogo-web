@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { displayRectToPageRect, focusBandHeightRatio, focusDimOpacity, focusRowSpacing, formatFocusSpacingPercent, guideGeometryForRotation, guidePositionForRotation, isChartAutoFollowRotationCompatible, pageRectToDisplayRect, parseFocusSpacingPercent } from './focusGeometry'
+import { displayRectToPageRect, focusBandHeightRatio, focusDimOpacity, focusRowSpacing, formatFocusSpacingPercent, guideGeometryForRotation, guidePositionForRotation, guidePositionOffsetAfterMove, isChartAutoFollowRotationCompatible, pageRectToDisplayRect, parseFocusSpacingPercent } from './focusGeometry'
 import type { ProgressFocusSettings, ProgressGuide } from './types'
 
 describe('focus view rotation geometry', () => {
@@ -65,6 +65,27 @@ describe('focus view rotation geometry', () => {
     expect(isChartAutoFollowRotationCompatible(guide, 90)).toBe(false)
     expect(guideGeometryForRotation(guide, 11, 90)).toMatchObject({ position: 0.5, xStartRatio: 0.15, xEndRatio: 0.85 })
     expect(guideGeometryForRotation({ ...guide, chartRegion: { ...guide.chartRegion!, autoFollow: false } }, 11, 0)).toMatchObject({ position: 0.5, xStartRatio: 0.15, xEndRatio: 0.85 })
+  })
+
+  it('uses the shared rendered offset when nudging a rotated auto-follow chart line', () => {
+    const guide: ProgressGuide = {
+      id: 'chart-guide', position: 0.5, linkedCounterId: 'rows', positionOffset: 0.01,
+      rotationPositions: { '180': { position: 0.2, positionOffset: 0.2, xStartRatio: 0.15, xEndRatio: 0.85 } },
+      chartRegion: {
+        x: 0.1, y: 0.2, width: 0.8, height: 0.6, firstRow: 1, lastRow: 3, startCounterRow: 10,
+        repeat: false, direction: 'bottom-to-top', analysisRotation: 0, autoFollow: true,
+        rowRanges: [{ x: 0.2, y: 0.7, width: 0.3, height: 0.05 }],
+      },
+    }
+    const visible180 = { ...guide, position: 0.285, positionOffset: 0.2 }
+    const rotatedAutoFollow = guidePositionOffsetAfterMove(guide, visible180, 0.305, 180)
+    expect(rotatedAutoFollow.offset).toBeCloseTo(0.03)
+    expect(rotatedAutoFollow.chartAutoFollow).toBe(true)
+    expect(guideGeometryForRotation({ ...guide, positionOffset: rotatedAutoFollow.offset }, 10, 180).position).toBeCloseTo(0.305)
+    const visible90 = { ...guide, position: 0.285, positionOffset: 0.01 }
+    const incompatibleRotation = guidePositionOffsetAfterMove(guide, visible90, 0.305, 90)
+    expect(incompatibleRotation.offset).toBeCloseTo(0.03)
+    expect(incompatibleRotation.chartAutoFollow).toBe(false)
   })
 })
 

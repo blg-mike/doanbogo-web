@@ -44,6 +44,15 @@ export function isChartAutoFollowRotationCompatible(guide: ProgressGuide, rotati
   return analysisRotation === undefined || (rotation - analysisRotation + 360) % 180 === 0
 }
 
+export function guidePositionOffsetAfterMove(guide: ProgressGuide, visible: ProgressGuide, position: number, rotation: PageRotation) {
+  const chartAutoFollow = Boolean(guide.chartRegion?.rowRanges?.length && guide.chartRegion.autoFollow !== false && isChartAutoFollowRotationCompatible(guide, rotation))
+  const currentOffset = chartAutoFollow ? guide.positionOffset : visible.positionOffset ?? guide.positionOffset
+  return {
+    offset: Math.max(-1, Math.min(1, (currentOffset ?? 0) + position - visible.position)),
+    chartAutoFollow,
+  }
+}
+
 function legacyGuidePositionForRotation(guide: ProgressGuide, row: number, rotation: PageRotation) {
   const screenPosition = guide.rotationPositions?.[String(rotation) as '0' | '90' | '180' | '270']
   const orientedGuide = screenPosition ? { ...guide, ...screenPosition } : guide

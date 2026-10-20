@@ -2,7 +2,7 @@ import { formatNumber, t, translateMessage, type LocaleKey } from './locales/ind
 import { useEffect, useId, useLayoutEffect, useRef, useState, type CSSProperties, type KeyboardEvent as ReactKeyboardEvent, type PointerEvent as ReactPointerEvent } from 'react'
 import { createPortal } from 'react-dom'
 import { ArrowDown, ArrowUp, ChevronRight, Palette, Plus, Trash2, X } from 'lucide-react'
-import { focusBandHeightRatio, focusDimOpacity, guideGeometryForRotation, pageRectToDisplayRect } from './focusGeometry'
+import { focusBandHeightRatio, focusDimOpacity, guideGeometryForRotation, guidePositionOffsetAfterMove, pageRectToDisplayRect } from './focusGeometry'
 import type { CounterSnapshot, PageRotation, PageWorkRecord, ProgressGuide, ProgressGuideScreenPosition } from './types'
 import { ColorPresetButtons } from './ColorPresetButtons'
 import { DESIGN_SYSTEM_COLORS, PROGRESS_LINE_COLOR_PRESETS } from './designTokens'
@@ -137,9 +137,9 @@ function updateGuideWork(work: PageWorkRecord, guideId: string, changes: Partial
     const linked = counters.find((counter) => counter.id === nextGuide.linkedCounterId)
     const effectiveRow = counterRow(linked) - (nextGuide.counterRowOffset ?? 0)
     if (nextGuide.chartRegion) {
-      const offset = clamp((visible.positionOffset ?? original.positionOffset ?? 0) + position - visible.position, -1, 1)
+      const { offset, chartAutoFollow } = guidePositionOffsetAfterMove(original, visible, position, rotation)
       screenPosition.positionOffset = offset
-      if (rotation === 0) nextGuide.positionOffset = offset
+      if (rotation === 0 || chartAutoFollow) nextGuide.positionOffset = offset
     } else if (screenPosition.rowSpacing !== undefined) {
       screenPosition.rowSpacingStartRow = effectiveRow
       if (rotation === 0) nextGuide.rowSpacingStartRow = effectiveRow

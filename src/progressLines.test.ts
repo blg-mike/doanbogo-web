@@ -148,6 +148,22 @@ describe('progress line vertical movement', () => {
     expect(progressGuidePositionAfterNudge(0.01, 12, 600, 'up')).toBe(0)
     expect(progressGuidePositionAfterNudge(0.99, 12, 600, 'down')).toBe(1)
   })
+
+  it('returns to the original page position after ten down and up steps at every supported zoom', () => {
+    const pageWidth = 600
+    const pageHeight = 2400
+    const fitScale = 0.5
+    for (const thickness of [1, 12, 36]) {
+      for (const zoom of [0.5, 1, 1.25, 2, 5]) {
+        const cssWidth = pageWidth * fitScale * zoom
+        const stroke = progressLineStrokeWidth(thickness, pageWidth, cssWidth, zoom)
+        let position = 0.5
+        for (let i = 0; i < 10; i++) position = progressGuidePositionAfterNudge(position, stroke, pageHeight, 'down')
+        for (let i = 0; i < 10; i++) position = progressGuidePositionAfterNudge(position, stroke, pageHeight, 'up')
+        expect(position).toBeCloseTo(0.5, 9)
+      }
+    }
+  })
 })
 
 describe('progress line popover placement', () => {
