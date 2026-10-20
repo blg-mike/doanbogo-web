@@ -723,7 +723,7 @@ export default function KnittingReport({ documentId, fileName, pageCount, totalW
       <div className="report-entry-title"><strong>{t("바늘 ")}{index + 1}</strong><button type="button" className="report-icon-button" aria-label={t("바늘 삭제")} onClick={() => removeRow('needles', needle.id)}><Trash2 size={15} /></button></div>
       {rowFields(needle, 'needles', [
         { field: 'type', label: '바늘 종류', kind: 'select', options: [...new Set(['대바늘', '코바늘', '기타', needle.type].filter(Boolean))] },
-        { field: 'size', label: '사이즈' }, { field: 'sizeUnit', label: '표기', kind: 'select', options: ['mm', 'US', 'JP'], emptyLabel: '기존 표기' },
+        { field: 'size', label: '사이즈' }, { field: 'sizeUnit', label: '표기', kind: 'select', options: ['mm', 'us', 'uk', 'jp'], emptyLabel: '기존 표기' },
         { field: 'brand', label: '브랜드' }, { field: 'section', label: '사용 부위' },
         ...(showDetails ? [{ field: 'cableLength' as const, label: '케이블 길이' }, { field: 'memo' as const, label: '메모', wide: true }] : []),
       ])}

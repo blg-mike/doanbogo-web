@@ -17,7 +17,7 @@ describe('Instagram report caption', () => {
     expect(caption).toContain('Yarn\n실가게 메리노 크림 1012')
     expect(caption).toContain('4.3볼 · 215g · 850m')
     expect(caption).toContain('다음에는 소매를 짧게 뜨기')
-    expect(caption).toContain('#봄가디건 #뜨개기록')
+    expect(caption).toContain('#봄가디건 #뜨개기록 #니트피크 #knitpeek')
     expect(caption).not.toContain('개인 메모')
     expect(caption).not.toContain('실은 세탁 후 늘어남')
     expect(caption).not.toContain('실타래 메모')

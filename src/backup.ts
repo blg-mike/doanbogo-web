@@ -293,7 +293,7 @@ function isKnittingReport(value: unknown, documentIds: Set<string>): value is Kn
       (row.strandCount === undefined || typeof row.strandCount === 'string') && (row.needleSizeMm === undefined || typeof row.needleSizeMm === 'string') &&
       (row.memo === undefined || typeof row.memo === 'string')) &&
     needles.every((row) => isObject(row) && (row.brand === undefined || typeof row.brand === 'string' && row.brand.length <= 20_000) &&
-      (row.sizeUnit === undefined || row.sizeUnit === 'mm' || row.sizeUnit === 'US' || row.sizeUnit === 'JP')) &&
+      (row.sizeUnit === undefined || row.sizeUnit === 'mm' || row.sizeUnit === 'us' || row.sizeUnit === 'uk' || row.sizeUnit === 'jp' || row.sizeUnit === 'US' || row.sizeUnit === 'JP')) &&
     accessories.every((row) => isObject(row) && isReportPhoto(row.photo)) && measurements.every((row) => isObject(row) && (row.unit === undefined || row.unit === 'cm' || row.unit === 'inch'))
 }
 

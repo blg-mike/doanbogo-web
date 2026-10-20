@@ -514,6 +514,7 @@ html.viewer-viewport-locked .viewer-shell { height: 100dvh; min-height: 0; flex:
   .chart-row-counter-settings label { flex: 1 1 170px; justify-content: space-between; }
   .chart-row-counter-settings select { flex: 1; min-width: 90px; }
 }
+
 .progress-connect-options { display: grid; gap: 4px; padding: 3px 6px 6px; }
 .progress-connect-options select { min-width: 0; min-height: 36px; padding: 0 7px; border: 1px solid var(--color-border); border-radius: 7px; color: #3b4960; background: #fff; font: inherit; font-size: 11px; }
 .progress-connect-options button { min-height: 36px; padding: 4px 8px; border: 0; border-radius: 8px; color: inherit; background: var(--color-primary-soft); font: inherit; font-size: 11px; text-align: left; cursor: pointer; }
@@ -1917,4 +1918,51 @@ html.viewer-viewport-locked .viewer-shell { height: 100dvh; min-height: 0; flex:
   .viewer-shell.focus-view .viewer-timer-bar:not(.positioned) { top: 100px; }
   .viewer-shell.focus-view .viewer-focus-restore { width: 44px; min-width: 44px; height: 44px; padding: 0; }
   .viewer-shell.focus-view .viewer-focus-restore span { display: none; }
+}
+
+.counter-panel-view-title { margin: 0 0 2px; color: var(--color-text); font-size: 16px; }
+.counter-main-design-section { display: grid; gap: 0; padding: 12px; border: 1px solid var(--color-divider); border-radius: 12px; background: var(--color-surface); }
+.counter-main-design-section > header,
+.counter-main-aux-section > header { min-height: 34px; display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.counter-main-design-section > header h3,
+.counter-main-aux-section > header h3 { margin: 0; color: var(--color-text); font-size: 13px; }
+.counter-main-design-section > header strong { min-width: 0; overflow: hidden; color: var(--color-text-secondary); font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
+.counter-main-setting-row { min-height: 64px; display: flex; align-items: center; justify-content: space-between; gap: 12px; border-top: 1px solid var(--color-divider); color: var(--color-text-secondary); font-size: 12px; }
+.counter-knitting-mode { width: min(220px, 64%); min-width: 0; display: grid; grid-template-columns: 1fr 1fr; gap: 4px; padding: 4px; border-radius: 10px; background: var(--color-surface-subtle); }
+.counter-knitting-mode button { min-width: 0; min-height: 44px; border: 1px solid transparent; border-radius: 8px; color: var(--color-text-secondary); background: transparent; font: inherit; cursor: pointer; }
+.counter-knitting-mode button.selected { border-color: var(--color-primary); color: var(--color-primary); background: var(--color-primary-soft); font-weight: 650; }
+.counter-goal-setting-row { flex-wrap: wrap; }
+.counter-goal-setting-row > label { display: flex; align-items: center; gap: 6px; }
+.counter-goal-setting-row > label small { color: var(--color-text-muted); font-size: 10px; }
+.counter-goal-input-wrap { min-width: 106px; height: 44px; display: flex; align-items: center; gap: 8px; padding: 0 10px; border: 1px solid var(--color-border); border-radius: 9px; color: var(--color-text-secondary); background: var(--color-surface); }
+.counter-goal-input-wrap input { width: 70px; min-width: 0; height: 40px; padding: 0; border: 0; outline: 0; color: var(--color-text); background: transparent; font: inherit; font-variant-numeric: tabular-nums; }
+.counter-main-aux-section { display: grid; gap: 8px; }
+.counter-main-add-button { min-width: 72px; min-height: 44px; display: inline-flex; align-items: center; justify-content: center; gap: 4px; padding: 0 8px; border: 0; border-radius: 8px; color: var(--color-primary); background: var(--color-primary-soft); font: inherit; font-size: 12px; cursor: pointer; }
+.counter-settings-add-counter { width: 100%; justify-content: flex-start; margin-top: 8px; padding-inline: 10px; }
+.counter-main-aux-list { display: grid; gap: 7px; }
+.counter-main-aux-card { width: 100%; min-width: 0; min-height: 60px; display: grid; grid-template-columns: 12px minmax(0, 1fr) 18px; align-items: center; gap: 10px; padding: 8px 11px; border: 1px solid var(--color-divider); border-radius: 11px; color: var(--color-text-secondary); background: var(--color-surface); text-align: left; font: inherit; cursor: pointer; }
+.counter-main-aux-card:hover:not(:disabled) { border-color: var(--color-primary); background: var(--color-primary-soft); }
+.counter-main-aux-card > svg { color: var(--color-text-muted); }
+.counter-main-aux-color { width: 12px; height: 12px; border: 1px solid var(--color-border); border-radius: 50%; }
+.counter-main-aux-copy { min-width: 0; display: grid; gap: 3px; }
+.counter-main-aux-copy strong,
+.counter-main-aux-copy small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.counter-main-aux-copy strong { color: var(--color-text); font-size: 13px; }
+.counter-main-aux-copy small { color: var(--color-text-muted); font-size: 11px; }
+.counter-panel-editor .counter-editor-management { display: flex; gap: 8px; }
+.counter-panel-editor .counter-editor-management button { min-width: 44px; min-height: 44px; display: inline-flex; align-items: center; justify-content: center; gap: 6px; padding: 0 10px; border: 1px solid var(--color-border); border-radius: 8px; color: var(--color-text-secondary); background: var(--color-surface); font: inherit; cursor: pointer; }
+.counter-panel-editor .counter-editor-management button:last-child { color: var(--color-danger); }
+.counter-panel-editor .counter-editor-management button:hover:not(:disabled) { background: var(--color-surface-subtle); }
+.counter-lap-session-summary { min-height: 60px; grid-template-columns: 12px minmax(0, 1fr) auto 18px; }
+.counter-lap-session-time { grid-column: 2; overflow: hidden; color: var(--color-text); font-size: 13px; font-variant-numeric: tabular-nums; text-overflow: ellipsis; white-space: nowrap; }
+.counter-lap-session-summary > strong { grid-column: 3; grid-row: 1; }
+.counter-lap-session-summary > svg { grid-column: 4; grid-row: 1; }
+
+@media (max-width: 360px) {
+  .counter-main-design-section { padding: 10px; }
+  .counter-main-setting-row { gap: 8px; font-size: 11px; }
+  .counter-knitting-mode { width: min(190px, 62%); }
+  .counter-lap-session-summary { grid-template-columns: 12px minmax(0, 1fr) auto 16px; gap: 5px; padding-inline: 8px; }
+  .counter-lap-session-time { font-size: 12px; }
+  .counter-lap-session-summary > strong { font-size: 12px; }
 }

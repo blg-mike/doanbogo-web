@@ -75,6 +75,7 @@ export function buildInstagramCaption(report: KnittingReport, selected: Instagra
     .filter((value): value is string => Boolean(value))
     .map((value) => '#' + value)
   hashtags.push('#' + t('뜨개기록'))
+  hashtags.push('#니트피크', '#knitpeek')
   sections.push([...new Set(hashtags)].join(' '))
   return sections.filter((section) => section.trim()).join('\n\n')
 }

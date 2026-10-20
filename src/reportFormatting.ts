@@ -18,6 +18,6 @@ export function formatNeedleSize(needle: Pick<ReportNeedle, 'size' | 'sizeUnit'>
   const size = needle.size.trim()
   if (!size || !needle.sizeUnit) return needle.size
   if (needle.sizeUnit === 'mm') return /mm\s*$/i.test(size) ? size : `${size} mm`
-  const notation = needle.sizeUnit
+  const notation = needle.sizeUnit.toUpperCase()
   return new RegExp(`^${notation}\\s`, 'i').test(size) ? size : `${notation} ${size}`
 }

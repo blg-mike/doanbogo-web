@@ -320,6 +320,7 @@ export interface CounterSnapshot {
   taskRecords?: CounterTaskRecord[]
   instructions?: CounterPatternInstruction[]
   goalRow?: number | null
+  knittingMode?: 'flat' | 'round'
   goalFinalSide?: 'rs' | 'ws'
   firstSide?: 'rs' | 'ws'
   goalAlertEnabled?: boolean
@@ -466,7 +467,7 @@ export interface ReportNeedle {
   section: string
   type: string
   size: string
-  sizeUnit?: 'mm' | 'US' | 'JP'
+  sizeUnit?: 'mm' | 'us' | 'uk' | 'jp' | 'US' | 'JP'
   brand?: string
   cableLength: string
   memo: string

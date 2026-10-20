@@ -35,12 +35,12 @@ export function groupCounterTimeLaps(laps: readonly CounterTimeLap[]): CounterTi
     return {
       counterId: first.counterId,
       sessionId: first.sessionId,
-      laps: session,
+      laps: [...session].reverse(),
       startedAt: first.recordedAt - first.durationMs,
       endedAt: last.recordedAt,
       rowCount: Math.max(0, session.reduce((total, lap) => total + lap.rowDelta, 0)),
     }
-  }).sort((first, second) => second.endedAt - first.endedAt)
+  }).sort((first, second) => second.endedAt - first.endedAt || second.startedAt - first.startedAt)
 }
 
 export function normalizeCounterTimeLaps(value: unknown, history: CounterHistoryEntry[] = []): CounterTimeLap[] {
@@ -105,7 +105,7 @@ export function createCounter(kind: CounterKind, name?: string): CounterSnapshot
   const id = crypto.randomUUID()
   const color = DEFAULT_COUNTER_COLORS[kind]
   const common = { id, kind, name: name?.trim() || defaultName(kind), color, pinned: false, value: kind === 'task' ? 0 : 1 }
-  if (kind === 'simple') return { ...common, unit: 'row', firstSide: 'rs', goalAlertEnabled: true }
+  if (kind === 'simple') return { ...common, unit: 'row', knittingMode: 'flat', firstSide: 'rs', goalAlertEnabled: true }
   if (kind === 'pattern') return { ...common, currentRow: 1, patternRow: 1, repeatLength: 1, startRow: 1, instructions: [], patternAlertEnabled: true }
   return { ...common, currentRow: 1, taskKind: 'decrease', firstTaskRow: 4, interval: 6, total: 4, completedCount: 0, nextTaskRow: 4, taskRecords: [] }
 }
@@ -147,7 +147,8 @@ export function isCurrentCounterSnapshots(value: unknown): value is CounterSnaps
       !['simple', 'pattern', 'task'].includes(String(counter.kind)) || typeof counter.name !== 'string' || counter.name.length < 1 || counter.name.length > 100 || typeof counter.color !== 'string' || !/^#[\da-f]{6}$/i.test(counter.color) ||
       typeof counter.pinned !== 'boolean' || !Number.isSafeInteger(counter.value) || Number(counter.value) < 0 || Number(counter.value) > MAX_COUNTER_ROW ||
       (counter.linkedToId !== undefined && (typeof counter.linkedToId !== 'string' || counter.linkedToId.length > 100)) ||
-      (counter.legacyOverflow !== undefined && typeof counter.legacyOverflow !== 'boolean')) return false
+      (counter.legacyOverflow !== undefined && typeof counter.legacyOverflow !== 'boolean') ||
+      (counter.knittingMode !== undefined && counter.knittingMode !== 'flat' && counter.knittingMode !== 'round')) return false
     ids.add(counter.id)
     counts[counter.kind as CounterKind]++
     if (counter.kind === 'simple' && !['row', 'stitch', 'round'].includes(String(counter.unit))) return false
@@ -203,7 +204,7 @@ function migrateLegacyCounters(value: unknown): CounterSnapshot[] {
     const sourceId = 'legacy-counter-' + index
     const valueNumber = integer(entry.value, entry.mode === 'repeat' ? 1 : 0, entry.mode === 'repeat' ? 1 : 0)
     if (entry.mode === 'simple') {
-      result.push({ id: sourceId, kind: 'simple', name: '카운터 ' + (index + 1), color: DEFAULT_COUNTER_COLORS.simple, pinned: false, value: valueNumber, unit: 'row' })
+       result.push({ id: sourceId, kind: 'simple', name: '카운터 ' + (index + 1), color: DEFAULT_COUNTER_COLORS.simple, pinned: false, value: valueNumber, unit: 'row', knittingMode: 'flat' })
       return
     }
     const oldRules = Array.isArray(entry.taskRules) ? entry.taskRules.filter(isLegacyTaskRule).slice(0, MAX_COUNTER_TASK_RULES) : []
@@ -256,6 +257,7 @@ function normalizeNewCounter(value: unknown): CounterSnapshot | null {
   if (kind === 'simple') return {
     ...common,
     unit: value.unit === 'stitch' || value.unit === 'round' ? value.unit : 'row',
+    knittingMode: value.knittingMode === 'round' ? 'round' : 'flat',
     ...(value.goalRow === null ? { goalRow: null } : Number.isSafeInteger(value.goalRow) && Number(value.goalRow) > 0 ? { goalRow: integer(value.goalRow, 1, 1) } : {}),
     ...(value.goalFinalSide === 'rs' || value.goalFinalSide === 'ws' ? { goalFinalSide: value.goalFinalSide } : {}),
     firstSide: value.firstSide === 'ws' ? 'ws' : 'rs',
@@ -380,6 +382,7 @@ export function shouldPlayCounterTaskSound(history: CounterHistoryEntry | undefi
 }
 
 export function counterSideForRow(counter: CounterSnapshot, row: number): 'rs' | 'ws' {
+  if (counter.knittingMode === 'round') return 'rs'
   const target = counter.goalRow && counter.goalFinalSide ? counter.goalRow : 1
   const endSide = counter.goalRow && counter.goalFinalSide ? counter.goalFinalSide : counter.firstSide ?? 'rs'
   return Math.abs(target - row) % 2 === 0 ? endSide : endSide === 'rs' ? 'ws' : 'rs'

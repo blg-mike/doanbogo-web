@@ -46,7 +46,7 @@ describe('counter model', () => {
     expect(counterTimeLapTiming([], 'body', 'viewer', 50_000)).toEqual({ elapsedMs: 0, durationMs: 0 })
   })
 
-  it('groups lap records by counter and session, preserves zero-time records, and sorts newest sessions first', () => {
+  it('groups lap records by counter and session, preserves zero-time records, and sorts newest first', () => {
     const laps = [
       { id: 'old-1', counterId: 'body', sessionId: 'old', historyEntryId: 'h1', elapsedMs: 0, durationMs: 0, rowDelta: 1 as const, rowNumber: 4, recordedAt: 100 },
       { id: 'new-2', counterId: 'body', sessionId: 'new', historyEntryId: 'h3', elapsedMs: 90, durationMs: 60, rowDelta: -1 as const, recordedAt: 320 },
@@ -55,7 +55,7 @@ describe('counter model', () => {
     ]
 
     expect(groupCounterTimeLaps(laps)).toMatchObject([
-      { counterId: 'body', sessionId: 'new', startedAt: 200, endedAt: 320, rowCount: 0, laps: [{ id: 'new-1' }, { id: 'new-2' }] },
+      { counterId: 'body', sessionId: 'new', startedAt: 200, endedAt: 320, rowCount: 0, laps: [{ id: 'new-2' }, { id: 'new-1' }] },
       { counterId: 'sleeve', sessionId: 'new', rowCount: 1 },
       { counterId: 'body', sessionId: 'old', startedAt: 100, endedAt: 100, rowCount: 1, laps: [{ id: 'old-1', durationMs: 0 }] },
     ])
@@ -250,7 +250,15 @@ describe('counter model', () => {
     expect(counterSideForRow(base, 36)).toBe('rs')
     expect(counterSideForRow(base, 35)).toBe('ws')
     expect(counterSideForRow({ ...base, goalRow: null, firstSide: 'ws' }, 1)).toBe('ws')
+    expect(counterSideForRow({ ...base, knittingMode: 'round', firstSide: 'ws', goalFinalSide: 'ws' }, 35)).toBe('rs')
     expect([6, 14, 22, 30].map((row) => nextPatternAlertRow(pattern, row))).toEqual([6, 14, 22, 30])
+  })
+
+  it('defaults saved counters to flat and preserves a valid round mode', () => {
+    const legacyMode = { ...createCounter('simple'), id: 'legacy-mode', knittingMode: undefined }
+    const roundMode = { ...createCounter('simple'), id: 'round-mode', knittingMode: 'round' as const }
+    expect(normalizeCounterSnapshots([legacyMode, roundMode]).map((counter) => counter.knittingMode)).toEqual(['flat', 'round'])
+    expect(isCurrentCounterSnapshots([{ ...roundMode, knittingMode: 'circular' }])).toBe(false)
   })
 
   it('shows due and one-row-ahead alerts for the selected linked counter group', () => {

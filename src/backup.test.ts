@@ -270,6 +270,7 @@ describe('portable workspace backup', () => {
         usedSkeins: '', usedWeight: '150', usedMeters: '', strandCount: '3', needleSizeMm: '5.0', memo: '', leftover: '',
       }], needles: [
         { id: 'needle-new', section: '소매', type: '대바늘', size: '6', sizeUnit: 'US', brand: '치아오구', cableLength: '80cm', memo: '' },
+        { id: 'needle-uk', section: '몸판', type: '대바늘', size: '5', sizeUnit: 'uk', cableLength: '', memo: '' },
         { id: 'needle-legacy', section: '몸판', type: '수입바늘', size: '3.5', cableLength: '', memo: '' },
       ], accessories: [],
       measurements: [{ id: 'size-1', label: '기장', pattern: '54cm', finished: '57cm' }],
@@ -296,7 +297,7 @@ describe('portable workspace backup', () => {
     expect(restored.knittingReports.find((item) => item.id === report.id)?.yarns[0]).toMatchObject({ strandCount: '3', needleSizeMm: '5.0' })
     expect(restored.knittingReports.find((item) => item.id === report.id)).toMatchObject({
       fields: { 'gauge.pattern': '꽈배기 1무늬', 'gauge.beforeWidth': '8', 'gauge.beforeUnit': 'cm', 'gauge.afterHeight': '6', 'gauge.afterUnit': 'inch' },
-      needles: [{ id: 'needle-new', sizeUnit: 'US', brand: '치아오구' }, { id: 'needle-legacy', size: '3.5' }],
+      needles: [{ id: 'needle-new', sizeUnit: 'US', brand: '치아오구' }, { id: 'needle-uk', sizeUnit: 'uk' }, { id: 'needle-legacy', size: '3.5' }],
     })
     expect(restored.documents.find((item) => item.id === documentId)).toMatchObject({ workTimeSessions: [session], workTimeNotes: { [workDate]: '소매를 완성함' } })
 
@@ -315,7 +316,7 @@ describe('portable workspace backup', () => {
     const invalidNeedleEntries = unzipSync(new Uint8Array(await backup.arrayBuffer()))
     const invalidNeedleManifest = JSON.parse(strFromU8(invalidNeedleEntries['manifest.json'])) as { knittingReports: Record<string, unknown>[] }
     const invalidNeedleReport = invalidNeedleManifest.knittingReports.find((item) => item.id === report.id)!
-    ;(invalidNeedleReport.needles as Record<string, unknown>[])[0].sizeUnit = 'us'
+    ;(invalidNeedleReport.needles as Record<string, unknown>[])[0].sizeUnit = 'invalid'
     invalidNeedleEntries['manifest.json'] = strToU8(JSON.stringify(invalidNeedleManifest))
     await expect(readWorkspaceBackup(new File([zipSync(invalidNeedleEntries, { level: 0 })], 'invalid-needle-notation.doanbogo'))).rejects.toThrow()
 
@@ -327,7 +328,7 @@ describe('portable workspace backup', () => {
     expect(await getKnittingReports(imported!.id)).toContainEqual(expect.objectContaining({ yarns: [expect.objectContaining({ strandCount: '3', needleSizeMm: '5.0' })] }))
     expect(await getKnittingReports(imported!.id)).toContainEqual(expect.objectContaining({
       fields: expect.objectContaining({ 'gauge.beforeWidth': '8', 'gauge.afterUnit': 'inch' }),
-      needles: [expect.objectContaining({ sizeUnit: 'US', brand: '치아오구' }), expect.objectContaining({ size: '3.5' })],
+      needles: [expect.objectContaining({ sizeUnit: 'US', brand: '치아오구' }), expect.objectContaining({ sizeUnit: 'uk' }), expect.objectContaining({ size: '3.5' })],
     }))
     await deleteDocument(documentId)
     await deleteDocument(imported!.id)
