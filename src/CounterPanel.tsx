@@ -416,6 +416,7 @@ function CounterSettings({ view, snapshot, counters, timerLinkMode, onSave, onTi
             {!counters.some((counter) => counter.id !== selectedMain?.id) && <p className="counter-settings-note">{t('아직 추가한 카운터가 없습니다.')}</p>}</div>
           </section>
         </> : <>
+          <h2 className="counter-panel-view-title">{t('카운터·타이머 설정')}</h2>
           <section className="counter-global-section"><h3>{t('메인 카운터')}</h3>
             <label className="counter-settings-field">{t('현재 작업')}<select disabled={saving} value={draft.mainId} onChange={(event) => selectMain(event.currentTarget.value)}>{baseCounters.map((counter) => <option key={counter.id} value={counter.id}>{counter.name}{t(' · 현재 ')}{formatNumber(counter.value)}{t('단')}</option>)}</select></label>
             <button ref={addButtonRef} type="button" className="counter-main-add-button counter-settings-add-counter" disabled={saving || kinds.every((kind) => maxCountersForType(counters, kind) >= MAX_COUNTERS_PER_TYPE)} onClick={onAdd}><Plus size={16} />{t('보조 카운터 추가')}</button>
