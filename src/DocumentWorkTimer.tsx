@@ -2,7 +2,7 @@ import { Pause, Play } from 'lucide-react'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { t } from './locales'
-import { addDocumentWorkSessions, addDocumentWorkTime } from './storage'
+import { addDocumentWorkSessions, addDocumentWorkTime, resetDocumentWorkTime } from './storage'
 import type { DocumentWorkTimeDay, DocumentWorkTimeSession } from './types'
 import { formatWorkTime, localWorkDateKey, persistedWorkTimeBase, splitWorkTimeSession } from './workTime'
 import WorkTimeRecordPanel from './WorkTimeRecordPanel'
@@ -226,6 +226,44 @@ export default function DocumentWorkTimer({ documentId, initialTotalWorkTimeMs, 
     if (!await saveSessions(sessions, true)) throw new Error('작업시간을 저장하지 못했습니다.')
   }, [elapsedNow, saveSessions, todayElapsedNow])
 
+  const resetWorkTime = useCallback(async (workDate?: string) => {
+    const manualAdd = manualWorkTimePromiseRef.current
+    if (manualAdd) await manualAdd
+    const shouldResume = runningRef.current
+    if (shouldResume) await pauseAndSave()
+    else if (savePromiseRef.current) await savePromiseRef.current
+    if (savingRef.current) throw new Error('작업시간을 저장 중입니다.')
+
+    savingRef.current = true
+    setSaving(true)
+    onSavingChange(true)
+    try {
+      const totals = await resetDocumentWorkTime(documentId, workDate)
+      pendingSessionsRef.current = pendingSessionsRef.current.filter((session) => workDate !== undefined && session.workDate !== workDate)
+      if (workDate === undefined) {
+        savedSessionIdsRef.current.clear()
+        savedSessionTimeByDateRef.current.clear()
+      } else savedSessionTimeByDateRef.current.delete(workDate)
+      setError(pendingSessionsRef.current.length > 0)
+
+      const currentDate = localWorkDateKey()
+      const currentDateTotal = totals.workTimeDays.find((day) => day.date === currentDate)?.elapsedMs ?? 0
+      if (workDate === undefined || workDate === currentDate) {
+        todayWorkDateRef.current = currentDate
+        todayBaseRef.current = currentDateTotal
+        todaySessionStartElapsedRef.current = elapsedNow()
+        setElapsedMs(currentDateTotal)
+      }
+      onWorkTimeChange({ ...totals, todayWorkDate: currentDate, todayWorkTimeMs: currentDateTotal })
+      return totals
+    } finally {
+      savingRef.current = false
+      setSaving(false)
+      onSavingChange(false)
+      if (shouldResume) startTimer()
+    }
+  }, [documentId, elapsedNow, onSavingChange, onWorkTimeChange, pauseAndSave, startTimer])
+
   useEffect(() => {
     onClockChange({ sessionId, elapsedNow, todayElapsedNow, isRunning: () => runningRef.current, startIfNotStartedToday, pauseAndSave, addWorkTime })
     return () => onClockChange(null)
@@ -292,7 +330,7 @@ export default function DocumentWorkTimer({ documentId, initialTotalWorkTimeMs, 
       {running ? <Pause size={17} /> : <Play size={17} />}
     </button>
     <button type="button" className="viewer-work-timer-elapsed" aria-haspopup="dialog" aria-expanded={recordPanelOpen} aria-label={`${t('오늘 누적 작업시간')} ${formatWorkTime(elapsedMs)} · ${t('작업 기록')}`} title={t('작업 기록')} aria-live="off" onClick={() => onRecordPanelOpenChange(true)}>{formatWorkTime(elapsedMs)}</button>
-    {recordPanelOpen && <WorkTimeRecordPanel documentId={documentId} initialTotalWorkTimeMs={initialTotalWorkTimeMs} initialWorkTimeDays={initialWorkTimeDays} onClose={() => { onRecordPanelOpenChange(false); onRecordPanelBlockingChange?.(false) }} onAddWorkTime={addWorkTime} onInteractionBlockingChange={onRecordPanelBlockingChange} onTotalsChange={(total, days) => {
+    {recordPanelOpen && <WorkTimeRecordPanel documentId={documentId} initialTotalWorkTimeMs={initialTotalWorkTimeMs} initialWorkTimeDays={initialWorkTimeDays} onClose={() => { onRecordPanelOpenChange(false); onRecordPanelBlockingChange?.(false) }} onAddWorkTime={addWorkTime} onResetWorkTime={resetWorkTime} onInteractionBlockingChange={onRecordPanelBlockingChange} onTotalsChange={(total, days) => {
       const currentDate = localWorkDateKey()
       onWorkTimeChange({ totalWorkTimeMs: total, todayWorkDate: currentDate, todayWorkTimeMs: days.find((day) => day.date === currentDate)?.elapsedMs ?? 0, workTimeDays: days })
     }} />}

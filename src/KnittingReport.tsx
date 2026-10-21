@@ -16,10 +16,9 @@ import './ReportDesignSystem.css'
 
 type Props = { documentId: string; fileName: string; pageCount: number; totalWorkTimeMs: number; workTimeDays: DocumentWorkTimeDay[]; reportId?: string; onBack: () => void; onAddWorkTime: (date: string, elapsedMs: number) => Promise<DocumentWorkTimeTotals>; onReportChange?: (reportId: string) => void }
 type FieldKind = 'text' | 'date' | 'number' | 'positiveDecimal' | 'url' | 'multiline' | 'select' | 'tags'
-type DetailId = 'project' | 'pattern' | 'size' | 'yarn' | 'needles' | 'modifications' | 'oneLine' | 'gauge' | 'measurements' | 'fit' | 'yarnMemo' | 'detailMemo' | 'extras'
+type DetailId = 'project' | 'pattern' | 'size' | 'modifications' | 'accessories' | 'yarnMemo'
 
 const featureOptions = '라글란,드롭숄더,브이넥,크롭,오버핏,케이블,배색,탑다운,바텀업'
-const tensionOptions = ['많이 널손', '널손', '보통', '쫀손', '많이 쫀손']
 
 function cleanName(fileName: string) {
   return fileName.replace(/\.pdf$/i, '').trim() || t('뜨개 프로젝트')
@@ -718,14 +717,13 @@ export default function KnittingReport({ documentId, fileName, pageCount, totalW
     })}</div>
   }
 
-  function needleCards(showDetails: boolean) {
+  function needleCards() {
     return loadedReport.needles.map((needle, index) => <article className="report-entry-card compact report-needle-card" key={needle.id}>
       <div className="report-entry-title"><strong>{t("바늘 ")}{index + 1}</strong><button type="button" className="report-icon-button" aria-label={t("바늘 삭제")} onClick={() => removeRow('needles', needle.id)}><Trash2 size={15} /></button></div>
       {rowFields(needle, 'needles', [
         { field: 'type', label: '바늘 종류', kind: 'select', options: [...new Set(['대바늘', '코바늘', '기타', needle.type].filter(Boolean))] },
         { field: 'size', label: '사이즈' }, { field: 'sizeUnit', label: '표기', kind: 'select', options: ['mm', 'us', 'uk', 'jp'], emptyLabel: '기존 표기' },
         { field: 'brand', label: '브랜드' }, { field: 'section', label: '사용 부위' },
-        ...(showDetails ? [{ field: 'cableLength' as const, label: '케이블 길이' }, { field: 'memo' as const, label: '메모', wide: true }] : []),
       ])}
     </article>)
   }
@@ -830,7 +828,7 @@ export default function KnittingReport({ documentId, fileName, pageCount, totalW
     : <div className="knitting-report-error" role="alert">{translateMessage(saveState)}</div>
   const loadedReport = report
   const values = report.fields
-  const detailTitles: Record<DetailId, LocaleKey> = { project: '프로젝트 정보', pattern: '도안 정보', size: '사이즈', yarn: '사용 실', needles: '바늘 · 부자재', modifications: '도안에서 수정한 부분', oneLine: '한줄 기록', gauge: '게이지', measurements: '완성 실측', fit: '핏 · 완성 후기', yarnMemo: '실 메모', detailMemo: '상세 메모', extras: '기타 기록' }
+  const detailTitles: Record<DetailId, LocaleKey> = { project: '프로젝트 정보', pattern: '도안 정보', size: '사이즈', modifications: '도안에서 수정한 부분', accessories: '부자재', yarnMemo: '실 메모' }
   function saveMeasurementSelection(presets: MeasurementEntryDraft[], custom: MeasurementEntryDraft[]) {
     update((current) => ({ ...current, measurements: applyMeasurementSelection(current.measurements, presets, custom) }))
     setMeasurementDialogOpen(false)
@@ -872,49 +870,22 @@ export default function KnittingReport({ documentId, fileName, pageCount, totalW
       {field('pattern.seller', '도안 구매처')}{field('pattern.link', '도안 링크', 'url')}{field('pattern.language', '사용 언어')}
       {field('pattern.features', '디자인 특징', 'tags', featureOptions.split(','), true)}{field('pattern.memo', '도안 메모', 'multiline', undefined, true)}
     </div>
-    if (id === 'size') return <>{field('pattern.originalSizes', '도안 사이즈')}{field('pattern.selectedSize', '뜬 사이즈')}{measurementEditor}</>
-    if (id === 'yarn') return <>{loadedReport.yarns.map((yarn, index) => <article className="report-entry-card" key={yarn.id}>
-      <div className="report-entry-title"><strong>{t("사용 실 ")}{index + 1}</strong><button type="button" className="report-icon-button" aria-label={t("실 삭제")} onClick={() => removeRow('yarns', yarn.id)}><Trash2 size={15} /></button></div>
-      <div className="report-entry-with-photo"><PhotoField label="실 사진" value={yarn.photo} onChange={(photo) => updateRow('yarns', yarn.id, { photo })} onProcessingChange={trackPhotoProcessing} onPreview={setPreviewPhoto} />{rowFields(yarn, 'yarns', [
-        { field: 'brand', label: '브랜드' }, { field: 'product', label: '제품명' }, { field: 'colorName', label: '컬러명' }, { field: 'colorNumber', label: '컬러번호' },
-        { field: 'strandCount', label: '합수', kind: 'number' }, { field: 'needleSizeMm', label: '바늘 크기 (mm)', kind: 'number' },
-        { field: 'usedSkeins', label: '사용 타래 수' }, { field: 'usedWeight', label: '사용 중량 (g)' }, { field: 'usedMeters', label: '사용 길이 (m)' }, { field: 'memo', label: '메모', wide: true },
-        { field: 'lot', label: 'Lot No.' }, { field: 'fiber', label: '성분' }, { field: 'weightClass', label: '실 굵기' }, { field: 'skeinWeight', label: '타래 중량' },
-        { field: 'skeinLength', label: '타래 길이' }, { field: 'recommendedNeedle', label: '권장 바늘' }, { field: 'country', label: '제조국' },
-        { field: 'quantity', label: '구매 수량' }, { field: 'leftover', label: '남은 실' }, { field: 'retailer', label: '구매처' }, { field: 'purchaseLink', label: '구매 링크' }, { field: 'price', label: '구매 가격' },
-      ])}</div></article>)}<button type="button" className="secondary-button report-add-button" onClick={() => update((current) => ({ ...current, yarns: [...current.yarns, makeYarn()] }))}><Plus size={15} />{t("다른 실 추가")}</button></>
-    if (id === 'needles') return <>
-      <div className="report-detail-subheading"><h3>{t("사용 바늘")}</h3><button type="button" className="secondary-button" onClick={() => update((current) => ({ ...current, needles: [...current.needles, makeNeedle()] }))}><Plus size={14} />{t("바늘 추가")}</button></div>
-      {needleCards(true)}
+    if (id === 'size') return <>{field('pattern.originalSizes', '도안 사이즈')}{measurementEditor}</>
+    if (id === 'modifications') return <><p className="report-detail-hint">{t("뜨는 중 남긴 메모에서 후보를 찾습니다. 확인한 내용만 보고서에 추가돼요.")}</p><button type="button" className="secondary-button" disabled={analysisLoading || switching} onClick={() => void analyzeNow()}><Sparkles size={15} />{analysisLoading ? t('찾는 중…') : t('수정사항 다시 찾기')}</button>
+      {loadedReport.modifications.map((item, index) => <article className="report-entry-card compact" key={item.id}><div className="report-entry-title"><strong>{item.section || '수정사항 ' + (index + 1)}</strong><button type="button" className="report-icon-button" aria-label={t("수정사항 삭제")} onClick={() => removeRow('modifications', item.id)}><Trash2 size={15} /></button></div>{rowFields(item, 'modifications', [{ field: 'memo', label: '메모', wide: true }])}</article>)}
+      {!loadedReport.modifications.length && <p className="report-empty-hint">{t("아직 기록된 수정사항이 없어요.")}</p>}<button type="button" className="secondary-button report-add-button" onClick={() => update((current) => ({ ...current, modifications: [...current.modifications, makeModification()] }))}><Plus size={15} />{t("직접 추가")}</button></>
+    if (id === 'accessories') return <>
       <div className="report-detail-subheading"><h3>{t("부자재")}</h3><button type="button" className="secondary-button" onClick={() => update((current) => ({ ...current, accessories: [...current.accessories, makeAccessory()] }))}><Plus size={14} />{t("부자재 추가")}</button></div>
       {loadedReport.accessories.map((accessory, index) => <article className="report-entry-card" key={accessory.id}><div className="report-entry-title"><strong>{t("부자재 ")}{index + 1}</strong><button type="button" className="report-icon-button" aria-label={t("부자재 삭제")} onClick={() => removeRow('accessories', accessory.id)}><Trash2 size={15} /></button></div><PhotoField label="부자재 사진" value={accessory.photo} onChange={(photo) => updateRow('accessories', accessory.id, { photo })} onProcessingChange={trackPhotoProcessing} onPreview={setPreviewPhoto} />{rowFields(accessory, 'accessories', [{ field: 'type', label: '종류' }, { field: 'size', label: '크기' }, { field: 'quantity', label: '수량' }, { field: 'detail', label: '상세', wide: true }])}</article>)}
+      {!loadedReport.accessories.length && <p className="report-empty-hint">{t('필요할 때 다시 확인할 수 있도록 자세히 남겨두세요.')}</p>}
     </>
-    if (id === 'modifications') return <><p className="report-detail-hint">{t("뜨는 중 남긴 메모에서 후보를 찾습니다. 확인한 내용만 보고서에 추가돼요.")}</p><button type="button" className="secondary-button" disabled={analysisLoading || switching} onClick={() => void analyzeNow()}><Sparkles size={15} />{analysisLoading ? t('찾는 중…') : t('수정사항 다시 찾기')}</button>
-      {loadedReport.modifications.map((item, index) => <article className="report-entry-card compact" key={item.id}><div className="report-entry-title"><strong>{item.section || '수정사항 ' + (index + 1)}</strong><button type="button" className="report-icon-button" aria-label={t("수정사항 삭제")} onClick={() => removeRow('modifications', item.id)}><Trash2 size={15} /></button></div>{rowFields(item, 'modifications', [{ field: 'section', label: '구간' }, { field: 'original', label: '도안 값' }, { field: 'changed', label: '실제 변경' }, { field: 'memo', label: '메모', wide: true }])}</article>)}
-      {!loadedReport.modifications.length && <p className="report-empty-hint">{t("아직 기록된 수정사항이 없어요.")}</p>}<button type="button" className="secondary-button report-add-button" onClick={() => update((current) => ({ ...current, modifications: [...current.modifications, makeModification()] }))}><Plus size={15} />{t("직접 추가")}</button></>
-    if (id === 'oneLine') return <>{field('review.nextChanges', '한줄 기록', 'multiline', undefined, true)}<small className="report-field-hint">{t("권장 150자 · 다음에 참고하고 싶은 점이나 다시 뜨고 싶은 마음을 적어 주세요.")}</small></>
-    if (id === 'gauge') return <>{gaugeEditor}<div className="report-fields">
-      {field('gauge.patternStitches', '도안 게이지 · 코')}{field('gauge.patternRows', '도안 게이지 · 단')}{field('gauge.memo', '게이지 메모', 'multiline', undefined, true)}
-    </div><div className="report-tension"><strong>{t("손땀")}</strong><div>{tensionOptions.map((option, index) => <label key={option} className={values['gauge.tension'] === String(index + 1) ? 'selected' : ''}><input type="radio" name="report-tension" value={index + 1} checked={values['gauge.tension'] === String(index + 1)} onChange={() => update((current) => ({ ...current, fields: { ...current.fields, 'gauge.tension': String(index + 1) } }))} />{t(option as LocaleKey)}</label>)}</div></div></>
-    if (id === 'measurements') return <>{measurementEditor}<small className="report-field-hint">{t("항목명과 단위를 원하는 대로 입력할 수 있어요.")}</small></>
-    if (id === 'fit') return <div className="report-fields">
-      {field('review.fit', '핏', 'select', ['작게 느껴짐', '딱 맞음', '여유 있음', '많이 여유 있음'])}{field('review.difficulty', '난이도', 'select', ['쉬움', '보통', '어려움'])}
-      {field('review.satisfaction', '전체 만족도', 'select', ['1점', '2점', '3점', '4점', '5점'])}{field('review.yarnSatisfaction', '실 만족도', 'select', ['1점', '2점', '3점', '4점', '5점'])}
-      {field('review.patternSatisfaction', '도안 만족도', 'select', ['1점', '2점', '3점', '4점', '5점'])}{field('review.makeAgain', '다시 뜰 의향', 'select', ['있음', '없음'])}
-    </div>
     if (id === 'yarnMemo') return <>{field('private.yarnMemo', '실 메모', 'multiline', undefined, true)}<small className="report-field-hint">{t("세탁·촉감·늘어남 등 나중에 다시 볼 내용을 기록합니다.")}</small></>
-    if (id === 'detailMemo') return <>{field('project.memo', '상세 메모', 'multiline', undefined, true)}<small className="report-field-hint">{t("다음 프로젝트를 위해 기억해둘 내용을 자유롭게 적어 주세요.")}</small></>
-    return <div className="report-fields">
-      {field('pattern.source', '도안 출처')}{field('pattern.seller', '도안 구매처')}{field('pattern.link', '도안 링크', 'url')}{field('pattern.language', '사용 언어')}
-      {field('finished.washed', '세탁 여부', 'select', ['예', '아니오'])}{field('finished.washingMethod', '세탁 방법')}{field('finished.blockingMethod', '블로킹 방법')}
-      {field('finished.beforeSize', '세탁 전 크기')}{field('finished.afterSize', '세탁 후 크기')}{field('finished.washMemo', '세탁·블로킹 변화', 'multiline', undefined, true)}
-      {field('review.problems', '문제와 해결', 'multiline', undefined, true)}{field('review.memo', '완성 메모', 'multiline', undefined, true)}
-    </div>
+    return null
   }
   const photoInput = (kind: 'work' | 'finished') => <label className="secondary-button report-photo-add"><Plus size={15} />{t("사진 추가")}<input type="file" accept="image/*" multiple onChange={(event) => { const files = [...(event.currentTarget.files ?? [])]; event.currentTarget.value = ''; if (kind === 'work') void addWorkPhotos(files); else void addFinishedPhotos(files) }} /></label>
 
   const reportTitle = values['project.name'] || report.title || t('프로젝트 이름')
-  const extraDetailIds: DetailId[] = ['project', 'pattern', 'size', 'yarn', 'needles', 'modifications', 'oneLine', 'gauge', 'measurements', 'fit', 'yarnMemo', 'detailMemo', 'extras']
+  const extraDetailIds: DetailId[] = ['pattern', 'size', 'modifications', 'accessories', 'yarnMemo']
 
   return <div className="knitting-report-editor">
     <header className="report-appbar"><button type="button" className="report-appbar-back" aria-label={t("도안으로 돌아가기")} onClick={onBack}><ArrowLeft size={20} /></button><strong>{t("뜨개보고서")}</strong><div className="report-appbar-actions"><span className="report-save-indicator"><i />{translateMessage(saveState)}</span><button type="button" className="report-appbar-share" disabled={switching || processingPhotos || titleEditing} onClick={() => void openCaption()}><Share2 size={15} /><span>{t("공유하기")}</span></button><button ref={moreTriggerRef} type="button" className="report-more-trigger" aria-label={t("보고서 메뉴")} aria-expanded={moreOpen} onClick={() => setMoreOpen((value) => !value)}><Ellipsis size={22} /></button></div>
@@ -939,16 +910,15 @@ export default function KnittingReport({ documentId, fileName, pageCount, totalW
           ])}</article>) : <p className="report-form-empty">{t('필요할 때 다시 확인할 수 있도록 자세히 남겨두세요.')}</p>}
         </section>
         <section className="report-form-card"><header><h2>{t('바늘')}</h2><button type="button" className="report-add-action" onClick={() => update((current) => ({ ...current, needles: [...current.needles, makeNeedle()] }))}><Plus size={18} />{t('바늘 추가')}</button></header>
-          {report.needles.length ? needleCards(false) : <p className="report-form-empty">{t('필요할 때 다시 확인할 수 있도록 자세히 남겨두세요.')}</p>}
+          {report.needles.length ? needleCards() : <p className="report-form-empty">{t('필요할 때 다시 확인할 수 있도록 자세히 남겨두세요.')}</p>}
         </section>
         </div>
-        <section className="report-form-card"><header><h2>{t('완성 실측')}</h2><small>{t('추가 치수')}</small></header>{measurementEditor}</section>
-        <section className="report-form-card"><header><h2>{t('부자재')}</h2><button type="button" className="report-add-action" onClick={() => update((current) => ({ ...current, accessories: [...current.accessories, makeAccessory()] }))}><Plus size={18} />{t('부자재 추가')}</button></header>
-          <div className="report-accessory-table"><div className="report-accessory-head"><span>{t('종류')}</span><span>{t('수량')}</span><span>{t('메모')}</span><span /></div>
-            {report.accessories.map((accessory) => <div className="report-accessory-row" key={accessory.id}>{rowFields(accessory, 'accessories', [{ field: 'type', label: '종류' }, { field: 'quantity', label: '수량' }, { field: 'detail', label: '메모' }])}<button type="button" className="report-remove-action" aria-label={t('부자재 삭제')} onClick={() => removeRow('accessories', accessory.id)}><Trash2 size={16} /></button></div>)}
-          </div>
-          {!report.accessories.length && <p className="report-form-empty">{t('필요할 때 다시 확인할 수 있도록 자세히 남겨두세요.')}</p>}
-        </section>
+        <section className="report-form-card"><header><h2>{t('완성 실측')}</h2></header>{measurementEditor}</section>
+        <section className="report-form-card"><header><h2>{t('핏 · 완성 후기')}</h2></header><div className="report-fields">
+          {field('review.fit', '핏', 'select', ['작게 느껴짐', '딱 맞음', '여유 있음', '많이 여유 있음'])}{field('review.difficulty', '난이도', 'select', ['쉬움', '보통', '어려움'])}
+          {field('review.satisfaction', '전체 만족도', 'select', ['1점', '2점', '3점', '4점', '5점'])}{field('review.yarnSatisfaction', '실 만족도', 'select', ['1점', '2점', '3점', '4점', '5점'])}
+          {field('review.patternSatisfaction', '도안 만족도', 'select', ['1점', '2점', '3점', '4점', '5점'])}{field('review.makeAgain', '다시 뜰 의향', 'select', ['있음', '없음'])}
+        </div></section>
         <section className="report-form-card report-notes-photos"><header><h2>{t('메모 · 사진')}</h2></header><div className="report-notes-photos-content">{field('project.memo', '메모', 'multiline', undefined, true)}
           <div className="report-photo-grid">
         {report.workPhotos.map((photo, index) => <article className="report-photo-tile" key={photo.id} draggable onDragStart={() => setDraggedPhotoId(photo.id)} onDragOver={(event) => event.preventDefault()} onDrop={(event) => { event.preventDefault(); if (draggedPhotoId && draggedPhotoId !== photo.id) reorderWorkPhoto(draggedPhotoId, photo.id); setDraggedPhotoId('') }} onDragEnd={() => setDraggedPhotoId('')}><button type="button" className="report-photo-open" aria-label={`${photo.label || t('작업 과정 사진')} 크게 보기`} onClick={() => setPreviewPhoto(photo.dataUrl)}><img src={photo.dataUrl} alt={photo.label || t('작업 과정')} loading="lazy" decoding="async" /><span>{photo.activityDate || localDateValue(photo.uploadedAt)}</span></button><label className="report-photo-label"><span className="sr-only">{t("작업 사진 설명")}</span><input aria-label={t("작업 사진 설명")} value={photo.label} placeholder={t("작업 내용")} onChange={(event) => updateWorkPhoto(photo.id, { label: event.currentTarget.value })} /></label><label className="report-photo-date"><span className="sr-only">{t("작업 날짜")}</span><input aria-label={t("작업 날짜")} type="date" value={photo.activityDate} onChange={(event) => updateWorkPhoto(photo.id, { activityDate: event.currentTarget.value || localDateValue(photo.uploadedAt) })} /></label><div className="report-photo-tools"><button type="button" draggable onDragStart={(event) => { event.stopPropagation(); setDraggedPhotoId(photo.id) }} aria-label={t("사진 순서 이동 핸들")} title={t("드래그해 순서 변경")}><GripVertical size={16} aria-hidden="true" /></button><button type="button" aria-label={t("사진 앞으로 이동")} title={t("앞으로")} disabled={index === 0} onClick={() => moveWorkPhoto(index, -1)}><ChevronUp size={14} /></button><button type="button" aria-label={t("사진 뒤로 이동")} title={t("뒤로")} disabled={index === report.workPhotos.length - 1} onClick={() => moveWorkPhoto(index, 1)}><ChevronDown size={14} /></button></div><button type="button" className="report-photo-delete" aria-label={t("작업 사진 삭제")} onClick={() => removeReportPhoto('work', photo.id)}><Trash2 size={14} /></button></article>)}

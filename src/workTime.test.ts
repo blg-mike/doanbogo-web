@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { formatWorkTime, formatWorkTimeHoursMinutes, isWorkDateKey, localWorkDateKey, normalizeWorkTimeDays, parseManualWorkTime, persistedWorkTimeBase, splitWorkTimeSession, summarizeWorkTime, workTimeChartBuckets } from './workTime'
+import { formatWorkTime, formatWorkTimeHoursMinutes, isWorkDateKey, localWorkDateKey, normalizeWorkTimeDays, parseManualWorkTime, persistedWorkTimeBase, splitWorkTimeSession, summarizeWorkTime, workTimeChartAxisTicks, workTimeChartBuckets } from './workTime'
 
 describe('work time formatting', () => {
   it('shows hours, minutes, and seconds without wrapping long totals', () => {
@@ -92,5 +92,12 @@ describe('work time formatting', () => {
     expect(monthly).toHaveLength(12)
     expect(monthly.at(-1)).toMatchObject({ key: '2026-10', elapsedMs: 210_000 })
     expect(monthly[0].elapsedMs).toBe(0)
+    expect(workTimeChartBuckets(days, 'day', 30, now)).toHaveLength(30)
+  })
+
+  it('builds readable time-axis ticks for empty, equal, and large work totals', () => {
+    expect(workTimeChartAxisTicks(0)).toEqual([0])
+    expect(workTimeChartAxisTicks(60 * 60_000)).toEqual([60, 45, 30, 15, 0].map((minutes) => minutes * 60_000))
+    expect(workTimeChartAxisTicks(10_000 * 60 * 60_000)).toEqual([600_000, 450_000, 300_000, 150_000, 0].map((minutes) => minutes * 60_000))
   })
 })

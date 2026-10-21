@@ -433,10 +433,6 @@ html.viewer-viewport-locked .viewer-shell { height: 100dvh; min-height: 0; flex:
 .progress-line-overlay > svg { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; pointer-events: none; touch-action: none; }
 .progress-line-overlay button, .progress-line-overlay input, .progress-line-overlay select { pointer-events: auto; }
 .progress-line-popover-layer { position: absolute; z-index: 20; inset: 0; pointer-events: none; }
-.progress-line-nudge-controls { position: absolute; z-index: 1; display: flex; flex-direction: column; align-items: center; transform: translate(-50%, -50%); pointer-events: none; }
-.progress-line-nudge-controls > button { width: 44px; height: 44px; flex: 0 0 44px; display: grid; place-items: center; padding: 0; border: 1px solid var(--color-border); border-radius: 50%; color: var(--color-primary); background: var(--color-surface); box-shadow: 0 2px 8px rgba(27,35,51,.18); cursor: pointer; pointer-events: auto; touch-action: manipulation; }
-.progress-line-nudge-controls > button:hover:not(:disabled) { background: var(--color-primary-soft); }
-.progress-line-nudge-controls > button:disabled { opacity: .45; cursor: not-allowed; }
 .progress-line-menu { position: absolute; z-index: 2; box-sizing: border-box; width: 244px; max-width: calc(100% - 16px); max-height: 430px; display: grid; gap: 3px; overflow: auto; overscroll-behavior: contain; padding: 8px; border: 1px solid #e6eaf1; border-radius: 14px; color: #1f2a3c; background: rgba(255,255,255,.98); box-shadow: 0 8px 28px rgba(27,35,51,.2); pointer-events: auto; }
 .progress-line-menu > button, .progress-line-menu > label { min-height: 44px; display: flex; align-items: center; gap: 8px; padding: 4px 9px; border: 0; border-radius: 8px; color: inherit; background: transparent; font: inherit; font-size: 12px; text-align: left; cursor: pointer; }
 .progress-line-menu > button:hover:not(:disabled) { background: #f1f4fa; }
@@ -558,7 +554,7 @@ html.viewer-viewport-locked .viewer-shell { height: 100dvh; min-height: 0; flex:
 .colorwork-resize-both { position: absolute; z-index: 1; right: -6px; bottom: -6px; width: 18px; height: 18px; padding: 0; border: 1px solid #fff; border-radius: 5px; background: var(--color-primary); box-shadow: 0 1px 4px rgba(23,56,105,.35); touch-action: none; cursor: nwse-resize; }
 .page-note { position: absolute; z-index: 3; display: flex; flex-direction: column; overflow: visible; pointer-events: auto; touch-action: none; }
 .page-note.selected { z-index: 4; outline: 1px dashed var(--color-primary); background: rgba(255,255,255,.86); box-shadow: 0 1px 5px rgba(25,55,95,.16); }
-.text-style-toolbar.viewer-mini-settings-panel { z-index: 6; top: auto; left: auto; width: min(246px, calc(100% - 8px)); max-width: calc(100% - 8px); max-height: min(420px, calc(var(--viewer-viewport-height, 100dvh) - var(--viewer-header-height) - 72px)); overflow-x: hidden; pointer-events: auto; touch-action: auto; }
+.text-style-toolbar.viewer-mini-settings-panel { z-index: 6; max-height: min(420px, calc(var(--viewer-viewport-height, 100dvh) - var(--viewer-header-height) - 72px)); overflow-x: hidden; pointer-events: auto; touch-action: auto; }
 .text-style-toolbar .text-style-color { display: grid; gap: 2px; min-width: 0; color: var(--color-text-muted); font-size: 10px; }
 .text-style-toolbar .text-style-color-presets { flex: 0 0 auto; }
 .text-style-toolbar.viewer-mini-settings-panel .annotation-style-section > label.text-style-size { display: grid; grid-template-columns: minmax(0, 1fr) 52px; align-items: center; }
@@ -740,7 +736,7 @@ html.viewer-viewport-locked .viewer-shell { height: 100dvh; min-height: 0; flex:
   .colorwork-brush-controls { gap: 4px; padding: 0 3px; }
   .colorwork-brush-controls label span { display: none; }
   .colorwork-brush-controls input[type="range"] { width: 38px; }
-  .text-style-toolbar.viewer-mini-settings-panel { width: min(246px, calc(100% - 8px)); padding: 8px; }
+  .text-style-toolbar.viewer-mini-settings-panel { padding: 8px; }
   .viewer-work-timer { gap: 3px; padding-inline: 0; border: 0; background: transparent; }
 }
 @media (any-pointer: coarse) {

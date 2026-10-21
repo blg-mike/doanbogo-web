@@ -379,6 +379,43 @@ export async function addDocumentWorkTime(id: string, elapsedMs: number, workDat
   })
 }
 
+export async function resetDocumentWorkTime(id: string, workDate?: string) {
+  if (workDate !== undefined && !isWorkDateKey(workDate)) throw new Error('작업 날짜가 올바르지 않습니다.')
+  const apply = (document: DocumentRecord, project: HomeProject | undefined) => {
+    const workTimeDays = normalizeWorkTimeDays(document.workTimeDays ?? project?.workTimeDays, document.todayWorkDate ?? project?.todayWorkDate, document.todayWorkTimeMs ?? project?.todayWorkTimeMs)
+    const workTimeSessions = document.workTimeSessions ?? []
+    const resetDayMs = workDate === undefined
+      ? document.totalWorkTimeMs ?? project?.totalWorkTimeMs ?? 0
+      : workTimeDays.find((day) => day.date === workDate)?.elapsedMs ?? workTimeSessions.filter((session) => session.workDate === workDate).reduce((total, session) => total + session.elapsedMs, 0)
+    const totalWorkTimeMs = workDate === undefined ? 0 : Math.max(0, (document.totalWorkTimeMs ?? project?.totalWorkTimeMs ?? 0) - resetDayMs)
+    const todayWorkDate = workDate === undefined ? localWorkDateKey() : document.todayWorkDate ?? project?.todayWorkDate ?? localWorkDateKey()
+    const todayWorkTimeMs = workDate === undefined || todayWorkDate === workDate ? 0 : document.todayWorkTimeMs ?? project?.todayWorkTimeMs ?? 0
+    const nextDays = workDate === undefined ? [] : workTimeDays.filter((day) => day.date !== workDate)
+    const nextSessions = workDate === undefined ? [] : workTimeSessions.filter((session) => session.workDate !== workDate)
+    const nextDocument = { ...document, totalWorkTimeMs, todayWorkDate, todayWorkTimeMs, workTimeDays: nextDays, workTimeSessions: nextSessions }
+    const nextProject = { ...(project ?? documentProject(document)), totalWorkTimeMs, todayWorkDate, todayWorkTimeMs, workTimeDays: nextDays }
+    return { document: nextDocument, project: nextProject, totals: { totalWorkTimeMs, todayWorkDate, todayWorkTimeMs, workTimeDays: nextDays } }
+  }
+  return access(async (db) => {
+    const tx = db.transaction(['documents', 'homeProjects'], 'readwrite')
+    const document = await tx.objectStore('documents').get(id)
+    if (!document) throw new Error('도안을 찾을 수 없습니다.')
+    const project = await tx.objectStore('homeProjects').get('document:' + id)
+    const result = apply(document, project)
+    await tx.objectStore('documents').put(result.document)
+    await tx.objectStore('homeProjects').put(result.project)
+    await tx.done
+    return result.totals
+  }, () => {
+    const document = temporary.documents.get(id)
+    if (!document) throw new Error('도안을 찾을 수 없습니다.')
+    const result = apply(document, temporary.homeProjects.get('document:' + id))
+    temporary.documents.set(id, result.document)
+    temporary.homeProjects.set(result.project.key, result.project)
+    return result.totals
+  })
+}
+
 export async function addDocumentWorkSessions(id: string, sessions: DocumentWorkTimeSession[]) {
   if (!Array.isArray(sessions) || sessions.length > 10_000) throw new Error('작업 세션 정보가 올바르지 않습니다.')
   const ids = new Set<string>()

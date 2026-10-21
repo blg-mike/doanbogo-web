@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { createDefaultPrimaryProgressGuide, DEFAULT_PROGRESS_LINE_THICKNESS, ensurePrimaryProgressGuide, guideRowPosition, keepProgressLinePopoverOpenDuringZoom, migrateProgressGuides, prepareProgressGuidesForDirectInteraction, progressGuideCandidates, progressGuideMoveExceededThreshold, progressGuidePositionAfterNudge, progressLinePopoverPageAnchor, progressLinePopoverPlacement, progressLinePopoverScreenPoint, progressLineStrokeWidth, progressMarkerGeometry, progressMarkerOpacity, progressMarkerProgressFromPointer } from './progressLines'
+import { createDefaultPrimaryProgressGuide, DEFAULT_PROGRESS_LINE_THICKNESS, ensurePrimaryProgressGuide, guideRowPosition, keepProgressLinePopoverOpenDuringZoom, migrateProgressGuides, prepareProgressGuidesForDirectInteraction, progressGuideCandidates, progressGuideMoveExceededThreshold, progressLinePopoverPageAnchor, progressLinePopoverPlacement, progressLinePopoverScreenPoint, progressLineStrokeWidth, progressMarkerGeometry, progressMarkerOpacity, progressMarkerProgressFromPointer } from './progressLines'
 import type { PageWorkRecord } from './types'
 
 function legacyWork(): PageWorkRecord {
@@ -119,50 +119,33 @@ describe('progress line zoom thickness', () => {
     expect(previewMarker.bottom - previewMarker.top).toBeCloseTo(settledMarker.bottom - settledMarker.top)
   })
 
-  it('extends the marker four screen pixels past both sides of the guide at every thickness', () => {
+  it('increases marker length by 80 percent around the guide center at every thickness', () => {
     const strokes = [1, 12, 36]
     const markers = strokes.map((lineStroke) => progressMarkerGeometry(200, lineStroke))
 
-    expect(markers.map(({ top }) => top)).toEqual([195.5, 190, 178])
-    expect(markers.map(({ bottom }) => bottom)).toEqual([204.5, 210, 222])
+    markers.forEach((marker, index) => {
+      expect(marker.bottom - marker.top).toBeCloseTo((strokes[index] + 8) * 1.8)
+      expect((marker.top + marker.bottom) / 2).toBe(200)
+    })
   })
 
-  it('keeps the marker extension screen-fixed through zoom preview scaling', () => {
-    for (const [svgUnitsPerCssPixel, previewScale] of [[1, 1], [2, 1], [2, 0.5]]) {
-      const marker = progressMarkerGeometry(200, 12, svgUnitsPerCssPixel / previewScale)
-      expect((194 - marker.top) / svgUnitsPerCssPixel * previewScale).toBeCloseTo(4)
-      expect((marker.bottom - 206) / svgUnitsPerCssPixel * previewScale).toBeCloseTo(4)
-    }
+  it('keeps preview and final marker lengths consistent after zoom scaling', () => {
+    const initialCssWidth = 300
+    const nextZoom = 1.25
+    const initialZoom = 1
+    const pageWidth = 600
+    const previewScale = nextZoom / initialZoom
+    const previewStroke = progressLineStrokeWidth(4, pageWidth, initialCssWidth, initialZoom)
+    const settledStroke = progressLineStrokeWidth(4, pageWidth, initialCssWidth, nextZoom)
+    const previewMarker = progressMarkerGeometry(200, previewStroke, 1 / previewScale)
+    const settledMarker = progressMarkerGeometry(200, settledStroke)
+
+    expect((previewMarker.bottom - previewMarker.top) * previewScale).toBeCloseTo(settledMarker.bottom - settledMarker.top)
   })
 
   it('renders the marker at twice the line opacity, capped at full opacity', () => {
     expect([0, 0.2, 0.4, 0.6, 1].map(progressMarkerOpacity)).toEqual([0, 0.4, 0.8, 1, 1])
     expect(progressMarkerOpacity(-0.2)).toBe(0)
-  })
-})
-
-describe('progress line vertical movement', () => {
-  it('moves one rendered line thickness and clamps at the page edges', () => {
-    expect(progressGuidePositionAfterNudge(0.5, 12, 600, 'up')).toBeCloseTo(0.48)
-    expect(progressGuidePositionAfterNudge(0.5, 12, 600, 'down')).toBeCloseTo(0.52)
-    expect(progressGuidePositionAfterNudge(0.01, 12, 600, 'up')).toBe(0)
-    expect(progressGuidePositionAfterNudge(0.99, 12, 600, 'down')).toBe(1)
-  })
-
-  it('returns to the original page position after ten down and up steps at every supported zoom', () => {
-    const pageWidth = 600
-    const pageHeight = 2400
-    const fitScale = 0.5
-    for (const thickness of [1, 12, 36]) {
-      for (const zoom of [0.5, 1, 1.25, 2, 5]) {
-        const cssWidth = pageWidth * fitScale * zoom
-        const stroke = progressLineStrokeWidth(thickness, pageWidth, cssWidth, zoom)
-        let position = 0.5
-        for (let i = 0; i < 10; i++) position = progressGuidePositionAfterNudge(position, stroke, pageHeight, 'down')
-        for (let i = 0; i < 10; i++) position = progressGuidePositionAfterNudge(position, stroke, pageHeight, 'up')
-        expect(position).toBeCloseTo(0.5, 9)
-      }
-    }
   })
 })
 
@@ -181,15 +164,14 @@ describe('progress line popover placement', () => {
     expect(progressLinePopoverScreenPoint({ x: 0.25, y: 0.5 }, 400, 600, { a: 2, b: 0, c: 0, d: 2, e: 20, f: 40 })).toEqual({ x: 220, y: 640 })
   })
 
-  it('tries left, right, below, then above while avoiding the arrow controls', () => {
-    const controls = { left: 378, top: 278, right: 422, bottom: 322 }
-    expect(progressLinePopoverPlacement({ x: 400, y: 300 }, size, bounds, controls)).toEqual({ left: 290, top: 330, overlapsControls: false })
+  it('tries left, right, below, then above and keeps the menu inside the viewer', () => {
+    expect(progressLinePopoverPlacement({ x: 400, y: 300 }, size, bounds)).toEqual({ left: 172, top: 220 })
 
-    const nearLeft = progressLinePopoverPlacement({ x: 100, y: 300 }, size, bounds, controls)
-    expect(nearLeft).toEqual({ left: 108, top: 220, overlapsControls: false })
+    const nearLeft = progressLinePopoverPlacement({ x: 100, y: 300 }, size, bounds)
+    expect(nearLeft).toEqual({ left: 108, top: 220 })
 
-    const constrained = progressLinePopoverPlacement({ x: 12, y: 300 }, size, bounds, { left: 0, top: 270, right: 44, bottom: 330 })
-    expect(constrained).toEqual({ left: 8, top: 338, overlapsControls: false })
+    const constrained = progressLinePopoverPlacement({ x: 12, y: 300 }, size, bounds)
+    expect(constrained).toEqual({ left: 20, top: 220 })
   })
 
   it('keeps the popup open for zoom controls and touch gestures on the page', () => {

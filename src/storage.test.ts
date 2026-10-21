@@ -1,6 +1,6 @@
 import 'fake-indexeddb/auto'
 import { describe, expect, it } from 'vitest'
-import { addDocument, addDocumentWorkSessions, addDocumentWorkTime, appendPhotoPages, createPhotoFolder, deleteDocument, deleteKnittingReport, duplicateDocument, getHomeProject, getKnittingReportById, getKnittingReports, getPageRecognition, getPageWork, getPages, getPhotoPage, getPhotoPages, getViewer, listDocuments, listHomeReports, markOpened, normalizePageWork, renameDocument, saveDocumentWorkTimeNote, saveKnittingReport, savePageRecognition, savePageRecords, savePageWork, saveViewer, saveViewerAndPageWorks, setPageFlag, updateTags } from './storage'
+import { addDocument, addDocumentWorkSessions, addDocumentWorkTime, appendPhotoPages, createPhotoFolder, deleteDocument, deleteKnittingReport, duplicateDocument, getHomeProject, getKnittingReportById, getKnittingReports, getPageRecognition, getPageWork, getPages, getPhotoPage, getPhotoPages, getViewer, listDocuments, listHomeReports, markOpened, normalizePageWork, renameDocument, resetDocumentWorkTime, saveDocumentWorkTimeNote, saveKnittingReport, savePageRecognition, savePageRecords, savePageWork, saveViewer, saveViewerAndPageWorks, setPageFlag, updateTags } from './storage'
 import { createCounter } from './smartCounter'
 import type { DocumentRecord, KnittingReport } from './types'
 import { localWorkDateKey } from './workTime'
@@ -98,6 +98,34 @@ describe('local document storage', () => {
       { date: '2026-10-13', elapsedMs: 1_000 },
     ])
     await deleteDocument(legacyDocument.id)
+  })
+
+  it('resets work time by date or in full while keeping work notes', async () => {
+    const document = makeDocument(crypto.randomUUID(), 'Reset work time.pdf', Date.now())
+    await addDocument(document)
+    const firstStart = new Date(2026, 9, 13, 9).getTime()
+    const secondStart = new Date(2026, 9, 14, 10).getTime()
+    const firstDate = localWorkDateKey(new Date(firstStart))
+    const secondDate = localWorkDateKey(new Date(secondStart))
+    const firstSession = { id: 'reset-one:' + firstDate, startedAt: firstStart, endedAt: firstStart + 30 * 60_000, elapsedMs: 30 * 60_000, workDate: firstDate }
+    const secondSession = { id: 'reset-two:' + secondDate, startedAt: secondStart, endedAt: secondStart + 60 * 60_000, elapsedMs: 60 * 60_000, workDate: secondDate }
+    await addDocumentWorkTime(document.id, 60_000, firstDate)
+    await addDocumentWorkTime(document.id, 2 * 60_000, secondDate)
+    await addDocumentWorkSessions(document.id, [firstSession, secondSession])
+    await saveDocumentWorkTimeNote(document.id, firstDate, '메모 유지')
+
+    const daily = await resetDocumentWorkTime(document.id, firstDate)
+
+    expect(daily).toMatchObject({ totalWorkTimeMs: 62 * 60_000, workTimeDays: [{ date: secondDate, elapsedMs: 62 * 60_000 }] })
+    expect((await listDocuments()).find((item) => item.id === document.id)).toMatchObject({ workTimeSessions: [secondSession], workTimeNotes: { [firstDate]: '메모 유지' } })
+    expect(await getHomeProject('document', document.id)).toMatchObject({ totalWorkTimeMs: 62 * 60_000, workTimeDays: [{ date: secondDate, elapsedMs: 62 * 60_000 }] })
+
+    const all = await resetDocumentWorkTime(document.id)
+
+    expect(all).toMatchObject({ totalWorkTimeMs: 0, todayWorkTimeMs: 0, workTimeDays: [] })
+    expect((await listDocuments()).find((item) => item.id === document.id)).toMatchObject({ workTimeSessions: [], workTimeNotes: { [firstDate]: '메모 유지' } })
+    expect(await getHomeProject('document', document.id)).toMatchObject({ totalWorkTimeMs: 0, workTimeDays: [] })
+    await deleteDocument(document.id)
   })
 
   it('stores work sessions idempotently and saves or clears a note by work date', async () => {

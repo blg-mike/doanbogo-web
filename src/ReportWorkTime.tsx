@@ -1,7 +1,8 @@
 import { useState } from 'react'
-import { ChevronRight } from 'lucide-react'
+import { BarChart3 } from 'lucide-react'
 import { formatDate, formatNumber, t } from './locales'
 import type { DocumentWorkTimeDay } from './types'
+import { resetDocumentWorkTime } from './storage'
 import { formatWorkTimeHoursMinutes } from './workTime'
 import WorkTimeRecordPanel from './WorkTimeRecordPanel'
 
@@ -30,8 +31,8 @@ export default function ReportWorkTime({ documentId, totalWorkTimeMs, workTimeDa
       <strong className="report-worktime-total">{durationText(totalWorkTimeMs)}</strong>
       <span className="report-worktime-hint">{t('타이머에서 자동 기록')}</span>
       {workTimeDays.length > 0 && <span className="report-worktime-recent">{[...workTimeDays].sort((left, right) => right.date.localeCompare(left.date)).slice(0, 2).map((day) => <span key={day.date}><time dateTime={day.date}>{formatDate(dayDate(day.date), { month: 'numeric', day: 'numeric' })}</time><b>{durationText(day.elapsedMs)}</b></span>)}</span>}
-      <span className="report-worktime-open">{t('작업시간 기록 보기')} <ChevronRight size={15} aria-hidden="true" /></span>
+      <span className="report-worktime-open">{t('작업시간 기록 보기')} <BarChart3 size={17} aria-hidden="true" /></span>
     </button>
-    {open && <WorkTimeRecordPanel documentId={documentId} initialTotalWorkTimeMs={totalWorkTimeMs} initialWorkTimeDays={workTimeDays} onClose={() => setOpen(false)} onAddWorkTime={onAddWorkTime} onTotalsChange={onTotalsChange} />}
+    {open && <WorkTimeRecordPanel documentId={documentId} initialTotalWorkTimeMs={totalWorkTimeMs} initialWorkTimeDays={workTimeDays} onClose={() => setOpen(false)} onAddWorkTime={onAddWorkTime} onResetWorkTime={(date) => resetDocumentWorkTime(documentId, date)} onTotalsChange={onTotalsChange} />}
   </>
 }

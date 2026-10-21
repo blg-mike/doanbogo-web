@@ -1,5 +1,6 @@
 window.pageMessages = {
   ko: {
+    handsPhotoAlt: "초록색 편물을 뜨는 손과 나무 바늘", patternPhotoAlt: "종이 뜨개 도안과 초록색 편물", pausePhotoAlt: "바늘에 코를 걸어 두고 잠시 쉬는 뜨개 작업 자리", finishedPhotoAlt: "완성한 초록색 니트와 실타래, 나무 바늘", craftPhotoCaption: "실과 바늘에 집중하는 시간.", demoExample: "동작 예시", demoChartAlt: "차트에서 카운터와 연결된 진행선이 한 줄 이동하는 예시", demoMotion: "동작 자동 재생", demoCaption: "단수를 바꾸면 연결된 진행선도 함께 움직여요.",
     faqTwoA: '도안과 작업 내용은 현재 브라우저 저장 공간에 보관됩니다. 기기 간 자동 동기화와 앱 화면에서 사용할 수 있는 백업·복원 기능은 제공하지 않습니다.',
     faqFourA: '브라우저에서 실행되고 화면 크기에 따라 배치가 바뀝니다. 실제 동작은 브라우저와 기기 환경에 따라 달라질 수 있으며, 모든 기기에서의 사용을 보장하지 않습니다.',
     mainNavigationLabel: '주요 메뉴', mobileNavigationLabel: '모바일 메뉴', footerLinksLabel: '서비스 안내', relatedLinksLabel: '관련 안내', brandHomeLabel: '니트피크 홈',
@@ -11,6 +12,7 @@ window.pageMessages = {
     legalKicker: '문서 안내', legalDraftNote: '초안 · 운영자 정보, 문의처와 시행일을 확정하고 번역을 검토한 뒤 공개해야 합니다.',
   },
   en: {
+    handsPhotoAlt: "Hands knitting green wool on wooden needles", patternPhotoAlt: "A paper knitting chart beside green knitted fabric", pausePhotoAlt: "A paused knitting project with stitches held on a wooden needle", finishedPhotoAlt: "Finished green knitwear with yarn and wooden needles", craftPhotoCaption: "A little time for yarn and needles.", demoExample: "Illustrated demo", demoChartAlt: "A linked progress line moves one row as the counter advances", demoMotion: "Play animation", demoCaption: "Change the row count and the linked progress line moves with it.",
     faqTwoA: 'Patterns and work details stay in the current browser storage. Automatic sync and backup or restore controls in the app are not currently available.',
     faqFourA: 'KnitPeek runs in a browser and adjusts its layout to screen size. Behavior can vary by browser and device; use on every device is not guaranteed.',
     mainNavigationLabel: 'Main navigation', mobileNavigationLabel: 'Mobile navigation', footerLinksLabel: 'Service links', relatedLinksLabel: 'Related pages', brandHomeLabel: 'KnitPeek home',
@@ -22,6 +24,7 @@ window.pageMessages = {
     legalKicker: 'Legal information', legalDraftNote: 'Draft · Confirm the operator, contact details, and effective date; review translations before publication.',
   },
   ja: {
+    handsPhotoAlt: "木製の針で緑の編み地を編む手", patternPhotoAlt: "紙の編み図と緑の編み地", pausePhotoAlt: "木製の針に目を休ませた編みかけの作品", finishedPhotoAlt: "完成した緑のニットと毛糸、木製の針", craftPhotoCaption: "糸と針に向き合う時間。", demoExample: "動作イメージ", demoChartAlt: "カウンターに連動した進行線が編み図上で1段移動する例", demoMotion: "アニメーションを再生", demoCaption: "段数を変えると、連動した進行線も一緒に動きます。",
     faqTwoA: '編み図と作業内容は現在のブラウザー保存領域に保存されます。端末間の自動同期や、アプリ画面で使えるバックアップ・復元機能はありません。',
     faqFourA: 'ブラウザーで動作し、画面サイズに応じてレイアウトが変わります。動作はブラウザーや端末によって異なるため、すべての端末での利用を保証するものではありません。',
     mainNavigationLabel: 'メインメニュー', mobileNavigationLabel: 'モバイルメニュー', footerLinksLabel: 'サービス案内', relatedLinksLabel: '関連ページ', brandHomeLabel: 'KnitPeek ホーム',
@@ -33,6 +36,7 @@ window.pageMessages = {
     legalKicker: '文書について', legalDraftNote: '草案 · 公開前に運営者情報、連絡先、施行日を確定し、翻訳を確認してください。',
   },
   de: {
+    handsPhotoAlt: "Hände beim Stricken mit grüner Wolle und Holznadeln", patternPhotoAlt: "Ein Strickdiagramm auf Papier neben grünem Gestrick", pausePhotoAlt: "Ein pausiertes Strickprojekt mit Maschen auf einer Holznadel", finishedPhotoAlt: "Fertiges grünes Strickstück mit Wolle und Holznadeln", craftPhotoCaption: "Ein Moment für Garn und Nadeln.", demoExample: "Funktionsbeispiel", demoChartAlt: "Eine verknüpfte Fortschrittslinie folgt dem Reihenzähler um eine Reihe", demoMotion: "Animation abspielen", demoCaption: "Ändere den Reihenzähler, und die verknüpfte Fortschrittslinie folgt.",
     faqTwoA: 'Muster und Arbeitsdaten bleiben im Speicher des aktuellen Browsers. Automatische Synchronisierung sowie Sicherungs- und Wiederherstellungsfunktionen in der App sind derzeit nicht verfügbar.',
     faqFourA: 'KnitPeek läuft im Browser und passt das Layout an die Bildschirmgröße an. Das Verhalten kann je nach Browser und Gerät variieren; die Nutzung auf jedem Gerät ist nicht garantiert.',
     mainNavigationLabel: 'Hauptnavigation', mobileNavigationLabel: 'Mobile Navigation', footerLinksLabel: 'Service-Links', relatedLinksLabel: 'Verwandte Seiten', brandHomeLabel: 'KnitPeek Startseite',
@@ -44,6 +48,7 @@ window.pageMessages = {
     legalKicker: 'Rechtliche Hinweise', legalDraftNote: 'Entwurf · Betreiber, Kontakt und Datum des Inkrafttretens festlegen und Übersetzungen vor der Veröffentlichung prüfen.',
   },
   da: {
+    handsPhotoAlt: "Hænder, der strikker grønt garn på træpinde", patternPhotoAlt: "Et strikkediagram på papir ved siden af grønt strik", pausePhotoAlt: "Et strikkeprojekt på pause med masker på en træpind", finishedPhotoAlt: "Færdigt grønt strik med garn og træpinde", craftPhotoCaption: "Et øjeblik til garn og pinde.", demoExample: "Illustreret eksempel", demoChartAlt: "En tilknyttet fremgangslinje flyttes én række med tælleren", demoMotion: "Afspil animation", demoCaption: "Når du ændrer rækketallet, følger den tilknyttede fremgangslinje med.",
     faqTwoA: 'Opskrifter og arbejdsdata gemmes i den aktuelle browsers lager. Automatisk synkronisering samt backup og gendannelse i appen er endnu ikke tilgængeligt.',
     faqFourA: 'KnitPeek kører i en browser og tilpasser layoutet til skærmstørrelsen. Funktionen kan variere efter browser og enhed; brug på alle enheder kan ikke garanteres.',
     mainNavigationLabel: 'Hovedmenu', mobileNavigationLabel: 'Mobilmenu', footerLinksLabel: 'Servicelinks', relatedLinksLabel: 'Relaterede sider', brandHomeLabel: 'KnitPeek-forside',
@@ -55,6 +60,7 @@ window.pageMessages = {
     legalKicker: 'Juridisk information', legalDraftNote: 'Udkast · Bekræft operatør, kontakt og ikrafttrædelsesdato, og få oversættelserne gennemgået før offentliggørelse.',
   },
   nb: {
+    handsPhotoAlt: "Hender som strikker grønt garn på trepinner", patternPhotoAlt: "Et strikkediagram på papir ved siden av grønt strikketøy", pausePhotoAlt: "Et strikkeprosjekt på pause med masker på en trepinne", finishedPhotoAlt: "Ferdig grønt strikketøy med garn og trepinner", craftPhotoCaption: "Litt tid til garn og pinner.", demoExample: "Illustrert eksempel", demoChartAlt: "En tilkoblet fremdriftslinje flyttes én rad med telleren", demoMotion: "Spill av animasjon", demoCaption: "Når du endrer radtallet, følger den tilkoblede fremdriftslinjen med.",
     faqTwoA: 'Oppskrifter og arbeidsdata lagres i den gjeldende nettleserens lager. Automatisk synkronisering og funksjoner for sikkerhetskopiering eller gjenoppretting i appen er foreløpig ikke tilgjengelige.',
     faqFourA: 'KnitPeek kjører i en nettleser og tilpasser oppsettet til skjermstørrelsen. Funksjonen kan variere med nettleser og enhet; bruk på alle enheter kan ikke garanteres.',
     mainNavigationLabel: 'Hovedmeny', mobileNavigationLabel: 'Mobilmeny', footerLinksLabel: 'Tjenestelenker', relatedLinksLabel: 'Relaterte sider', brandHomeLabel: 'KnitPeek-forside',
@@ -66,6 +72,7 @@ window.pageMessages = {
     legalKicker: 'Juridisk informasjon', legalDraftNote: 'Utkast · Bekreft operatør, kontakt og ikrafttredelsesdato, og få oversettelsene gjennomgått før publisering.',
   },
   fi: {
+    handsPhotoAlt: "Kädet neulovat vihreää lankaa puupuikoilla", patternPhotoAlt: "Paperinen neulekaavio vihreän neuloksen vieressä", pausePhotoAlt: "Tauolle jätetty neuletyö, jonka silmukat ovat puupuikolla", finishedPhotoAlt: "Valmis vihreä neule, lankakerä ja puupuikot", craftPhotoCaption: "Hetki langalle ja puikoille.", demoExample: "Havainnollistava esimerkki", demoChartAlt: "Laskuriin yhdistetty etenemisviiva siirtyy kaaviossa yhden kerroksen", demoMotion: "Toista animaatio", demoCaption: "Kun muutat kerroslukua, yhdistetty etenemisviiva seuraa mukana.",
     faqTwoA: 'Ohjeet ja työtiedot tallentuvat nykyisen selaimen tallennustilaan. Automaattista synkronointia eikä sovelluksen käyttöliittymässä toimivaa varmuuskopiointia tai palautusta ole tällä hetkellä saatavilla.',
     faqFourA: 'KnitPeek toimii selaimessa ja mukauttaa asettelun näytön kokoon. Toiminta voi vaihdella selaimen ja laitteen mukaan, eikä käyttöä kaikilla laitteilla voida taata.',
     mainNavigationLabel: 'Päävalikko', mobileNavigationLabel: 'Mobiilivalikko', footerLinksLabel: 'Palvelun linkit', relatedLinksLabel: 'Aiheeseen liittyvät sivut', brandHomeLabel: 'KnitPeek-etusivu',

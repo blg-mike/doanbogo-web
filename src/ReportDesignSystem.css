@@ -310,15 +310,6 @@ body:has(.knitting-report-editor) .pwa-dismiss-button:focus-visible { outline: 3
 .knitting-report-editor .report-form-card .report-field { gap: 5px; color: var(--color-text-secondary); font-size: 12px; }
 .knitting-report-editor .report-form-card .report-field.wide { grid-column: 1 / -1; }
 .knitting-report-editor .report-form-empty { margin: 0; color: var(--color-text-secondary); font-size: 13px; line-height: 1.55; }
-.knitting-report-editor .report-accessory-table { display: grid; min-width: 0; overflow: hidden; border: 1px solid var(--color-border); border-radius: 10px; }
-.knitting-report-editor .report-accessory-head,
-.knitting-report-editor .report-accessory-row { min-width: 0; display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1.3fr) 44px; align-items: center; gap: 8px; padding: 7px 8px; }
-.knitting-report-editor .report-accessory-head { min-width: 0; display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1.3fr) 44px; align-items: center; gap: 8px; padding: 7px 8px; }
-.knitting-report-editor .report-accessory-head { color: var(--color-text-secondary); background: var(--color-surface-subtle); font-size: 12px; text-align: center; }
-.knitting-report-editor .report-accessory-row { border-top: 1px solid var(--color-divider); }
-.knitting-report-editor .report-accessory-row .report-fields { display: contents; }
-.knitting-report-editor .report-accessory-row .report-field { min-width: 0; }
-.knitting-report-editor .report-accessory-row .report-field > input { width: 100%; min-width: 0; }
 .knitting-report-editor .report-gauge-editor { min-width: 0; display: grid; gap: 12px; }
 .knitting-report-editor .report-gauge-editor > .report-field { max-width: 360px; }
 .knitting-report-editor .report-gauge-columns { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
@@ -392,7 +383,7 @@ body:has(.knitting-report-editor) .pwa-dismiss-button:focus-visible { outline: 3
 .knitting-report-editor .report-extra-info-body { display: grid; gap: 12px; padding: 14px; }
 .knitting-report-editor .report-extra-info-body > p { margin: 0; color: var(--color-text-secondary); font-size: 13px; }
 .knitting-report-editor .report-extra-detail-buttons { display: grid; grid-template-columns: repeat(auto-fill, minmax(165px, 1fr)); gap: 8px; }
-.knitting-report-editor .report-extra-detail-buttons > button { min-width: 0; min-height: 44px; display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 0 10px; border: 1px solid var(--color-border); border-radius: 8px; color: var(--color-text-secondary); background: var(--color-surface); text-align: left; cursor: pointer; }
+.knitting-report-editor .report-extra-detail-buttons > button { min-width: 0; min-height: 44px; display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 0 10px; border: 1px solid var(--color-border); border-radius: 8px; color: var(--color-text-secondary); background: var(--color-surface); font: inherit; font-size: 11px; text-align: left; cursor: pointer; }
 .knitting-report-editor .report-extra-detail-buttons > button:hover { border-color: var(--color-primary); color: var(--color-primary); background: var(--color-primary-soft); }
 
 .knitting-report-editor .report-worktime-card { width: 100%; min-width: 0; display: grid; gap: 10px; padding: 17px 18px; border: 1px solid var(--color-border); border-radius: 16px; color: var(--color-text); background: var(--color-surface); text-align: left; cursor: pointer; }
@@ -450,19 +441,32 @@ body:has(.knitting-report-editor) .pwa-dismiss-button:focus-visible { outline: 3
 .report-worktime-add-button:disabled { opacity: .5; cursor: wait; }
 .report-worktime-chart-card > header,
 .report-worktime-days > header { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.report-worktime-chart-card > header { flex-wrap: wrap; }
 .report-worktime-chart-card h3,
 .report-worktime-days h3,
 .report-worktime-session-list h3 { margin: 0; color: var(--color-text); font-size: 16px; }
 .report-worktime-chart-card > header > span,
 .report-worktime-days > header > span { color: var(--color-text-secondary); font-size: 12px; }
 .report-worktime-chart-card select { min-height: 44px; padding: 0 10px; border: 1px solid var(--color-border); border-radius: 8px; color: var(--color-text); background: var(--color-surface); }
-.report-worktime-chart { min-width: 0; display: grid; grid-template-columns: repeat(var(--report-worktime-chart-count, 7), minmax(0, 1fr)); align-items: end; gap: 5px; min-height: 148px; }
-.report-worktime-bar-column { min-width: 0; display: grid; grid-template-rows: 20px minmax(0, 1fr) 30px; align-items: end; gap: 5px; text-align: center; }
-.report-worktime-bar-column > b { overflow: hidden; color: var(--color-text-secondary); font-size: 9px; font-weight: 500; text-overflow: clip; white-space: nowrap; }
-.report-worktime-bar-track { height: 100%; display: flex; align-items: end; justify-content: center; }
-.report-worktime-bar-track > i { width: min(100%, 34px); min-height: 0; display: block; border-radius: 7px 7px 2px 2px; background: var(--color-primary); opacity: .66; }
-.report-worktime-bar-column small { color: var(--color-text-secondary); font-size: 10px; line-height: 1.25; overflow-wrap: anywhere; }
-.report-worktime-chart.bars-30 .report-worktime-bar-column > b { visibility: hidden; }
+.report-worktime-axis-title { flex: 1; text-align: center; }
+.report-worktime-chart-layout { min-width: 0; display: grid; grid-template-columns: 48px minmax(0, 1fr); gap: 8px; }
+.report-worktime-y-axis { min-width: 0; display: grid; grid-template-rows: 180px 28px; }
+.report-worktime-y-ticks { display: flex; flex-direction: column; justify-content: space-between; align-items: flex-end; padding-right: 6px; color: var(--color-text-secondary); font-size: 9px; font-variant-numeric: tabular-nums; line-height: 1; }
+.report-worktime-y-ticks.empty { justify-content: flex-end; }
+.report-worktime-y-baseline { border-top: 1px solid var(--color-divider); }
+.report-worktime-chart { min-width: 0; height: 208px; position: relative; display: grid; grid-template-columns: repeat(var(--report-worktime-chart-count, 7), minmax(0, 1fr)); gap: 5px; }
+.report-worktime-chart-grid { position: absolute; inset: 0 0 28px; pointer-events: none; }
+.report-worktime-chart-grid > span { height: 1px; position: absolute; right: 0; left: 0; background: var(--color-divider); }
+.report-worktime-bar-column { min-width: 0; height: 208px; position: relative; z-index: 1; display: grid; grid-template-rows: 180px 28px; align-items: stretch; gap: 0; padding: 0; border: 0; color: var(--color-text-secondary); background: transparent; font: inherit; text-align: center; cursor: pointer; }
+.report-worktime-bar-track { height: 180px; display: flex; align-items: end; justify-content: center; }
+.report-worktime-bar-track > i { width: min(100%, 34px); min-height: 0; display: block; border-radius: 7px 7px 2px 2px; background: var(--color-primary-soft); }
+.report-worktime-bar-column.selected .report-worktime-bar-track > i { background: var(--color-primary); }
+.report-worktime-bar-column small { min-width: 0; overflow: hidden; color: inherit; font-size: 10px; line-height: 28px; text-overflow: clip; white-space: nowrap; }
+.report-worktime-chart.bars-30 .report-worktime-bar-column small { width: max-content; max-width: 56px; position: absolute; bottom: 0; left: 50%; transform: translateX(-50%); }
+.report-worktime-bar-column:hover { background: var(--color-surface-subtle); }
+.report-worktime-chart-selection { min-height: 44px; display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 0 12px; border-radius: 9px; color: var(--color-text-secondary); background: var(--color-surface-subtle); font-size: 12px; }
+.report-worktime-chart-selection > span { min-width: 0; overflow-wrap: anywhere; }
+.report-worktime-chart-selection strong { color: var(--color-text); font-size: 14px; font-variant-numeric: tabular-nums; }
 .report-worktime-days > ol,
 .report-worktime-session-list > ol { display: grid; gap: 0; padding: 0; margin: 0; list-style: none; }
 .report-worktime-days > ol > li { min-width: 0; border-top: 1px solid var(--color-divider); }
@@ -494,12 +498,31 @@ body:has(.knitting-report-editor) .pwa-dismiss-button:focus-visible { outline: 3
 .report-worktime-save { border-color: var(--color-primary) !important; color: var(--color-surface); background: var(--color-primary); }
 .report-worktime-note > div > button:disabled { opacity: .5; cursor: wait; }
 .report-worktime-loading { min-height: 180px; display: grid; place-items: center; color: var(--color-text-secondary); }
+.worktime-record-header-actions { min-width: 0; display: flex; align-items: center; gap: 6px; margin-left: auto; }
+.worktime-record-reset-wrap { position: relative; }
+.worktime-record-reset { width: 44px; height: 44px; display: grid; place-items: center; padding: 0; border: 1px solid var(--color-border); border-radius: 9px; color: var(--color-danger); background: var(--color-surface); cursor: pointer; }
+.worktime-record-reset:hover { background: var(--color-danger-soft); }
+.worktime-record-reset:disabled { opacity: .5; cursor: wait; }
+.worktime-record-reset-menu { width: min(236px, calc(100vw - 24px)); position: absolute; z-index: 5; top: calc(100% + 6px); right: 0; display: grid; gap: 2px; padding: 5px; border: 1px solid var(--color-border); border-radius: 12px; background: var(--color-surface); box-shadow: 0 8px 24px rgba(24, 28, 24, .16); }
+.worktime-record-reset-menu > button { min-width: 0; min-height: 44px; padding: 7px 9px; border: 0; border-radius: 8px; color: var(--color-text); background: transparent; text-align: left; font: inherit; font-size: 12px; cursor: pointer; }
+.worktime-record-reset-menu > button:hover:not(:disabled) { color: var(--color-danger); background: var(--color-danger-soft); }
+.worktime-record-reset-menu > button:disabled { color: var(--color-text-muted); cursor: not-allowed; }
 .worktime-record-add { min-height: 44px; display: inline-flex; align-items: center; justify-content: center; gap: 5px; padding: 0 8px; border: 0; border-radius: 9px; color: var(--color-primary); background: var(--color-primary-soft); font: inherit; font-size: 12px; font-weight: 650; white-space: nowrap; cursor: pointer; }
 .worktime-record-add:disabled { opacity: .5; cursor: wait; }
 .worktime-record-content { min-height: 0; display: grid; align-content: start; gap: 12px; overflow-x: hidden; overflow-y: auto; padding: 16px; overscroll-behavior: contain; }
 .worktime-record-total { display: grid; gap: 4px; padding: 12px 2px 16px; border-bottom: 1px solid var(--color-divider); }
 .worktime-record-total > span { color: var(--color-text-secondary); font-size: 13px; }
 .worktime-record-total > strong { color: var(--color-text); font-size: clamp(25px, 6vw, 32px); font-variant-numeric: tabular-nums; line-height: 1.2; }
+.worktime-record-reset-confirm { display: grid; gap: 9px; padding: 14px; border: 1px solid var(--color-border); border-radius: 14px; background: var(--color-surface); }
+.worktime-record-reset-confirm > h3 { margin: 0; color: var(--color-text); font-size: 14px; }
+.worktime-record-reset-confirm > p { margin: 0; color: var(--color-text-secondary); font-size: 12px; }
+.worktime-record-reset-confirm > label { min-width: 0; display: grid; gap: 5px; color: var(--color-text-secondary); font-size: 12px; }
+.worktime-record-reset-confirm select { box-sizing: border-box; width: 100%; min-height: 44px; padding: 0 11px; border: 1px solid var(--color-border); border-radius: 9px; color: var(--color-text); background: var(--color-surface); font: inherit; font-size: 13px; }
+.worktime-record-reset-confirm > div { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+.worktime-record-reset-confirm > div > button { min-width: 0; min-height: 44px; padding: 0 10px; border: 1px solid var(--color-border); border-radius: 9px; font: inherit; font-size: 13px; font-weight: 650; cursor: pointer; }
+.worktime-record-reset-confirm > div > button:disabled { opacity: .5; cursor: wait; }
+.worktime-record-reset-cancel { color: var(--color-text); background: var(--color-surface); }
+.worktime-record-reset-confirm-button { border-color: var(--color-danger) !important; color: var(--color-surface); background: var(--color-danger); }
 .worktime-record-form { display: grid; gap: 10px; padding: 14px; border: 1px solid var(--color-border); border-radius: 14px; background: var(--color-surface-subtle); }
 .worktime-record-form > header { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
 .worktime-record-form h3,
@@ -582,9 +605,6 @@ body:has(.knitting-report-editor) .pwa-dismiss-button:focus-visible { outline: 3
   .knitting-report-editor .report-measurement-choice-group { grid-template-columns: minmax(80px, .9fr) minmax(0, 1.8fr); gap: 6px; }
   .knitting-report-editor .report-measurement-choice-fields { grid-template-columns: minmax(0, 1fr) 68px; gap: 6px; }
   .knitting-report-editor .report-measurement-dialog-actions { min-height: 60px; padding: 8px 12px; }
-  .knitting-report-editor .report-accessory-head,
-  .knitting-report-editor .report-accessory-row { gap: 4px; padding-right: 5px; padding-left: 5px; }
-  .knitting-report-editor .report-accessory-row .report-field input { font-size: 12px; }
   .knitting-report-editor .report-gauge-columns { gap: 7px; }
   .knitting-report-editor .report-gauge-columns { grid-template-columns: minmax(0, 1fr); }
   .knitting-report-editor .report-gauge-columns > section { gap: 7px; padding: 9px; }
@@ -617,7 +637,8 @@ body:has(.knitting-report-editor) .pwa-dismiss-button:focus-visible { outline: 3
   .report-worktime-summary-stats b,
   .report-worktime-session-stats b { font-size: 12px; }
   .report-worktime-chart { gap: 2px; }
-  .report-worktime-bar-column > b { font-size: 8px; }
+  .report-worktime-chart-layout { grid-template-columns: 42px minmax(0, 1fr); gap: 4px; }
+  .report-worktime-y-ticks { padding-right: 4px; font-size: 8px; }
   .report-worktime-bar-column small { font-size: 9px; }
   .report-worktime-days > ol > li > button { grid-template-columns: 9px 48px minmax(0, 1fr) auto; gap: 6px; }
   .report-worktime-days > ol > li b,

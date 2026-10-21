@@ -426,7 +426,7 @@ function withTextBox(annotation: AnnotationRecord, pageHeight: number): Annotati
   return { ...annotation, points: [{ x: box.x, y: box.y }], boxWidth: box.width, boxHeight: box.height }
 }
 
-export function PdfPage({ pdf, page, paneId, pane, paneGestureOwnerRef, splitView, rotation, active, tool, lineSettings, counters, mainCounterId, annotationStyle, work, colorworkEnabled, workReady, canCreateLimitedAnnotation, pageWorkLoadError, onRetryPageWork, recognitionError, onRetryRecognition, colorworkBrushColor, colorworkBrushOpacity, colorworkEraser, createColorworkRequest, pageLinks, qrLinks, onPageRendered, onActivate, onWorkChange, onChartRowsApply, onZoom, onCenter, onColorworkRequestHandled, onTextToolConsumed, onRegionHighlightToolConsumed }: {
+export function PdfPage({ pdf, page, paneId, pane, paneGestureOwnerRef, splitView, rotation, active, tool, lineSettings, counters, mainCounterId, annotationStyle, work, colorworkEnabled, workReady, canCreateLimitedAnnotation, pageWorkLoadError, onRetryPageWork, recognitionError, onRetryRecognition, colorworkBrushColor, colorworkBrushOpacity, colorworkEraser, createColorworkRequest, pageLinks, qrLinks, textStylePortalTarget, onPageRendered, onActivate, onWorkChange, onChartRowsApply, onZoom, onCenter, onColorworkRequestHandled, onTextToolConsumed, onRegionHighlightToolConsumed }: {
   pdf: PDFDocumentProxy
   page: number
   paneId: PaneId
@@ -454,6 +454,7 @@ export function PdfPage({ pdf, page, paneId, pane, paneGestureOwnerRef, splitVie
   createColorworkRequest: ColorworkCreateRequest | null
   pageLinks: PdfQrLink[] | undefined
   qrLinks: PdfQrLink[] | undefined
+  textStylePortalTarget: HTMLElement | null
   onPageRendered: (pageNumber: number, canvas: HTMLCanvasElement) => void
   onActivate: () => void
   onWorkChange: (work: PageWorkRecord, immediate: boolean, recordHistory?: boolean, historyBefore?: PageWorkRecord, cellChanges?: { index: number; before: ColorworkCell | null; after: ColorworkCell | null }[]) => boolean
@@ -472,7 +473,6 @@ export function PdfPage({ pdf, page, paneId, pane, paneGestureOwnerRef, splitVie
   const detailCanvasRef = useRef<HTMLCanvasElement>(null)
   const annotationLayerRef = useRef<HTMLDivElement>(null)
   const textInputRef = useRef<HTMLTextAreaElement>(null)
-  const textStyleToolbarRef = useRef<HTMLDivElement>(null)
   const colorworkPanelRef = useRef<HTMLDivElement>(null)
   const colorworkCanvasRef = useRef<HTMLCanvasElement>(null)
   const regionPopoverRef = useRef<HTMLDivElement>(null)
@@ -537,7 +537,6 @@ export function PdfPage({ pdf, page, paneId, pane, paneGestureOwnerRef, splitVie
   const [editingNoteId, setEditingNoteId] = useState<string | null>(null)
   const [textDraft, setTextDraft] = useState<{ id: string; value: string } | null>(null)
   const [textPreviewPoint, setTextPreviewPoint] = useState<Point | null>(null)
-  const [textToolbarPosition, setTextToolbarPosition] = useState<Point | null>(null)
   const [fontSizeDraft, setFontSizeDraft] = useState<{ id: string; value: string } | null>(null)
   const regionHighlights = work.regionHighlights ?? EMPTY_REGION_HIGHLIGHTS
   const [regionPreview, setRegionPreview] = useState<RegionHighlight | null>(null)
@@ -1351,25 +1350,6 @@ export function PdfPage({ pdf, page, paneId, pane, paneGestureOwnerRef, splitVie
   useEffect(() => {
     onCenterRef.current = onCenter
   }, [onCenter])
-
-  useLayoutEffect(() => {
-    const layer = annotationLayerRef.current
-    const note = layer?.querySelector('.page-note.selected')
-    const toolbar = textStyleToolbarRef.current
-    if (!active || !layer || !note || !toolbar || !displayedSize) {
-      setTextToolbarPosition(null)
-      return
-    }
-    const layerRect = layer.getBoundingClientRect()
-    const noteRect = note.getBoundingClientRect()
-    const toolbarRect = toolbar.getBoundingClientRect()
-    const left = Math.min(Math.max(0, noteRect.left - layerRect.left), Math.max(0, layerRect.width - toolbarRect.width))
-    let top = noteRect.top - layerRect.top - toolbarRect.height - 8
-    if (top < 0) top = noteRect.bottom - layerRect.top + 8
-    top = Math.min(Math.max(0, top), Math.max(0, layerRect.height - toolbarRect.height))
-    const localCenter = pointFromEvent({ clientX: layerRect.left + left + toolbarRect.width / 2, clientY: layerRect.top + top + toolbarRect.height / 2 }, layer, rotation)
-    setTextToolbarPosition({ x: localCenter.x * layer.clientWidth - toolbar.offsetWidth / 2, y: localCenter.y * layer.clientHeight - toolbar.offsetHeight / 2 })
-  }, [active, selectedNoteId, displayedSize, rotation, work])
 
   function beginRegionHighlight(event: ReactPointerEvent<SVGSVGElement>, point: Point) {
     if (!workReady || !displayedSize || (event.pointerType === 'mouse' && event.button !== 0) || !canCreateLimitedAnnotation('region-highlight')) return
@@ -2702,15 +2682,13 @@ export function PdfPage({ pdf, page, paneId, pane, paneGestureOwnerRef, splitVie
                   {editing && <button type="button" className="note-resize-handle" aria-label={t("노트 크기 조절")} title={t("크기 조절")} onPointerDown={(event) => beginTextTransform(event, annotation, 'resize')} />}
                 </div>
               })}
-              {active && (() => {
+              {active && textStylePortalTarget && (() => {
                 const annotation = work.annotations.find((item) => item.id === selectedNoteId && item.type === 'text' && item.text?.trim())
                 if (!annotation) return null
-                return <div
-                  ref={textStyleToolbarRef}
+                return createPortal(<div
                   className="text-style-toolbar viewer-mini-settings-panel"
                   role="toolbar"
                   aria-label={t("선택한 텍스트 설정")}
-                  style={textToolbarPosition ? { left: textToolbarPosition.x, top: textToolbarPosition.y, transform: 'rotate(' + textNoteCounterRotation(rotation) + 'deg)' } : { left: 0, top: 0, visibility: 'hidden', transform: 'rotate(' + textNoteCounterRotation(rotation) + 'deg)' }}
                   onPointerDown={(event) => event.stopPropagation()}
                 >
                   <section className="viewer-mini-settings-section annotation-style-section">
@@ -2790,7 +2768,7 @@ export function PdfPage({ pdf, page, paneId, pane, paneGestureOwnerRef, splitVie
                       />
                     </label>
                   </section>
-                </div>
+                </div>, textStylePortalTarget)
               })()}
               {tool === 'pan' && pageLinks?.map((link, index) => <a
                 key={'pdf-' + index}

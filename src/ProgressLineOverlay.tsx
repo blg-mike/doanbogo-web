@@ -1,13 +1,13 @@
 import { formatNumber, t, translateMessage, type LocaleKey } from './locales/index'
 import { useEffect, useId, useLayoutEffect, useRef, useState, type CSSProperties, type KeyboardEvent as ReactKeyboardEvent, type PointerEvent as ReactPointerEvent } from 'react'
 import { createPortal } from 'react-dom'
-import { ArrowDown, ArrowUp, ChevronRight, Palette, Plus, Trash2, X } from 'lucide-react'
+import { ChevronRight, Palette, Plus, Trash2, X } from 'lucide-react'
 import { focusBandHeightRatio, focusDimOpacity, guideGeometryForRotation, guidePositionOffsetAfterMove, pageRectToDisplayRect } from './focusGeometry'
 import type { CounterSnapshot, PageRotation, PageWorkRecord, ProgressGuide, ProgressGuideScreenPosition } from './types'
 import { ColorPresetButtons } from './ColorPresetButtons'
 import { DESIGN_SYSTEM_COLORS, PROGRESS_LINE_COLOR_PRESETS } from './designTokens'
 import { useDismissiblePopover } from './useDismissiblePopover'
-import { keepProgressLinePopoverOpenDuringZoom, progressGuideMoveExceededThreshold, progressGuidePositionAfterNudge, progressLinePopoverPageAnchor, progressLinePopoverPlacement, progressLinePopoverScreenPoint, progressLineStrokeWidth, progressMarkerGeometry, progressMarkerOpacity, progressMarkerProgressFromPointer } from './progressLines'
+import { keepProgressLinePopoverOpenDuringZoom, progressGuideMoveExceededThreshold, progressLinePopoverPageAnchor, progressLinePopoverPlacement, progressLinePopoverScreenPoint, progressLineStrokeWidth, progressMarkerGeometry, progressMarkerOpacity, progressMarkerProgressFromPointer } from './progressLines'
 const minimumLength = 0.2
 type StyleField = 'opacity' | 'thickness' | 'dimOpacity' | 'bandHeightRatio'
 
@@ -242,9 +242,8 @@ export function ProgressLineOverlay({ width, height, cssWidth, cssHeight, render
     if (!menuGuideId || !popoverPortalTarget) return
     const panel = menuPanelRef.current
     const menu = panel?.querySelector<HTMLElement>('.progress-line-menu')
-    const controls = panel?.querySelector<HTMLElement>('.progress-line-nudge-controls')
     const scrollArea = popoverPortalTarget.querySelector<HTMLElement>('.pdf-scroll-area')
-    if (!panel || !menu || !controls || !scrollArea) return
+    if (!panel || !menu || !scrollArea) return
 
     let frame = 0
     const updatePosition = () => {
@@ -266,7 +265,6 @@ export function ProgressLineOverlay({ width, height, cssWidth, cssHeight, render
       const availableHeight = bounds.bottom - bounds.top - 16
       if (availableWidth <= 0 || availableHeight <= 0) {
         menu.style.visibility = 'hidden'
-        controls.querySelectorAll<HTMLElement>('button').forEach((button) => { button.style.visibility = 'hidden' })
         return
       }
       menu.style.visibility = ''
@@ -276,26 +274,11 @@ export function ProgressLineOverlay({ width, height, cssWidth, cssHeight, render
       if (!matrix) return
       const pageAnchor = progressLinePopoverPageAnchor(layout.anchor.xRatio, layout.anchor.yOffset, layout.guide.position)
       const anchor = progressLinePopoverScreenPoint(pageAnchor, width, height, matrix)
-      const lineCenter = progressLinePopoverScreenPoint({ x: ((layout.guide.xStartRatio ?? 0.15) + (layout.guide.xEndRatio ?? 0.85)) / 2, y: layout.guide.position }, width, height, matrix)
-      const stroke = guideStrokeWidth(layout.guide, width, cssWidth, renderedZoom, defaultThickness)
-      const gap = stroke * previewScale + 8
-      const controlHeight = 88 + gap
-      const controlBounds = { left: lineCenter.x - 22, right: lineCenter.x + 22, top: lineCenter.y - controlHeight / 2, bottom: lineCenter.y + controlHeight / 2 }
       const panelRect = panel.getBoundingClientRect()
-      controls.style.left = lineCenter.x - panelRect.left + 'px'
-      controls.style.top = lineCenter.y - panelRect.top + 'px'
-      controls.style.gap = gap + 'px'
       const menuRect = menu.getBoundingClientRect()
-      const placement = progressLinePopoverPlacement(anchor, { width: menuRect.width, height: menuRect.height }, bounds, controlBounds)
+      const placement = progressLinePopoverPlacement(anchor, { width: menuRect.width, height: menuRect.height }, bounds)
       menu.style.left = placement.left - panelRect.left + 'px'
       menu.style.top = placement.top - panelRect.top + 'px'
-      const placedMenuRect = menu.getBoundingClientRect()
-      controls.querySelectorAll<HTMLElement>('button').forEach((button) => {
-        const rect = button.getBoundingClientRect()
-        const overlaps = rect.left < placedMenuRect.right && rect.right > placedMenuRect.left && rect.top < placedMenuRect.bottom && rect.bottom > placedMenuRect.top
-        const outside = rect.left < bounds.left || rect.right > bounds.right || rect.top < bounds.top || rect.bottom > bounds.bottom
-        button.style.visibility = overlaps || outside ? 'hidden' : ''
-      })
     }
     const schedule = () => {
       if (frame) return
@@ -578,11 +561,6 @@ export function ProgressLineOverlay({ width, height, cssWidth, cssHeight, render
     const next = updateGuideWork(before, id, changes, rotation, counters, shown)
     if (next === before) return
     onWorkChange(next, true, true, before)
-  }
-
-  function nudgeGuide(guide: ProgressGuide, direction: 'up' | 'down') {
-    const stroke = guideStrokeWidth(guide, width, cssWidth, renderedZoom, defaultThickness)
-    updateGuide(guide.id, { position: progressGuidePositionAfterNudge(guide.position, stroke, height, direction) }, work, guide)
   }
 
   function addMarker(guide: ProgressGuide) {
@@ -879,10 +857,6 @@ export function ProgressLineOverlay({ width, height, cssWidth, cssHeight, render
       const linkedCounterId = guide.linkedCounterId
       const stylePanelOpen = styleGuideId === menuGuideId && styleMenuAnchor !== null
       const popup = <div ref={menuPanelRef} className="progress-line-popover-layer" onPointerDown={(event) => event.stopPropagation()} onPointerMove={(event) => event.stopPropagation()} onPointerUp={(event) => event.stopPropagation()} onPointerCancel={(event) => event.stopPropagation()} onClick={(event) => event.stopPropagation()} onDoubleClick={(event) => event.stopPropagation()} onWheel={(event) => event.stopPropagation()}>
-        <div className="progress-line-nudge-controls" style={{ left: 0, top: 0, gap: 8 }}>
-          <button type="button" aria-label={t('위로 이동')} title={t('위로 이동')} disabled={disabled || guide.position <= 0} onPointerDown={(event) => event.stopPropagation()} onClick={(event) => { event.stopPropagation(); nudgeGuide(guide, 'up') }}><ArrowUp size={18} aria-hidden="true" /></button>
-          <button type="button" aria-label={t('아래로 이동')} title={t('아래로 이동')} disabled={disabled || guide.position >= 1} onPointerDown={(event) => event.stopPropagation()} onClick={(event) => { event.stopPropagation(); nudgeGuide(guide, 'down') }}><ArrowDown size={18} aria-hidden="true" /></button>
-        </div>
         <div className={'progress-line-menu' + (stylePanelOpen ? ' progress-line-style-menu' : '')} role="menu" style={{ left: 0, top: 0, width: 244, maxHeight: 430 }} onPointerDown={(event) => event.stopPropagation()}>
         {styleGuideId === menuGuideId ? <>
           <div className="progress-line-style-header"><strong>{t(guide.role === 'primary' ? "진행선 스타일" : "참고선 스타일")}</strong><button type="button" aria-label={t("닫기")} title={t("닫기")} onClick={() => { setStyleGuideId(null); setMenuGuideId(null); setStyleMenuAnchor(null); menuTriggerRef.current?.focus?.() }}><X size={17} /></button></div>

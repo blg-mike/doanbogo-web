@@ -30,7 +30,15 @@ const embeddedStylesheet = stylesheet.replace(
 if (embeddedStylesheet === stylesheet) throw new Error('The generated icon sprite reference was not found in the homepage stylesheet.')
 if (embeddedStylesheet.includes('@@PRETENDARD_FONT@@')) throw new Error('The local Pretendard font reference was not embedded in the homepage stylesheet.')
 
+const craftImages = await Promise.all([
+  ['KNITTING_HANDS', 'knitting-hands.webp'],
+  ['PATTERN_PHOTO', 'pattern-and-knitting.webp'],
+  ['PAUSE_PHOTO', 'knitting-pause.webp'],
+  ['FINISHED_PHOTO', 'finished-knit.webp'],
+].map(async ([key, file]) => [`@@${key}@@`, `data:image/webp;base64,${(await readFile(resolve(root, 'homepage/assets', file))).toString('base64')}`]))
+
 const replacements = [
+  ...craftImages,
   ['@@LOGO@@', `data:image/png;base64,${logo.toString('base64')}`],
   ['@@VIEWER_IMAGE@@', `data:image/png;base64,${viewer.toString('base64')}`],
   ['@@FAVICON@@', `data:image/png;base64,${favicon.toString('base64')}`],

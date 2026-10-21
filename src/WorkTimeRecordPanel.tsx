@@ -1,10 +1,10 @@
-import { useEffect, useRef, useState, type FormEvent, type KeyboardEvent } from 'react'
-import { ArrowLeft, BarChart3, ChevronDown, Plus, X } from 'lucide-react'
+import { useEffect, useRef, useState, type CSSProperties, type FormEvent, type KeyboardEvent } from 'react'
+import { ArrowLeft, BarChart3, ChevronDown, Plus, RotateCcw, X } from 'lucide-react'
 import { createPortal } from 'react-dom'
 import { formatDate, formatDateTime, formatNumber, t } from './locales'
 import type { DocumentWorkTimeDay, DocumentWorkTimeSession } from './types'
 import { getDocument, saveDocumentWorkTimeNote } from './storage'
-import { formatWorkTimeHoursMinutes, localWorkDateKey, normalizeWorkTimeDays, parseManualWorkTime, summarizeWorkTime, workTimeChartBuckets, type WorkTimeChartMode } from './workTime'
+import { formatWorkTimeHoursMinutes, isWorkDateKey, localWorkDateKey, normalizeWorkTimeDays, parseManualWorkTime, summarizeWorkTime, workTimeChartAxisTicks, workTimeChartBuckets, type WorkTimeChartMode } from './workTime'
 
 type Props = {
   documentId: string
@@ -12,6 +12,7 @@ type Props = {
   initialWorkTimeDays: DocumentWorkTimeDay[]
   onClose: () => void
   onAddWorkTime: (date: string, elapsedMs: number) => Promise<{ totalWorkTimeMs: number; workTimeDays: DocumentWorkTimeDay[] }>
+  onResetWorkTime: (date?: string) => Promise<{ totalWorkTimeMs: number; workTimeDays: DocumentWorkTimeDay[] }>
   onTotalsChange?: (totalWorkTimeMs: number, workTimeDays: DocumentWorkTimeDay[]) => void
   onInteractionBlockingChange?: (blocked: boolean) => void
 }
@@ -32,7 +33,17 @@ function dayDate(date: string) {
   return new Date(date + 'T12:00:00')
 }
 
-export default function WorkTimeRecordPanel({ documentId, initialTotalWorkTimeMs, initialWorkTimeDays, onClose, onAddWorkTime, onTotalsChange, onInteractionBlockingChange }: Props) {
+function chartBucketDate(mode: WorkTimeChartMode, key: string) {
+  return mode === 'month' ? new Date(key + '-01T12:00:00') : dayDate(key)
+}
+
+function chartBucketLabel(mode: WorkTimeChartMode, key: string, compact = false) {
+  const date = chartBucketDate(mode, key)
+  if (compact) return formatDate(date, mode === 'month' ? { month: '2-digit' } : { month: '2-digit', day: '2-digit' })
+  return formatDate(date, mode === 'month' ? { year: 'numeric', month: 'long' } : { dateStyle: 'full' })
+}
+
+export default function WorkTimeRecordPanel({ documentId, initialTotalWorkTimeMs, initialWorkTimeDays, onClose, onAddWorkTime, onResetWorkTime, onTotalsChange, onInteractionBlockingChange }: Props) {
   const [record, setRecord] = useState<WorkTimeRecord>(() => ({ totalWorkTimeMs: initialTotalWorkTimeMs, workTimeDays: initialWorkTimeDays, sessions: [], notes: {} }))
   const [loading, setLoading] = useState(true)
   const [loadError, setLoadError] = useState(false)
@@ -40,7 +51,13 @@ export default function WorkTimeRecordPanel({ documentId, initialTotalWorkTimeMs
   const [view, setView] = useState<'records' | 'stats'>('records')
   const [mode, setMode] = useState<WorkTimeChartMode>('day')
   const [dailyRange, setDailyRange] = useState(7)
+  const [selectedBucketKey, setSelectedBucketKey] = useState<{ documentId: string; key: string } | null>(null)
   const [expandedDate, setExpandedDate] = useState('')
+  const [resetMenuOpen, setResetMenuOpen] = useState(false)
+  const [resetMode, setResetMode] = useState<'date' | 'all' | null>(null)
+  const [resetDate, setResetDate] = useState('')
+  const [resetting, setResetting] = useState(false)
+  const [resetError, setResetError] = useState('')
   const [adding, setAdding] = useState(false)
   const [date, setDate] = useState(localWorkDateKey())
   const [hours, setHours] = useState('0')
@@ -51,11 +68,16 @@ export default function WorkTimeRecordPanel({ documentId, initialTotalWorkTimeMs
   const [savingNote, setSavingNote] = useState(false)
   const [noteError, setNoteError] = useState('')
   const savingRef = useRef(false)
+  const resettingRef = useRef(false)
   const noteSavingRef = useRef(false)
   const closeRef = useRef<HTMLButtonElement>(null)
+  const resetMenuRef = useRef<HTMLDivElement>(null)
+  const resetButtonRef = useRef<HTMLButtonElement>(null)
+  const resetDateRef = useRef<HTMLSelectElement>(null)
+  const resetConfirmRef = useRef<HTMLButtonElement>(null)
   const initialRecordRef = useRef({ totalWorkTimeMs: initialTotalWorkTimeMs, workTimeDays: initialWorkTimeDays })
   const onTotalsChangeRef = useRef(onTotalsChange)
-  const closeLocked = saving || savingNote
+  const closeLocked = saving || savingNote || resetting
 
   useEffect(() => {
     const previouslyFocused = document.activeElement instanceof HTMLElement ? document.activeElement : null
@@ -66,6 +88,20 @@ export default function WorkTimeRecordPanel({ documentId, initialTotalWorkTimeMs
   }, [documentId])
 
   useEffect(() => { onTotalsChangeRef.current = onTotalsChange }, [onTotalsChange])
+
+  useEffect(() => {
+    if (!resetMenuOpen) return
+    const closeOnOutside = (event: PointerEvent) => {
+      if (event.target instanceof Node && !resetMenuRef.current?.contains(event.target)) setResetMenuOpen(false)
+    }
+    document.addEventListener('pointerdown', closeOnOutside)
+    return () => document.removeEventListener('pointerdown', closeOnOutside)
+  }, [resetMenuOpen])
+
+  useEffect(() => {
+    if (resetMode === 'date') requestAnimationFrame(() => resetDateRef.current?.focus())
+    else if (resetMode === 'all') requestAnimationFrame(() => resetConfirmRef.current?.focus())
+  }, [resetMode])
 
   useEffect(() => {
     let active = true
@@ -97,23 +133,35 @@ export default function WorkTimeRecordPanel({ documentId, initialTotalWorkTimeMs
   for (const [workDate, elapsedMs] of sessionTotals) if (!displayDaysMap.has(workDate)) displayDaysMap.set(workDate, elapsedMs)
   const displayDays = [...displayDaysMap].map(([workDate, elapsedMs]) => ({ date: workDate, elapsedMs })).filter((day) => day.elapsedMs > 0).sort((left, right) => left.date.localeCompare(right.date))
   const summary = summarizeWorkTime(record.totalWorkTimeMs, displayDays)
-  const sortedDays = [...displayDays].sort((left, right) => right.date.localeCompare(left.date))
-  const ordinals = new Map(displayDays.map((day, index) => [day.date, index + 1]))
+  const recordDaysMap = new Map(displayDaysMap)
+  for (const workDate of Object.keys(record.notes)) if (isWorkDateKey(workDate) && !recordDaysMap.has(workDate)) recordDaysMap.set(workDate, 0)
+  const sortedDays = [...recordDaysMap].map(([workDate, elapsedMs]) => ({ date: workDate, elapsedMs })).sort((left, right) => right.date.localeCompare(left.date))
+  const ordinals = new Map([...sortedDays].reverse().map((day, index) => [day.date, index + 1]))
+  const hasResettableTime = record.totalWorkTimeMs > 0 || sortedDays.some((day) => day.elapsedMs > 0) || record.sessions.length > 0
   const activeNote = noteDraft.date === expandedDate ? noteDraft.value : record.notes[expandedDate] ?? ''
   const noteHasDraft = Boolean(noteDraft.date && noteDraft.date === expandedDate && noteDraft.value !== (record.notes[expandedDate] ?? ''))
   const bucketCount = mode === 'day' ? dailyRange : mode === 'week' ? 8 : 12
   const buckets = workTimeChartBuckets(displayDays, mode, bucketCount)
-  const chartMax = Math.max(1, ...buckets.map((bucket) => bucket.elapsedMs))
+  const dataMax = Math.max(0, ...buckets.map((bucket) => bucket.elapsedMs))
+  const chartTicks = workTimeChartAxisTicks(dataMax)
+  const chartScaleMax = chartTicks[0] ?? 0
+  const selectedBucket = buckets.find((bucket) => selectedBucketKey?.documentId === documentId && bucket.key === selectedBucketKey.key) ?? [...buckets].reverse().find((bucket) => bucket.elapsedMs > 0)
+  const selectedBucketIndex = selectedBucket ? buckets.findIndex((bucket) => bucket.key === selectedBucket.key) : 0
+  const chartButtons = useRef<Array<HTMLButtonElement | null>>([])
 
   useEffect(() => {
-    onInteractionBlockingChange?.(adding || closeLocked || noteHasDraft)
-  }, [adding, closeLocked, noteHasDraft, onInteractionBlockingChange])
+    onInteractionBlockingChange?.(adding || closeLocked || noteHasDraft || resetMode !== null)
+  }, [adding, closeLocked, noteHasDraft, onInteractionBlockingChange, resetMode])
 
   function handleKeyDown(event: KeyboardEvent<HTMLElement>) {
     if (event.key === 'Escape') {
       event.preventDefault()
       event.stopPropagation()
-      if (!closeLocked) onClose()
+      if (!closeLocked) {
+        if (resetMode) { setResetMode(null); setResetError(''); requestAnimationFrame(() => resetButtonRef.current?.focus()) }
+        else if (resetMenuOpen) { setResetMenuOpen(false); resetButtonRef.current?.focus() }
+        else onClose()
+      }
       return
     }
     if (event.key !== 'Tab') return
@@ -130,6 +178,8 @@ export default function WorkTimeRecordPanel({ documentId, initialTotalWorkTimeMs
   }
 
   function startAdd() {
+    setResetMenuOpen(false)
+    setResetMode(null)
     setDate(localWorkDateKey())
     setHours('0')
     setMinutes('0')
@@ -137,10 +187,63 @@ export default function WorkTimeRecordPanel({ documentId, initialTotalWorkTimeMs
     setAdding(true)
   }
 
+  function openReset(mode: 'date' | 'all') {
+    if (mode === 'date' && !sortedDays.some((day) => day.elapsedMs > 0)) return
+    if (mode === 'all' && !hasResettableTime) return
+    setResetMenuOpen(false)
+    setAdding(false)
+    setResetDate(sortedDays.find((day) => day.elapsedMs > 0)?.date ?? '')
+    setResetError('')
+    setResetMode(mode)
+  }
+
+  async function confirmReset() {
+    if (!resetMode || resettingRef.current || savingRef.current || noteSavingRef.current) return
+    const targetDate = resetMode === 'date' ? resetDate : undefined
+    if (resetMode === 'date' && (!targetDate || !sortedDays.some((day) => day.date === targetDate && day.elapsedMs > 0))) return
+    resettingRef.current = true
+    setResetting(true)
+    setResetError('')
+    try {
+      const totals = await onResetWorkTime(targetDate)
+      const workTimeDays = normalizeWorkTimeDays(totals.workTimeDays)
+      setRecord((current) => ({
+        ...current,
+        totalWorkTimeMs: totals.totalWorkTimeMs,
+        workTimeDays,
+        sessions: current.sessions.filter((session) => targetDate !== undefined && session.workDate !== targetDate),
+      }))
+      onTotalsChangeRef.current?.(totals.totalWorkTimeMs, workTimeDays)
+      if (!targetDate || expandedDate === targetDate) setExpandedDate('')
+      setResetMode(null)
+      requestAnimationFrame(() => resetButtonRef.current?.focus())
+    } catch {
+      setResetError(t('작업시간을 초기화하지 못했습니다.'))
+    } finally {
+      resettingRef.current = false
+      setResetting(false)
+    }
+  }
+
   function retryLoad() {
     setLoading(true)
     setLoadError(false)
     setLoadAttempt((attempt) => attempt + 1)
+  }
+
+  function handleChartKeyDown(event: KeyboardEvent<HTMLButtonElement>, index: number) {
+    if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') return
+    event.preventDefault()
+    const nextIndex = (index + (event.key === 'ArrowRight' ? 1 : -1) + buckets.length) % buckets.length
+    const nextBucket = buckets[nextIndex]
+    if (!nextBucket) return
+    setSelectedBucketKey({ documentId, key: nextBucket.key })
+    chartButtons.current[nextIndex]?.focus()
+  }
+
+  function chartTickText(milliseconds: number) {
+    const { hours, minutes } = formatWorkTimeHoursMinutes(milliseconds)
+    return `${formatNumber(Number(hours), { minimumIntegerDigits: 2 })}:${formatNumber(Number(minutes), { minimumIntegerDigits: 2 })}`
   }
 
   async function submitAdd(event: FormEvent<HTMLFormElement>) {
@@ -189,7 +292,16 @@ export default function WorkTimeRecordPanel({ documentId, initialTotalWorkTimeMs
       <header className="report-worktime-dialog-header">
         {view === 'stats' && <button type="button" className="report-worktime-back" aria-label={t('뒤로')} onClick={() => setView('records')}><ArrowLeft size={19} /></button>}
         <h2 id="report-worktime-title">{view === 'stats' ? t('통계') : t('작업 기록')}</h2>
-        {view === 'records' && <button type="button" className="worktime-record-add" disabled={loading || closeLocked} onClick={startAdd}><Plus size={16} />{t('시간 추가')}</button>}
+        {view === 'records' && <div className="worktime-record-header-actions">
+          <div className="worktime-record-reset-wrap" ref={resetMenuRef}>
+            <button ref={resetButtonRef} type="button" className="worktime-record-reset" aria-label={t('작업시간 초기화')} title={t('작업시간 초기화')} aria-expanded={resetMenuOpen} aria-controls="worktime-reset-menu" disabled={loading || closeLocked} onClick={() => setResetMenuOpen((open) => !open)}><RotateCcw size={17} /></button>
+            {resetMenuOpen && <div id="worktime-reset-menu" className="worktime-record-reset-menu" role="group" aria-label={t('작업시간 초기화')}>
+              <button type="button" disabled={closeLocked || !sortedDays.some((day) => day.elapsedMs > 0)} onClick={() => openReset('date')}>{t('날짜별 작업시간 초기화')}</button>
+              <button type="button" disabled={closeLocked || !hasResettableTime} onClick={() => openReset('all')}>{t('전체 작업시간 초기화')}</button>
+            </div>}
+          </div>
+          <button type="button" className="worktime-record-add" disabled={loading || closeLocked} onClick={startAdd}><Plus size={16} />{t('시간 추가')}</button>
+        </div>}
         <button ref={closeRef} type="button" className="report-worktime-close" aria-label={t('닫기')} disabled={closeLocked} onClick={onClose}><X size={19} /></button>
       </header>
       {loadError && <div className="worktime-record-load-error" role="alert"><span>{t('작업 기록을 불러오지 못했습니다.')}</span><button type="button" disabled={loading} onClick={retryLoad}>{t('다시 시도')}</button></div>}
@@ -199,14 +311,34 @@ export default function WorkTimeRecordPanel({ documentId, initialTotalWorkTimeMs
           <span><small>{t('작업일 평균')}</small><b>{durationText(summary.averageMs)}</b></span>
           <span><small>{t('최장 작업일')}</small><b>{durationText(summary.longestDayMs)}</b></span>
         </div>{summary.unknownMs > 0 && <p>{t('날짜 미상 기록')}: {durationText(summary.unknownMs)}</p>}</section>
-        <section className="report-worktime-chart-card"><header><h3>{t(mode === 'day' ? '일별' : mode === 'week' ? '주간' : '월간')}</h3>{mode === 'day' ? <select aria-label={t('최근 7일')} value={dailyRange} onChange={(event) => setDailyRange(Number(event.currentTarget.value))}><option value={7}>{t('최근 7일')}</option><option value={30}>{t('최근 30일')}</option></select> : <span>{t(mode === 'week' ? '최근 8주' : '최근 12개월')}</span>}</header>
+        <section className="report-worktime-chart-card"><header><h3>{t(mode === 'day' ? '일별' : mode === 'week' ? '주간' : '월간')}</h3><span className="report-worktime-axis-title">{t('작업 시간')} · HH:MM</span>{mode === 'day' ? <select aria-label={t('최근 7일')} value={dailyRange} onChange={(event) => setDailyRange(Number(event.currentTarget.value))}><option value={7}>{t('최근 7일')}</option><option value={30}>{t('최근 30일')}</option></select> : <span>{t(mode === 'week' ? '최근 8주' : '최근 12개월')}</span>}</header>
           <nav className="report-worktime-tabs" aria-label={t('통계')}>
             {(['day', 'week', 'month'] as const).map((item) => <button key={item} type="button" aria-pressed={mode === item} className={mode === item ? 'selected' : ''} onClick={() => setMode(item)}>{t(item === 'day' ? '일별' : item === 'week' ? '주간' : '월간')}</button>)}
           </nav>
-          <div className={'report-worktime-chart bars-' + buckets.length} role="img" aria-label={mode === 'day' ? t('최근 기록 {count}일', { count: bucketCount }) : t(mode === 'week' ? '최근 8주' : '최근 12개월')}>{buckets.map((bucket) => <div className="report-worktime-bar-column" key={bucket.key} title={`${bucket.label}: ${durationText(bucket.elapsedMs)}`}><b>{bucket.elapsedMs > 0 ? durationText(bucket.elapsedMs) : ''}</b><span className="report-worktime-bar-track"><i style={{ height: `${bucket.elapsedMs ? Math.max(5, bucket.elapsedMs / chartMax * 100) : 0}%` }} /></span><small>{bucket.label}</small></div>)}</div>
+          <div className="report-worktime-chart-layout">
+            <div className="report-worktime-y-axis" aria-hidden="true"><div className={'report-worktime-y-ticks' + (chartScaleMax ? '' : ' empty')}>{chartTicks.map((tick) => <span key={tick}>{chartTickText(tick)}</span>)}</div><span className="report-worktime-y-baseline" /></div>
+            <div className={'report-worktime-chart bars-' + buckets.length} role="group" aria-label={mode === 'day' ? t('최근 기록 {count}일', { count: bucketCount }) : t(mode === 'week' ? '최근 8주' : '최근 12개월')} style={{ '--report-worktime-chart-count': buckets.length } as CSSProperties}>
+              <div className="report-worktime-chart-grid" aria-hidden="true">{chartTicks.map((tick) => <span key={tick} style={{ bottom: `${chartScaleMax ? tick / chartScaleMax * 100 : 0}%` }} />)}</div>
+              {buckets.map((bucket, index) => {
+                const labelVisible = buckets.length !== 30 || index % 6 === 0 || index === buckets.length - 1
+                const selected = selectedBucket?.key === bucket.key
+                const label = chartBucketLabel(mode, bucket.key, true)
+                return <button ref={(element) => { chartButtons.current[index] = element }} type="button" className={'report-worktime-bar-column' + (selected ? ' selected' : '')} key={bucket.key} title={`${chartBucketLabel(mode, bucket.key)}: ${durationText(bucket.elapsedMs)}`} aria-label={`${t(mode === 'day' ? '일별' : mode === 'week' ? '주간' : '월간')} ${chartBucketLabel(mode, bucket.key)}, ${durationText(bucket.elapsedMs)}`} aria-pressed={selected} tabIndex={index === selectedBucketIndex ? 0 : -1} onClick={() => setSelectedBucketKey({ documentId, key: bucket.key })} onKeyDown={(event) => handleChartKeyDown(event, index)}><span className="report-worktime-bar-track"><i style={{ height: `${chartScaleMax ? bucket.elapsedMs / chartScaleMax * 100 : 0}%` }} /></span><small aria-hidden={!labelVisible}>{labelVisible ? label : ''}</small></button>
+              })}
+            </div>
+          </div>
+          <div className="report-worktime-chart-selection" aria-live="polite">{selectedBucket ? <><span>{chartBucketLabel(mode, selectedBucket.key)}</span><strong>{durationText(selectedBucket.elapsedMs)}</strong></> : <span>{t('선택 기간의 작업시간 기록이 없습니다.')}</span>}</div>
         </section>
       </div> : <div className="worktime-record-content">
         <section className="worktime-record-total"><span>{t('총 작업시간')}</span><strong>{durationText(record.totalWorkTimeMs)}</strong></section>
+        {resetMode && <section className="worktime-record-reset-confirm" aria-labelledby="worktime-reset-title">
+          <h3 id="worktime-reset-title">{t(resetMode === 'date' ? '날짜별 작업시간 초기화' : '전체 작업시간 초기화')}</h3>
+          <p>{t(resetMode === 'date' ? '선택한 날짜의 작업시간과 세션 기록을 초기화합니다.' : '누적 작업시간과 모든 세션 기록을 초기화합니다.')}</p>
+          <p>{t('작업 메모는 유지됩니다.')}</p>
+          {resetMode === 'date' && <label>{t('초기화할 날짜')}<select ref={resetDateRef} value={resetDate} disabled={closeLocked} onChange={(event) => setResetDate(event.currentTarget.value)}>{sortedDays.filter((day) => day.elapsedMs > 0).map((day) => <option key={day.date} value={day.date}>{formatDate(dayDate(day.date), { year: 'numeric', month: '2-digit', day: '2-digit' })} · {durationText(day.elapsedMs)}</option>)}</select></label>}
+          {resetError && <p className="worktime-record-error" role="alert">{resetError}</p>}
+          <div><button type="button" className="worktime-record-reset-cancel" disabled={closeLocked} onClick={() => { setResetMode(null); setResetError(''); requestAnimationFrame(() => resetButtonRef.current?.focus()) }}>{t('취소')}</button><button ref={resetMode === 'all' ? resetConfirmRef : null} type="button" className="worktime-record-reset-confirm-button" disabled={closeLocked || resetMode === 'date' && !resetDate} onClick={() => void confirmReset()}>{resetting ? t('초기화 중…') : t('초기화')}</button></div>
+        </section>}
         {adding && <form className="worktime-record-form" onSubmit={(event) => void submitAdd(event)}>
           <header><h3>{t('작업시간 추가')}</h3><button type="button" aria-label={t('입력 취소')} disabled={closeLocked} onClick={() => { setAdding(false); setAddError('') }}><X size={17} /></button></header>
           <label>{t('작업 날짜')}<input type="date" value={date} required disabled={closeLocked} onChange={(event) => setDate(event.currentTarget.value)} /></label>

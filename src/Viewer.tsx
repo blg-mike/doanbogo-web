@@ -470,6 +470,7 @@ export default function Viewer() {
   const [miniBarSettingsState, setMiniBarSettingsState] = useState(() => ({ documentId: id, open: false }))
   if (miniBarSettingsState.documentId !== id) setMiniBarSettingsState({ documentId: id, open: false })
   const miniBarSettingsOpen = miniBarSettingsState.documentId === id && miniBarSettingsState.open
+  const [textStylePortalTarget, setTextStylePortalTarget] = useState<HTMLDivElement | null>(null)
   const setMiniBarSettingsOpen = useCallback((nextOpen: boolean | ((open: boolean) => boolean)) => {
     setMiniBarSettingsState((current) => ({ documentId: id, open: typeof nextOpen === 'function' ? nextOpen(current.documentId === id && current.open) : nextOpen }))
   }, [id])
@@ -2616,6 +2617,7 @@ export default function Viewer() {
       onRegionHighlightToolConsumed={() => setTool('pan')}
       pageLinks={pdfLinksByPage[pane.page]}
       qrLinks={qrLinksByPage[pane.page]}
+      textStylePortalTarget={textStylePortalTarget}
       onPageRendered={onPageRendered}
     />
   }
@@ -3234,7 +3236,7 @@ export default function Viewer() {
             </div>}
           </div>}
         </div>
-        {!reportMode && <div className={'viewer-floating-bar viewer-mini-bar' + (miniBarOpen ? ' expanded' : '')}>
+        {!reportMode && <div ref={setTextStylePortalTarget} className={'viewer-floating-bar viewer-mini-bar' + (miniBarOpen ? ' expanded' : '')}>
           <button ref={miniBarAccordionButtonRef} type="button" className="viewer-mini-accordion-button" aria-label={t('뷰어 도구')} title={t('뷰어 도구')} aria-expanded={miniBarOpen} aria-controls={miniBarControlsId} onClick={() => { const open = !miniBarOpen; if (!open) closeMiniBarOnPdfActionRef.current = false; setMiniBarState({ documentId: id, open }); if (!open) setMiniBarSettingsOpen(false) }}>
             <img className="viewer-mini-accordion-icon" src={viewerToolsIcon} alt="" aria-hidden="true" /><span aria-hidden="true">{miniBarOpen ? <ChevronUp size={16} /> : <ChevronDown size={16} />}</span>
           </button>

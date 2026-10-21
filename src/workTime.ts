@@ -114,3 +114,13 @@ export function workTimeChartBuckets(days: readonly DocumentWorkTimeDay[], mode:
   }
   return buckets
 }
+
+export function workTimeChartAxisTicks(maxElapsedMs: number) {
+  const maxMinutes = Math.ceil(Math.max(0, maxElapsedMs) / 60_000)
+  if (!maxMinutes) return [0]
+  const interval = Math.max(1, Math.ceil(maxMinutes / 4))
+  const top = Math.ceil(maxMinutes / interval) * interval
+  const ticks: number[] = []
+  for (let minute = top; minute >= 0; minute -= interval) ticks.push(minute * 60_000)
+  return ticks
+}
