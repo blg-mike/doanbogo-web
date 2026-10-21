@@ -55,4 +55,5 @@ export const DEFAULT_COUNTER_COLORS = {
   simple: '#557A95',
   pattern: '#5C8167',
   task: '#D46A4C',
+  repeat: '#7A6A94',
 } as const

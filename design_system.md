@@ -22,7 +22,7 @@ Green Modern Retro / Soft Craft Minimalism. 브랜드 그린과 Pretendard로 �
 | Warning / Soft | `#B88732` / `#F6EEDC` |
 | Progress | `#21A366` |
 
-Functional colors remain distinct: `#2C2B27`, `#C85E4B`, `#557A95`, `#5C8167`, `#7A6A94`, `#7D7A76`. Counter colors are `#557A95`, `#5C8167`, and `#D46A4C`.
+Functional colors remain distinct: `#2C2B27`, `#C85E4B`, `#557A95`, `#5C8167`, `#7A6A94`, `#7D7A76`. Counter colors are `#557A95`, `#5C8167`, `#D46A4C`, and `#7A6A94` for repeat counters.
 The app uses locally bundled Pretendard 400·500·600 from `src/assets/fonts/PretendardVariable.woff2`; its license is `src/assets/fonts/LICENSE.txt`. The portable homepage embeds the same font.
 
 ## 필기·진행선 팔레트

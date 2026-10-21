@@ -18,7 +18,7 @@ type BackupHomeProject = Omit<HomeProject, 'cover'>
 
 interface BackupManifest {
   format: 'doanbogo'
-  version: 14
+  version: 15
   exportedAt: number
   documents: BackupDocument[]
   pages: PageRecord[]
@@ -178,6 +178,7 @@ function isGuideArray(value: unknown) {
 function isCounterHistory(value: unknown) {
   return Array.isArray(value) && value.length <= MAX_COUNTER_HISTORY && value.every((entry) => isObject(entry) && typeof entry.id === 'string' && entry.id.length <= 100 &&
     typeof entry.label === 'string' && entry.label.length <= 200 && Number.isFinite(entry.savedAt) && Number.isSafeInteger(entry.actualRow) && Number(entry.actualRow) >= 0 &&
+    (entry.counterOnly === undefined || typeof entry.counterOnly === 'boolean') &&
     (entry.baseCounterId === undefined || typeof entry.baseCounterId === 'string' && entry.baseCounterId.length <= 100) &&
     (entry.timeLapId === undefined || typeof entry.timeLapId === 'string' && entry.timeLapId.length <= 100) &&
     isCurrentCounterSnapshots(entry.counters) && Array.isArray(entry.guides) && entry.guides.length <= 1000 && entry.guides.every((item) => isObject(item) && Number.isSafeInteger(item.pageNumber) &&
@@ -352,7 +353,7 @@ export async function createWorkspaceBackup() {
 
   const manifest: BackupManifest = {
     format: 'doanbogo',
-    version: 14,
+    version: 15,
     exportedAt: Date.now(),
     documents,
     pages: data.pages.map(normalizeVisiblePageRecord),
@@ -385,7 +386,7 @@ export async function readWorkspaceBackup(file: File): Promise<WorkspaceData> {
   } catch {
     throw new Error('작업 파일의 안내 정보가 손상됐습니다.')
   }
-  if (!isObject(manifest) || manifest.format !== 'doanbogo' || ![1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14].includes(manifest.version as number) ||
+  if (!isObject(manifest) || manifest.format !== 'doanbogo' || ![1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15].includes(manifest.version as number) ||
     !Array.isArray(manifest.documents) || !Array.isArray(manifest.pages) ||
     !Array.isArray(manifest.viewers) || !Array.isArray(manifest.preferences) ||
     ((manifest.version as number) >= 2 && !Array.isArray(manifest.pageWork)) ||

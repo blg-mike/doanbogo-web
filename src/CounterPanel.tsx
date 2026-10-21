@@ -1,41 +1,29 @@
 import { formatDateTime, formatNumber, t, type LocaleKey } from './locales/index'
 import { useEffect, useLayoutEffect, useRef, useState, type FocusEvent as ReactFocusEvent, type FormEvent, type KeyboardEvent as ReactKeyboardEvent, type PointerEvent as ReactPointerEvent, type RefObject } from 'react'
 import { createPortal } from 'react-dom'
-import { ArrowDownUp, Bell, Check, ChevronDown, ChevronLeft, ChevronRight, ChevronUp, Clock3, Hash, Pin, PinOff, Plus, Repeat2, RotateCcw, Settings, Trash2, Vibrate, Volume2, X } from 'lucide-react'
+import { ArrowDownUp, Bell, Check, ChevronDown, ChevronLeft, ChevronRight, ChevronUp, Clock3, GripVertical, Hash, Pin, PinOff, Plus, Repeat, Repeat2, RotateCcw, Settings, Trash2, Vibrate, Volume2, X } from 'lucide-react'
 import type { CounterKind, CounterSnapshot, CounterTimerLinkMode, CounterUnit, ViewerSnapshot } from './types'
-import { MAX_COUNTER_ROW, MAX_COUNTERS_PER_TYPE, counterAlertState, createCounter, findCounterRewindCheckpoint, groupCounterTimeLaps, maxCountersForType, taskSchedule } from './smartCounter'
+import { MAX_COUNTER_ROW, MAX_COUNTERS_PER_TYPE, counterAlertState, createCounter, findCounterRewindCheckpoint, groupCounterTimeLaps, maxCountersForType, repeatCounterProgress, stepRepeatCounter, taskSchedule } from './smartCounter'
 import { ColorPresetButtons } from './ColorPresetButtons'
+import { canStartCounterPopoverDrag, COUNTER_POPOVER_LONG_PRESS_MS, getCounterPopoverDragPosition, shouldCancelCounterPopoverLongPress } from './counterPopoverDrag'
+import { CounterStepButton } from './CounterStepButton'
 
-const kinds: CounterKind[] = ['simple', 'pattern', 'task']
-const kindLabels: Record<CounterKind, LocaleKey> = { simple: '자유 카운터', pattern: '무늬 카운터', task: '줄임·늘림 카운터' }
+const kinds: CounterKind[] = ['simple', 'pattern', 'task', 'repeat']
+const kindLabels: Record<CounterKind, LocaleKey> = { simple: '자유 카운터', pattern: '무늬 카운터', task: '줄임·늘림 카운터', repeat: '반복 카운터' }
 const unitLabels: Record<CounterUnit, LocaleKey> = { row: '단', stitch: '코', round: '회' }
-function translateCounterAlert(message: string) {
-  let match = /^목표 (\d+)단을 완료했어요\.$/.exec(message)
-  if (match) return t('목표 {row}단을 완료했어요.', { row: formatNumber(Number(match[1])) })
-  match = /^다음 단에 목표 (\d+)단이에요\.$/.exec(message)
-  if (match) return t('다음 단에 목표 {row}단이에요.', { row: formatNumber(Number(match[1])) })
-  match = /^(.+) · (늘림|줄임) 작업 단이에요\.$/.exec(message)
-  if (match) return t('{name} · {task} 작업 단이에요.', { name: match[1], task: t(match[2] as LocaleKey) })
-  match = /^(.+) · 무늬 반복 단이에요\.$/.exec(message)
-  if (match) return t('{name} · 무늬 반복 단이에요.', { name: match[1] })
-  match = /^다음 단에 (.+) (늘림|줄임) 작업이 있어요\.$/.exec(message)
-  if (match) return t('다음 단에 {name} {task} 작업이 있어요.', { name: match[1], task: t(match[2] as LocaleKey) })
-  match = /^다음 단에 (.+) 무늬단이 시작돼요\.$/.exec(message)
-  if (match) return t('다음 단에 {name} 무늬단이 시작돼요.', { name: match[1] })
-  return message
-}
-
 function counterSummary(counter: CounterSnapshot) {
   if (counter.kind === 'simple') return formatNumber(counter.value) + t(unitLabels[counter.unit ?? 'row'])
   if (counter.kind === 'task') return formatNumber(counter.completedCount ?? 0) + '/' + formatNumber(counter.total ?? 0) + t('회')
+  if (counter.kind === 'repeat') return formatNumber(repeatCounterProgress(counter)?.completedRepeats ?? 0) + '/' + formatNumber(counter.repeatTarget ?? 1) + t('회')
   return formatNumber(counter.patternRow ?? 1) + '/' + formatNumber(counter.repeatLength ?? 1) + t('단')
 }
 
-function CounterEditor({ counter, counters, isNew = false, portal = true, inline = false, onClose, onSave, onDelete, canDelete = true, onSavingChange }: {
+function CounterEditor({ counter, counters, isNew = false, portal = true, inline = false, defaultLinkToId, onClose, onSave, onDelete, canDelete = true, onSavingChange }: {
   counter: CounterSnapshot
   counters: CounterSnapshot[]
   isNew?: boolean
   portal?: boolean
+  defaultLinkToId?: string
   onClose: () => void
   onSave: (updated: CounterSnapshot[], label: string) => void | boolean | Promise<boolean>
   onDelete?: (counter: CounterSnapshot) => Promise<boolean>
@@ -56,10 +44,12 @@ function CounterEditor({ counter, counters, isNew = false, portal = true, inline
   const selectedMembersRef = useRef(selectedMembers)
   const [linkedToId, setLinkedToId] = useState(counter.linkedToId ?? '')
   const linkedToIdRef = useRef(linkedToId)
+  const [repeatLinkedToId, setRepeatLinkedToId] = useState(counter.repeatLinkedToId ?? '')
+  const repeatLinkedToIdRef = useRef(repeatLinkedToId)
   const [advanced, setAdvanced] = useState(false)
   const [previewGenerated, setPreviewGenerated] = useState(false)
   const rowBases = counters.filter((item) => item.id !== counter.id && item.kind === 'simple' && item.unit === 'row' && !item.linkedToId)
-  const defaultBase = rowBases[0]
+  const defaultBase = rowBases.find((item) => item.id === defaultLinkToId) ?? rowBases[0]
 
   function set<K extends keyof CounterSnapshot>(key: K, value: CounterSnapshot[K]) {
     const next = { ...draftRef.current, [key]: value }
@@ -84,6 +74,8 @@ function CounterEditor({ counter, counters, isNew = false, portal = true, inline
       next = next.map((item) => item.id !== updatedDraft.id && (item.linkedToId === updatedDraft.id || selectedMembersRef.current.has(item.id))
         ? selectedMembersRef.current.has(item.id) ? { ...item, linkedToId: updatedDraft.id } : { ...item, linkedToId: undefined }
         : item)
+    } else if (updatedDraft.kind === 'repeat') {
+      next = next.map((item) => item.id === updatedDraft.id ? { ...item, linkedToId: undefined, repeatLinkedToId: repeatLinkedToIdRef.current || undefined } : item)
     } else {
       next = next.map((item) => item.id === updatedDraft.id ? { ...item, linkedToId: linkedToIdRef.current || undefined } : item)
     }
@@ -99,6 +91,19 @@ function CounterEditor({ counter, counters, isNew = false, portal = true, inline
     if (!formRef.current?.checkValidity()) {
       formRef.current?.reportValidity()
       return false
+    }
+    if (draftRef.current.kind === 'repeat') {
+      const start = draftRef.current.repeatStartRow ?? 0
+      const end = draftRef.current.repeatEndRow ?? 0
+      const target = draftRef.current.repeatTarget ?? 0
+      if ((end - start + 1) * target > MAX_COUNTER_ROW) {
+        setError(t('반복 범위와 횟수의 총 단수는 9999 이하여야 합니다.'))
+        return false
+      }
+      if (draftRef.current.value > (end - start + 1) * target) {
+        setError(t('목표 반복 단수는 이미 완료한 단수보다 작을 수 없습니다.'))
+        return false
+      }
     }
     const updatedDraft = { ...draftRef.current, name: draftRef.current.name.trim() || t(kindLabels[draftRef.current.kind]) }
     const next = buildNext(updatedDraft)
@@ -168,12 +173,16 @@ function CounterEditor({ counter, counters, isNew = false, portal = true, inline
       ? { ...replacement, id: draft.id, value: 0, unit: 'stitch' }
       : kind === 'pattern'
         ? { ...replacement, id: draft.id, ...(defaultBase ? { linkedToId: defaultBase.id, currentRow: defaultBase.value, startRow: defaultBase.value } : {}), repeatLength: 8 }
-        : { ...replacement, id: draft.id, ...(defaultBase ? { linkedToId: defaultBase.id, currentRow: defaultBase.value } : {}), firstTaskRow: defaultBase?.value ?? 1, nextTaskRow: defaultBase?.value ?? 1, interval: 2, total: 8 }
+        : kind === 'task'
+          ? { ...replacement, id: draft.id, ...(defaultBase ? { linkedToId: defaultBase.id, currentRow: defaultBase.value } : {}), firstTaskRow: defaultBase?.value ?? 1, nextTaskRow: defaultBase?.value ?? 1, interval: 2, total: 8 }
+          : { ...replacement, id: draft.id, ...(defaultBase ? { repeatLinkedToId: defaultBase.id } : {}) }
     draftRef.current = next
     dirtyRef.current = true
     setDraft(next)
     linkedToIdRef.current = next.linkedToId ?? ''
     setLinkedToId(linkedToIdRef.current)
+    repeatLinkedToIdRef.current = next.repeatLinkedToId ?? ''
+    setRepeatLinkedToId(repeatLinkedToIdRef.current)
     setAdvanced(false)
     setPreviewGenerated(false)
     if (!isNew) void saveDraft(false)
@@ -193,8 +202,8 @@ function CounterEditor({ counter, counters, isNew = false, portal = true, inline
         {isNew && <section className="counter-kind-picker" aria-label={t('어떤 작업을 셀까요?')}>
           <strong>{t('어떤 작업을 셀까요?')}</strong>
           {kinds.map((kind) => {
-            const Icon = kind === 'simple' ? Hash : kind === 'pattern' ? Repeat2 : ArrowDownUp
-            const description: Record<CounterKind, LocaleKey> = { simple: '필요한 횟수를 자유롭게 세기', pattern: '4단, 8단 등의 무늬 반복하기', task: '몇 단마다 코를 늘리거나 줄이기' }
+            const Icon = kind === 'simple' ? Hash : kind === 'pattern' ? Repeat2 : kind === 'task' ? ArrowDownUp : Repeat
+            const description: Record<CounterKind, LocaleKey> = { simple: '필요한 횟수를 자유롭게 세기', pattern: '4단, 8단 등의 무늬 반복하기', task: '몇 단마다 코를 늘리거나 줄이기', repeat: '지정한 단 구간을 목표 횟수만큼 반복하기' }
             return <button type="button" key={kind} className={'counter-kind-choice' + (draft.kind === kind ? ' selected' : '')} disabled={maxCountersForType(counters, kind) >= MAX_COUNTERS_PER_TYPE} aria-pressed={draft.kind === kind} onClick={() => chooseKind(kind)}><Icon size={19} /><span><b>{t(kindLabels[kind])}</b><small>{t(description[kind])}</small></span><i aria-hidden="true">{draft.kind === kind ? '✓' : ''}</i></button>
           })}
         </section>}
@@ -245,8 +254,26 @@ function CounterEditor({ counter, counters, isNew = false, portal = true, inline
             <label className="counter-settings-field">{t("다음 작업 단")}<input type="number" min="1" max={MAX_COUNTER_ROW} value={draft.nextTaskRow ?? draft.firstTaskRow ?? 1} onChange={(event) => set('nextTaskRow', Number(event.currentTarget.value))} /></label>
           </div>}
         </>}
-        {draft.kind === 'simple' && draft.unit === 'row' && !draft.linkedToId && <section className="counter-link-editor"><strong>{t("이 단 완료와 함께 진행")}</strong><span>{t("현재 숫자는 유지되고 다음 완료부터 적용됩니다.")}</span>{counters.filter((item) => item.id !== draft.id && (!item.linkedToId || item.linkedToId === draft.id) && (!counters.some((child) => child.linkedToId === item.id) || item.linkedToId === draft.id)).map((item) => <label key={item.id}><input type="checkbox" checked={selectedMembers.has(item.id)} onChange={(event) => { const next = new Set(selectedMembersRef.current); if (event.currentTarget.checked) next.add(item.id); else next.delete(item.id); selectedMembersRef.current = next; setSelectedMembers(next); dirtyRef.current = true; setError(''); if (!isNew) void saveDraft(false) }} />{item.name} · {t(kindLabels[item.kind])}</label>)}</section>}
-        {!(draft.kind === 'simple' && draft.unit === 'row' && !draft.linkedToId) && <label className="counter-settings-field">{t("함께 진행할 기준 단")}<select value={linkedToId} onChange={(event) => { linkedToIdRef.current = event.currentTarget.value; setLinkedToId(linkedToIdRef.current); set('linkedToId', linkedToIdRef.current || undefined); if (!isNew) void saveDraft(false) }}><option value="">{t("연동 안 함")}</option>{rowBases.map((base) => <option key={base.id} value={base.id}>{base.name}{t(" · 현재 ")}{base.value}{t("단")}</option>)}</select></label>}
+        {draft.kind === 'repeat' && <>
+          <div className="counter-settings-grid">
+            <label className="counter-settings-field">{t('시작 단')}<input required type="number" inputMode="numeric" min="1" max={MAX_COUNTER_ROW} step="1" value={draft.repeatStartRow ?? 1} onChange={(event) => set('repeatStartRow', Number(event.currentTarget.value))} /></label>
+            <label className="counter-settings-field">{t('종료 단')}<input required type="number" inputMode="numeric" min={draft.repeatStartRow ?? 1} max={MAX_COUNTER_ROW} step="1" value={draft.repeatEndRow ?? 2} onChange={(event) => set('repeatEndRow', Number(event.currentTarget.value))} /></label>
+          </div>
+          <label className="counter-settings-field">{t('목표 반복 횟수')}<input required type="number" inputMode="numeric" min="1" max={MAX_COUNTER_ROW} step="1" value={draft.repeatTarget ?? 5} onChange={(event) => set('repeatTarget', Number(event.currentTarget.value))} /></label>
+          {(() => {
+            const progress = repeatCounterProgress(draft)
+            return progress && <div className="counter-repeat-preview" aria-live="polite">
+              <strong>{t('반복 {start}~{end}단 × {target}회', { start: formatNumber(progress.startRow), end: formatNumber(progress.endRow), target: formatNumber(progress.target) })}</strong>
+              <span>{t('완료 반복 {completed} / {target}회', { completed: formatNumber(progress.completedRepeats), target: formatNumber(progress.target) })}</span>
+              <span>{progress.complete ? t('목표 반복 완료') : t('현재 {row}단 진행 예정', { row: formatNumber(progress.nextRow ?? progress.startRow) })}</span>
+              <span>{t('총 {completed} / {total}단 완료', { completed: formatNumber(progress.completedRows), total: formatNumber(progress.totalRows) })}</span>
+            </div>
+          })()}
+          <label className="counter-settings-field">{t('일반 카운터 연동')}<select value={repeatLinkedToId} onChange={(event) => { repeatLinkedToIdRef.current = event.currentTarget.value; setRepeatLinkedToId(repeatLinkedToIdRef.current); set('repeatLinkedToId', repeatLinkedToIdRef.current || undefined); if (!isNew) void saveDraft(false) }}><option value="">{t('연동 안 함')}</option>{rowBases.map((base) => <option key={base.id} value={base.id}>{base.name}{t(' · 현재 ')}{base.value}{t('단')}</option>)}</select></label>
+          <p className="counter-link-note">{t('선택한 일반 카운터 숫자만 올립니다. 반복에서 −를 눌러도 일반 단수는 줄지 않습니다.')}</p>
+        </>}
+        {draft.kind === 'simple' && draft.unit === 'row' && !draft.linkedToId && <section className="counter-link-editor"><strong>{t("이 단 완료와 함께 진행")}</strong><span>{t("현재 숫자는 유지되고 다음 완료부터 적용됩니다.")}</span>{counters.filter((item) => item.id !== draft.id && item.kind !== 'repeat' && (!item.linkedToId || item.linkedToId === draft.id) && (!counters.some((child) => child.linkedToId === item.id) || item.linkedToId === draft.id)).map((item) => <label key={item.id}><input type="checkbox" checked={selectedMembers.has(item.id)} onChange={(event) => { const next = new Set(selectedMembersRef.current); if (event.currentTarget.checked) next.add(item.id); else next.delete(item.id); selectedMembersRef.current = next; setSelectedMembers(next); dirtyRef.current = true; setError(''); if (!isNew) void saveDraft(false) }} />{item.name} · {t(kindLabels[item.kind])}</label>)}</section>}
+        {draft.kind !== 'repeat' && !(draft.kind === 'simple' && draft.unit === 'row' && !draft.linkedToId) && <label className="counter-settings-field">{t("함께 진행할 기준 단")}<select value={linkedToId} onChange={(event) => { linkedToIdRef.current = event.currentTarget.value; setLinkedToId(linkedToIdRef.current); set('linkedToId', linkedToIdRef.current || undefined); if (!isNew) void saveDraft(false) }}><option value="">{t("연동 안 함")}</option>{rowBases.map((base) => <option key={base.id} value={base.id}>{base.name}{t(" · 현재 ")}{base.value}{t("단")}</option>)}</select></label>}
         {draft.linkedToId && <p className="counter-link-note">{t("현재 단 ")}{draft.currentRow ?? 1}{t(" · 기준 카운터와 함께 진행합니다.")}</p>}
         {!isNew && <div className="counter-editor-management">
           <button type="button" aria-label={draft.pinned ? t('고정 해제') : t('상단 고정')} title={draft.pinned ? t('고정 해제') : t('상단 고정')} disabled={saving} onClick={() => setAndSave('pinned', !draft.pinned)}>{draft.pinned ? <PinOff size={16} /> : <Pin size={16} />}{draft.pinned ? t('고정 해제') : t('상단 고정')}</button>
@@ -268,7 +295,7 @@ function clamp(value: number, min: number, max: number) {
   return Math.max(min, Math.min(max, value))
 }
 
-function CounterSettings({ view, snapshot, counters, timerLinkMode, onSave, onTimerLinkModeChange, onEdit, onAdd, addButtonRef, onSavingChange }: {
+function CounterSettings({ view, snapshot, counters, timerLinkMode, onSave, onTimerLinkModeChange, onEdit, onAdd, onRepeatStep, counterActionSaving, addButtonRef, onSavingChange }: {
   view: 'main' | 'settings'
   snapshot: ViewerSnapshot
   counters: CounterSnapshot[]
@@ -277,6 +304,8 @@ function CounterSettings({ view, snapshot, counters, timerLinkMode, onSave, onTi
   onTimerLinkModeChange: (mode: CounterTimerLinkMode) => Promise<void>
   onEdit: (counter: CounterSnapshot, trigger: HTMLButtonElement) => void
   onAdd: () => void
+  onRepeatStep: (counterId: string, direction: -1 | 1) => void
+  counterActionSaving: boolean
   addButtonRef: RefObject<HTMLButtonElement | null>
   onSavingChange: (saving: boolean) => void
 }) {
@@ -409,9 +438,33 @@ function CounterSettings({ view, snapshot, counters, timerLinkMode, onSave, onTi
             <div className="counter-main-setting-row counter-goal-setting-row"><label htmlFor="counter-goal-row">{t('목표단')} <small id="counter-goal-optional">{t('선택 항목')}</small></label><div className="counter-goal-input-wrap"><input id="counter-goal-row" disabled={saving} type="number" min="1" max={MAX_COUNTER_ROW} step="1" value={draft.goalRow} aria-describedby="counter-goal-optional" placeholder="00" onChange={(event) => { const goalRow = event.currentTarget.value; const target = Number(goalRow); const next = { ...draftRef.current, goalRow, ...(Number.isSafeInteger(target) && target > 0 ? { goalFinalSide: sideForGoal(target, draftRef.current.firstSide, 1) } : {}) }; draftRef.current = next; setDraft(next); retryRef.current = null; setError('') }} onBlur={() => persist()} onKeyDown={(event) => { if (event.key === 'Enter') { event.preventDefault(); event.currentTarget.blur() } }} /><span>{t('단')}</span></div></div>
           </section>
           <section className="counter-main-aux-section"><header><h3>{t('보조 카운터')}</h3><button ref={addButtonRef} type="button" className="counter-main-add-button" disabled={saving || kinds.every((kind) => maxCountersForType(counters, kind) >= MAX_COUNTERS_PER_TYPE)} onClick={onAdd}><Plus size={16} />{t('추가')}</button></header>
-            <div className="counter-main-aux-list">{counters.filter((counter) => counter.id !== selectedMain?.id).map((counter) => <button type="button" className="counter-main-aux-card" key={counter.id} disabled={saving} aria-label={`${counter.name}: ${t(kindLabels[counter.kind])}, ${counterSummary(counter)}, ${t('설정')}`} onClick={(event) => onEdit(counter, event.currentTarget)}>
-              <span className="counter-main-aux-color" style={{ background: counter.color }} /><span className="counter-main-aux-copy"><strong>{counter.name}</strong><small>{t(kindLabels[counter.kind])} · {counterSummary(counter)}</small></span><ChevronRight size={18} />
-            </button>)}
+            <div className="counter-main-aux-list">{counters.filter((counter) => counter.id !== selectedMain?.id).map((counter) => counter.kind === 'repeat'
+              ? (() => {
+                const progress = repeatCounterProgress(counter)!
+                const blocked = stepRepeatCounter(counters, counter.id, 1).blocked
+                const blockedLabel = blocked === 'base-complete' ? t('연동한 일반 카운터의 목표에 도달했거나 완료되어 반복 진행을 늘릴 수 없습니다.')
+                  : blocked === 'base-limit' ? t('연동한 일반 카운터가 9999단이라 반복 진행을 늘릴 수 없습니다.')
+                    : blocked === 'missing-base' ? t('연동한 일반 카운터를 찾을 수 없어 진행할 수 없습니다.') : undefined
+                const base = counters.find((item) => item.id === counter.repeatLinkedToId)
+                return <article className="counter-main-aux-card counter-main-repeat-card" key={counter.id}>
+                  <span className="counter-main-aux-color" style={{ background: counter.color }} />
+                  <button type="button" className="counter-main-aux-copy counter-main-repeat-edit" disabled={saving} aria-label={`${counter.name}: ${t(kindLabels[counter.kind])}, ${counterSummary(counter)}, ${t('설정')}`} onClick={(event) => onEdit(counter, event.currentTarget)}>
+                    <strong>{counter.name}</strong>
+                    <small>{t('반복 {start}~{end}단 × {target}회', { start: formatNumber(progress.startRow), end: formatNumber(progress.endRow), target: formatNumber(progress.target) })}</small>
+                    <small>{t('완료 반복 {completed} / {target}회', { completed: formatNumber(progress.completedRepeats), target: formatNumber(progress.target) })} · {progress.complete ? t('목표 반복 완료') : t('현재 {row}단 진행 예정', { row: formatNumber(progress.nextRow ?? progress.startRow) })}</small>
+                    <small>{t('총 {completed} / {total}단 완료', { completed: formatNumber(progress.completedRows), total: formatNumber(progress.totalRows) })}</small>
+                    <small>{base?.kind === 'simple' ? base.name : t('연동 안 함')}</small>
+                    {blockedLabel && <small role="status">{blockedLabel}</small>}
+                  </button>
+                  <div className="counter-main-repeat-actions">
+                    <CounterStepButton className="counter-repeat-step" label={t('반복 단 줄이기')} disabled={saving || counterActionSaving || counter.value <= 0} onStep={() => onRepeatStep(counter.id, -1)}>−</CounterStepButton>
+                    <CounterStepButton className="counter-repeat-step" label={t('반복 단 늘리기')} title={blockedLabel} disabled={saving || counterActionSaving || progress.complete} onStep={() => onRepeatStep(counter.id, 1)}>+</CounterStepButton>
+                  </div>
+                </article>
+              })()
+              : <button type="button" className="counter-main-aux-card" key={counter.id} disabled={saving} aria-label={`${counter.name}: ${t(kindLabels[counter.kind])}, ${counterSummary(counter)}, ${t('설정')}`} onClick={(event) => onEdit(counter, event.currentTarget)}>
+                <span className="counter-main-aux-color" style={{ background: counter.color }} /><span className="counter-main-aux-copy"><strong>{counter.name}</strong><small>{t(kindLabels[counter.kind])} · {counterSummary(counter)}</small></span><ChevronRight size={18} />
+              </button>)}
             {!counters.some((counter) => counter.id !== selectedMain?.id) && <p className="counter-settings-note">{t('아직 추가한 카운터가 없습니다.')}</p>}</div>
           </section>
         </> : <>
@@ -445,7 +498,7 @@ function CounterSettings({ view, snapshot, counters, timerLinkMode, onSave, onTi
 }
 
 export default function CounterPanel({
-  snapshot, counters, timerLinkMode, onChange, onUndo, onRewind, onSettingsSave, onTimerLinkModeChange, onSnapshotUpdate, onClose, triggerRef, onSavingChange,
+  snapshot, counters, timerLinkMode, onChange, onUndo, onRewind, onRepeatStep, counterActionSaving, onSettingsSave, onTimerLinkModeChange, onSnapshotUpdate, onClose, triggerRef, onSavingChange,
 }: {
   snapshot: ViewerSnapshot
   counters: CounterSnapshot[]
@@ -453,6 +506,8 @@ export default function CounterPanel({
   onChange: (counters: CounterSnapshot[], label: string) => void | boolean | Promise<boolean>
   onUndo: () => void
   onRewind: (counterId: string, targetRow: number) => void
+  onRepeatStep: (counterId: string, direction: -1 | 1) => void
+  counterActionSaving: boolean
   onSettingsSave: (counters: CounterSnapshot[], changes: Partial<ViewerSnapshot>, label: string) => Promise<boolean>
   onTimerLinkModeChange: (mode: CounterTimerLinkMode) => Promise<void>
   onSnapshotUpdate: (changes: Partial<ViewerSnapshot>) => void
@@ -462,9 +517,9 @@ export default function CounterPanel({
 }) {
   const panelRef = useRef<HTMLElement>(null)
   const addButtonRef = useRef<HTMLButtonElement>(null)
-  const dragRef = useRef<{ pointerId: number; x: number; y: number; left: number; top: number; mobile: boolean } | null>(null)
-  const [position, setPosition] = useState<{ left: number; top: number } | null>(null)
-  const positionRef = useRef<{ left: number; top: number } | null>(null)
+  const dragRef = useRef<{ pointerId: number; pointerType: string; startedAt: number; x: number; y: number; left: number; top: number; viewport: boolean; dragging: boolean; moved: boolean; cancelled: boolean; timerId: number; cleanup: () => void } | null>(null)
+  const [position, setPosition] = useState<{ left: number; top: number; viewport: boolean } | null>(null)
+  const positionRef = useRef<{ left: number; top: number; viewport: boolean } | null>(null)
   const manuallyPositionedRef = useRef(false)
   const collapsed = snapshot.counterPanelCollapsed === true
   const [activeTab, setActiveTab] = useState<'counter' | 'laps' | 'settings'>('counter')
@@ -475,6 +530,7 @@ export default function CounterPanel({
   const restoreNewCounterFocusRef = useRef(false)
   const [newCounterDraft, setNewCounterDraft] = useState<CounterSnapshot | null>(null)
   const [rewindOpen, setRewindOpen] = useState(false)
+  useEffect(() => () => dragRef.current?.cleanup(), [])
   const [rewindRow, setRewindRow] = useState('')
   function closePanel() {
     if (panelSaving) return
@@ -530,7 +586,11 @@ export default function CounterPanel({
   }
 
   async function deleteCounter(counter: CounterSnapshot) {
-    const next = counters.filter((item) => item.id !== counter.id).map((item) => item.linkedToId === counter.id ? { ...item, linkedToId: undefined } : item)
+    const next = counters.filter((item) => item.id !== counter.id).map((item) => ({
+      ...item,
+      ...(item.linkedToId === counter.id ? { linkedToId: undefined } : {}),
+      ...(item.repeatLinkedToId === counter.id ? { repeatLinkedToId: undefined } : {}),
+    }))
     if (counter.id !== activeBase?.id) return (await onChange(next, '카운터 삭제')) !== false
     const replacement = next.find((item) => item.kind === 'simple' && item.unit === 'row' && !item.linkedToId)
     if (!replacement) return false
@@ -595,6 +655,15 @@ export default function CounterPanel({
     if (!panel || !shell || !bar) return
     const place = () => {
       if (window.matchMedia('(max-width: 600px)').matches) {
+        if (manuallyPositionedRef.current && positionRef.current) {
+          const panelRect = panel.getBoundingClientRect()
+          const base = positionRef.current.viewport ? positionRef.current : { left: panelRect.left, top: panelRect.top }
+          const next = { ...getCounterPopoverDragPosition({ ...base, deltaX: 0, deltaY: 0, panelWidth: panel.offsetWidth, panelHeight: panel.offsetHeight, boundsWidth: window.innerWidth, boundsHeight: window.innerHeight }), viewport: true }
+          if (positionRef.current.viewport && Math.abs(positionRef.current.left - next.left) < 1 && Math.abs(positionRef.current.top - next.top) < 1) return
+          positionRef.current = next
+          setPosition(next)
+          return
+        }
         manuallyPositionedRef.current = false
         positionRef.current = null
         setPosition(null)
@@ -607,19 +676,20 @@ export default function CounterPanel({
       const min = 12
       const rightSide = barRect.right - shellRect.left + 8
       const leftSide = barRect.left - shellRect.left - panelWidth - 8
-      const left = manuallyPositionedRef.current && positionRef.current
-        ? clamp(positionRef.current.left, min, Math.max(min, shellRect.width - panelWidth - min))
+      const manualBase = positionRef.current?.viewport ? { left: panel.getBoundingClientRect().left - shellRect.left, top: panel.getBoundingClientRect().top - shellRect.top } : positionRef.current
+      const left = manuallyPositionedRef.current && manualBase
+        ? clamp(manualBase.left, min, Math.max(min, shellRect.width - panelWidth - min))
         : rightSide + panelWidth <= shellRect.width - min
           ? rightSide
           : leftSide >= min
             ? leftSide
             : clamp(rightSide, min, Math.max(min, shellRect.width - panelWidth - min))
-      const top = manuallyPositionedRef.current && positionRef.current
-        ? clamp(positionRef.current.top, min, Math.max(min, shellRect.height - panelHeight - min))
+      const top = manuallyPositionedRef.current && manualBase
+        ? clamp(manualBase.top, min, Math.max(min, shellRect.height - panelHeight - min))
         : clamp(barRect.top - shellRect.top, min, Math.max(min, shellRect.height - panelHeight - min))
       const current = positionRef.current
-      if (current && Math.abs(current.left - left) < 1 && Math.abs(current.top - top) < 1) return
-      const next = { left, top }
+      if (current && !current.viewport && Math.abs(current.left - left) < 1 && Math.abs(current.top - top) < 1) return
+      const next = { left, top, viewport: false }
       positionRef.current = next
       setPosition(next)
     }
@@ -637,35 +707,72 @@ export default function CounterPanel({
 
   function beginHeaderGesture(event: ReactPointerEvent<HTMLElement>) {
     if (event.pointerType === 'mouse' && event.button !== 0 || (event.target as HTMLElement).closest('button')) return
+    dragRef.current?.cleanup()
     const rect = panelRef.current?.getBoundingClientRect()
     const parent = panelRef.current?.parentElement?.getBoundingClientRect()
     if (!rect || !parent) return
-    const mobile = window.matchMedia('(max-width: 600px)').matches
-    dragRef.current = { pointerId: event.pointerId, x: event.clientX, y: event.clientY, left: rect.left - parent.left, top: rect.top - parent.top, mobile }
-    try { event.currentTarget.setPointerCapture(event.pointerId) } catch { /* Pointer capture is optional. */ }
-  }
-
-  function moveHeaderGesture(event: ReactPointerEvent<HTMLElement>) {
-    const drag = dragRef.current
-    if (!drag || drag.pointerId !== event.pointerId || drag.mobile) return
-    const parent = panelRef.current?.parentElement?.getBoundingClientRect()
-    const panel = panelRef.current
-    if (!parent || !panel) return
-    const left = Math.max(8, Math.min(parent.width - panel.offsetWidth - 8, drag.left + event.clientX - drag.x))
-    const top = Math.max(8, Math.min(parent.height - panel.offsetHeight - 8, drag.top + event.clientY - drag.y))
-    manuallyPositionedRef.current = true
-    positionRef.current = { left, top }
-    setPosition({ left, top })
-  }
-
-  function endHeaderGesture(event: ReactPointerEvent<HTMLElement>) {
-    const drag = dragRef.current
-    if (!drag || drag.pointerId !== event.pointerId) return
-    if (drag.mobile && Math.abs(event.clientY - drag.y) > 32) {
-      const next = event.clientY < drag.y ? false : true
-      onChange(counters, 'panel:' + String(next))
+    const viewport = window.matchMedia('(max-width: 600px)').matches
+    const startedAt = Date.now()
+    const drag = {
+      pointerId: event.pointerId,
+      pointerType: event.pointerType,
+      startedAt,
+      x: event.clientX,
+      y: event.clientY,
+      left: viewport ? rect.left : rect.left - parent.left,
+      top: viewport ? rect.top : rect.top - parent.top,
+      viewport,
+      dragging: canStartCounterPopoverDrag(event.pointerType, 0),
+      moved: false,
+      cancelled: false,
+      timerId: 0,
+      cleanup: () => {},
     }
-    dragRef.current = null
+    const cleanup = () => {
+      window.clearTimeout(drag.timerId)
+      window.removeEventListener('pointermove', move, true)
+      window.removeEventListener('pointerup', finish, true)
+      window.removeEventListener('pointercancel', finish, true)
+      window.removeEventListener('resize', cancel, true)
+      if (dragRef.current === drag) dragRef.current = null
+    }
+    const move = (pointer: PointerEvent) => {
+      if (pointer.pointerId !== drag.pointerId) return
+      const deltaX = pointer.clientX - drag.x
+      const deltaY = pointer.clientY - drag.y
+      if (!drag.dragging && shouldCancelCounterPopoverLongPress(deltaX, deltaY)) {
+        window.clearTimeout(drag.timerId)
+        drag.cancelled = true
+        return
+      }
+      if (drag.cancelled) return
+      if (!drag.dragging || !panelRef.current || !drag.moved && Math.hypot(deltaX, deltaY) < 4) return
+      drag.moved = true
+      const currentParent = panelRef.current.parentElement?.getBoundingClientRect()
+      const boundsWidth = drag.viewport ? window.innerWidth : currentParent?.width ?? 0
+      const boundsHeight = drag.viewport ? window.innerHeight : currentParent?.height ?? 0
+      const next = { ...getCounterPopoverDragPosition({ left: drag.left, top: drag.top, deltaX, deltaY, panelWidth: panelRef.current.offsetWidth, panelHeight: panelRef.current.offsetHeight, boundsWidth, boundsHeight }), viewport: drag.viewport }
+      manuallyPositionedRef.current = true
+      positionRef.current = next
+      setPosition(next)
+    }
+    const finish = (pointer: PointerEvent) => {
+      if (pointer.pointerId !== drag.pointerId) return
+      if (drag.cancelled && drag.viewport && Math.abs(pointer.clientY - drag.y) > 32) onChange(counters, 'panel:' + String(pointer.clientY > drag.y))
+      cleanup()
+    }
+    const cancel = () => cleanup()
+    drag.cleanup = cleanup
+    dragRef.current = drag
+    window.addEventListener('pointermove', move, true)
+    window.addEventListener('pointerup', finish, true)
+    window.addEventListener('pointercancel', finish, true)
+    window.addEventListener('resize', cancel, true)
+    if (!drag.dragging) {
+      drag.timerId = window.setTimeout(() => {
+        if (dragRef.current === drag && canStartCounterPopoverDrag(drag.pointerType, Date.now() - drag.startedAt)) drag.dragging = true
+      }, COUNTER_POPOVER_LONG_PRESS_MS)
+    }
   }
 
   function add() {
@@ -676,7 +783,9 @@ export default function CounterPanel({
       ? { ...counter, value: 0, unit: 'stitch' as const }
       : kind === 'pattern'
         ? { ...counter, linkedToId: activeBase?.id, currentRow, startRow: currentRow, patternRow: 1, repeatLength: 8 }
-        : { ...counter, linkedToId: activeBase?.id, currentRow, firstTaskRow: currentRow, nextTaskRow: currentRow, interval: 2, total: 8 }
+        : kind === 'task'
+          ? { ...counter, linkedToId: activeBase?.id, currentRow, firstTaskRow: currentRow, nextTaskRow: currentRow, interval: 2, total: 8 }
+          : { ...counter, repeatLinkedToId: activeBase?.id }
     restoreEditorFocusRef.current = false
     setEditingId(null)
     setActiveTab('settings')
@@ -690,9 +799,9 @@ export default function CounterPanel({
     setRewindOpen(false)
   }
 
-  return <aside ref={panelRef} className={'number-counter-panel' + (collapsed ? ' mobile-collapsed' : '')} aria-label={t("카운터")} style={position ? { left: position.left, top: position.top, right: 'auto', bottom: 'auto' } : undefined}>
-    <header className="number-counter-header" onPointerDown={beginHeaderGesture} onPointerMove={moveHeaderGesture} onPointerUp={endHeaderGesture} onPointerCancel={endHeaderGesture} onLostPointerCapture={endHeaderGesture}>
-      <div className="counter-drag-handle" aria-hidden="true" />
+  return <aside ref={panelRef} className={'number-counter-panel' + (collapsed ? ' mobile-collapsed' : '') + (position?.viewport ? ' positioned-mobile' : '')} aria-label={t("카운터")} style={position ? { position: position.viewport ? 'fixed' : 'absolute', left: position.left, top: position.top, right: 'auto', bottom: 'auto' } : undefined}>
+    <header className="number-counter-header" onPointerDown={beginHeaderGesture}>
+      <div className="counter-drag-handle" aria-hidden="true"><GripVertical size={17} /></div>
       <nav className="counter-panel-tabs" role="tablist" aria-label={t('카운터')}>
         <button type="button" role="tab" aria-selected={activeTab === 'counter'} aria-label={t('카운터')} title={t('카운터')} disabled={panelSaving} className={activeTab === 'counter' ? 'selected' : ''} onClick={() => setActiveTab('counter')}><Hash size={19} /></button>
         <button type="button" role="tab" aria-selected={activeTab === 'laps'} aria-label={t('타임랩')} title={t('타임랩')} disabled={panelSaving} className={activeTab === 'laps' ? 'selected' : ''} onClick={() => setActiveTab('laps')}><Clock3 size={19} /></button>
@@ -701,9 +810,8 @@ export default function CounterPanel({
         <button type="button" className="icon-button counter-collapse-mobile" aria-label={collapsed ? t('카운터 펼치기') : t('카운터 접기')} aria-expanded={!collapsed} disabled={panelSaving} onClick={() => onChange(counters, 'panel:' + String(!collapsed))}>{collapsed ? <ChevronUp size={18} /> : <ChevronDown size={18} />}</button>
       </nav>
     </header>
-    {!collapsed && <div className="counter-popover-body">
-      {activeTab === 'counter' && pendingAlert && <section className="counter-pending-alert" role="status"><div><Bell size={17} /><strong>{alertState.messages.map(translateCounterAlert).join(' ')}</strong></div><button type="button" onClick={() => onSnapshotUpdate({ counterAlertAcknowledged: alertState.key })}>{t('확인')}</button></section>}
-      {activeTab === 'counter' && <CounterSettings view="main" snapshot={snapshot} counters={counters} timerLinkMode={timerLinkMode} onSave={onSettingsSave} onTimerLinkModeChange={onTimerLinkModeChange} onEdit={editCounter} onAdd={add} addButtonRef={addButtonRef} onSavingChange={(saving) => { setPanelSaving(saving); onSavingChange(saving) }} />}
+    {!collapsed && <div className={'counter-popover-body' + (activeTab === 'settings' && (newCounterDraft || activeEditor) ? ' counter-popover-body-editor' : '')}>
+      {activeTab === 'counter' && <CounterSettings view="main" snapshot={snapshot} counters={counters} timerLinkMode={timerLinkMode} onSave={onSettingsSave} onTimerLinkModeChange={onTimerLinkModeChange} onEdit={editCounter} onAdd={add} onRepeatStep={onRepeatStep} counterActionSaving={counterActionSaving} addButtonRef={addButtonRef} onSavingChange={(saving) => { setPanelSaving(saving); onSavingChange(saving) }} />}
       {activeTab === 'laps' && <section className="counter-lap-sessions" aria-label={t('타임랩')}>
         <header><h2>{t('타임랩')}</h2></header>
         {timeLapSessions.length ? <div className="counter-lap-session-list">{timeLapSessions.map((session) => {
@@ -718,10 +826,10 @@ export default function CounterPanel({
         })}</div> : <p className="counter-laps-empty">{t('타임랩 기록이 없습니다.')}</p>}
       </section>}
       {activeTab === 'settings' && (newCounterDraft
-        ? <CounterEditor inline portal={false} counter={newCounterDraft} counters={counters} isNew onClose={closeDirectEditor} onSavingChange={(saving) => { setPanelSaving(saving); onSavingChange(saving) }} onSave={(next, label) => onChange(next, label)} />
+        ? <CounterEditor inline portal={false} counter={newCounterDraft} counters={counters} defaultLinkToId={activeBase?.id} isNew onClose={closeDirectEditor} onSavingChange={(saving) => { setPanelSaving(saving); onSavingChange(saving) }} onSave={(next, label) => onChange(next, label)} />
         : activeEditor
-          ? <CounterEditor inline portal={false} counter={activeEditor} counters={counters} canDelete={activeEditor.id !== activeBase?.id || baseCounters.length > 1} onDelete={deleteCounter} onClose={closeDirectEditor} onSavingChange={(saving) => { setPanelSaving(saving); onSavingChange(saving) }} onSave={(next, label) => onChange(next, label)} />
-          : <CounterSettings view="settings" snapshot={snapshot} counters={counters} timerLinkMode={timerLinkMode} onSave={onSettingsSave} onTimerLinkModeChange={onTimerLinkModeChange} onEdit={editCounter} onAdd={add} addButtonRef={addButtonRef} onSavingChange={(saving) => { setPanelSaving(saving); onSavingChange(saving) }} />)}
+          ? <CounterEditor inline portal={false} counter={activeEditor} counters={counters} defaultLinkToId={activeBase?.id} canDelete={activeEditor.id !== activeBase?.id || baseCounters.length > 1} onDelete={deleteCounter} onClose={closeDirectEditor} onSavingChange={(saving) => { setPanelSaving(saving); onSavingChange(saving) }} onSave={(next, label) => onChange(next, label)} />
+          : <CounterSettings view="settings" snapshot={snapshot} counters={counters} timerLinkMode={timerLinkMode} onSave={onSettingsSave} onTimerLinkModeChange={onTimerLinkModeChange} onEdit={editCounter} onAdd={add} onRepeatStep={onRepeatStep} counterActionSaving={counterActionSaving} addButtonRef={addButtonRef} onSavingChange={(saving) => { setPanelSaving(saving); onSavingChange(saving) }} />)}
     </div>}
     {!collapsed && activeTab === 'counter' && <footer className="counter-popover-footer"><button type="button" className="counter-undo-button" aria-label={t("최근 카운터·진행선 작업 되돌리기")} title={t("최근 카운터·진행선 작업 되돌리기")} disabled={!snapshot.counterHistory?.length} onClick={onUndo}><RotateCcw size={16} /></button><button type="button" className="counter-rewind-open" disabled={!visibleRewindRows.length} onClick={() => { setRewindRow(String(visibleRewindRows[0] ?? '')); setRewindOpen(true) }}><RotateCcw size={15} />{t("단 되돌리기")}</button><span>{goalCompleted ? t('목표 완료') : t('현재 {row}단', { row: formatNumber(currentRow) })}</span></footer>}
     {rewindOpen && createPortal(<div className="modal-backdrop counter-modal-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) setRewindOpen(false) }}><form className="modal-card counter-rewind-dialog" role="dialog" aria-modal="true" aria-label={t("단 되돌리기")} onSubmit={confirmRewind}><div className="modal-heading"><div><p className="eyebrow">{t('단 되돌리기')}</p><h2>{t("단 되돌리기")}</h2></div><button type="button" className="icon-button" aria-label={t("닫기")} onClick={() => setRewindOpen(false)}><X size={20} /></button></div><label className="counter-settings-field">{t("다시 뜰 단")}<select value={rewindRow} onChange={(event) => setRewindRow(event.currentTarget.value)}>{visibleRewindRows.map((row) => <option key={row} value={row}>{row}{t("단")}</option>)}</select></label><p>{t("선택한 단 시점의 ")}{activeBase?.name}{t("과 연동된 카운터·진행선을 복원합니다.")}</p><div className="modal-actions"><button type="button" className="secondary-button" onClick={() => setRewindOpen(false)}>{t("취소")}</button><button type="submit" className="primary-button" disabled={!rewindRow}>{t("적용")}</button></div></form></div>, document.body)}

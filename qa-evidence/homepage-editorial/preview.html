@@ -1,0 +1,35 @@
+<!doctype html><meta charset="utf-8"><title>KnitPeek layout verification</title>
+<style>body{margin:0;background:#e9ecea;font:13px sans-serif}header{position:sticky;top:0;z-index:2;background:white;padding:8px;display:flex;gap:8px;align-items:center}button{padding:8px}#frame-wrap{margin:auto;overflow:hidden}iframe{display:block;border:0;transform-origin:top left;background:white}#results{white-space:pre-wrap;padding:12px}header a{color:#107c41}</style>
+<header><button data-width="1440">Desktop 1440</button><button data-width="768">Tablet 768</button><button data-width="390">Mobile 390</button><button id="run">Run checks</button><a href="../../portable/homepage.html" target="_blank">Homepage</a><span id="status">Ready</span></header><pre id="results" hidden></pre><div id="frame-wrap"><iframe id="preview" title="KnitPeek homepage" src="../../portable/homepage.html"></iframe></div>
+<script>
+const frame=document.getElementById('preview'), wrap=document.getElementById('frame-wrap'), status=document.getElementById('status'), results=document.getElementById('results');
+let width=1440;
+function size(w){width=w;const scale=Math.min(1,(innerWidth-24)/w);frame.style.width=w+'px';const height=w>1000?1000:1100;frame.style.height=height+'px';frame.style.transform='scale('+scale+')';wrap.style.width=w*scale+'px';wrap.style.height=height*scale+'px';}
+document.querySelectorAll('[data-width]').forEach(b=>b.onclick=()=>{results.hidden=true;size(Number(b.dataset.width));frame.contentWindow.scrollTo(0,0);scrollTo(0,0);});addEventListener('resize',()=>size(width));size(width);
+const settle=()=>Promise.resolve();
+const pause=()=>new Promise(r=>setTimeout(r,30));
+async function language(locale){const el=frame.contentDocument.getElementById('language');el.value=locale;el.dispatchEvent(new Event('change',{bubbles:true}));await settle();}
+async function route(hash){const win=frame.contentWindow;if(win.location.hash===hash)return;await new Promise(r=>{win.addEventListener('hashchange',r,{once:true});win.location.hash=hash;});}
+async function run(){const issues=[],errors=[];let checks=0;const doc=()=>frame.contentDocument;const win=()=>frame.contentWindow;
+function check(ok,message){checks++;if(!ok)issues.push(message);}
+win().addEventListener('error',e=>errors.push(e.message));
+status.textContent='Checking responsive layouts…';results.hidden=true;
+await doc().fonts.ready;
+await Promise.all([...doc().images].map(async image=>{image.loading='eager';try{await image.decode();}catch{}}));
+for(const w of [360,390,768,1024,1440]) {size(w);await route('#top');for(const lang of ['ko','en','ja','de','da','nb','fi']) {await language(lang);status.textContent=w+' / '+lang;check(doc().documentElement.scrollWidth<=w,`Overflow: home ${w} ${lang}`);check([...doc().images].every(i=>i.complete&&i.naturalWidth>0),`Image: ${w} ${lang}`);check([...doc().querySelectorAll('.language-picker select')].every(s=>s.value===lang),`Language sync: ${lang}`);check([...doc().querySelectorAll('.step-photo,.closing-photo img')].every(i=>Math.abs(i.getBoundingClientRect().width/i.getBoundingClientRect().height-4/3)<.02),`Photo ratio: ${w} ${lang}`);check(doc().documentElement.lang===lang,`Document language: ${lang}`);check([...doc().querySelectorAll('#home-content h1,#home-content h2')].every(h=>h.getBoundingClientRect().width>120),`Heading space: ${w} ${lang}`);
+if(w===390||w===1440)for(const r of ['about','guide','features','faq','terms','privacy']) {await route('#page/'+r);check(doc().documentElement.scrollWidth<=w,`Overflow: ${r} ${w} ${lang}`);check(!doc().querySelector('[data-info-page='+r+']').hidden,`Route: ${r}`);check(doc().activeElement.tagName==='H1',`Focus: ${r}`);if(r==='terms'||r==='privacy')check(doc().querySelector('[data-legal-document='+r+']').innerText.length>100,`Legal: ${r} ${lang}`);await route('#top');}}
+}
+size(390);await language('ko');await route('#top');const menu=doc().querySelector('.menu-toggle');menu.click();check(menu.getAttribute('aria-expanded')==='true'&&!doc().getElementById('mobile-menu').inert,'Menu open');doc().dispatchEvent(new KeyboardEvent('keydown',{key:'Escape',bubbles:true}));check(doc().getElementById('mobile-menu').hidden&&doc().activeElement===menu,'Escape focus');const faq=doc().querySelector('.faq-item');faq.querySelector('summary').click();check(faq.open,'FAQ opens');faq.querySelector('summary').click();check(!faq.open,'FAQ closes');
+await route('#page/no-such-page');check(!doc().getElementById('home-content').hidden&&win().location.hash==='#top','Invalid route fallback');
+check([...doc().querySelectorAll('a[href^="./index.html"]')].every(a=>/^\.\/index\.html(?:#\/projects(?:\/new)?)?$/.test(a.getAttribute('href'))),'CTA paths');
+const motion=doc().querySelector('.demo-motion-input'), line=doc().querySelector('.demo-progress');
+if(!win().matchMedia('(prefers-reduced-motion: reduce)').matches){
+check(win().getComputedStyle(line).animationPlayState==='running','Demo starts playing');motion.click();check(win().getComputedStyle(line).animationPlayState==='paused','Demo can pause');motion.click();check(win().getComputedStyle(line).animationPlayState==='running','Demo can resume');
+const parts=[line,doc().querySelector('.demo-count-before'),doc().querySelector('.demo-count-after')];
+for(const time of [0,2399,2401,4000,5641,5999]){parts.forEach(el=>el.getAnimations().forEach(a=>{a.pause();a.currentTime=time;}));const raised=win().getComputedStyle(line).transform!=='matrix(1, 0, 0, 1, 0, 0)'&&win().getComputedStyle(line).transform!=='none';const next=Number(win().getComputedStyle(parts[2]).opacity)>.5;check(raised===next,'Line and counter synchronized at '+time+'ms');}parts.forEach(el=>el.getAnimations().forEach(a=>a.play()));
+}else check(win().getComputedStyle(line).animationName==='none','Reduced motion uses static example');
+check(errors.length===0,'No JavaScript errors: '+errors.join(', '));
+const data={checks,issues,errors};results.textContent=JSON.stringify(data,null,2);results.hidden=false;status.textContent=issues.length?'FAIL':'PASS '+checks+' checks';console.log(JSON.stringify(data));size(1440);await language('ko');await route('#top');scrollTo(0,0);
+}
+document.getElementById('run').onclick=run;
+</script>

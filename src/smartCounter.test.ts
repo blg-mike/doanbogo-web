@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { advanceLinkedCounters, counterAlertState, counterSideForRow, counterTimeLapTiming, createCounter, createDefaultCounters, findCounterRewindCheckpoint, groupCounterTimeLaps, guidePositionForRow, isCounterSnapshots, isCurrentCounterSnapshots, isLegacyCounterSnapshots, maxCountersForType, nextPatternAlertRow, normalizeCounterSnapshots, normalizeCounterTimeLaps, patternRowAfterCompletion, progressGuideForCounter, reanchorProgressGuideForCounter, restoreCounterGroup, setCounterGroupRow, shouldPlayCounterTaskSound, taskSchedule } from './smartCounter'
+import { advanceLinkedCounters, counterAlertState, counterSideForRow, counterTimeLapTiming, createCounter, createDefaultCounters, findCounterRewindCheckpoint, groupCounterTimeLaps, guidePositionForRow, isCounterSnapshots, isCurrentCounterSnapshots, isLegacyCounterSnapshots, maxCountersForType, nextPatternAlertRow, normalizeCounterSnapshots, normalizeCounterTimeLaps, patternRowAfterCompletion, progressGuideForCounter, reanchorProgressGuideForCounter, repeatCounterProgress, restoreCounterGroup, setCounterGroupRow, shouldPlayCounterTaskSound, stepRepeatCounter, taskSchedule } from './smartCounter'
 import type { CounterSnapshot, ProgressGuide } from './types'
 
 describe('counter model', () => {
@@ -10,6 +10,51 @@ describe('counter model', () => {
     expect(maxCountersForType(five, 'pattern')).toBe(5)
     expect(isCurrentCounterSnapshots(five)).toBe(true)
     expect(isCounterSnapshots(five)).toBe(true)
+  })
+
+  it('calculates repeat rows and completed repeats from completed rows', () => {
+    const repeat = { ...createCounter('repeat', '소매 반복'), id: 'repeat', repeatStartRow: 1, repeatEndRow: 2, repeatTarget: 5, value: 0 }
+    expect([0, 1, 2, 3, 4, 10].map((value) => {
+      const progress = repeatCounterProgress({ ...repeat, value })!
+      return [progress.completedRepeats, progress.nextRow, progress.complete]
+    })).toEqual([
+      [0, 1, false], [0, 2, false], [1, 1, false], [1, 2, false], [2, 1, false], [5, null, true],
+    ])
+    expect(isCurrentCounterSnapshots([repeat])).toBe(true)
+    expect(isCurrentCounterSnapshots([{ ...repeat, repeatTarget: 5000 }])).toBe(false)
+    expect(isCurrentCounterSnapshots([{ ...repeat, repeatEndRow: 10_000 }])).toBe(false)
+    expect(maxCountersForType(Array.from({ length: 5 }, (_, index) => ({ ...repeat, id: 'repeat-' + index })), 'repeat')).toBe(5)
+    const singleRow = { ...repeat, repeatEndRow: 1, repeatTarget: 1 }
+    expect(repeatCounterProgress(singleRow)).toMatchObject({ totalRows: 1, completedRepeats: 0, nextRow: 1, complete: false })
+    expect(repeatCounterProgress(stepRepeatCounter([singleRow], singleRow.id, 1).counters[0])).toMatchObject({ completedRepeats: 1, nextRow: null, complete: true })
+  })
+
+  it('links repeat plus to only the selected general row counter and keeps minus independent', () => {
+    const base = { ...createCounter('simple'), id: 'base', value: 16, unit: 'row' as const }
+    const pattern = { ...createCounter('pattern'), id: 'pattern', linkedToId: 'base', currentRow: 16 }
+    const repeat = { ...createCounter('repeat'), id: 'repeat', repeatStartRow: 1, repeatEndRow: 2, repeatTarget: 5, repeatLinkedToId: 'base', value: 0 }
+    const first = stepRepeatCounter([base, pattern, repeat], repeat.id, 1)
+    const second = stepRepeatCounter(first.counters, repeat.id, 1)
+    expect(second.counters).toMatchObject([{ id: 'base', value: 18 }, { id: 'pattern', currentRow: 16 }, { id: 'repeat', value: 2 }])
+    const decreased = stepRepeatCounter(second.counters, repeat.id, -1)
+    expect(decreased.counters.find((counter) => counter.id === 'base')).toMatchObject({ value: 18 })
+    expect(decreased.counters.find((counter) => counter.id === 'repeat')).toMatchObject({ value: 1 })
+    const resumed = stepRepeatCounter(decreased.counters, repeat.id, 1)
+    expect(resumed.counters.find((counter) => counter.id === 'base')).toMatchObject({ value: 19 })
+    expect(resumed.counters.find((counter) => counter.id === 'repeat')).toMatchObject({ value: 2 })
+    expect(stepRepeatCounter([base, repeat], repeat.id, -1).blocked).toBe('minimum')
+  })
+
+  it('blocks repeat increments at completion, a reached general goal, and the row limit', () => {
+    const repeat = { ...createCounter('repeat'), id: 'repeat', repeatStartRow: 1, repeatEndRow: 2, repeatTarget: 1, value: 2 }
+    expect(stepRepeatCounter([repeat], repeat.id, 1).blocked).toBe('complete')
+    expect(stepRepeatCounter([repeat], repeat.id, -1).counters[0].value).toBe(1)
+    const goalBase = { ...createCounter('simple'), id: 'base', unit: 'row' as const, goalRow: 16, value: 16 }
+    expect(stepRepeatCounter([goalBase, { ...repeat, value: 0, repeatLinkedToId: 'base' }], repeat.id, 1).blocked).toBe('base-complete')
+    const fullBase = { ...goalBase, goalRow: null, value: 9999 }
+    expect(stepRepeatCounter([fullBase, { ...repeat, value: 0, repeatLinkedToId: 'base' }], repeat.id, 1).blocked).toBe('base-limit')
+    const linkedChild = { ...goalBase, id: 'child', linkedToId: 'parent' }
+    expect(normalizeCounterSnapshots([goalBase, linkedChild, { ...repeat, repeatLinkedToId: 'child' }]).find((counter) => counter.id === repeat.id)?.repeatLinkedToId).toBeUndefined()
   })
 
   it('keeps only unique and valid saved counter time laps', () => {
@@ -264,12 +309,18 @@ describe('counter model', () => {
   it('shows due and one-row-ahead alerts for the selected linked counter group', () => {
     const base = { ...createCounter('simple'), id: 'base', value: 5, goalRow: 6 }
     const pattern = { ...createCounter('pattern'), id: 'pattern', name: '꽈배기 A', linkedToId: 'base', startRow: 6, repeatLength: 8, patternPreviewEnabled: true }
-    const task = { ...createCounter('task'), id: 'task', name: '소매 감소', linkedToId: 'base', nextTaskRow: 6, total: 4 }
-    expect(counterAlertState([base, pattern, task], 'base', true).messages).toHaveLength(3)
-    expect(counterAlertState([{ ...base, value: 6 }, pattern, { ...task, currentRow: 6 }], 'base').messages).toEqual([
+    const task = { ...createCounter('task'), id: 'task', name: '소매 감소', linkedToId: 'base', nextTaskRow: 6, total: 4, taskKind: 'decrease' as const }
+    const increase = { ...createCounter('task'), id: 'increase', name: '소매 늘림', linkedToId: 'base', nextTaskRow: 6, total: 4, taskKind: 'increase' as const }
+    const preview = counterAlertState([base, pattern, task, increase], 'base', true)
+    expect(preview.messages).toHaveLength(4)
+    expect(preview.alerts.map(({ counterId }) => counterId)).toEqual(['base', 'pattern', 'task', 'increase'])
+    const due = counterAlertState([{ ...base, value: 6 }, pattern, { ...task, currentRow: 6 }, { ...increase, currentRow: 6 }], 'base')
+    expect(due.messages).toEqual([
       '꽈배기 A · 무늬 반복 단이에요.',
       '소매 감소 · 줄임 작업 단이에요.',
+      '소매 늘림 · 늘림 작업 단이에요.',
     ])
+    expect(due.alerts.map(({ counterId }) => counterId)).toEqual(['pattern', 'task', 'increase'])
   })
 
   it('finds an exact rewind checkpoint for one base and restores only that group', () => {

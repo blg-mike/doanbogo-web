@@ -268,7 +268,7 @@ export interface PaneSnapshot {
 
 export type CounterTaskKind = 'decrease' | 'increase'
 export type CounterTaskStatus = 'done' | 'missed'
-export type CounterKind = 'simple' | 'pattern' | 'task'
+export type CounterKind = 'simple' | 'pattern' | 'task' | 'repeat'
 export type CounterUnit = 'row' | 'stitch' | 'round'
 
 export interface CounterTaskRule {
@@ -327,6 +327,10 @@ export interface CounterSnapshot {
   goalCompleted?: boolean
   patternAlertEnabled?: boolean
   patternPreviewEnabled?: boolean
+  repeatStartRow?: number
+  repeatEndRow?: number
+  repeatTarget?: number
+  repeatLinkedToId?: string
 }
 
 export interface CounterHistoryEntry {
@@ -337,6 +341,7 @@ export interface CounterHistoryEntry {
   actualRow: number
   baseCounterId?: string
   timeLapId?: string
+  counterOnly?: boolean
   savedAt: number
 }
 

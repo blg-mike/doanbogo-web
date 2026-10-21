@@ -548,6 +548,58 @@ const counterUiTranslations: typeof specializedTranslations = {
   },
 }
 
+const repeatCounterTranslations: Record<keyof typeof specializedTranslations, Partial<Record<LocaleKey, string>>> = {
+  en: {
+    '반복 카운터': 'Repeat counter', '지정한 단 구간을 목표 횟수만큼 반복하기': 'Repeat a selected row range a set number of times', '시작 단': 'Start row', '종료 단': 'End row', '목표 반복 횟수': 'Repeat target', '일반 카운터 연동': 'Link to a main counter',
+    '선택한 일반 카운터 숫자만 올립니다. 반복에서 −를 눌러도 일반 단수는 줄지 않습니다.': 'Only the selected main counter number increases. Pressing − here does not reduce the main row count.',
+    '반복 {start}~{end}단 × {target}회': 'Repeat rows {start}–{end} × {target}', '완료 반복 {completed} / {target}회': 'Repeats {completed} / {target} complete', '현재 {row}단 진행 예정': 'Next: row {row}', '총 {completed} / {total}단 완료': 'Total: {completed} / {total} rows complete', '목표 반복 완료': 'Repeat target complete',
+    '반복 단 늘리기': 'Complete a repeat row', '반복 단 줄이기': 'Undo a repeat row', '반복 단 완료': 'Repeat row completed', '반복 단 되돌리기': 'Repeat row undone',
+    '반복 범위와 횟수의 총 단수는 9999 이하여야 합니다.': 'The range and target must add up to no more than 9,999 rows.', '목표 반복 단수는 이미 완료한 단수보다 작을 수 없습니다.': 'The repeat target cannot be below the rows already completed.',
+    '연동한 일반 카운터의 목표에 도달했거나 완료되어 반복 진행을 늘릴 수 없습니다.': 'The linked main counter has reached its goal or is complete, so the repeat cannot advance.', '연동한 일반 카운터가 9999단이라 반복 진행을 늘릴 수 없습니다.': 'The linked main counter is at row 9,999, so the repeat cannot advance.', '연동한 일반 카운터를 찾을 수 없어 진행할 수 없습니다.': 'The linked main counter is unavailable, so the repeat cannot advance.',
+  },
+  ja: {
+    '반복 카운터': '繰り返しカウンター', '지정한 단 구간을 목표 횟수만큼 반복하기': '指定した段の範囲を目標回数だけ繰り返します', '시작 단': '開始段', '종료 단': '終了段', '목표 반복 횟수': '目標回数', '일반 카운터 연동': '通常カウンターと連携',
+    '선택한 일반 카운터 숫자만 올립니다. 반복에서 −를 눌러도 일반 단수는 줄지 않습니다.': '連携時は通常カウンターの数だけ増えます。繰り返し側で−を押しても通常の段数は減りません。',
+    '반복 {start}~{end}단 × {target}회': '{start}〜{end}段を{target}回繰り返す', '완료 반복 {completed} / {target}회': '完了 {completed} / {target}回', '현재 {row}단 진행 예정': '次は{row}段', '총 {completed} / {total}단 완료': '合計 {completed} / {total}段完了', '목표 반복 완료': '目標回数に到達',
+    '반복 단 늘리기': '繰り返し段を進める', '반복 단 줄이기': '繰り返し段を戻す', '반복 단 완료': '繰り返し段を完了', '반복 단 되돌리기': '繰り返し段を戻す',
+    '반복 범위와 횟수의 총 단수는 9999 이하여야 합니다.': '範囲と回数から計算した段数は9,999以下にしてください。', '목표 반복 단수는 이미 완료한 단수보다 작을 수 없습니다.': '目標段数は完了済みの段数より少なくできません。',
+    '연동한 일반 카운터의 목표에 도달했거나 완료되어 반복 진행을 늘릴 수 없습니다.': '連携した通常カウンターが目標に達したか完了しているため、繰り返しを進められません。', '연동한 일반 카운터가 9999단이라 반복 진행을 늘릴 수 없습니다.': '連携した通常カウンターが9,999段のため、繰り返しを進められません。', '연동한 일반 카운터를 찾을 수 없어 진행할 수 없습니다.': '連携した通常カウンターが見つからないため、進められません。',
+  },
+  de: {
+    '반복 카운터': 'Wiederholungszähler', '지정한 단 구간을 목표 횟수만큼 반복하기': 'Einen ausgewählten Reihenbereich eine festgelegte Anzahl wiederholen', '시작 단': 'Startreihe', '종료 단': 'Endreihe', '목표 반복 횟수': 'Wiederholungsziel', '일반 카운터 연동': 'Mit Hauptzähler verknüpfen',
+    '선택한 일반 카운터 숫자만 올립니다. 반복에서 −를 눌러도 일반 단수는 줄지 않습니다.': 'Nur der ausgewählte Hauptzähler wird erhöht. − am Wiederholungszähler verringert die Hauptreihe nicht.',
+    '반복 {start}~{end}단 × {target}회': 'Reihen {start}–{end} × {target} wiederholen', '완료 반복 {completed} / {target}회': '{completed} / {target} Wiederholungen abgeschlossen', '현재 {row}단 진행 예정': 'Als Nächstes: Reihe {row}', '총 {completed} / {total}단 완료': 'Insgesamt {completed} / {total} Reihen abgeschlossen', '목표 반복 완료': 'Wiederholungsziel erreicht',
+    '반복 단 늘리기': 'Wiederholungsreihe abschließen', '반복 단 줄이기': 'Wiederholungsreihe zurücksetzen', '반복 단 완료': 'Wiederholungsreihe abgeschlossen', '반복 단 되돌리기': 'Wiederholungsreihe zurückgesetzt',
+    '반복 범위와 횟수의 총 단수는 9999 이하여야 합니다.': 'Bereich und Ziel dürfen zusammen höchstens 9.999 Reihen ergeben.', '목표 반복 단수는 이미 완료한 단수보다 작을 수 없습니다.': 'Das Wiederholungsziel darf nicht unter den bereits fertigen Reihen liegen.',
+    '연동한 일반 카운터의 목표에 도달했거나 완료되어 반복 진행을 늘릴 수 없습니다.': 'Der verknüpfte Hauptzähler hat sein Ziel erreicht oder ist abgeschlossen. Die Wiederholung kann nicht fortgesetzt werden.', '연동한 일반 카운터가 9999단이라 반복 진행을 늘릴 수 없습니다.': 'Der verknüpfte Hauptzähler steht bei Reihe 9.999. Die Wiederholung kann nicht fortgesetzt werden.', '연동한 일반 카운터를 찾을 수 없어 진행할 수 없습니다.': 'Der verknüpfte Hauptzähler wurde nicht gefunden.',
+  },
+  da: {
+    '반복 카운터': 'Gentagelsestæller', '지정한 단 구간을 목표 횟수만큼 반복하기': 'Gentag et valgt pindeforløb et bestemt antal gange', '시작 단': 'Startrække', '종료 단': 'Slutrække', '목표 반복 횟수': 'Gentagelsesmål', '일반 카운터 연동': 'Knyt til hovedtæller',
+    '선택한 일반 카운터 숫자만 올립니다. 반복에서 −를 눌러도 일반 단수는 줄지 않습니다.': 'Kun hovedtællerens tal øges. − på gentagelsestælleren sænker ikke hovedrækken.',
+    '반복 {start}~{end}단 × {target}회': 'Gentag pind {start}–{end} × {target}', '완료 반복 {completed} / {target}회': '{completed} / {target} gentagelser færdige', '현재 {row}단 진행 예정': 'Næste: pind {row}', '총 {completed} / {total}단 완료': 'I alt {completed} / {total} pinde færdige', '목표 반복 완료': 'Gentagelsesmål nået',
+    '반복 단 늘리기': 'Fuldfør gentagelsespind', '반복 단 줄이기': 'Fortryd gentagelsespind', '반복 단 완료': 'Gentagelsespind fuldført', '반복 단 되돌리기': 'Gentagelsespind fortrudt',
+    '반복 범위와 횟수의 총 단수는 9999 이하여야 합니다.': 'Område og mål må højst give 9.999 pinde.', '목표 반복 단수는 이미 완료한 단수보다 작을 수 없습니다.': 'Gentagelsesmålet må ikke være lavere end allerede færdige pinde.',
+    '연동한 일반 카운터의 목표에 도달했거나 완료되어 반복 진행을 늘릴 수 없습니다.': 'Hovedtælleren har nået sit mål eller er færdig, så gentagelsen kan ikke fortsætte.', '연동한 일반 카운터가 9999단이라 반복 진행을 늘릴 수 없습니다.': 'Hovedtælleren står på pind 9.999, så gentagelsen kan ikke fortsætte.', '연동한 일반 카운터를 찾을 수 없어 진행할 수 없습니다.': 'Den tilknyttede hovedtæller blev ikke fundet.',
+  },
+  nb: {
+    '반복 카운터': 'Gjenta-teller', '지정한 단 구간을 목표 횟수만큼 반복하기': 'Gjenta en valgt radsekvens et bestemt antall ganger', '시작 단': 'Startrad', '종료 단': 'Sluttrad', '목표 반복 횟수': 'Gjenta mål', '일반 카운터 연동': 'Koble til hovedteller',
+    '선택한 일반 카운터 숫자만 올립니다. 반복에서 −를 눌러도 일반 단수는 줄지 않습니다.': 'Bare tallet i hovedtelleren øker. − i gjenta-telleren reduserer ikke hovedraden.',
+    '반복 {start}~{end}단 × {target}회': 'Gjenta rad {start}–{end} × {target}', '완료 반복 {completed} / {target}회': '{completed} / {target} repetisjoner fullført', '현재 {row}단 진행 예정': 'Neste: rad {row}', '총 {completed} / {total}단 완료': 'Totalt {completed} / {total} rader fullført', '목표 반복 완료': 'Gjenta-målet er nådd',
+    '반복 단 늘리기': 'Fullfør gjentarad', '반복 단 줄이기': 'Angre gjentarad', '반복 단 완료': 'Gjentarad fullført', '반복 단 되돌리기': 'Gjentarad angret',
+    '반복 범위와 횟수의 총 단수는 9999 이하여야 합니다.': 'Området og målet kan til sammen ikke overstige 9 999 rader.', '목표 반복 단수는 이미 완료한 단수보다 작을 수 없습니다.': 'Gjenta-målet kan ikke være lavere enn antall fullførte rader.',
+    '연동한 일반 카운터의 목표에 도달했거나 완료되어 반복 진행을 늘릴 수 없습니다.': 'Hovedtelleren har nådd målet eller er fullført, så gjentakelsen kan ikke fortsette.', '연동한 일반 카운터가 9999단이라 반복 진행을 늘릴 수 없습니다.': 'Hovedtelleren står på rad 9 999, så gjentakelsen kan ikke fortsette.', '연동한 일반 카운터를 찾을 수 없어 진행할 수 없습니다.': 'Fant ikke den tilknyttede hovedtelleren.',
+  },
+  fi: {
+    '반복 카운터': 'Toistolaskuri', '지정한 단 구간을 목표 횟수만큼 반복하기': 'Toista valittua kerrosväliä määritetyn määrän kertoja', '시작 단': 'Aloituskerros', '종료 단': 'Lopetuskerros', '목표 반복 횟수': 'Toistotavoite', '일반 카운터 연동': 'Yhdistä päälaskuriin',
+    '선택한 일반 카운터 숫자만 올립니다. 반복에서 −를 눌러도 일반 단수는 줄지 않습니다.': 'Vain valitun päälaskurin luku kasvaa. Toistolaskurin − ei vähennä päälaskurin kerroksia.',
+    '반복 {start}~{end}단 × {target}회': 'Toista kerrokset {start}–{end} × {target}', '완료 반복 {completed} / {target}회': 'Toistoja valmiina {completed} / {target}', '현재 {row}단 진행 예정': 'Seuraavaksi kerros {row}', '총 {completed} / {total}단 완료': 'Yhteensä {completed} / {total} kerrosta valmiina', '목표 반복 완료': 'Toistotavoite saavutettu',
+    '반복 단 늘리기': 'Valmis toistokerros', '반복 단 줄이기': 'Kumoa toistokerros', '반복 단 완료': 'Toistokerros valmis', '반복 단 되돌리기': 'Toistokerros kumottu',
+    '반복 범위와 횟수의 총 단수는 9999 이하여야 합니다.': 'Alueen ja tavoitteen yhteismäärä saa olla enintään 9 999 kerrosta.', '목표 반복 단수는 이미 완료한 단수보다 작을 수 없습니다.': 'Toistotavoite ei voi olla jo tehtyjä kerroksia pienempi.',
+    '연동한 일반 카운터의 목표에 도달했거나 완료되어 반복 진행을 늘릴 수 없습니다.': 'Yhdistetty päälaskuri on saavuttanut tavoitteensa tai valmis, joten toistoa ei voi jatkaa.', '연동한 일반 카운터가 9999단이라 반복 진행을 늘릴 수 없습니다.': 'Päälaskurissa on 9 999 kerrosta, joten toistoa ei voi jatkaa.', '연동한 일반 카운터를 찾을 수 없어 진행할 수 없습니다.': 'Yhdistettyä päälaskuria ei löydy.',
+  },
+}
+
 for (const locale of Object.keys(counterUiTranslations) as (keyof typeof counterUiTranslations)[]) {
   Object.assign(specializedTranslations[locale], counterUiTranslations[locale])
+  Object.assign(specializedTranslations[locale], repeatCounterTranslations[locale])
 }

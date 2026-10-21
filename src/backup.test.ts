@@ -114,7 +114,7 @@ describe('portable workspace backup', () => {
     await deleteDocument(id)
   })
 
-  it('round-trips photo folders and image pages in the v14 backup', async () => {
+  it('round-trips photo folders and image pages in the v15 backup', async () => {
     const folder = await createPhotoFolder('종이 도안', [
       { blob: new Blob(['first-page'], { type: 'image/jpeg' }), width: 1200, height: 1600, addedAt: 1, sourceName: '01.jpg' },
       { blob: new Blob(['second-page'], { type: 'image/jpeg' }), width: 1600, height: 1200, addedAt: 2, sourceName: '02.jpg' },
@@ -123,7 +123,7 @@ describe('portable workspace backup', () => {
     const backup = await createWorkspaceBackup()
     const entries = unzipSync(new Uint8Array(await backup.arrayBuffer()))
     const manifest = JSON.parse(strFromU8(entries['manifest.json'])) as { version: number; documents: Record<string, unknown>[]; photoPages: Record<string, unknown>[] }
-    expect(manifest.version).toBe(14)
+    expect(manifest.version).toBe(15)
     expect(manifest.documents.find((item) => item.id === folder.id)).toMatchObject({ kind: 'photos', pdfPath: null, pageCount: 2 })
     expect(manifest.photoPages).toHaveLength(2)
 
@@ -357,12 +357,16 @@ describe('portable workspace backup', () => {
     const rowCounter = { ...createCounter('simple', '몸판 단'), id: 'body-row', value: 19, unit: 'row' as const, goalRow: 36, goalFinalSide: 'rs' as const, firstSide: 'ws' as const }
     const patternCounter = { ...createCounter('pattern', '몸판 무늬'), id: 'body-pattern', linkedToId: rowCounter.id, value: 3, currentRow: 19, patternRow: 3, startRow: 5, repeatLength: 12, repeatCount: 3, repeatStartNumber: 1, patternPreviewEnabled: true }
     const taskCounter = { ...createCounter('task', '몸판 줄임'), id: 'body-decrease', linkedToId: rowCounter.id, value: 1, currentRow: 19, taskKind: 'decrease' as const, firstTaskRow: 6, interval: 6, total: 8, completedCount: 1, nextTaskRow: 24, taskRecords: [{ row: 6, status: 'done' as const }, { row: 12, status: 'missed' as const }] }
-    const counters = [rowCounter, patternCounter, taskCounter]
+    const repeatCounter = { ...createCounter('repeat', '소매 반복'), id: 'sleeve-repeat', repeatStartRow: 1, repeatEndRow: 2, repeatTarget: 5, repeatLinkedToId: rowCounter.id, value: 2 }
+    const counters = [rowCounter, patternCounter, taskCounter, repeatCounter]
     await saveViewer({
       ...viewer,
       thumbnailGroups: [{ id: 'label-a', name: 'A', pageNumbers: [2, 5] }],
       counters,
-      counterHistory: [{ id: 'history-1', label: '몸판 단 · 19단 완료', counters, guides: [], actualRow: 19, baseCounterId: rowCounter.id, timeLapId: 'lap-1', savedAt: Date.now() }],
+      counterHistory: [
+        { id: 'history-1', label: '몸판 단 · 19단 완료', counters, guides: [], actualRow: 19, baseCounterId: rowCounter.id, timeLapId: 'lap-1', savedAt: Date.now() },
+        { id: 'history-repeat', label: '소매 반복 · 반복 단 완료', counters, guides: [], actualRow: 0, counterOnly: true, savedAt: Date.now() },
+      ],
       counterTimeLaps: [{ id: 'lap-1', counterId: rowCounter.id, sessionId: 'session-1', historyEntryId: 'history-1', elapsedMs: 120000, durationMs: 120000, rowDelta: 1, recordedAt: Date.now() }],
       counterSoundEnabled: false,
       counterPreviewEnabled: true,
@@ -426,7 +430,7 @@ describe('portable workspace backup', () => {
     const backup = await createWorkspaceBackup()
     const archiveEntries = unzipSync(new Uint8Array(await backup.arrayBuffer()))
     const manifest = JSON.parse(strFromU8(archiveEntries['manifest.json']))
-    expect(manifest.version).toBe(14)
+    expect(manifest.version).toBe(15)
     manifest.pages.push(
       { documentId: original.id, pageNumber: 2, hidden: true, hiddenGroupId: 'hide-batch-1', bookmarked: false },
       { documentId: original.id, pageNumber: 5, hidden: true, hiddenGroupId: 'hide-batch-1', bookmarked: false },
@@ -453,10 +457,12 @@ describe('portable workspace backup', () => {
       { id: 'body-row', kind: 'simple', value: 19, name: '몸판 단', goalRow: 36, goalFinalSide: 'rs', firstSide: 'ws' },
       { id: 'body-pattern', kind: 'pattern', currentRow: 19, patternRow: 3, repeatLength: 12, repeatCount: 3, patternPreviewEnabled: true },
       { id: 'body-decrease', kind: 'task', completedCount: 1, nextTaskRow: 24, taskRecords: [{ row: 6, status: 'done' }, { row: 12, status: 'missed' }] },
+      { id: 'sleeve-repeat', kind: 'repeat', repeatStartRow: 1, repeatEndRow: 2, repeatTarget: 5, repeatLinkedToId: 'body-row', value: 2 },
     ])
-    expect(restoredViewer.counterHistory).toHaveLength(1)
+    expect(restoredViewer.counterHistory).toHaveLength(2)
     expect(restoredViewer.counterHistory?.[0].baseCounterId).toBe('body-row')
     expect(restoredViewer.counterHistory?.[0].timeLapId).toBe('lap-1')
+    expect(restoredViewer.counterHistory?.[1].counterOnly).toBe(true)
     expect(restoredViewer.counterTimeLaps).toMatchObject([{ id: 'lap-1', counterId: 'body-row', sessionId: 'session-1', historyEntryId: 'history-1', elapsedMs: 120000, durationMs: 120000, rowDelta: 1, rowNumber: 20 }])
     expect(restoredViewer.counterPreviewEnabled).toBe(true)
     expect(restoredViewer.counterVibrationEnabled).toBe(true)
