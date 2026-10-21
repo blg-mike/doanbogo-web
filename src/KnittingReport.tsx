@@ -7,7 +7,7 @@ import type { CounterSnapshot, DocumentWorkTimeDay, KnittingReport, ReportAccess
 import { exportKnittingReportPdf } from './knittingReportPdf'
 import InstagramReportDialog from './InstagramReportDialog'
 import InstagramCaptionDialog from './InstagramCaptionDialog'
-import { analyzeKnittingReportCandidates } from './knittingReportAnalysis'
+import { analyzeKnittingReportCandidates, collectReportPageTexts } from './knittingReportAnalysis'
 import ReportWorkTime from './ReportWorkTime'
 import type { DocumentWorkTimeTotals } from './DocumentWorkTimer'
 import { getGaugeMeasurement } from './reportFormatting'
@@ -70,6 +70,7 @@ function makeModification(): ReportModification {
 
 type ReportCollectionKey = 'yarns' | 'needles' | 'accessories' | 'measurements' | 'modifications'
 type ReportRow = ReportYarn | ReportNeedle | ReportAccessory | ReportMeasurement | ReportModification
+type ReportTextLookup = { documentId: string; reportId: string; status: 'loading' | 'error' } | { documentId: string; reportId: string; status: 'success'; texts: ReturnType<typeof collectReportPageTexts> }
 
 async function compressPhoto(file: File) {
   const source = await createImageBitmap(file)
@@ -334,6 +335,8 @@ export default function KnittingReport({ documentId, fileName, pageCount, totalW
   const [candidateSelection, setCandidateSelection] = useState<string[]>([])
   const [analysisLoading, setAnalysisLoading] = useState(false)
   const [analysisNotice, setAnalysisNotice] = useState('')
+  const [pageTextLookup, setPageTextLookup] = useState<ReportTextLookup | null>(null)
+  const pageTextLookupRequestRef = useRef(0)
   const timer = useRef<number | undefined>(undefined)
   const undoTimer = useRef<number | undefined>(undefined)
   const photoProcessingCount = useRef(0)
@@ -356,9 +359,15 @@ export default function KnittingReport({ documentId, fileName, pageCount, totalW
     setProcessingPhotos(photoProcessingCount.current > 0)
   }
 
+  function clearPageTextLookup() {
+    pageTextLookupRequestRef.current += 1
+    setPageTextLookup(null)
+  }
+
   useEffect(() => {
     let disposed = false
     void (async () => {
+      clearPageTextLookup()
       setReport(null)
       setReports([])
       let currentReports = await getKnittingReports(documentId)
@@ -406,6 +415,7 @@ export default function KnittingReport({ documentId, fileName, pageCount, totalW
 
   async function switchReport(id: string) {
     if (switching || processingPhotos || id === reportRef.current?.id) return
+    clearPageTextLookup()
     setSwitching(true)
     try {
       await flushPendingReport()
@@ -424,6 +434,7 @@ export default function KnittingReport({ documentId, fileName, pageCount, totalW
 
   async function addReport() {
     if (switching || processingPhotos) return
+    clearPageTextLookup()
     setSwitching(true)
     try {
       await flushPendingReport()
@@ -444,6 +455,7 @@ export default function KnittingReport({ documentId, fileName, pageCount, totalW
   async function confirmDeleteReport() {
     const current = reportRef.current
     if (!current || switching || exporting || processingPhotos || titleEditing) return
+    clearPageTextLookup()
     let deleted = false
     setSwitching(true)
     setDeleteError('')
@@ -633,6 +645,20 @@ export default function KnittingReport({ documentId, fileName, pageCount, totalW
       setSaveState(cause instanceof Error ? translateMessage(cause.message) : t('수정사항 후보를 분석하지 못했습니다.'))
     } finally {
       setAnalysisLoading(false)
+    }
+  }
+
+  async function findPageTexts() {
+    const target = reportRef.current
+    if (!target || target.documentId !== documentId || switching || (pageTextLookup?.status === 'loading' && pageTextLookup.reportId === target.id)) return
+    const requestId = ++pageTextLookupRequestRef.current
+    setPageTextLookup({ documentId, reportId: target.id, status: 'loading' })
+    try {
+      const works = await getPageWorks(documentId)
+      if (requestId !== pageTextLookupRequestRef.current || reportRef.current?.id !== target.id || deletingReportIdRef.current === target.id) return
+      setPageTextLookup({ documentId, reportId: target.id, status: 'success', texts: collectReportPageTexts(works) })
+    } catch {
+      if (requestId === pageTextLookupRequestRef.current && reportRef.current?.id === target.id && deletingReportIdRef.current !== target.id) setPageTextLookup({ documentId, reportId: target.id, status: 'error' })
     }
   }
 
@@ -827,6 +853,8 @@ export default function KnittingReport({ documentId, fileName, pageCount, totalW
     ? <BrandLoading kind="report" requestId={'report:' + documentId} layout="report" />
     : <div className="knitting-report-error" role="alert">{translateMessage(saveState)}</div>
   const loadedReport = report
+  const visiblePageTextLookup = pageTextLookup?.documentId === documentId && pageTextLookup.reportId === loadedReport.id && (reportId === undefined || reportId === loadedReport.id) ? pageTextLookup : null
+  const pageTextLoading = visiblePageTextLookup?.status === 'loading'
   const values = report.fields
   const detailTitles: Record<DetailId, LocaleKey> = { project: '프로젝트 정보', pattern: '도안 정보', size: '사이즈', modifications: '도안에서 수정한 부분', accessories: '부자재', yarnMemo: '실 메모' }
   function saveMeasurementSelection(presets: MeasurementEntryDraft[], custom: MeasurementEntryDraft[]) {
@@ -871,7 +899,15 @@ export default function KnittingReport({ documentId, fileName, pageCount, totalW
       {field('pattern.features', '디자인 특징', 'tags', featureOptions.split(','), true)}{field('pattern.memo', '도안 메모', 'multiline', undefined, true)}
     </div>
     if (id === 'size') return <>{field('pattern.originalSizes', '도안 사이즈')}{measurementEditor}</>
-    if (id === 'modifications') return <><p className="report-detail-hint">{t("뜨는 중 남긴 메모에서 후보를 찾습니다. 확인한 내용만 보고서에 추가돼요.")}</p><button type="button" className="secondary-button" disabled={analysisLoading || switching} onClick={() => void analyzeNow()}><Sparkles size={15} />{analysisLoading ? t('찾는 중…') : t('수정사항 다시 찾기')}</button>
+    if (id === 'modifications') return <><p className="report-detail-hint">{t('도안의 텍스트 도구로 작성한 원문을 조회합니다. 보고서에는 자동 추가되지 않습니다.')}</p><button type="button" className="secondary-button" disabled={pageTextLoading || switching} onClick={() => void findPageTexts()}><Sparkles size={15} />{pageTextLoading ? t('찾는 중…') : t('수정사항 다시 찾기')}</button>
+      {visiblePageTextLookup && <section className="report-page-text-results" aria-live="polite" aria-busy={pageTextLoading}>
+        <h3>{t('도안에 작성한 텍스트')}</h3>
+        {visiblePageTextLookup.status === 'loading' && <p role="status">{t('찾는 중…')}</p>}
+        {visiblePageTextLookup.status === 'error' && <div><p role="alert">{t('도안 텍스트를 불러오지 못했습니다.')}</p><button type="button" className="text-button" onClick={() => void findPageTexts()}>{t('다시 시도')}</button></div>}
+        {visiblePageTextLookup.status === 'success' && (visiblePageTextLookup.texts.length
+          ? <ol>{visiblePageTextLookup.texts.map((item) => <li key={item.pageNumber + ':' + item.id}><small>{t('페이지 {page}', { page: formatNumber(item.pageNumber) })}</small><p>{item.text}</p></li>)}</ol>
+          : <p role="status">{t('도안에 작성한 텍스트가 없습니다.')}</p>)}
+      </section>}
       {loadedReport.modifications.map((item, index) => <article className="report-entry-card compact" key={item.id}><div className="report-entry-title"><strong>{item.section || '수정사항 ' + (index + 1)}</strong><button type="button" className="report-icon-button" aria-label={t("수정사항 삭제")} onClick={() => removeRow('modifications', item.id)}><Trash2 size={15} /></button></div>{rowFields(item, 'modifications', [{ field: 'memo', label: '메모', wide: true }])}</article>)}
       {!loadedReport.modifications.length && <p className="report-empty-hint">{t("아직 기록된 수정사항이 없어요.")}</p>}<button type="button" className="secondary-button report-add-button" onClick={() => update((current) => ({ ...current, modifications: [...current.modifications, makeModification()] }))}><Plus size={15} />{t("직접 추가")}</button></>
     if (id === 'accessories') return <>
@@ -890,7 +926,7 @@ export default function KnittingReport({ documentId, fileName, pageCount, totalW
   return <div className="knitting-report-editor">
     <header className="report-appbar"><button type="button" className="report-appbar-back" aria-label={t("도안으로 돌아가기")} onClick={onBack}><ArrowLeft size={20} /></button><strong>{t("뜨개보고서")}</strong><div className="report-appbar-actions"><span className="report-save-indicator"><i />{translateMessage(saveState)}</span><button type="button" className="report-appbar-share" disabled={switching || processingPhotos || titleEditing} onClick={() => void openCaption()}><Share2 size={15} /><span>{t("공유하기")}</span></button><button ref={moreTriggerRef} type="button" className="report-more-trigger" aria-label={t("보고서 메뉴")} aria-expanded={moreOpen} onClick={() => setMoreOpen((value) => !value)}><Ellipsis size={22} /></button></div>
       {moreOpen && <div ref={moreMenuRef} className="report-more-menu"><label>{t("보고서 선택")}<select aria-label={t("보고서 선택")} value={report.id} disabled={switching || processingPhotos || titleEditing} onChange={(event) => { setMoreOpen(false); void switchReport(event.currentTarget.value) }}>{reports.map((item, index) => <option key={item.id} value={item.id}>{item.title || t('보고서') + ' ' + (index + 1)}</option>)}</select></label>
-        <button type="button" aria-pressed={report.status === 'complete'} disabled={switching || exporting || processingPhotos || titleEditing} onClick={() => { setMoreOpen(false); update((current) => ({ ...current, status: current.status === 'complete' ? 'draft' : 'complete', completedAt: current.status === 'complete' ? null : Date.now() })) }}><Check size={15} />{report.status === 'complete' ? t('작성 중으로 변경') : t('작성 완료')}</button><button type="button" disabled={switching || exporting || processingPhotos || titleEditing} onClick={() => { setMoreOpen(false); setActiveDetail('project') }}><Pencil size={15} />{t("수정")}</button><button type="button" className="danger-action" disabled={switching || exporting || processingPhotos || titleEditing || analysisLoading} onClick={() => { setMoreOpen(false); setDeleteError(''); setDeleteConfirmOpen(true) }}><Trash2 size={15} />{t("삭제")}</button><button type="button" disabled={switching || exporting || processingPhotos || titleEditing} onClick={() => { setMoreOpen(false); void addReport() }}><Plus size={15} />{t("보고서 추가")}</button><button type="button" disabled={switching || exporting || processingPhotos || titleEditing} onClick={() => { setMoreOpen(false); void downloadReport() }}><Download size={15} />{t("PDF 다운로드")}</button><button type="button" disabled={switching || processingPhotos || titleEditing} onClick={() => { setMoreOpen(false); void openInstagramImage() }}><ImagePlus size={15} />{t("인스타 이미지 만들기")}</button><button type="button" disabled={analysisLoading || switching} onClick={() => { setMoreOpen(false); void analyzeNow() }}><Sparkles size={15} />{t("수정사항 다시 찾기")}</button>
+        <button type="button" aria-pressed={report.status === 'complete'} disabled={switching || exporting || processingPhotos || titleEditing} onClick={() => { setMoreOpen(false); update((current) => ({ ...current, status: current.status === 'complete' ? 'draft' : 'complete', completedAt: current.status === 'complete' ? null : Date.now() })) }}><Check size={15} />{report.status === 'complete' ? t('작성 중으로 변경') : t('작성 완료')}</button><button type="button" disabled={switching || exporting || processingPhotos || titleEditing} onClick={() => { setMoreOpen(false); setActiveDetail('project') }}><Pencil size={15} />{t("수정")}</button><button type="button" className="danger-action" disabled={switching || exporting || processingPhotos || titleEditing || analysisLoading} onClick={() => { setMoreOpen(false); setDeleteError(''); setDeleteConfirmOpen(true) }}><Trash2 size={15} />{t("삭제")}</button><button type="button" disabled={switching || exporting || processingPhotos || titleEditing} onClick={() => { setMoreOpen(false); void addReport() }}><Plus size={15} />{t("보고서 추가")}</button><button type="button" disabled={switching || exporting || processingPhotos || titleEditing} onClick={() => { setMoreOpen(false); void downloadReport() }}><Download size={15} />{t("PDF 다운로드")}</button><button type="button" disabled={switching || processingPhotos || titleEditing} onClick={() => { setMoreOpen(false); void openInstagramImage() }}><ImagePlus size={15} />{t("인스타 이미지 만들기")}</button><button type="button" disabled={pageTextLoading || switching} onClick={() => { setMoreOpen(false); setActiveDetail("modifications"); void findPageTexts() }}><Sparkles size={15} />{pageTextLoading ? t("찾는 중…") : t("수정사항 다시 찾기")}</button>
       </div>}
     </header>
     <div className={'report-workspace' + (activeDetail ? ' editing' : '')}>

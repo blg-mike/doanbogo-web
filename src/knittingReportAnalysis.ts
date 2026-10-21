@@ -6,6 +6,12 @@ export interface ReportNoteInput {
   text: string
 }
 
+export function collectReportPageTexts(works: PageWorkRecord[]): ReportNoteInput[] {
+  return [...works].sort((left, right) => left.pageNumber - right.pageNumber).flatMap((work) => work.annotations
+    .filter((annotation) => annotation.type === 'text' && Boolean(annotation.text?.trim()))
+    .map((annotation) => ({ pageNumber: work.pageNumber, id: annotation.id, text: annotation.text ?? '' })))
+}
+
 function normalized(value: string) {
   return value.toLocaleLowerCase().replace(/\s+/g, ' ').trim()
 }

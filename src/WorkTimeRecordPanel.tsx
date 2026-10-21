@@ -344,7 +344,7 @@ export default function WorkTimeRecordPanel({ documentId, initialTotalWorkTimeMs
           <label>{t('작업 날짜')}<input type="date" value={date} required disabled={closeLocked} onChange={(event) => setDate(event.currentTarget.value)} /></label>
           <div className="worktime-record-time-fields">
             <label>{t('시간')}<input type="number" inputMode="numeric" min="0" max="9999" step="1" value={hours} disabled={closeLocked} onChange={(event) => setHours(event.currentTarget.value)} /></label>
-            <label>{t('분')}<select value={minutes} disabled={closeLocked} onChange={(event) => setMinutes(event.currentTarget.value)}>{Array.from({ length: 60 }, (_, minute) => <option key={minute} value={minute}>{formatNumber(minute)}{t('분')}</option>)}</select></label>
+            <label>{t('분')}<input type="number" inputMode="numeric" min="0" max="59" step="1" value={minutes} disabled={closeLocked} onChange={(event) => setMinutes(event.currentTarget.value)} /></label>
           </div>
           {addError && <p className="worktime-record-error" role="alert">{addError}</p>}
           <button type="submit" className="report-worktime-save" disabled={closeLocked}>{saving ? t('저장 중…') : t('저장')}</button>

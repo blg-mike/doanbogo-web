@@ -2,6 +2,7 @@ import type { LocaleKey } from './ko'
 
 export const reportTranslations: Record<'en' | 'ja' | 'de' | 'da' | 'nb' | 'fi', Partial<Record<LocaleKey, string>>> = {
   en: {
+    '도안의 텍스트 도구로 작성한 원문을 조회합니다. 보고서에는 자동 추가되지 않습니다.': 'View the original text written with the pattern text tool. It is not added to the report automatically.', '도안에 작성한 텍스트': 'Text written on the pattern', '도안에 작성한 텍스트가 없습니다.': 'There is no text on this pattern.', '도안 텍스트를 불러오지 못했습니다.': 'Could not load text from the pattern.', '페이지 {page}': 'Page {page}', '다시 시도': 'Try again',
     '작업시간 초기화': 'Reset work time', '날짜별 작업시간 초기화': 'Reset time for a date', '전체 작업시간 초기화': 'Reset all work time',
     '선택한 날짜의 작업시간과 세션 기록을 초기화합니다.': 'Clear the selected day’s work time and session records.', '누적 작업시간과 모든 세션 기록을 초기화합니다.': 'Clear all accumulated work time and session records.', '작업 메모는 유지됩니다.': 'Work notes will be kept.',
     '초기화할 날짜': 'Date to reset', '작업시간을 초기화하지 못했습니다.': 'Could not reset work time.', '초기화': 'Reset', '초기화 중…': 'Resetting…',
@@ -24,6 +25,7 @@ export const reportTranslations: Record<'en' | 'ja' | 'de' | 'da' | 'nb' | 'fi',
     '총장': 'Total length', '어깨너비': 'Shoulder width', '암홀': 'Armhole', '팔길이': 'Arm length', '목깊이': 'Neck depth', '완성 실측 추가': 'Add finished measurements', '치수 추가': 'Add measurements', '완성한 작품의 치수를 기록해 보세요.': 'Record the measurements of your finished project.', '직접 입력': 'Custom measurement', '직접 입력 항목 더 추가': 'Add another custom measurement', '추가됨': 'Added', '입력 내용을 버릴까요?': 'Discard your measurement changes?', '입력된 치수를 삭제할까요?': 'Delete the entered measurements?', '직접 입력 항목 이름을 입력하세요.': 'Enter a name for each custom measurement.', '{count}개 추가': 'Add {count}', '{count}개 적용': 'Apply {count}', '항목명 수정': 'Edit measurement name',
   },
   ja: {
+    '도안의 텍스트 도구로 작성한 원문을 조회합니다. 보고서에는 자동 추가되지 않습니다.': '編み図のテキストツールで書いた原文を表示します。レポートには自動で追加されません。', '도안에 작성한 텍스트': '編み図に書いたテキスト', '도안에 작성한 텍스트가 없습니다.': '編み図に書かれたテキストはありません。', '도안 텍스트를 불러오지 못했습니다.': '編み図のテキストを読み込めませんでした。', '페이지 {page}': '{page}ページ', '다시 시도': '再試行',
     '작업시간 초기화': '作業時間をリセット', '날짜별 작업시간 초기화': '日別の作業時間をリセット', '전체 작업시간 초기화': 'すべての作業時間をリセット',
     '선택한 날짜의 작업시간과 세션 기록을 초기화합니다.': '選択した日の作業時間とセッション記録を消去します。', '누적 작업시간과 모든 세션 기록을 초기화합니다.': '累計作業時間とすべてのセッション記録を消去します。', '작업 메모는 유지됩니다.': '作業メモは保持されます。',
     '초기화할 날짜': 'リセットする日付', '작업시간을 초기화하지 못했습니다.': '作業時間をリセットできませんでした。', '초기화': 'リセット', '초기화 중…': 'リセット中…',
@@ -46,6 +48,7 @@ export const reportTranslations: Record<'en' | 'ja' | 'de' | 'da' | 'nb' | 'fi',
     '총장': '総丈', '어깨너비': '肩幅', '암홀': '袖ぐり', '팔길이': '袖丈', '목깊이': '襟ぐりの深さ', '완성 실측 추가': '完成サイズを追加', '치수 추가': 'サイズを追加', '완성한 작품의 치수를 기록해 보세요.': '完成した作品のサイズを記録しましょう。', '직접 입력': 'カスタムサイズ', '직접 입력 항목 더 추가': 'カスタムサイズを追加', '추가됨': '追加済み', '입력 내용을 버릴까요?': '入力内容を破棄しますか？', '입력된 치수를 삭제할까요?': '入力済みの寸法を削除しますか？', '직접 입력 항목 이름을 입력하세요.': 'カスタムサイズの名前を入力してください。', '{count}개 추가': '{count}件追加', '{count}개 적용': '{count}件を適用', '항목명 수정': '項目名を編集',
   },
   de: {
+    '도안의 텍스트 도구로 작성한 원문을 조회합니다. 보고서에는 자동 추가되지 않습니다.': 'Zeigt den Originaltext an, der mit dem Textwerkzeug in der Anleitung geschrieben wurde. Er wird nicht automatisch in den Bericht übernommen.', '도안에 작성한 텍스트': 'In die Anleitung geschriebener Text', '도안에 작성한 텍스트가 없습니다.': 'In dieser Anleitung ist kein Text vorhanden.', '도안 텍스트를 불러오지 못했습니다.': 'Der Text aus der Anleitung konnte nicht geladen werden.', '페이지 {page}': 'Seite {page}', '다시 시도': 'Erneut versuchen',
     '작업시간 초기화': 'Arbeitszeit zurücksetzen', '날짜별 작업시간 초기화': 'Arbeitszeit eines Tages zurücksetzen', '전체 작업시간 초기화': 'Gesamte Arbeitszeit zurücksetzen',
     '선택한 날짜의 작업시간과 세션 기록을 초기화합니다.': 'Arbeitszeit und Sitzungen des ausgewählten Tages löschen.', '누적 작업시간과 모든 세션 기록을 초기화합니다.': 'Gesamte Arbeitszeit und alle Sitzungen löschen.', '작업 메모는 유지됩니다.': 'Arbeitsnotizen bleiben erhalten.',
     '초기화할 날짜': 'Zurückzusetzender Tag', '작업시간을 초기화하지 못했습니다.': 'Arbeitszeit konnte nicht zurückgesetzt werden.', '초기화': 'Zurücksetzen', '초기화 중…': 'Wird zurückgesetzt…',
@@ -68,6 +71,7 @@ export const reportTranslations: Record<'en' | 'ja' | 'de' | 'da' | 'nb' | 'fi',
     '총장': 'Gesamtlänge', '어깨너비': 'Schulterbreite', '암홀': 'Armausschnitt', '팔길이': 'Ärmellänge', '목깊이': 'Halstiefe', '완성 실측 추가': 'Fertigmaße hinzufügen', '치수 추가': 'Maße hinzufügen', '완성한 작품의 치수를 기록해 보세요.': 'Notiere die Maße deines fertigen Strickstücks.', '직접 입력': 'Eigenes Maß', '직접 입력 항목 더 추가': 'Weiteres eigenes Maß hinzufügen', '추가됨': 'Hinzugefügt', '입력 내용을 버릴까요?': 'Änderungen an den Maßen verwerfen?', '입력된 치수를 삭제할까요?': 'Eingegebene Maße löschen?', '직접 입력 항목 이름을 입력하세요.': 'Gib für jedes eigene Maß einen Namen ein.', '{count}개 추가': '{count} hinzufügen', '{count}개 적용': '{count} anwenden', '항목명 수정': 'Maßname bearbeiten',
   },
   da: {
+    '도안의 텍스트 도구로 작성한 원문을 조회합니다. 보고서에는 자동 추가되지 않습니다.': 'Vis originalteksten skrevet med opskriftens tekstværktøj. Den føjes ikke automatisk til rapporten.', '도안에 작성한 텍스트': 'Tekst skrevet på opskriften', '도안에 작성한 텍스트가 없습니다.': 'Der er ingen tekst på opskriften.', '도안 텍스트를 불러오지 못했습니다.': 'Teksten fra opskriften kunne ikke indlæses.', '페이지 {page}': 'Side {page}', '다시 시도': 'Prøv igen',
     '작업시간 초기화': 'Nulstil arbejdstid', '날짜별 작업시간 초기화': 'Nulstil arbejdstid for en dag', '전체 작업시간 초기화': 'Nulstil al arbejdstid',
     '선택한 날짜의 작업시간과 세션 기록을 초기화합니다.': 'Ryd arbejdstid og sessioner for den valgte dag.', '누적 작업시간과 모든 세션 기록을 초기화합니다.': 'Ryd samlet arbejdstid og alle sessioner.', '작업 메모는 유지됩니다.': 'Arbejdsnoter bevares.',
     '초기화할 날짜': 'Dato, der skal nulstilles', '작업시간을 초기화하지 못했습니다.': 'Arbejdstiden kunne ikke nulstilles.', '초기화': 'Nulstil', '초기화 중…': 'Nulstiller…',
@@ -90,6 +94,7 @@ export const reportTranslations: Record<'en' | 'ja' | 'de' | 'da' | 'nb' | 'fi',
     '총장': 'Samlet længde', '어깨너비': 'Skulderbredde', '암홀': 'Ærmegab', '팔길이': 'Ærmelængde', '목깊이': 'Halsdybde', '완성 실측 추가': 'Tilføj færdige mål', '치수 추가': 'Tilføj mål', '완성한 작품의 치수를 기록해 보세요.': 'Skriv målene på dit færdige strikketøj.', '직접 입력': 'Eget mål', '직접 입력 항목 더 추가': 'Tilføj endnu et eget mål', '추가됨': 'Tilføjet', '입력 내용을 버릴까요?': 'Vil du kassere dine ændringer?', '입력된 치수를 삭제할까요?': 'Vil du slette de indtastede mål?', '직접 입력 항목 이름을 입력하세요.': 'Angiv et navn til hvert eget mål.', '{count}개 추가': 'Tilføj {count}', '{count}개 적용': 'Anvend {count}', '항목명 수정': 'Rediger målnavn',
   },
   nb: {
+    '도안의 텍스트 도구로 작성한 원문을 조회합니다. 보고서에는 자동 추가되지 않습니다.': 'Vis originalteksten skrevet med oppskriftens tekstverktøy. Den legges ikke automatisk til i rapporten.', '도안에 작성한 텍스트': 'Tekst skrevet på oppskriften', '도안에 작성한 텍스트가 없습니다.': 'Det finnes ingen tekst på oppskriften.', '도안 텍스트를 불러오지 못했습니다.': 'Kunne ikke laste inn teksten fra oppskriften.', '페이지 {page}': 'Side {page}', '다시 시도': 'Prøv igjen',
     '작업시간 초기화': 'Tilbakestill arbeidstid', '날짜별 작업시간 초기화': 'Tilbakestill arbeidstid for en dag', '전체 작업시간 초기화': 'Tilbakestill all arbeidstid',
     '선택한 날짜의 작업시간과 세션 기록을 초기화합니다.': 'Slett arbeidstid og økter for den valgte dagen.', '누적 작업시간과 모든 세션 기록을 초기화합니다.': 'Slett samlet arbeidstid og alle økter.', '작업 메모는 유지됩니다.': 'Arbeidsnotater beholdes.',
     '초기화할 날짜': 'Dato som skal tilbakestilles', '작업시간을 초기화하지 못했습니다.': 'Kunne ikke tilbakestille arbeidstiden.', '초기화': 'Tilbakestill', '초기화 중…': 'Tilbakestiller…',
@@ -112,6 +117,7 @@ export const reportTranslations: Record<'en' | 'ja' | 'de' | 'da' | 'nb' | 'fi',
     '총장': 'Hel lengde', '어깨너비': 'Skulderbredde', '암홀': 'Ermehull', '팔길이': 'Ermelengde', '목깊이': 'Halsdybde', '완성 실측 추가': 'Legg til ferdige mål', '치수 추가': 'Legg til mål', '완성한 작품의 치수를 기록해 보세요.': 'Noter målene på det ferdige strikkeplagget.', '직접 입력': 'Eget mål', '직접 입력 항목 더 추가': 'Legg til enda et eget mål', '추가됨': 'Lagt til', '입력 내용을 버릴까요?': 'Vil du forkaste endringene?', '입력된 치수를 삭제할까요?': 'Vil du slette de registrerte målene?', '직접 입력 항목 이름을 입력하세요.': 'Skriv inn et navn for hvert eget mål.', '{count}개 추가': 'Legg til {count}', '{count}개 적용': 'Bruk {count}', '항목명 수정': 'Rediger målnavn',
   },
   fi: {
+    '도안의 텍스트 도구로 작성한 원문을 조회합니다. 보고서에는 자동 추가되지 않습니다.': 'Näytä ohjeeseen tekstityökalulla kirjoitettu alkuperäinen teksti. Sitä ei lisätä automaattisesti raporttiin.', '도안에 작성한 텍스트': 'Ohjeeseen kirjoitettu teksti', '도안에 작성한 텍스트가 없습니다.': 'Ohjeessa ei ole tekstiä.', '도안 텍스트를 불러오지 못했습니다.': 'Ohjeen tekstin lataaminen epäonnistui.', '페이지 {page}': 'Sivu {page}', '다시 시도': 'Yritä uudelleen',
     '작업시간 초기화': 'Nollaa työaika', '날짜별 작업시간 초기화': 'Nollaa päivän työaika', '전체 작업시간 초기화': 'Nollaa kaikki työaika',
     '선택한 날짜의 작업시간과 세션 기록을 초기화합니다.': 'Poista valitun päivän työaika ja työjaksot.', '누적 작업시간과 모든 세션 기록을 초기화합니다.': 'Poista kertynyt työaika ja kaikki työjaksot.', '작업 메모는 유지됩니다.': 'Työmuistiinpanot säilytetään.',
     '초기화할 날짜': 'Nollattava päivä', '작업시간을 초기화하지 못했습니다.': 'Työajan nollaus epäonnistui.', '초기화': 'Nollaa', '초기화 중…': 'Nollataan…',

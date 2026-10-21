@@ -1,10 +1,10 @@
 import { describe, expect, it } from 'vitest'
-import { analyzeKnittingReportCandidates } from './knittingReportAnalysis'
+import { analyzeKnittingReportCandidates, collectReportPageTexts } from './knittingReportAnalysis'
 import type { CounterSnapshot, PageWorkRecord } from './types'
 
-function workWithNotes(texts: string[]): PageWorkRecord {
+function workWithNotes(texts: string[], pageNumber = 1): PageWorkRecord {
   return {
-    documentId: 'document-1', pageNumber: 1, horizontalPosition: 0.5, verticalPosition: 0.5,
+    documentId: 'document-1', pageNumber, horizontalPosition: 0.5, verticalPosition: 0.5,
     annotations: texts.map((text, index) => ({ id: 'note-' + index, type: 'text', text, points: [], style: { color: '#000000', thickness: 1, opacity: 1, fontSize: 12 } })),
   }
 }
@@ -15,6 +15,18 @@ const taskCounter: CounterSnapshot = {
 }
 
 describe('knitting report modification candidates', () => {
+  it('collects nonempty text annotations in page order without changing their content or duplicates', () => {
+    const pageThree = workWithNotes(['same text', 'same text'], 3)
+    pageThree.annotations.push({ id: 'pen-note', type: 'pen', text: 'ignore non-text annotation', points: [], style: { color: '#000000', thickness: 1, opacity: 1, fontSize: 12 } })
+
+    expect(collectReportPageTexts([pageThree, workWithNotes(['  ', 'こんにちは\n소매 2cm']), workWithNotes(['Änderung am Ärmel'], 2)])).toEqual([
+      { pageNumber: 1, id: 'note-1', text: 'こんにちは\n소매 2cm' },
+      { pageNumber: 2, id: 'note-0', text: 'Änderung am Ärmel' },
+      { pageNumber: 3, id: 'note-0', text: 'same text' },
+      { pageNumber: 3, id: 'note-1', text: 'same text' },
+    ])
+  })
+
   it('extracts explicit row, length, and count changes while ignoring uncertain notes', () => {
     const candidates = analyzeKnittingReportCandidates({
       works: [workWithNotes(['몸판 12단 더 뜸', '소매 2cm 짧게', '8번 줄이라는데 7번만 함', '목 고무단은 3.5로', '코막음은 Italian bind-off 사용', '소매 7번만 줄일까?', '오늘 잘 떠짐'])],
