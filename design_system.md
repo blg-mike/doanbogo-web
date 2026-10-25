@@ -1,29 +1,49 @@
 # 니트피크 디자인시스템 요약
 
-기준일: 2026-10-17. 기준 소스: `src/designTokens.ts`, `src/index.css`. UI는 시맨틱 토큰을 사용하고 루트와 웹 기준서는 동일하게 유지한다.
+기준일: 2026-10-23. 기준 소스: `src/designTokens.ts`, `src/index.css`. UI는 시맨틱 토큰을 사용하고 루트와 웹 기준서는 동일하게 유지한다.
 
 ## 원칙
 
-Green Modern Retro / Soft Craft Minimalism. 브랜드 그린과 Pretendard로 위계를 세우고 밝은 표면과 낮은 장식 밀도를 유지한다. 기본 앱·사이트 배경, 카드, 팝오버, 입력 표면은 모두 `#FFFFFF`로 통일한다. 보고서 편집 작업 영역만 `--color-report-editor-background` (`#F5F6F5`)를 사용하고, 카드 표면은 흰색으로 유지한다. 의미가 있는 상태 색과 도안 작업 영역은 구분해 유지하며 PDF·사진 원본과 저장된 객체 색상은 그대로 표시한다.
+첨부 카운터 시안의 흰 패널·초록 선택 상태·여백과 가로 구분선을 공통 기준으로 사용한다. 기능·문구·정보 구조·요소 순서는 유지한다. 기본 앱·사이트 배경, 패널, 팝오버, 입력 표면은 `#FFFFFF`다. 보고서 편집 작업 영역만 `--color-report-editor-background` (`#F5F6F5`)를 사용한다. PDF·사진 원본과 저장된 객체·카운터 색상은 그대로 표시한다.
 
 ## UI 색상 토큰
 
 | 역할 | 색상 |
 |---|---|
-| Primary / Hover / Pressed | `#21A366` / `#107C41` / `#0B5A30` |
-| Primary text / soft | `#111111` / `#E7F5EC` |
-| Secondary / Hover / Soft | `#111111` / `#303030` / `#FFFFFF` |
-| Tertiary / Soft | `#107C41` / `#E7F5EC` |
+| Primary / Hover / Pressed | `#00865D` / `#006F4D` / `#005B3F` |
+| Primary text / soft | `#FFFFFF` / `#E8F6F0` |
+| Secondary / Hover / Soft | `#111827` / `#334155` / `#FFFFFF` |
+| Tertiary / Soft | `#00865D` / `#E8F6F0` |
 | App background / Surface | `#FFFFFF` / `#FFFFFF` |
 | Subtle / Viewer | `#FFFFFF` / `#E9E6DF` |
-| Text / Secondary / Muted | `#111111` / `#525650` / `#777C76` |
-| Border / Divider | `#CFCFC8` / `#E4E2DC` |
+| Text / Secondary / Muted | `#111827` / `#64748B` / `#64748B` |
+| Border / Divider | `#E2E8F0` / `#E2E8F0` |
 | Danger / Soft | `#B9473F` / `#F7E9E6` |
 | Warning / Soft | `#B88732` / `#F6EEDC` |
-| Progress | `#21A366` |
+| Progress | `#00865D` |
 
 Functional colors remain distinct: `#2C2B27`, `#C85E4B`, `#557A95`, `#5C8167`, `#7A6A94`, `#7D7A76`. Counter colors are `#557A95`, `#5C8167`, `#D46A4C`, and `#7A6A94` for repeat counters.
-The app uses locally bundled Pretendard 400·500·600 from `src/assets/fonts/PretendardVariable.woff2`; its license is `src/assets/fonts/LICENSE.txt`. The portable homepage embeds the same font.
+Pretendard 400·600·700을 `src/assets/fonts/PretendardVariable.woff2`에서 로컬 로드한다. 라이선스는 `src/assets/fonts/LICENSE.txt`다. portable·site 홈페이지에도 같은 폰트를 내장한다.
+
+## 간격·글자·표면
+
+| 항목 | 규칙 |
+|---|---|
+| 간격 | 4·8·12·16·24px. 일반 패널 내부 24px·목록 행 상하 16px, 작업 도구 패널 내부 16px·행 상하 12px |
+| 정렬 | 제목과 설명 간격 4px, 아이콘과 글자 간격 8px. 설명은 항목명 아래 정렬 |
+| 화면 제목 | 24px / 700 |
+| 섹션 제목 | 18px / 700 |
+| 항목명 | 16px / 600 |
+| 본문·입력 | 16px / 400 |
+| 보조 설명 | 14px / 400 |
+| 테두리 | 1px `#E2E8F0` |
+| 모서리 | 패널 16px, 입력·버튼 그룹 10px, 알림 배지 8px |
+| 아이콘 | 20px, 선 1.75~2px. 터치 영역 최소 44×44px |
+| 그림자 | 떠 있는 패널에만 약하게 적용. 일반 목록·정적 카드에는 사용하지 않음 |
+
+카운터·타이머처럼 PDF 위에 뜨는 작업 도구는 기존 앱의 밀도를 따른다. 관리창 제목 18px, 섹션 14px, 항목·버튼·시간 13px, 보조 설명·알림 12px, 메인 숫자 20px를 사용한다. 입력창은 16px와 44px 터치 영역을 유지한다. 일반 화면의 제목 크기를 작업 도구에 일괄 적용하지 않는다.
+
+목록 항목은 개별 카드 테두리를 반복하지 않고 여백과 가로 구분선으로 나눈다. 표지·사진 등 별도 콘텐츠 타일의 구조는 유지한다. 좁은 화면에서는 그룹을 다음 줄로 배치하며 터치 영역·본문 스크롤·저장 버튼 접근성을 유지한다.
 
 ## 필기·진행선 팔레트
 
@@ -41,13 +61,16 @@ The app uses locally bundled Pretendard 400·500·600 from `src/assets/fonts/Pre
 
 ## 컴포넌트·접근성
 
-- 간격은 4·8·12·16·24·32px, 버튼 Radius 10px, 툴바 14px, 팝오버 16px이다.
-- 기본 아이콘은 20px이며 버튼·핸들은 최소 44×44px로 한다.
+- Viewer Header·Footer·도구막대, 홈·프로젝트 도구막대, 보고서·차트의 일반 액션은 개별 네모 테두리 없이 표시한다. 설정·더보기·삭제도 같은 규칙을 사용한다. 입력창·팔레트·콘텐츠 표지와 연결 스테퍼의 경계는 유지한다. 증감 버튼은 외곽선 하나와 내부 구분선으로 연결된 스테퍼다.
+- 선택 상태는 연한 초록 배경과 초록 글자로 표시한다. 입력·콘텐츠 선택에는 초록 테두리를 쓰며 인접 도구 버튼마다 별도 네모를 반복하지 않는다. 주요 완료 버튼은 초록 바탕에 흰 글자를 사용한다.
 - Hover·Pressed·Selected·Disabled 상태와 키보드 `focus-visible`을 일관되게 표현하고 접근성 이름을 제공한다.
 - 팝오버는 연결 요소 옆에 화면 안으로 배치하고 바깥 클릭·Escape로 닫는다. Escape 후 연결 요소에 포커스를 돌린다.
 - 입력창·메모의 키보드 편집과 선택은 보존한다. Viewer의 비편집 영역은 앱 제스처를 우선한다.
 - 필기 도구는 선택과 설정을 함께 활성화하며 첫 Canvas 조작에서 설정 팝업을 닫는다.
 - 진행선 탭·롱프레스는 스타일 설정을 열고 8px 초과 이동은 직접 드래그로 처리한다.
+- 카운터 미니바는 메인 `− / 단 / +`를 연결하고 단·현재 면을 연한 초록 표면에 표시한다. 누적시간과 재생 버튼의 순서·키보드 순서는 같게 둔다. 보조 카운터 행은 이름·설명, 진행 수치·저장 색 막대, 조작 영역으로 나누고 알림은 진행 수치 위에 둔다. `− / + / …`는 같은 줄을 유지한다. 알림 글자·아이콘·행 강조선은 해당 카운터의 설정색, 배지와 행 배경은 같은 색의 낮은 불투명도를 사용한다. 접힌 알림 요약도 같은 색을 사용한다.
+- ‘카운터 추가’ 옆 접기·펼치기 화살표는 모바일을 포함해 유지한다.
+- 카운터 관리 팝오버는 최대 440px이며 제목과 상단·하단 조작을 고정하고 목록 본문만 세로 스크롤한다. 좁은 화면에서는 진행·알림·조작을 다음 줄로 재배치하며 가로 넘침을 허용하지 않는다.
 
 ## 브랜드·컨트롤
 
@@ -60,3 +83,7 @@ The app uses locally bundled Pretendard 400·500·600 from `src/assets/fonts/Pre
 ## 확인
 
 토큰·원본 표면·44px 조작 영역·키보드 사용·390/1024/1440px 화면 넘침을 확인한다. `npm run check:design-system`으로 코드 토큰과 루트·웹 기준서의 일치를 검사한다.
+
+현재 공통 UI 규칙의 CSS는 `AppDesignSystem.css`에 둔다. `App.tsx`의 `App.css → AppDesignSystem.css → Home.css` 순서를 유지하며, 화면별 CSS와 저장된 객체 색은 해당 소스가 소유한다.
+
+작업 타이머와 카운터 관리 팝업은 내부 레이아웃을 유지한 채 전체를 50%로 표시한다. 이 두 도구의 글자·아이콘·조작 영역도 함께 절반 크기로 표시하며, 이동 경계는 실제 표시 크기로 계산한다.

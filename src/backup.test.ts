@@ -27,6 +27,8 @@ describe('portable workspace backup', () => {
           mode: index === 0 ? 'repeat' : 'simple', value: index === 0 ? 13 : 0, repeatName: '몸판', startRow: 1,
           repeatLength: 8, repeatCount: null, taskRules: [], taskOccurrences: [],
         })),
+        counterHistory: [{ id: 'legacy-history', label: '몸판 · 단 완료', counters: [], guides: [], actualRow: 1, baseCounterId: 'legacy-counter', timeLapId: 'legacy-lap', savedAt: 1 }],
+        counterTimeLaps: [{ id: 'legacy-lap', counterId: 'legacy-counter', sessionId: 'old', historyEntryId: 'legacy-history', elapsedMs: 1000, durationMs: 1000, rowDelta: 1, recordedAt: 1 }],
         wideRatio: 0.5, tallRatio: 0.5, techniqueSlots: [null, null, null, null, null], updatedAt: Date.now(),
       })
       db.createObjectStore('preferences', { keyPath: 'key' })
@@ -51,12 +53,27 @@ describe('portable workspace backup', () => {
       id: 'migration-check', fileName: 'migration.pdf', size: pdf.size, pageCount: 1,
       createdAt: Date.now(), lastOpenedAt: null, tags: [], pdf, cover: null,
     })
+    const migratedDatabase = await new Promise<IDBDatabase>((resolve, reject) => {
+      const open = indexedDB.open('doanbogo-web')
+      open.onsuccess = () => resolve(open.result)
+      open.onerror = () => reject(open.error)
+    })
+    const migratedViewer = await new Promise<Record<string, unknown>>((resolve, reject) => {
+      const read = migratedDatabase.transaction('viewers', 'readonly').objectStore('viewers').get('migration-check')
+      read.onsuccess = () => resolve(read.result as Record<string, unknown>)
+      read.onerror = () => reject(read.error)
+    })
+    migratedDatabase.close()
+    expect(migratedViewer).not.toHaveProperty('counterTimeLaps')
+    expect((migratedViewer.counterHistory as Record<string, unknown>[])[0]).not.toHaveProperty('timeLapId')
     expect(await getViewer('migration-check', 1)).not.toHaveProperty('techniqueSlots')
     expect((await getViewer('migration-check', 1)).counters).toHaveLength(6)
     expect((await getViewer('migration-check', 1)).counters?.slice(0, 2)).toMatchObject([
       { kind: 'simple', value: 13, name: '몸판 단' },
       { kind: 'pattern', currentRow: 13, patternRow: 5, repeatLength: 8 },
     ])
+    expect(await getViewer('migration-check', 1)).not.toHaveProperty('counterTimeLaps')
+    expect((await getViewer('migration-check', 1)).counterHistory?.[0]).not.toHaveProperty('timeLapId')
     expect(await getKnittingReports('migration-check')).toMatchObject([{ id: 'migration-check', workPhotos: [], title: '기존 보고서' }])
     const work = await getPageWork('migration-check', 1)
     expect(work).toMatchObject({ horizontalPosition: 0.5, verticalPosition: 0.5, annotations: [] })
@@ -114,7 +131,7 @@ describe('portable workspace backup', () => {
     await deleteDocument(id)
   })
 
-  it('round-trips photo folders and image pages in the v15 backup', async () => {
+  it('round-trips photo folders and image pages in the v16 backup', async () => {
     const folder = await createPhotoFolder('종이 도안', [
       { blob: new Blob(['first-page'], { type: 'image/jpeg' }), width: 1200, height: 1600, addedAt: 1, sourceName: '01.jpg' },
       { blob: new Blob(['second-page'], { type: 'image/jpeg' }), width: 1600, height: 1200, addedAt: 2, sourceName: '02.jpg' },
@@ -123,7 +140,7 @@ describe('portable workspace backup', () => {
     const backup = await createWorkspaceBackup()
     const entries = unzipSync(new Uint8Array(await backup.arrayBuffer()))
     const manifest = JSON.parse(strFromU8(entries['manifest.json'])) as { version: number; documents: Record<string, unknown>[]; photoPages: Record<string, unknown>[] }
-    expect(manifest.version).toBe(15)
+    expect(manifest.version).toBe(16)
     expect(manifest.documents.find((item) => item.id === folder.id)).toMatchObject({ kind: 'photos', pdfPath: null, pageCount: 2 })
     expect(manifest.photoPages).toHaveLength(2)
 
@@ -364,10 +381,9 @@ describe('portable workspace backup', () => {
       thumbnailGroups: [{ id: 'label-a', name: 'A', pageNumbers: [2, 5] }],
       counters,
       counterHistory: [
-        { id: 'history-1', label: '몸판 단 · 19단 완료', counters, guides: [], actualRow: 19, baseCounterId: rowCounter.id, timeLapId: 'lap-1', savedAt: Date.now() },
+        { id: 'history-1', label: '몸판 단 · 19단 완료', counters, guides: [], actualRow: 19, baseCounterId: rowCounter.id, savedAt: Date.now() },
         { id: 'history-repeat', label: '소매 반복 · 반복 단 완료', counters, guides: [], actualRow: 0, counterOnly: true, savedAt: Date.now() },
       ],
-      counterTimeLaps: [{ id: 'lap-1', counterId: rowCounter.id, sessionId: 'session-1', historyEntryId: 'history-1', elapsedMs: 120000, durationMs: 120000, rowDelta: 1, recordedAt: Date.now() }],
       counterSoundEnabled: false,
       counterPreviewEnabled: true,
       counterVibrationEnabled: true,
@@ -430,7 +446,18 @@ describe('portable workspace backup', () => {
     const backup = await createWorkspaceBackup()
     const archiveEntries = unzipSync(new Uint8Array(await backup.arrayBuffer()))
     const manifest = JSON.parse(strFromU8(archiveEntries['manifest.json']))
-    expect(manifest.version).toBe(15)
+    expect(manifest.version).toBe(16)
+    const backupViewer = manifest.viewers.find((entry: { documentId: string }) => entry.documentId === original.id)
+    expect(backupViewer).not.toHaveProperty('counterTimeLaps')
+    expect(backupViewer.counterHistory[0]).not.toHaveProperty('timeLapId')
+    manifest.version = 15
+    const legacyFreeCounters = (['stitch', 'round'] as const).map((unit, index) => ({ ...createCounter('simple', unit), id: 'free-' + unit, unit, value: 12 + index }))
+    backupViewer.counters.unshift(legacyFreeCounters[0])
+    backupViewer.counters.push(legacyFreeCounters[1])
+    delete backupViewer.counterMainId
+    for (const history of backupViewer.counterHistory) history.counters.push(...legacyFreeCounters.map((counter) => ({ ...counter, value: counter.value - 1 })))
+    backupViewer.counterTimeLaps = [{ id: 'lap-1', counterId: rowCounter.id, sessionId: 'old', historyEntryId: 'history-1', elapsedMs: 120000, durationMs: 120000, rowDelta: 1, recordedAt: Date.now() }]
+    backupViewer.counterHistory[0].timeLapId = 'lap-1'
     manifest.pages.push(
       { documentId: original.id, pageNumber: 2, hidden: true, hiddenGroupId: 'hide-batch-1', bookmarked: false },
       { documentId: original.id, pageNumber: 5, hidden: true, hiddenGroupId: 'hide-batch-1', bookmarked: false },
@@ -454,16 +481,19 @@ describe('portable workspace backup', () => {
     expect(restoredViewer.progressSettings?.horizontal).toMatchObject({ color: '#edc21b', thickness: 5, opacity: 0.4 })
     expect(restoredViewer.annotationSettings?.text).toMatchObject({ color: '#28384c', fontSize: 20 })
     expect(restoredViewer.counters).toMatchObject([
-      { id: 'body-row', kind: 'simple', value: 19, name: '몸판 단', goalRow: 36, goalFinalSide: 'rs', firstSide: 'ws' },
+      { id: 'free-stitch', kind: 'simple', unit: 'row', value: 12 },
+      { id: 'body-row', kind: 'simple', unit: 'row', value: 19, name: '몸판 단', goalRow: 36, goalFinalSide: 'rs', firstSide: 'ws' },
       { id: 'body-pattern', kind: 'pattern', currentRow: 19, patternRow: 3, repeatLength: 12, repeatCount: 3, patternPreviewEnabled: true },
       { id: 'body-decrease', kind: 'task', completedCount: 1, nextTaskRow: 24, taskRecords: [{ row: 6, status: 'done' }, { row: 12, status: 'missed' }] },
       { id: 'sleeve-repeat', kind: 'repeat', repeatStartRow: 1, repeatEndRow: 2, repeatTarget: 5, repeatLinkedToId: 'body-row', value: 2 },
+      { id: 'free-round', kind: 'simple', unit: 'row', value: 13 },
     ])
     expect(restoredViewer.counterHistory).toHaveLength(2)
     expect(restoredViewer.counterHistory?.[0].baseCounterId).toBe('body-row')
-    expect(restoredViewer.counterHistory?.[0].timeLapId).toBe('lap-1')
+    expect(restoredViewer.counterHistory?.[0].counters.slice(-2)).toMatchObject([{ id: 'free-stitch', unit: 'row', value: 11 }, { id: 'free-round', unit: 'row', value: 12 }])
+    expect(restoredViewer.counterHistory?.[0]).not.toHaveProperty('timeLapId')
     expect(restoredViewer.counterHistory?.[1].counterOnly).toBe(true)
-    expect(restoredViewer.counterTimeLaps).toMatchObject([{ id: 'lap-1', counterId: 'body-row', sessionId: 'session-1', historyEntryId: 'history-1', elapsedMs: 120000, durationMs: 120000, rowDelta: 1, rowNumber: 20 }])
+    expect(restoredViewer).not.toHaveProperty('counterTimeLaps')
     expect(restoredViewer.counterPreviewEnabled).toBe(true)
     expect(restoredViewer.counterVibrationEnabled).toBe(true)
     expect(restoredViewer.counterMainId).toBe('body-row')
@@ -503,7 +533,7 @@ describe('portable workspace backup', () => {
     expect(await getHomeProject('document', imported!.id)).toMatchObject({ status: 'paused', archivedAt })
     expect((await getPages(imported!.id)).find((page) => page.pageNumber === 3)).toMatchObject({ documentId: imported!.id, pageNumber: 3, bookmarked: true })
     expect((await getViewer(imported!.id, original.pageCount)).primary).toMatchObject({ page: 4, zoom: 2, centerX: 0.37, centerY: 0.68 })
-    expect((await getViewer(imported!.id, original.pageCount)).counters?.[1]).toMatchObject({ kind: 'pattern', value: 3, name: '몸판 무늬' })
+    expect((await getViewer(imported!.id, original.pageCount)).counters?.find((counter) => counter.id === patternCounter.id)).toMatchObject({ kind: 'pattern', value: 3, name: '몸판 무늬' })
     expect(await getPageWork(imported!.id, 4)).toMatchObject({
       horizontalGuides: [{ id: 'h-1', position: 0.32 }, { id: 'h-2', position: 0.68 }],
       verticalGuides: [{ id: 'v-1', position: 0.72 }],

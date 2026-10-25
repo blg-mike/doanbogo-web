@@ -18,6 +18,7 @@ type Props = {
   initialTodayWorkDate?: string
   initialTodayWorkTimeMs?: number
   portalTarget: HTMLElement | null
+  counterMiniBarLayout?: boolean
   onWorkTimeChange: (totals: DocumentWorkTimeTotals) => void
   onTodayWorkTimeChange: (date: string, elapsedMs: number) => void
   onUnsavedChange: (unsaved: boolean) => void
@@ -28,7 +29,7 @@ type Props = {
   onRecordPanelBlockingChange?: (blocked: boolean) => void
 }
 
-export default function DocumentWorkTimer({ documentId, initialTotalWorkTimeMs, initialWorkTimeDays, initialTodayWorkDate, initialTodayWorkTimeMs = 0, portalTarget, onWorkTimeChange, onTodayWorkTimeChange, onUnsavedChange, onSavingChange, onClockChange, recordPanelOpen, onRecordPanelOpenChange, onRecordPanelBlockingChange }: Props) {
+export default function DocumentWorkTimer({ documentId, initialTotalWorkTimeMs, initialWorkTimeDays, initialTodayWorkDate, initialTodayWorkTimeMs = 0, portalTarget, counterMiniBarLayout = false, onWorkTimeChange, onTodayWorkTimeChange, onUnsavedChange, onSavingChange, onClockChange, recordPanelOpen, onRecordPanelOpenChange, onRecordPanelBlockingChange }: Props) {
   const [sessionId] = useState(() => crypto.randomUUID())
   const elapsedBaseRef = useRef(0)
   const initialTodayBase = initialTodayWorkDate === localWorkDateKey() ? initialTodayWorkTimeMs : 0
@@ -325,11 +326,12 @@ export default function DocumentWorkTimer({ documentId, initialTotalWorkTimeMs, 
   }
 
   if (!portalTarget) return null
-  return createPortal(<div className="viewer-work-timer" aria-label={t('작업 타이머')}>
-    <button type="button" className="viewer-work-timer-toggle" aria-label={error ? t('저장 재시도') : running ? t('일시정지') : t('재생')} title={error ? t('저장 재시도') : running ? t('일시정지') : t('재생')} disabled={saving} onClick={() => void toggle()}>
+  const toggleButton = <button type="button" className="viewer-work-timer-toggle" aria-label={error ? t('저장 재시도') : running ? t('일시정지') : t('재생')} title={error ? t('저장 재시도') : running ? t('일시정지') : t('재생')} disabled={saving} onClick={() => void toggle()}>
       {running ? <Pause size={17} /> : <Play size={17} />}
     </button>
-    <button type="button" className="viewer-work-timer-elapsed" aria-haspopup="dialog" aria-expanded={recordPanelOpen} aria-label={`${t('오늘 누적 작업시간')} ${formatWorkTime(elapsedMs)} · ${t('작업 기록')}`} title={t('작업 기록')} aria-live="off" onClick={() => onRecordPanelOpenChange(true)}>{formatWorkTime(elapsedMs)}</button>
+  const elapsedButton = <button type="button" className="viewer-work-timer-elapsed" aria-haspopup="dialog" aria-expanded={recordPanelOpen} aria-label={`${t('오늘 누적 작업시간')} ${formatWorkTime(elapsedMs)} · ${t('작업 기록')}`} title={t('작업 기록')} aria-live="off" onClick={() => onRecordPanelOpenChange(true)}>{formatWorkTime(elapsedMs)}</button>
+  return createPortal(<div className="viewer-work-timer" aria-label={t('작업 타이머')}>
+    {counterMiniBarLayout ? <>{elapsedButton}{toggleButton}</> : <>{toggleButton}{elapsedButton}</>}
     {recordPanelOpen && <WorkTimeRecordPanel documentId={documentId} initialTotalWorkTimeMs={initialTotalWorkTimeMs} initialWorkTimeDays={initialWorkTimeDays} onClose={() => { onRecordPanelOpenChange(false); onRecordPanelBlockingChange?.(false) }} onAddWorkTime={addWorkTime} onResetWorkTime={resetWorkTime} onInteractionBlockingChange={onRecordPanelBlockingChange} onTotalsChange={(total, days) => {
       const currentDate = localWorkDateKey()
       onWorkTimeChange({ totalWorkTimeMs: total, todayWorkDate: currentDate, todayWorkTimeMs: days.find((day) => day.date === currentDate)?.elapsedMs ?? 0, workTimeDays: days })

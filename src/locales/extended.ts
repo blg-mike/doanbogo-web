@@ -273,32 +273,32 @@ Object.assign(extendedTranslations.nb, thumbnailGroupTranslations.nb)
 Object.assign(extendedTranslations.fi, thumbnailGroupTranslations.fi)
 
 Object.assign(extendedTranslations.en, {
-  '타임랩': 'Lap times', '타임랩 및 카운터': 'Counter and lap times', '타임랩 기록이 없습니다.': 'No lap records yet.', '더 보기': 'Show more',
+  '더 보기': 'Show more',
   '현재 단 입력': 'Edit current row', '단 번호 입력': 'Row number', '1에서 9999 사이의 정수를 입력하세요.': 'Enter a whole number from 1 to 9999.',
   '+1단': '+1 row', '−1단': '−1 row', '일시정지를 누르지 않아 마지막 저장 이후 측정한 시간은 누적 작업시간에 저장되지 않습니다.': 'Time measured since the last save will not be added to total work time because the timer was not paused.',
 })
 Object.assign(extendedTranslations.ja, {
-  '타임랩': 'ラップタイム', '타임랩 및 카운터': 'カウンターとラップタイム', '타임랩 기록이 없습니다.': 'ラップ記録はありません。', '더 보기': 'さらに表示',
+  '더 보기': 'さらに表示',
   '현재 단 입력': '現在の段を編集', '단 번호 입력': '段番号', '1에서 9999 사이의 정수를 입력하세요.': '1〜9999の整数を入力してください。',
   '+1단': '+1段', '−1단': '−1段', '일시정지를 누르지 않아 마지막 저장 이후 측정한 시간은 누적 작업시간에 저장되지 않습니다.': '一時停止していないため、前回保存後に計測した時間は累計作業時間に加算されません。',
 })
 Object.assign(extendedTranslations.de, {
-  '타임랩': 'Rundenzeiten', '타임랩 및 카운터': 'Reihenzähler und Rundenzeiten', '타임랩 기록이 없습니다.': 'Noch keine Rundenzeiten.', '더 보기': 'Mehr anzeigen',
+  '더 보기': 'Mehr anzeigen',
   '현재 단 입력': 'Aktuelle Reihe bearbeiten', '단 번호 입력': 'Reihennummer', '1에서 9999 사이의 정수를 입력하세요.': 'Geben Sie eine ganze Zahl von 1 bis 9999 ein.',
   '+1단': '+1 Reihe', '−1단': '−1 Reihe', '일시정지를 누르지 않아 마지막 저장 이후 측정한 시간은 누적 작업시간에 저장되지 않습니다.': 'Die seit dem letzten Speichern gemessene Zeit wird nicht zur Gesamtarbeitszeit addiert, weil der Timer nicht pausiert wurde.',
 })
 Object.assign(extendedTranslations.da, {
-  '타임랩': 'Rundetider', '타임랩 및 카운터': 'Rundetæller og rundetider', '타임랩 기록이 없습니다.': 'Ingen rundetider endnu.', '더 보기': 'Vis flere',
+  '더 보기': 'Vis flere',
   '현재 단 입력': 'Rediger aktuel omgang', '단 번호 입력': 'Omgangsnummer', '1에서 9999 사이의 정수를 입력하세요.': 'Indtast et helt tal fra 1 til 9999.',
   '+1단': '+1 omgang', '−1단': '−1 omgang', '일시정지를 누르지 않아 마지막 저장 이후 측정한 시간은 누적 작업시간에 저장되지 않습니다.': 'Tiden siden sidste lagring lægges ikke til den samlede arbejdstid, fordi timeren ikke blev sat på pause.',
 })
 Object.assign(extendedTranslations.nb, {
-  '타임랩': 'Rundetider', '타임랩 및 카운터': 'Radeteller og rundetider', '타임랩 기록이 없습니다.': 'Ingen rundetider ennå.', '더 보기': 'Vis flere',
+  '더 보기': 'Vis flere',
   '현재 단 입력': 'Rediger gjeldende omgang', '단 번호 입력': 'Omgangsnummer', '1에서 9999 사이의 정수를 입력하세요.': 'Skriv inn et heltall fra 1 til 9999.',
   '+1단': '+1 omgang', '−1단': '−1 omgang', '일시정지를 누르지 않아 마지막 저장 이후 측정한 시간은 누적 작업시간에 저장되지 않습니다.': 'Tiden siden siste lagring legges ikke til samlet arbeidstid fordi tidtakeren ikke ble satt på pause.',
 })
 Object.assign(extendedTranslations.fi, {
-  '타임랩': 'Kierrosajat', '타임랩 및 카운터': 'Kerroslaskuri ja kierrosajat', '타임랩 기록이 없습니다.': 'Ei vielä kierrosaikoja.', '더 보기': 'Näytä lisää',
+  '더 보기': 'Näytä lisää',
   '현재 단 입력': 'Muokkaa nykyistä kerrosta', '단 번호 입력': 'Kerrosnumero', '1에서 9999 사이의 정수를 입력하세요.': 'Anna kokonaisluku väliltä 1–9999.',
   '+1단': '+1 kerros', '−1단': '−1 kerros', '일시정지를 누르지 않아 마지막 저장 이후 측정한 시간은 누적 작업시간에 저장되지 않습니다.': 'Edellisen tallennuksen jälkeen mitattua aikaa ei lisätä kokonaistyöaikaan, koska ajastinta ei keskeytetty.',
 })

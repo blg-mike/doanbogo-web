@@ -2,7 +2,7 @@ import { formatNumber, t, translateMessage } from './locales/index'
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type DragEvent as ReactDragEvent, type FormEvent as ReactFormEvent, type MouseEvent as ReactMouseEvent, type PointerEvent as ReactPointerEvent, type ReactNode, type UIEvent as ReactUIEvent } from 'react'
 import type { PDFDocumentProxy } from 'pdfjs-dist'
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
-import { ArrowLeft, Bell, Bookmark, Check, ChevronDown, ChevronLeft, ChevronRight, ChevronUp, Columns2, Eraser, Eye, EyeClosed, EyeOff, Files, Focus, Grid3X3, GripVertical, Highlighter, Maximize2, Minus, Minimize2, MoreHorizontal, MousePointer2, Pencil, Plus, Redo2, RefreshCw, ScanLine, Settings2, SlidersHorizontal, Square, Type, Undo2, X } from 'lucide-react'
+import { ArrowLeft, Bell, Bookmark, Check, ChevronDown, ChevronLeft, ChevronRight, ChevronUp, Columns2, Copy, Eraser, Eye, EyeClosed, EyeOff, Files, Focus, Grid3X3, GripVertical, Highlighter, Maximize2, Minus, Minimize2, MoreHorizontal, MousePointer2, Pencil, Plus, Redo2, RefreshCw, ScanLine, Settings2, Square, Trash2, Type, Undo2, X } from 'lucide-react'
 import { createPortal } from 'react-dom'
 import BrandLoading from './BrandLoading'
 import yyLogo from './assets/yy-logo.png'
@@ -13,12 +13,12 @@ import { pdfPageRenderQueue } from './pdfPageRenderQueue'
 import { openPdf, pdfErrorMessage } from './pdf'
 import { openPhotoDocument } from './photoDocument'
 import KnittingReport from './KnittingReport'
-import type { AnnotationSettings, AnnotationStyle, AnnotationTool, ColorworkCreateRequest, ColorworkSettings, CounterHistoryEntry, CounterSnapshot, CounterTimeLap, CounterTimerLinkMode, DocumentRecord, DocumentWorkTimeDay, PageRecord, PageRotation, PageWorkRecord, PaneId, PaneSnapshot, ProgressGuide, ProgressSettings, ThumbnailGroup, ThumbnailRailOrderItem, ViewerSnapshot } from './types'
+import type { AnnotationSettings, AnnotationStyle, AnnotationTool, ColorworkCreateRequest, ColorworkSettings, CounterHistoryEntry, CounterSnapshot, CounterTimerLinkMode, DocumentRecord, DocumentWorkTimeDay, PageRecord, PageRotation, PageWorkRecord, PaneId, PaneSnapshot, ProgressGuide, ProgressSettings, ThumbnailGroup, ThumbnailRailOrderItem, ViewerSnapshot } from './types'
 import { defaultColorworkSettings, getColorworkDimensions, resizeColorworkGrid } from './colorwork'
-import { MAX_COUNTER_HISTORY, MAX_COUNTER_ROW, advanceLinkedCounters, counterAlertState, counterSideForRow, counterTimeLapTiming, createCounter, findCounterRewindCheckpoint, nextPatternAlertRow, normalizeCounterSnapshots, progressGuideForCounter, reanchorProgressGuideForCounter, repeatCounterProgress, restoreCounterGroup, setCounterGroupRow, stepRepeatCounter } from './smartCounter'
+import { MAX_COUNTERS_PER_TYPE, MAX_COUNTER_HISTORY, MAX_COUNTER_ROW, advanceLinkedCounters, counterAlertState, counterSideForRow, createCounter, duplicateCounterSnapshot, findCounterRewindCheckpoint, maxCountersForType, nextPatternAlertRow, normalizeCounterSnapshots, progressGuideForCounter, reanchorProgressGuideForCounter, repeatCounterProgress, repeatCounterStepBlock, restoreCounterGroup, setCounterGroupRow, stepAuxiliaryCounter, stepRepeatCounter } from './smartCounter'
 import { CounterStepButton } from './CounterStepButton'
 import CounterPanel from './CounterPanel'
-import { translateCounterAlert } from './counterAlertText'
+import { repeatCounterBlockLabel, translateCounterAlert } from './counterAlertText'
 import DocumentWorkTimer, { type DocumentTimerClock, type DocumentWorkTimeTotals } from './DocumentWorkTimer'
 import { isCounterTimerLinkMode, resolveCounterTimerAction, type CounterTimerChoice } from './timerCounterLink'
 import type { PdfQrLink } from './qr'
@@ -87,7 +87,6 @@ type ThumbnailReorderGesture = {
   target?: ThumbnailReorderTarget
 }
 type CounterGuideAction = { kind: 'advance' | 'correct'; pageNumber: number; guideId: string }
-type CounterTimeLapAction = Omit<CounterTimeLap, 'historyEntryId'>
 type TimerBarDrag = { pointerId: number; offsetX: number; offsetY: number; bar: HTMLElement; shell: HTMLElement; clientX: number; clientY: number; frameId: number | null }
 type TimerBarPress = { pointerId: number; startX: number; startY: number; bar: HTMLElement; shell: HTMLElement; timerId: number; active: boolean; cleanup: () => void }
 function createCounterSession(documentId: string) { return { documentId, visible: false } }
@@ -252,7 +251,6 @@ export default function Viewer() {
   const counterTimerModeRef = useRef<CounterTimerLinkMode>('ask-once')
   const counterTimerChoiceRef = useRef<CounterTimerChoice>(null)
   const counterTimerPromptLockRef = useRef(false)
-  const counterTimeLapSessionId = useMemo(() => `${crypto.randomUUID()}:${id.slice(0, 8)}`, [id])
   const thumbnailGroupSavePromiseRef = useRef<Promise<boolean> | null>(null)
   const thumbnailRailRef = useRef<HTMLDivElement>(null)
   const thumbnailGroupListRef = useRef<HTMLDivElement>(null)
@@ -321,6 +319,12 @@ export default function Viewer() {
   const [timerSaving, setTimerSaving] = useState(false)
   const [counterActionSaving, setCounterActionSaving] = useState(false)
   const [counterSettingsSaving, setCounterSettingsSaving] = useState(false)
+  const [counterPanelRequest, setCounterPanelRequest] = useState<{ id: number; action: 'add' | 'edit'; counterId?: string }>({ id: 0, action: 'add' })
+  const [counterDeleteToastId, setCounterDeleteToastId] = useState<string | null>(null)
+  const counterDeleteToastTimerRef = useRef<number | undefined>(undefined)
+  useEffect(() => () => {
+    if (counterDeleteToastTimerRef.current !== undefined) window.clearTimeout(counterDeleteToastTimerRef.current)
+  }, [])
   const [exitPromptOpen, setExitPromptOpen] = useState(false)
   const [exitPromptTarget, setExitPromptTarget] = useState<'home' | 'report'>('home')
   const [timerSessionKey, setTimerSessionKey] = useState(0)
@@ -420,7 +424,7 @@ export default function Viewer() {
   const mainCounterBases = counters.filter((counter) => counter.kind === 'simple' && counter.unit === 'row' && !counter.linkedToId)
   const mainCounter = mainCounterBases.find((counter) => counter.id === snapshot?.counterMainId) ?? mainCounterBases[0]
   const mainCounterCanStepBack = Boolean(snapshot && mainCounter && mainCounter.value > 1 && findCounterRewindCheckpoint(snapshot.counterHistory ?? [], counters, mainCounter.id, mainCounter.value - 1))
-  const auxiliaryCounters = counters.filter((counter) => counter.kind === 'repeat' || counter.linkedToId === mainCounter?.id)
+  const auxiliaryCounters = counters.filter((counter) => counter.id !== mainCounter?.id)
   const [counterDetailsUi, setCounterDetailsUi] = useState(() => ({ documentId: id, expanded: true }))
   const counterDetailsExpanded = counterDetailsUi.documentId === id ? counterDetailsUi.expanded : true
   const setCounterDetailsExpanded = (next: boolean | ((expanded: boolean) => boolean)) => setCounterDetailsUi((current) => ({
@@ -1357,13 +1361,11 @@ export default function Viewer() {
     mutateSnapshot((current) => ({ ...current, [paneId]: change(current[paneId]) }), immediate)
   }
 
-  function commitCounterTransaction(nextCounters: CounterSnapshot[], label: string, actualRow = 0, restoreGuides?: CounterHistoryEntry['guides'], saveHistory = true, autoPanY?: number, baseCounterId?: string, snapshotChanges?: Partial<ViewerSnapshot>, guideAction?: CounterGuideAction, lapAction?: CounterTimeLapAction, counterOnly = false) {
-    const retryAction = () => commitCounterTransaction(nextCounters, label, actualRow, restoreGuides, saveHistory, autoPanY, baseCounterId, snapshotChanges, guideAction, lapAction, counterOnly)
+  function commitCounterTransaction(nextCounters: CounterSnapshot[], label: string, actualRow = 0, restoreGuides?: CounterHistoryEntry['guides'], saveHistory = true, autoPanY?: number, baseCounterId?: string, snapshotChanges?: Partial<ViewerSnapshot>, guideAction?: CounterGuideAction, counterOnly = false) {
+    const retryAction = () => commitCounterTransaction(nextCounters, label, actualRow, restoreGuides, saveHistory, autoPanY, baseCounterId, snapshotChanges, guideAction, counterOnly)
     const operation = counterActionQueueRef.current.then(async () => {
       const current = snapshotRef.current
       if (!current) return true
-      const undoneHistory = !saveHistory ? current.counterHistory?.at(-1) : undefined
-      const undoneTimeLap = undoneHistory?.timeLapId ? current.counterTimeLaps?.find((lap) => lap.id === undoneHistory.timeLapId) : undefined
       if (saveTimer.current !== undefined) window.clearTimeout(saveTimer.current)
       saveTimer.current = undefined
       const provisional = { ...current, ...snapshotChanges, counters: nextCounters, ...(autoPanY === undefined ? {} : { [current.activePane]: { ...current[current.activePane], centerY: autoPanY } }) }
@@ -1420,20 +1422,17 @@ export default function Viewer() {
           updatedWorks.push({ ...work, horizontalGuides: nextHorizontal, verticalGuides: nextVertical })
         }
         let counterHistory = current.counterHistory ?? []
-        let counterTimeLaps = current.counterTimeLaps ?? []
         if (saveHistory) {
           const historyEntryId = crypto.randomUUID()
-          const entry: CounterHistoryEntry = { id: historyEntryId, label, counters: normalizeCounterSnapshots(current.counters), guides: beforeGuides, actualRow, ...(baseCounterId ? { baseCounterId } : {}), ...(lapAction ? { timeLapId: lapAction.id } : {}), ...(counterOnly ? { counterOnly: true } : {}), savedAt: Date.now() }
+          const entry: CounterHistoryEntry = { id: historyEntryId, label, counters: normalizeCounterSnapshots(current.counters), guides: beforeGuides, actualRow, ...(baseCounterId ? { baseCounterId } : {}), ...(counterOnly ? { counterOnly: true } : {}), savedAt: Date.now() }
           counterHistory = [...counterHistory, entry].slice(-MAX_COUNTER_HISTORY)
-          if (lapAction) counterTimeLaps = [...counterTimeLaps, { ...lapAction, historyEntryId }]
         } else if (!saveHistory) {
           counterHistory = counterHistory.slice(0, -1)
-          if (undoneTimeLap) counterTimeLaps = counterTimeLaps.filter((lap) => lap.id !== undoneTimeLap.id)
         }
         const autoPanGuideStillLinked = current.counterGuideAutoPanId
           ? works.some((work) => [...(work.horizontalGuides ?? []), ...(work.verticalGuides ?? [])].some((guide) => guide.id === current.counterGuideAutoPanId && Boolean(guide.linkedCounterId && counterById.has(guide.linkedCounterId))))
           : false
-        const nextSnapshot = { ...provisional, counterHistory, counterTimeLaps, ...(!counterOnly && current.counterGuideAutoPanId && !autoPanGuideStillLinked ? { counterGuideAutoPanId: null } : {}) }
+        const nextSnapshot = { ...provisional, counterHistory, ...(!counterOnly && current.counterGuideAutoPanId && !autoPanGuideStillLinked ? { counterGuideAutoPanId: null } : {}) }
         snapshotRef.current = nextSnapshot
         setSnapshot(nextSnapshot)
         await saveViewerAndPageWorks(nextSnapshot, updatedWorks)
@@ -1527,6 +1526,44 @@ export default function Viewer() {
     return commitCounterTransaction(nextCounters, label, 0, undefined, true, undefined, undefined, undefined, counterGuideCorrection(current, nextCounters))
   }
 
+  function requestCounterPanelAction(action: 'add' | 'edit', counterId?: string) {
+    setCounterPanelRequest((current) => ({ id: current.id + 1, action, ...(counterId ? { counterId } : {}) }))
+    updateCounterSnapshot({ counterPanelCollapsed: false })
+    setSavedCounterSession({ documentId: id, visible: true })
+  }
+
+  async function duplicateCounterAction(counterId: string) {
+    const current = snapshotRef.current
+    if (!current) return false
+    const currentCounters = normalizeCounterSnapshots(current.counters)
+    const selected = currentCounters.find((counter) => counter.id === counterId)
+    if (!selected || maxCountersForType(currentCounters, selected.kind) >= MAX_COUNTERS_PER_TYPE) return false
+    const duplicate = duplicateCounterSnapshot(selected, `${selected.name} (${t('복사본')})`)
+    const next = [...currentCounters]
+    next.splice(next.findIndex((counter) => counter.id === selected.id) + 1, 0, duplicate)
+    return (await updateCounterPanel(next, '카운터 복제')) !== false
+  }
+
+  async function deleteCounterAction(counterId: string) {
+    const current = snapshotRef.current
+    if (!current) return false
+    const currentCounters = normalizeCounterSnapshots(current.counters)
+    const selected = currentCounters.find((counter) => counter.id === counterId)
+    if (!selected || !window.confirm(t('카운터를 삭제할까요?') + ' (' + formatNumber(1) + ')\n' + selected.name)) return false
+    const next = currentCounters.filter((counter) => counter.id !== selected.id).map((counter) => ({
+      ...counter,
+      ...(counter.linkedToId === selected.id ? { linkedToId: undefined } : {}),
+      ...(counter.repeatLinkedToId === selected.id ? { repeatLinkedToId: undefined } : {}),
+    }))
+    const deleted = (await updateCounterPanel(next, '카운터 삭제')) !== false
+    if (deleted) {
+      setCounterDeleteToastId(snapshotRef.current?.counterHistory?.at(-1)?.id ?? null)
+      if (counterDeleteToastTimerRef.current !== undefined) window.clearTimeout(counterDeleteToastTimerRef.current)
+      counterDeleteToastTimerRef.current = window.setTimeout(() => setCounterDeleteToastId(null), 6000)
+    }
+    return deleted
+  }
+
   function counterGuideCorrection(current: ViewerSnapshot, nextCounters: CounterSnapshot[]): CounterGuideAction | undefined {
     const rowOf = (counter: CounterSnapshot) => counter.kind === 'simple' ? counter.value : counter.currentRow ?? 1
     const previous = new Map(normalizeCounterSnapshots(current.counters).map((counter) => [counter.id, counter]))
@@ -1598,13 +1635,6 @@ export default function Viewer() {
     setCounterActionSaving(false)
   }
 
-  function createCounterTimeLap(counterId: string, rowDelta: -1 | 1, rowNumber: number): CounterTimeLapAction {
-    const sessionId = counterTimeLapSessionId
-    const recordedAt = Date.now()
-    const timing = counterTimeLapTiming(snapshotRef.current?.counterTimeLaps ?? [], counterId, sessionId, recordedAt)
-    return { id: crypto.randomUUID(), counterId, sessionId, ...timing, rowDelta, rowNumber, recordedAt }
-  }
-
   function beginCounterRowEdit() {
     if (!mainCounter) return
     setCounterRowDraft(String(mainCounter.value))
@@ -1642,7 +1672,6 @@ export default function Viewer() {
     const nextCounters = completingGoal
       ? advanced.map((counter) => counter.id === base.id ? { ...counter, value: base.value, goalCompleted: true } : counter)
       : advanced
-    const lapAction = createCounterTimeLap(counterId, 1, nextCounters.find((counter) => counter.id === base.id)?.value ?? base.value)
     const activePage = current[current.activePane].page
     const activeWork = workRef.current[activePage]
     const activeRotation = current[current.activePane].rotations?.[activePage] ?? activeWork?.rotation ?? 0
@@ -1654,7 +1683,7 @@ export default function Viewer() {
       : undefined
     const primaryGuide = (activeWork?.horizontalGuides ?? []).find((guide) => guide.role === 'primary' && guide.linkedCounterId === base.id)
     const label = base.name + ' · ' + base.value + (completingGoal ? '단 목표 완료' : '단 완료')
-    void commitCounterTransaction(nextCounters, label, base.value, undefined, true, autoPanY, base.id, { counterAlertAcknowledged: alertToAcknowledge }, primaryGuide ? { kind: 'advance', pageNumber: activePage, guideId: primaryGuide.id } : undefined, lapAction).finally(releaseCounterActionLock)
+    void commitCounterTransaction(nextCounters, label, base.value, undefined, true, autoPanY, base.id, { counterAlertAcknowledged: alertToAcknowledge }, primaryGuide ? { kind: 'advance', pageNumber: activePage, guideId: primaryGuide.id } : undefined).finally(releaseCounterActionLock)
   }
 
   function setCounterValue(counterId: string, value: number) {
@@ -1690,7 +1719,7 @@ export default function Viewer() {
     const latest = history.at(-1)
     if (!current || !latest || !acquireCounterActionLock()) return
     if (!latest.counterOnly) handleCounterTimerInteraction()
-    void commitCounterTransaction(latest.counters, latest.label + ' 되돌리기', latest.actualRow, latest.counterOnly ? undefined : latest.guides, false, undefined, undefined, undefined, undefined, undefined, latest.counterOnly === true).finally(releaseCounterActionLock)
+    void commitCounterTransaction(latest.counters, latest.label + ' 되돌리기', latest.actualRow, latest.counterOnly ? undefined : latest.guides, false, undefined, undefined, undefined, undefined, latest.counterOnly === true).finally(releaseCounterActionLock)
   }
 
   function stepRepeatCounterAction(counterId: string, direction: -1 | 1) {
@@ -1701,18 +1730,31 @@ export default function Viewer() {
     if (!selected || selected.kind !== 'repeat') return
     const result = stepRepeatCounter(currentCounters, counterId, direction)
     if (result.blocked) {
-      if (result.blocked === 'base-complete') setSuspendError(t('연동한 일반 카운터의 목표에 도달했거나 완료되어 반복 진행을 늘릴 수 없습니다.'))
-      else if (result.blocked === 'base-limit') setSuspendError(t('연동한 일반 카운터가 9999단이라 반복 진행을 늘릴 수 없습니다.'))
-      else if (result.blocked === 'missing-base') setSuspendError(t('연동한 일반 카운터를 찾을 수 없어 진행할 수 없습니다.'))
+      const blockedLabel = repeatCounterBlockLabel(result.blocked)
+      if (blockedLabel) setSuspendError(blockedLabel)
       else if (result.blocked === 'complete') setSuspendError(t('목표 반복 완료'))
       return
     }
     if (!acquireCounterActionLock()) return
     const label = selected.name + ' · ' + t(direction > 0 ? '반복 단 완료' : '반복 단 되돌리기')
-    void commitCounterTransaction(result.counters, label, 0, undefined, true, undefined, undefined, undefined, undefined, undefined, true).finally(releaseCounterActionLock)
+    void commitCounterTransaction(result.counters, label, 0, undefined, true, undefined, undefined, undefined, undefined, true).finally(releaseCounterActionLock)
   }
 
-  function rewindCounter(baseId: string, targetRow: number, recordLap = false) {
+  function stepAuxiliaryCounterAction(counterId: string, direction: -1 | 1) {
+    const current = snapshotRef.current
+    if (!current || !acquireCounterActionLock()) return
+    const result = stepAuxiliaryCounter(normalizeCounterSnapshots(current.counters), counterId, direction)
+    if (result.blocked) {
+      releaseCounterActionLock()
+      return
+    }
+    const selected = normalizeCounterSnapshots(current.counters).find((counter) => counter.id === counterId)
+    handleCounterTimerInteraction()
+    const label = (selected?.name ?? t('카운터')) + ' · ' + t(direction > 0 ? '보조 카운터 늘리기' : '보조 카운터 줄이기')
+    void commitCounterTransaction(result.counters, label, 0, undefined, true, undefined, undefined, undefined, undefined, true).finally(releaseCounterActionLock)
+  }
+
+  function rewindCounter(baseId: string, targetRow: number) {
     const current = snapshotRef.current
     const counters = normalizeCounterSnapshots(current?.counters)
     const base = counters.find((counter) => counter.id === baseId)
@@ -1728,8 +1770,7 @@ export default function Viewer() {
     })).filter((item) => item.horizontalGuides.length || item.verticalGuides.length)
     if (!acquireCounterActionLock()) return
     handleCounterTimerInteraction()
-    const lapAction = recordLap ? createCounterTimeLap(baseId, -1, next.find((counter) => counter.id === baseId)?.value ?? targetRow) : undefined
-    const operation = commitCounterTransaction(next, '단 되돌아가기', targetRow, restoreGuides, true, undefined, baseId, undefined, undefined, lapAction)
+    const operation = commitCounterTransaction(next, '단 되돌아가기', targetRow, restoreGuides, true, undefined, baseId)
     void operation.finally(releaseCounterActionLock)
   }
 
@@ -2425,9 +2466,9 @@ export default function Viewer() {
 
   function applyTimerBarPosition(drag: TimerBarDrag, clientX: number, clientY: number) {
     const shellRect = drag.shell.getBoundingClientRect()
-    const left = clamp(clientX - shellRect.left - drag.offsetX, 0, Math.max(0, shellRect.width - drag.bar.offsetWidth))
+    const left = clamp(clientX - shellRect.left - drag.offsetX, 0, Math.max(0, shellRect.width - drag.bar.getBoundingClientRect().width))
     const minTop = window.matchMedia('(max-width: 600px)').matches ? focusView ? 100 : 44 : 0
-    const top = clamp(clientY - shellRect.top - drag.offsetY, minTop, Math.max(minTop, shellRect.height - drag.bar.offsetHeight))
+    const top = clamp(clientY - shellRect.top - drag.offsetY, minTop, Math.max(minTop, shellRect.height - drag.bar.getBoundingClientRect().height))
     drag.bar.style.left = left + 'px'
     drag.bar.style.top = top + 'px'
     drag.bar.style.right = 'auto'
@@ -3046,7 +3087,7 @@ export default function Viewer() {
   }
 
   const timerPortalTarget = loadError?.id === id || suspended || loading || loadedId !== id || !pdf || !snapshot ? null : timerPortalHost
-  const timerElement = <DocumentWorkTimer key={id + ':' + timerSessionKey} documentId={id} initialTotalWorkTimeMs={documentWorkTimeMs} initialWorkTimeDays={documentWorkTimeDays} initialTodayWorkDate={todayWorkDate} initialTodayWorkTimeMs={todayWorkTimeMs} portalTarget={timerPortalTarget} onWorkTimeChange={onTimerWorkTimeChange} onTodayWorkTimeChange={onTimerTodayWorkTimeChange} onUnsavedChange={onTimerUnsavedChange} onSavingChange={onTimerSavingChange} onClockChange={onTimerClockChange} recordPanelOpen={workTimeRecordOpen} onRecordPanelOpenChange={onWorkTimeRecordOpenChange} onRecordPanelBlockingChange={onWorkTimePanelBlockingChange} />
+  const timerElement = <DocumentWorkTimer key={id + ':' + timerSessionKey} documentId={id} initialTotalWorkTimeMs={documentWorkTimeMs} initialWorkTimeDays={documentWorkTimeDays} initialTodayWorkDate={todayWorkDate} initialTodayWorkTimeMs={todayWorkTimeMs} portalTarget={timerPortalTarget} counterMiniBarLayout={!reportMode} onWorkTimeChange={onTimerWorkTimeChange} onTodayWorkTimeChange={onTimerTodayWorkTimeChange} onUnsavedChange={onTimerUnsavedChange} onSavingChange={onTimerSavingChange} onClockChange={onTimerClockChange} recordPanelOpen={workTimeRecordOpen} onRecordPanelOpenChange={onWorkTimeRecordOpenChange} onRecordPanelBlockingChange={onWorkTimePanelBlockingChange} />
   const requestReportExit = () => {
     if (timerSaving) return
     if (timerHasUnsaved) {
@@ -3105,7 +3146,7 @@ export default function Viewer() {
           <div className="split-section split-section-secondary" style={orientation === 'wide' ? { flex: '0 0 ' + splitBasis(1 - displayedRatio) } : { width: '100%', flex: '0 0 ' + splitBasis(1 - displayedRatio) }}>{renderPane('secondary', snapshot.secondary, snapshot.activePane === 'secondary')}</div>
         </> : renderPane(snapshot.activePane, snapshot[snapshot.activePane], true)}
         </div>
-        {!reportMode && counterPanelVisible && <CounterPanel snapshot={snapshot} counters={counters} timerLinkMode={counterTimerMode} onChange={updateCounterPanel} onUndo={undoCounterAction} onRewind={rewindCounter} onRepeatStep={stepRepeatCounterAction} counterActionSaving={counterActionSaving} onSettingsSave={saveCounterSettings} onTimerLinkModeChange={changeCounterTimerLinkMode} onSnapshotUpdate={updateCounterSnapshot} triggerRef={counterPanelFocusRef} onSavingChange={setCounterSettingsSaving} onClose={() => { setSavedCounterSession({ documentId: id, visible: false }); setCounterSettingsSaving(false); requestAnimationFrame(() => counterPanelFocusRef.current?.focus()) }} />}
+        {!reportMode && counterPanelVisible && <CounterPanel snapshot={snapshot} counters={counters} timerLinkMode={counterTimerMode} counterPanelRequest={counterPanelRequest} onChange={updateCounterPanel} onUndo={undoCounterAction} onRepeatStep={stepRepeatCounterAction} onCounterStep={stepAuxiliaryCounterAction} counterActionSaving={counterActionSaving} onSettingsSave={saveCounterSettings} onTimerLinkModeChange={changeCounterTimerLinkMode} onSnapshotUpdate={updateCounterSnapshot} triggerRef={counterPanelFocusRef} onSavingChange={setCounterSettingsSaving} onClose={() => { setSavedCounterSession({ documentId: id, visible: false }); setCounterSettingsSaving(false); requestAnimationFrame(() => counterPanelFocusRef.current?.focus()) }} />}
       </section>
       <section className={'viewer-footer' + (thumbnailCollapsed ? ' thumbnail-collapsed' : '')}>
         <div id={thumbnailContentId} className="thumbnail-content" hidden={thumbnailCollapsed || focusView}>
@@ -3223,62 +3264,87 @@ export default function Viewer() {
         </div>}
       </section>
       <div className="viewer-floating-layer">
-        <div className={'viewer-floating-bar viewer-timer-bar' + (counterDetailsExpanded ? ' counter-details-expanded' : '') + (!reportMode && miniBarAlerts.length ? ' has-counter-alerts' : '') + (timerBarPosition.left === null ? '' : ' positioned')} style={timerBarPosition.left === null ? undefined : { left: timerBarPosition.left, top: timerBarPosition.top, right: 'auto' }} role="group" aria-label={`${t('카운터')} · ${t('작업 타이머')}`} onPointerDown={beginTimerBarTouchPress} onClickCapture={(event) => { if (Date.now() > timerBarClickSuppressUntilRef.current) return; timerBarClickSuppressUntilRef.current = 0; event.preventDefault(); event.stopPropagation() }}>
+        {counterDeleteToastId && <div className="viewer-counter-delete-toast" role="status"><span>{t('카운터를 삭제했습니다.')}</span><button type="button" disabled={snapshot.counterHistory?.at(-1)?.id !== counterDeleteToastId} onClick={() => { if (snapshot.counterHistory?.at(-1)?.id === counterDeleteToastId) undoCounterAction(); setCounterDeleteToastId(null) }}>{t('실행 취소')}</button><button type="button" aria-label={t('닫기')} onClick={() => setCounterDeleteToastId(null)}><X size={15} /></button></div>}
+        <div className={'viewer-floating-bar viewer-timer-bar' + (!reportMode ? ' has-counter-details' : '') + (!reportMode && miniBarAlerts.length ? ' has-counter-alerts' : '') + (timerBarPosition.left === null ? '' : ' positioned')} style={timerBarPosition.left === null ? undefined : { left: timerBarPosition.left, top: timerBarPosition.top, right: 'auto' }} role="group" aria-label={`${t('카운터')} · ${t('작업 타이머')}`} onPointerDown={beginTimerBarTouchPress} onClickCapture={(event) => { if (Date.now() > timerBarClickSuppressUntilRef.current) return; timerBarClickSuppressUntilRef.current = 0; event.preventDefault(); event.stopPropagation() }}>
           <button type="button" className="viewer-floating-drag-handle" aria-label={t('작업 타이머 이동')} title={t('작업 타이머 이동')} onPointerDown={beginTimerBarDrag} onPointerMove={moveTimerBarDrag} onPointerUp={finishTimerBarDrag} onPointerCancel={finishTimerBarDrag} onLostPointerCapture={finishTimerBarDrag}><GripVertical size={17} /></button>
           {!reportMode && <div className="viewer-counter-tools" role="group" aria-label={t('카운터')}>
-            <button type="button" className="viewer-mini-counter-step" aria-label={t('이전 단으로 되돌리기')} title={mainCounterCanStepBack ? t('이전 단으로 되돌리기') : t('정확한 복원 이력이 없습니다')} disabled={!mainCounterCanStepBack || counterActionSaving} onClick={() => { if (mainCounter && mainCounter.value > 1) rewindCounter(mainCounter.id, mainCounter.value - 1, true) }}>−</button>
+            <div className="viewer-mini-counter-step-group" role="group" aria-label={t('카운터')}>
+            <button type="button" className="viewer-mini-counter-step" aria-label={t('이전 단으로 되돌리기')} title={mainCounterCanStepBack ? t('이전 단으로 되돌리기') : t('정확한 복원 이력이 없습니다')} disabled={!mainCounterCanStepBack || counterActionSaving} onClick={() => { if (mainCounter && mainCounter.value > 1) rewindCounter(mainCounter.id, mainCounter.value - 1) }}><Minus size={20} /></button>
             {mainCounter && (counterRowEditing
               ? <input ref={counterRowInputRef} className="viewer-mini-counter-row-input" aria-label={t('단 번호 입력')} type="number" inputMode="numeric" min="1" max={MAX_COUNTER_ROW} step="1" autoFocus disabled={counterActionSaving} value={counterRowDraft} onChange={(event) => setCounterRowDraft(event.currentTarget.value)} onBlur={() => { if (skipCounterRowBlurRef.current) { skipCounterRowBlurRef.current = false; return } finishCounterRowEdit() }} onKeyDown={(event) => {
                 if (event.key === 'Enter') { event.preventDefault(); event.currentTarget.blur() }
                 if (event.key === 'Escape') { event.preventDefault(); skipCounterRowBlurRef.current = true; setCounterRowDraft(String(mainCounter.value)); setCounterRowEditing(false); event.currentTarget.blur() }
               }} />
               : <button type="button" className="viewer-mini-counter-row" aria-label={t('현재 단 입력')} title={t('현재 단 입력')} disabled={counterActionSaving} onClick={beginCounterRowEdit}><strong>{formatNumber(mainCounter.value)}</strong><span>{t('단')}</span><small>{counterSideForRow(mainCounter, mainCounter.value).toUpperCase()}</small></button>)}
-            <button type="button" className="viewer-mini-counter-step" aria-label={t('현재 단 완료 후 다음 단으로 이동')} disabled={!mainCounter || counterActionSaving || mainCounter.goalCompleted === true || mainCounter.value >= MAX_COUNTER_ROW && mainCounter.goalRow !== mainCounter.value} onClick={() => { if (mainCounter) advanceCounterGroup(mainCounter.id) }}>+</button>
-            <button type="button" className={'viewer-counter-details-toggle' + (counterDetailsExpanded ? ' active' : '')} aria-label={counterDetailsExpanded ? t('보조 카운터 정보 접기') : t('보조 카운터 정보 펼치기')} title={counterDetailsExpanded ? t('보조 카운터 정보 접기') : t('보조 카운터 정보 펼치기')} aria-expanded={counterDetailsExpanded} aria-controls={'viewer-counter-details-' + id.replace(/[^a-zA-Z0-9_-]/g, '-')} onClick={() => setCounterDetailsExpanded((expanded) => !expanded)}>{counterDetailsExpanded ? <ChevronUp size={16} /> : <ChevronDown size={16} />}</button>
-            <button ref={counterPanelFocusRef} type="button" className={'viewer-mini-lap-toggle' + (counterPanelVisible ? ' active' : '')} aria-label={counterAlertPending ? t('카운터 · 확인할 알림 있음') : t('타임랩')} title={t('타임랩')} aria-pressed={counterPanelVisible} disabled={counterSettingsSaving} onClick={(event) => { counterPanelFocusRef.current = event.currentTarget; setSavedCounterSession({ documentId: id, visible: !counterPanelVisible }) }}><SlidersHorizontal size={16} />{counterAlertPending && <i className="counter-notification-dot" aria-hidden="true" />}</button>
+            <button type="button" className="viewer-mini-counter-step" aria-label={t('현재 단 완료 후 다음 단으로 이동')} disabled={!mainCounter || counterActionSaving || mainCounter.goalCompleted === true || mainCounter.value >= MAX_COUNTER_ROW && mainCounter.goalRow !== mainCounter.value} onClick={() => { if (mainCounter) advanceCounterGroup(mainCounter.id) }}><Plus size={20} /></button>
+            </div>
+            <button ref={counterPanelFocusRef} type="button" className={'viewer-counter-settings-toggle' + (counterPanelVisible ? ' active' : '')} aria-label={t('카운터 설정')} title={t('카운터 설정')} aria-pressed={counterPanelVisible} disabled={counterSettingsSaving} onClick={(event) => { counterPanelFocusRef.current = event.currentTarget; setSavedCounterSession({ documentId: id, visible: !counterPanelVisible }) }}><Settings2 size={16} />{counterAlertPending && <i className="counter-notification-dot" aria-hidden="true" />}</button>
           </div>}
-          {!reportMode && counterDetailsExpanded && <section id={'viewer-counter-details-' + id.replace(/[^a-zA-Z0-9_-]/g, '-')} className="viewer-counter-details" aria-label={t('보조 카운터 정보')}>
-            {auxiliaryCounters.length ? auxiliaryCounters.map((counter) => {
-              const alerts = currentCounterAlerts.alerts.filter((alert) => alert.counterId === counter.id).map((alert) => translateCounterAlert(alert.message))
-              const repeatProgress = counter.kind === 'repeat' ? repeatCounterProgress(counter) : null
-              const repeatBlock = counter.kind === 'repeat' ? stepRepeatCounter(counters, counter.id, 1).blocked : null
-              const repeatBlockLabel = repeatBlock === 'base-complete' ? t('연동한 일반 카운터의 목표에 도달했거나 완료되어 반복 진행을 늘릴 수 없습니다.')
-                : repeatBlock === 'base-limit' ? t('연동한 일반 카운터가 9999단이라 반복 진행을 늘릴 수 없습니다.')
-                  : repeatBlock === 'missing-base' ? t('연동한 일반 카운터를 찾을 수 없어 진행할 수 없습니다.') : undefined
-              return <div className={'viewer-counter-detail-item' + (counter.kind === 'repeat' ? ' has-repeat-actions' : '')} key={counter.id}>
-                <span className="viewer-counter-detail-color" style={{ background: counter.color }} />
-                <strong>{counter.name}</strong>
-                <span className="viewer-counter-detail-summary">{counter.kind === 'pattern'
-                  ? t('무늬 {current} / {total}단 · 다음 {next}단', { current: formatNumber(counter.patternRow ?? 1), total: formatNumber(counter.repeatLength ?? 1), next: formatNumber(nextPatternAlertRow(counter, mainCounter?.value ?? 1) ?? 1) })
-                  : counter.kind === 'task'
-                    ? t('{task} {completed} / {total}회 · 다음 {row}단', { task: t(counter.taskKind === 'increase' ? '늘림' : '줄임'), completed: formatNumber(counter.completedCount ?? 0), total: formatNumber(counter.total ?? 0), row: formatNumber(counter.nextTaskRow ?? counter.firstTaskRow ?? 1) })
-                    : counter.kind === 'repeat' && repeatProgress
-                      ? <span className="viewer-counter-detail-summary-repeat">
-                        <strong>{t('반복 {start}~{end}단 × {target}회', { start: formatNumber(repeatProgress.startRow), end: formatNumber(repeatProgress.endRow), target: formatNumber(repeatProgress.target) })}</strong>
-                        <span>{t('완료 반복 {completed} / {target}회', { completed: formatNumber(repeatProgress.completedRepeats), target: formatNumber(repeatProgress.target) })} · {repeatProgress.complete ? <strong role="status">{t('목표 반복 완료')}</strong> : t('현재 {row}단 진행 예정', { row: formatNumber(repeatProgress.nextRow ?? repeatProgress.startRow) })}</span>
-                        <span>{t('총 {completed} / {total}단 완료', { completed: formatNumber(repeatProgress.completedRows), total: formatNumber(repeatProgress.totalRows) })}</span>
-                        {repeatBlockLabel && <small>{repeatBlockLabel}</small>}
-                      </span>
-                      : formatNumber(counter.value) + t(counter.unit === 'stitch' ? '코' : counter.unit === 'round' ? '회' : '단')}</span>
-                {counter.kind === 'repeat' && <div className="viewer-counter-detail-actions">
-                  <CounterStepButton className="viewer-mini-counter-step" label={t('반복 단 줄이기')} disabled={counterActionSaving || counter.value <= 0} onStep={() => stepRepeatCounterAction(counter.id, -1)}>−</CounterStepButton>
-                  <CounterStepButton className="viewer-mini-counter-step" label={t('반복 단 늘리기')} title={repeatBlockLabel} disabled={counterActionSaving || repeatProgress?.complete === true} onStep={() => stepRepeatCounterAction(counter.id, 1)}>+</CounterStepButton>
-                </div>}
-                {alerts.length > 0 && <span className="viewer-counter-detail-alert" role="status"><Bell size={12} /><span>{alerts.join(' · ')}</span></span>}
-              </div>
-            }) : <p>{t('연결된 보조 카운터가 없습니다.')}</p>}
-          </section>}
           {!reportMode && <span className="viewer-timer-divider" aria-hidden="true" />}
           <div className="viewer-timer-portal-host" ref={setTimerPortalHost} />
           {!reportMode && <div className="viewer-timer-more-anchor">
             <button ref={timerMoreTriggerRef} type="button" className="viewer-counter-mobile-more" aria-label={t('더보기')} title={t('더보기')} aria-haspopup="menu" aria-expanded={timerMoreOpen} onClick={() => setTimerMoreOpen((open) => !open)}><MoreHorizontal size={20} />{counterAlertPending && <i className="counter-notification-dot" aria-hidden="true" />}</button>
             {timerMoreOpen && <div ref={timerMorePanelRef} className="viewer-compact-menu viewer-timer-more-menu" role="menu" aria-label={t('더보기')}>
-              <button type="button" role="menuitem" className={counterPanelVisible ? 'selected' : ''} aria-pressed={counterPanelVisible} disabled={counterSettingsSaving} onClick={() => { counterPanelFocusRef.current = timerMoreTriggerRef.current; setSavedCounterSession({ documentId: id, visible: !counterPanelVisible }); setTimerMoreOpen(false) }}><SlidersHorizontal size={18} /><span>{counterPanelVisible ? t('타임랩') + ' · ' + t('닫기') : t('타임랩')}</span>{counterAlertPending && <i className="counter-notification-dot" aria-hidden="true" />}</button>
+              <button type="button" role="menuitem" className={counterPanelVisible ? 'selected' : ''} aria-pressed={counterPanelVisible} disabled={counterSettingsSaving} onClick={() => { counterPanelFocusRef.current = timerMoreTriggerRef.current; setSavedCounterSession({ documentId: id, visible: !counterPanelVisible }); setTimerMoreOpen(false) }}><Settings2 size={18} /><span>{counterPanelVisible ? t('카운터 설정') + ' · ' + t('닫기') : t('카운터 설정')}</span>{counterAlertPending && <i className="counter-notification-dot" aria-hidden="true" />}</button>
               <button type="button" role="menuitem" className={counterDetailsExpanded ? 'selected' : ''} aria-pressed={counterDetailsExpanded} onClick={() => { setCounterDetailsExpanded((expanded) => !expanded); setTimerMoreOpen(false) }}>{counterDetailsExpanded ? <ChevronUp size={18} /> : <ChevronDown size={18} />}<span>{counterDetailsExpanded ? t('보조 카운터 정보 접기') : t('보조 카운터 정보 펼치기')}</span></button>
             </div>}
           </div>}
+          {!reportMode && <section id={'viewer-counter-details-' + id.replace(/[^a-zA-Z0-9_-]/g, '-')} className="viewer-counter-details" aria-label={t('보조 카운터 정보')}>
+            <header className="viewer-counter-details-header">
+              <strong>{t('보조 카운터')} · {formatNumber(auxiliaryCounters.length)}</strong>
+              <div>
+                <button type="button" className="viewer-counter-add-button" aria-label={t('카운터 추가')} title={t('카운터 추가')} onClick={() => requestCounterPanelAction('add')}><Plus size={15} /><span>{t('카운터 추가')}</span></button>
+                <button type="button" className={'viewer-counter-details-toggle' + (counterDetailsExpanded ? ' active' : '')} aria-label={counterDetailsExpanded ? t('보조 카운터 정보 접기') : t('보조 카운터 정보 펼치기')} title={counterDetailsExpanded ? t('보조 카운터 정보 접기') : t('보조 카운터 정보 펼치기')} aria-expanded={counterDetailsExpanded} aria-controls={'viewer-counter-details-list-' + id.replace(/[^a-zA-Z0-9_-]/g, '-')} onClick={() => setCounterDetailsExpanded((expanded) => !expanded)}>{counterDetailsExpanded ? <ChevronUp size={16} /> : <ChevronDown size={16} />}</button>
+              </div>
+            </header>
+            {counterDetailsExpanded && <div id={'viewer-counter-details-list-' + id.replace(/[^a-zA-Z0-9_-]/g, '-')} className="viewer-counter-details-list">
+            {auxiliaryCounters.length ? auxiliaryCounters.map((counter) => {
+              const alerts = currentCounterAlerts.alerts.filter((alert) => alert.counterId === counter.id).map((alert) => translateCounterAlert(alert.message, false))
+              const repeatProgress = counter.kind === 'repeat' ? repeatCounterProgress(counter) : null
+              const progressPercent = counter.kind === 'pattern' ? Math.round((counter.patternRow ?? 1) / Math.max(1, counter.repeatLength ?? 1) * 100)
+                : counter.kind === 'task' ? Math.round((counter.completedCount ?? 0) / Math.max(1, counter.total ?? 1) * 100)
+                  : repeatProgress ? Math.round(repeatProgress.completedRows / Math.max(1, repeatProgress.totalRows) * 100) : null
+              const repeatBlock = counter.kind === 'repeat' ? repeatCounterStepBlock(counters, counter.id, 1) : null
+              const repeatBlockLabel = repeatCounterBlockLabel(repeatBlock)
+              const decreaseDisabled = counter.kind === 'simple' ? counter.value <= 0 : counter.kind === 'task' ? (counter.completedCount ?? 0) <= 0 : counter.kind === 'repeat' ? counter.value <= 0 : false
+              const increaseDisabled = counter.kind === 'task' ? (counter.completedCount ?? 0) >= (counter.total ?? 0) : counter.kind === 'repeat' ? repeatProgress?.complete === true || Boolean(repeatBlock) : false
+              const progressSummary = counter.kind === 'pattern'
+                ? t('무늬 {current} / {total}단 · 다음 {next}단', { current: formatNumber(counter.patternRow ?? 1), total: formatNumber(counter.repeatLength ?? 1), next: formatNumber(nextPatternAlertRow(counter, mainCounter?.value ?? 1) ?? 1) })
+                : counter.kind === 'task'
+                  ? t('{task} {completed} / {total}회 · 다음 {row}단', { task: t(counter.taskKind === 'increase' ? '늘림' : '줄임'), completed: formatNumber(counter.completedCount ?? 0), total: formatNumber(counter.total ?? 0), row: formatNumber(counter.nextTaskRow ?? counter.firstTaskRow ?? 1) })
+                  : counter.kind === 'repeat' && repeatProgress
+                    ? <span className="viewer-counter-detail-summary-repeat">
+                      <strong>{t('반복 {start}~{end}단 × {target}회', { start: formatNumber(repeatProgress.startRow), end: formatNumber(repeatProgress.endRow), target: formatNumber(repeatProgress.target) })}</strong>
+                      <span>{t('완료 반복 {completed} / {target}회', { completed: formatNumber(repeatProgress.completedRepeats), target: formatNumber(repeatProgress.target) })} · {repeatProgress.complete ? <strong role="status">{t('목표 반복 완료')}</strong> : t('현재 {row}단 진행 예정', { row: formatNumber(repeatProgress.nextRow ?? repeatProgress.startRow) })}</span>
+                      <span>{t('총 {completed} / {total}단 완료', { completed: formatNumber(repeatProgress.completedRows), total: formatNumber(repeatProgress.totalRows) })}</span>
+                      {repeatBlockLabel && <small>{repeatBlockLabel}</small>}
+                    </span>
+                    : null
+              const step = (direction: -1 | 1) => counter.kind === 'repeat' ? stepRepeatCounterAction(counter.id, direction) : stepAuxiliaryCounterAction(counter.id, direction)
+              return <article className={'viewer-counter-detail-item' + (progressPercent !== null ? ' has-progress' : '') + (alerts.length ? ' has-alert' : '')} style={{ '--counter-color': counter.color } as CSSProperties} key={counter.id}>
+                <span className="viewer-counter-detail-color" style={{ background: counter.color }} />
+                <div className="viewer-counter-detail-info"><strong>{counter.name}</strong><span className="viewer-counter-detail-summary">{counter.kind === 'task' ? t(counter.taskKind === 'increase' ? '늘림' : '줄임') : counter.kind === 'simple' ? `${formatNumber(counter.value)} ${t('단')}` : t(counter.kind === 'pattern' ? '무늬 카운터' : '반복 카운터')}</span></div>
+                {progressPercent !== null && <div className="viewer-counter-detail-progress-group">
+                  {alerts.map((alert, index) => <span className="viewer-counter-detail-alert" role="status" key={counter.id + '-alert-' + index}><Bell size={12} /><span>{alert}</span></span>)}
+                  <div className="viewer-counter-detail-progress-summary">{progressSummary}</div><span className="viewer-counter-detail-progress" role="progressbar" aria-valuemin={0} aria-valuemax={100} aria-valuenow={progressPercent} aria-label={`${counter.name} ${progressPercent}%`}><i style={{ width: progressPercent + '%', background: counter.color }} /></span>
+                </div>}
+                <div className="viewer-counter-detail-actions">
+                  <div className="viewer-counter-detail-stepper" role="group" aria-label={counter.name}>
+                    <CounterStepButton className="viewer-mini-counter-step" label={`${counter.name} · ${t('보조 카운터 줄이기')}`} disabled={counterActionSaving || decreaseDisabled} onStep={() => step(-1)}><Minus size={20} /></CounterStepButton>
+                    <CounterStepButton className="viewer-mini-counter-step" label={`${counter.name} · ${t('보조 카운터 늘리기')}`} title={repeatBlockLabel} disabled={counterActionSaving || increaseDisabled} onStep={() => step(1)}><Plus size={20} /></CounterStepButton>
+                  </div>
+                  <details className="viewer-counter-action-menu"><summary aria-label={`${counter.name} · ${t('더보기')}`} title={t('더보기')}><MoreHorizontal size={18} /></summary><div role="menu">
+                    <button type="button" role="menuitem" onClick={() => requestCounterPanelAction('edit', counter.id)}><Settings2 size={15} />{t('설정 수정')}</button>
+                    <button type="button" role="menuitem" disabled={maxCountersForType(counters, counter.kind) >= MAX_COUNTERS_PER_TYPE} onClick={() => void duplicateCounterAction(counter.id)}><Copy size={15} />{t('복제')}</button>
+                    <button type="button" role="menuitem" onClick={() => void deleteCounterAction(counter.id)}><Trash2 size={15} />{t('삭제')}</button>
+                  </div></details>
+                </div>
+              </article>
+            }) : <p>{t('연결된 보조 카운터가 없습니다.')}</p>}
+            </div>}
+          </section>}
           {!reportMode && miniBarAlerts.length > 0 && <div className="viewer-mini-counter-alerts" role="status" aria-label={t('알림')}>
-            {miniBarAlerts.map((alert) => <span className="viewer-counter-detail-alert" key={alert.counterId}><Bell size={12} /><span>{translateCounterAlert(alert.message)}</span></span>)}
+            {miniBarAlerts.map((alert) => <span className="viewer-counter-detail-alert" style={{ '--counter-color': counters.find((counter) => counter.id === alert.counterId)?.color ?? 'var(--color-primary)' } as CSSProperties} key={alert.counterId}><Bell size={20} /><span>{translateCounterAlert(alert.message)}</span></span>)}
           </div>}
         </div>
         {!reportMode && <div ref={setTextStylePortalTarget} className={'viewer-floating-bar viewer-mini-bar' + (miniBarOpen ? ' expanded' : '')}>

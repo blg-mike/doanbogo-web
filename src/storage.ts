@@ -1,8 +1,9 @@
 import { openDB, type DBSchema, type IDBPDatabase } from 'idb'
 import type { ChartDocument, CounterHistoryEntry, DocumentRecord, DocumentWorkTimeDay, DocumentWorkTimeSession, HomeProject, KnittingReport, PageRecognitionRecord, PageRecord, PageWorkRecord, PhotoPageRecord, PaneSnapshot, PreferenceRecord, ProgressGuide, SortMode, ViewerSnapshot } from './types'
 import { isWorkDateKey, localWorkDateKey, normalizeWorkTimeDays } from './workTime'
-import { MAX_COUNTER_HISTORY, normalizeCounterSnapshots, normalizeCounterTimeLaps } from './smartCounter'
+import { MAX_COUNTER_HISTORY, normalizeCounterSnapshots } from './smartCounter'
 import { normalizeThumbnailGroups, normalizeThumbnailRailOrder, normalizeVisiblePageRecord } from './pageManagement'
+import { normalizeViewerCounterState } from './viewerCounterState'
 
 interface DoanBogoDB extends DBSchema {
   documents: {
@@ -69,7 +70,7 @@ function stripLegacyTechniqueSlots(viewer: ViewerSnapshot): ViewerSnapshot {
   delete cleaned.techniqueSlots
   const counterHistory = Array.isArray(cleaned.counterHistory) ? cleaned.counterHistory.slice(-MAX_COUNTER_HISTORY).filter((item): item is CounterHistoryEntry =>
     Boolean(item && typeof item === 'object' && Array.isArray(item.counters) && Array.isArray(item.guides))) : []
-  return { ...cleaned, counters: normalizeCounterSnapshots(cleaned.counters), counterHistory, counterTimeLaps: normalizeCounterTimeLaps(cleaned.counterTimeLaps, counterHistory) }
+  return normalizeViewerCounterState({ ...cleaned, counterHistory })
 }
 
 export function normalizePageWork(work: PageWorkRecord): PageWorkRecord {
@@ -111,7 +112,7 @@ async function database(): Promise<Database | null> {
     try {
       let abandoned = false
       let timeoutId = 0
-      const opening = openDB<DoanBogoDB>('doanbogo-web', 11, {
+      const opening = openDB<DoanBogoDB>('doanbogo-web', 12, {
         async upgrade(db, oldVersion, _newVersion, transaction) {
           if (oldVersion < 1) {
             const documents = db.createObjectStore('documents', { keyPath: 'id' })
@@ -207,6 +208,20 @@ async function database(): Promise<Database | null> {
             }
           }
           if (oldVersion < 11) db.createObjectStore('migrations', { keyPath: 'key' })
+          if (oldVersion < 12 && db.objectStoreNames.contains('viewers')) {
+            let cursor = await transaction.objectStore('viewers').openCursor()
+            while (cursor) {
+              const viewer = { ...cursor.value } as ViewerSnapshot & { counterTimeLaps?: unknown }
+              delete viewer.counterTimeLaps
+              viewer.counterHistory = Array.isArray(viewer.counterHistory) ? viewer.counterHistory.map((item) => {
+                const entry = { ...item } as CounterHistoryEntry & { timeLapId?: unknown }
+                delete entry.timeLapId
+                return entry
+              }) : []
+              await cursor.update(viewer)
+              cursor = await cursor.continue()
+            }
+          }
         },
       }).then((db) => {
         if (abandoned) {

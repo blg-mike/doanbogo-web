@@ -47,6 +47,7 @@ function inlinePortableAppIcons() {
 
 export default defineConfig(({ mode }) => {
   const portable = mode === 'portable'
+  const site = mode === 'site'
   const manifest = {
     name: '니트피크',
     short_name: '니트피크',
@@ -54,8 +55,8 @@ export default defineConfig(({ mode }) => {
     theme_color: '#FFFFFF',
     background_color: '#FFFFFF',
     display: 'standalone' as const,
-    start_url: './',
-    scope: './',
+    start_url: site ? '/app/' : './',
+    scope: site ? '/app/' : './',
     icons: [
       { src: 'pwa-192.png', sizes: '192x192', type: 'image/png', purpose: 'any' as const },
       { src: 'pwa-512.png', sizes: '512x512', type: 'image/png', purpose: 'any' as const },
@@ -64,7 +65,7 @@ export default defineConfig(({ mode }) => {
   }
 
   return {
-    base: portable ? './' : process.env.GITHUB_ACTIONS === 'true' && repository ? '/' + repository + '/' : '/',
+    base: site ? '/app/' : portable ? './' : process.env.GITHUB_ACTIONS === 'true' && repository ? '/' + repository + '/' : '/',
     publicDir: portable ? false : 'public',
     define: { 'import.meta.env.VITE_PORTABLE': JSON.stringify(portable) },
     plugins: [
@@ -82,10 +83,10 @@ export default defineConfig(({ mode }) => {
       }),
       ...(portable ? [inlinePortableAppIcons(), viteSingleFile({ removeViteModuleLoader: true })] : []),
     ],
-    build: portable ? {
-      outDir: 'portable',
+    build: portable || site ? {
+      outDir: site ? 'site/app' : 'portable',
       emptyOutDir: true,
-      assetsInlineLimit: Number.MAX_SAFE_INTEGER,
+      assetsInlineLimit: portable ? Number.MAX_SAFE_INTEGER : undefined,
     } : undefined,
   }
 })

@@ -1,9 +1,10 @@
 import { strFromU8, strToU8, unzipSync, zipSync } from 'fflate'
-import type { AnnotationRecord, ChartDocument, ColorworkGrid, CounterHistoryEntry, CounterTimeLap, DocumentRecord, DocumentWorkTimeDay, DocumentWorkTimeSession, HomeProject, KnittingReport, PageRecord, PageWorkRecord, PhotoPageRecord, PreferenceRecord, RegionHighlight, ReportTimelinePhoto, ViewerSnapshot } from './types'
+import type { AnnotationRecord, ChartDocument, ColorworkGrid, CounterHistoryEntry, DocumentRecord, DocumentWorkTimeDay, DocumentWorkTimeSession, HomeProject, KnittingReport, PageRecord, PageWorkRecord, PhotoPageRecord, PreferenceRecord, RegionHighlight, ReportTimelinePhoto, ViewerSnapshot } from './types'
 import { normalizePageWork, readWorkspaceData, type WorkspaceData } from './storage'
 import { normalizeVisiblePageRecord } from './pageManagement'
-import { createDefaultCounters, isCurrentCounterSnapshots, isLegacyCounterSnapshots, normalizeCounterSnapshots, normalizeCounterTimeLaps, MAX_COUNTER_HISTORY } from './smartCounter'
+import { createDefaultCounters, isCurrentCounterSnapshots, isLegacyCounterSnapshots, normalizeCounterSnapshots, MAX_COUNTER_HISTORY } from './smartCounter'
 import { isWorkDateKey, localWorkDateKey, normalizeWorkTimeDays } from './workTime'
+import { normalizeViewerCounterState } from './viewerCounterState'
 
 interface BackupDocument extends Omit<DocumentRecord, 'pdf' | 'cover'> {
   pdfPath: string | null
@@ -18,7 +19,7 @@ type BackupHomeProject = Omit<HomeProject, 'cover'>
 
 interface BackupManifest {
   format: 'doanbogo'
-  version: 15
+  version: 16
   exportedAt: number
   documents: BackupDocument[]
   pages: PageRecord[]
@@ -180,22 +181,8 @@ function isCounterHistory(value: unknown) {
     typeof entry.label === 'string' && entry.label.length <= 200 && Number.isFinite(entry.savedAt) && Number.isSafeInteger(entry.actualRow) && Number(entry.actualRow) >= 0 &&
     (entry.counterOnly === undefined || typeof entry.counterOnly === 'boolean') &&
     (entry.baseCounterId === undefined || typeof entry.baseCounterId === 'string' && entry.baseCounterId.length <= 100) &&
-    (entry.timeLapId === undefined || typeof entry.timeLapId === 'string' && entry.timeLapId.length <= 100) &&
     isCurrentCounterSnapshots(entry.counters) && Array.isArray(entry.guides) && entry.guides.length <= 1000 && entry.guides.every((item) => isObject(item) && Number.isSafeInteger(item.pageNumber) &&
       Number(item.pageNumber) >= 1 && isGuideArray(item.horizontalGuides) && isGuideArray(item.verticalGuides)))
-}
-
-function isCounterTimeLaps(value: unknown): value is CounterTimeLap[] {
-  if (!Array.isArray(value)) return false
-  const ids = new Set<string>()
-  return value.every((entry) => isObject(entry) && typeof entry.id === 'string' && entry.id.length > 0 && entry.id.length <= 100 && !ids.has(entry.id) &&
-    typeof entry.counterId === 'string' && entry.counterId.length > 0 && entry.counterId.length <= 100 &&
-    typeof entry.sessionId === 'string' && entry.sessionId.length > 0 && entry.sessionId.length <= 100 &&
-    typeof entry.historyEntryId === 'string' && entry.historyEntryId.length > 0 && entry.historyEntryId.length <= 100 &&
-    Number.isSafeInteger(entry.elapsedMs) && (entry.elapsedMs as number) >= 0 && Number.isSafeInteger(entry.durationMs) && (entry.durationMs as number) >= 0 &&
-    (entry.durationMs as number) <= (entry.elapsedMs as number) && (entry.rowDelta === -1 || entry.rowDelta === 1) &&
-    (entry.rowNumber === undefined || Number.isSafeInteger(entry.rowNumber) && (entry.rowNumber as number) >= 1 && (entry.rowNumber as number) <= 9999) &&
-    Number.isSafeInteger(entry.recordedAt) && (entry.recordedAt as number) >= 0 && Boolean(ids.add(entry.id)))
 }
 
 function isLegacyRectangleArray(value: unknown) {
@@ -353,11 +340,11 @@ export async function createWorkspaceBackup() {
 
   const manifest: BackupManifest = {
     format: 'doanbogo',
-    version: 15,
+    version: 16,
     exportedAt: Date.now(),
     documents,
     pages: data.pages.map(normalizeVisiblePageRecord),
-    viewers: data.viewers,
+    viewers: data.viewers.map(normalizeViewerCounterState),
     preferences: data.preferences,
     pageWork: data.pageWork,
     charts: data.charts,
@@ -386,7 +373,7 @@ export async function readWorkspaceBackup(file: File): Promise<WorkspaceData> {
   } catch {
     throw new Error('작업 파일의 안내 정보가 손상됐습니다.')
   }
-  if (!isObject(manifest) || manifest.format !== 'doanbogo' || ![1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15].includes(manifest.version as number) ||
+  if (!isObject(manifest) || manifest.format !== 'doanbogo' || ![1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16].includes(manifest.version as number) ||
     !Array.isArray(manifest.documents) || !Array.isArray(manifest.pages) ||
     !Array.isArray(manifest.viewers) || !Array.isArray(manifest.preferences) ||
     ((manifest.version as number) >= 2 && !Array.isArray(manifest.pageWork)) ||
@@ -527,7 +514,6 @@ export async function readWorkspaceBackup(file: File): Promise<WorkspaceData> {
       ((manifest.version as number) >= 10 && (!isCurrentCounterSnapshots(entry.counters) || entry.counterHistory !== undefined && !isCounterHistory(entry.counterHistory))) ||
       ((manifest.version as number) >= 10 && (entry.counterSoundEnabled !== undefined && typeof entry.counterSoundEnabled !== 'boolean' || entry.counterPreviewEnabled !== undefined && typeof entry.counterPreviewEnabled !== 'boolean' || entry.counterPanelCollapsed !== undefined && typeof entry.counterPanelCollapsed !== 'boolean' || entry.counterGuideAutoPanId !== undefined && entry.counterGuideAutoPanId !== null && typeof entry.counterGuideAutoPanId !== 'string' || entry.collapsedCounterKinds !== undefined && (!isObject(entry.collapsedCounterKinds) || Object.values(entry.collapsedCounterKinds).some((value) => typeof value !== 'boolean')))) ||
       ((manifest.version as number) >= 12 && (entry.counterMainId !== undefined && typeof entry.counterMainId !== 'string' || entry.counterVibrationEnabled !== undefined && typeof entry.counterVibrationEnabled !== 'boolean' || entry.counterAlertAcknowledged !== undefined && typeof entry.counterAlertAcknowledged !== 'string' || typeof entry.counterAlertAcknowledged === 'string' && entry.counterAlertAcknowledged.length > 500)) ||
-      (entry.counterTimeLaps !== undefined && !isCounterTimeLaps(entry.counterTimeLaps)) ||
       (entry.thumbnailGroups !== undefined && !isThumbnailGroups(entry.thumbnailGroups, pageCounts.get(entry.documentId)!)) ||
       (entry.thumbnailRailOrder !== undefined && !isThumbnailRailOrder(entry.thumbnailRailOrder, pageCounts.get(entry.documentId)!, entry.thumbnailGroups ?? [])) ||
       !Number.isFinite(entry.wideRatio) || !Number.isFinite(entry.tallRatio) || !Number.isFinite(entry.updatedAt) ||
@@ -541,8 +527,7 @@ export async function readWorkspaceBackup(file: File): Promise<WorkspaceData> {
     else if ((manifest.version as number) < 10) viewer.counters = normalizeCounterSnapshots(viewer.counters)
     const counterHistory = Array.isArray(viewer.counterHistory) ? viewer.counterHistory.slice(-MAX_COUNTER_HISTORY) as CounterHistoryEntry[] : []
     viewer.counterHistory = counterHistory
-    viewer.counterTimeLaps = normalizeCounterTimeLaps(viewer.counterTimeLaps, counterHistory)
-    return viewer as unknown as ViewerSnapshot
+    return normalizeViewerCounterState(viewer as unknown as ViewerSnapshot)
   })
 
   const preferences = manifest.preferences.map((entry): PreferenceRecord => {

@@ -1,3 +1,6 @@
+const appUrl = document.querySelector('meta[name="knitpeek-app-url"]').content || './index.html'
+if (window.location.hash.startsWith('#/')) window.location.replace(appUrl + window.location.hash)
+
 const messages = {
   ko: {
     pageTitle: '니트피크 | 뜨개 도안을 보며 이어서 뜨기',

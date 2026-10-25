@@ -12,30 +12,30 @@ const tokens = readFileSync(tokenPath, 'utf8')
 const css = readFileSync(cssPath, 'utf8')
 const homepageCss = readFileSync(homepageCssPath, 'utf8')
 const expected = {
-  primary: '#21A366',
-  primaryText: '#111111',
-  primaryHover: '#107C41',
-  primaryPressed: '#0B5A30',
-  primarySoft: '#E7F5EC',
-  secondary: '#111111',
-  secondaryHover: '#303030',
+  primary: '#00865D',
+  primaryText: '#FFFFFF',
+  primaryHover: '#006F4D',
+  primaryPressed: '#005B3F',
+  primarySoft: '#E8F6F0',
+  secondary: '#111827',
+  secondaryHover: '#334155',
   secondarySoft: '#FFFFFF',
-  tertiary: '#107C41',
-  tertiarySoft: '#E7F5EC',
+  tertiary: '#00865D',
+  tertiarySoft: '#E8F6F0',
   background: '#FFFFFF',
   surface: '#FFFFFF',
   surfaceSubtle: '#FFFFFF',
   viewerBackground: '#E9E6DF',
-  text: '#111111',
-  textSecondary: '#525650',
-  textMuted: '#777C76',
-  border: '#CFCFC8',
-  divider: '#E4E2DC',
+  text: '#111827',
+  textSecondary: '#64748B',
+  textMuted: '#64748B',
+  border: '#E2E8F0',
+  divider: '#E2E8F0',
   danger: '#B9473F',
   dangerSoft: '#F7E9E6',
   warning: '#B88732',
   warningSoft: '#F6EEDC',
-  progress: '#21A366',
+  progress: '#00865D',
 }
 
 const errors = []
@@ -46,9 +46,17 @@ for (const [name, color] of Object.entries({ secondarySoft: '#FFFFFF', surface: 
   if (!homepageCss.toLowerCase().includes(variable.toLowerCase())) errors.push(`homepage/homepage.css must keep ${name} white`)
 }
 for (const [name, color] of Object.entries(expected)) {
-  if (!tokens.toLowerCase().includes(color.toLowerCase())) errors.push(`src/designTokens.ts is missing ${name} ${color}`)
+  if (!new RegExp(`\\b${name}:\\s*['"]${color}['"]`, 'i').test(tokens)) errors.push(`src/designTokens.ts is missing ${name} ${color}`)
   if (!css.toLowerCase().includes(`--color-${name.replace(/[A-Z]/g, (letter) => '-' + letter.toLowerCase())}: ${color.toLowerCase()}`)) errors.push(`src/index.css is missing ${name} token ${color}`)
   if (!designSystem.toLowerCase().includes(color.toLowerCase())) errors.push(`design_system.md is missing ${name} ${color}`)
+}
+for (const [name, value] of Object.entries({
+  'space-1': '4px', 'space-2': '8px', 'space-3': '12px', 'space-4': '16px', 'space-5': '24px',
+  'control-height': '44px', 'control-radius': '10px', 'panel-radius': '16px', 'badge-radius': '8px',
+  'font-title': '24px', 'font-section': '18px', 'font-label': '16px', 'font-description': '14px',
+  'icon-size': '20px', 'icon-stroke': '1.75',
+})) {
+  if (!css.includes(`--${name}: ${value};`)) errors.push(`src/index.css is missing ${name} token ${value}`)
 }
 for (const name of ['primary', 'primaryText', 'primaryHover', 'primaryPressed', 'primarySoft', 'secondary', 'secondaryHover', 'secondarySoft', 'tertiary', 'tertiarySoft', 'background', 'surface', 'surfaceSubtle', 'text', 'textSecondary', 'textMuted', 'border', 'divider', 'progress']) {
   const color = expected[name]
@@ -57,7 +65,7 @@ for (const name of ['primary', 'primaryText', 'primaryHover', 'primaryPressed', 
 }
 
 const legacyColors = /#(?:2673e8|815b52|8266c2|df8545|ed3f8a)\b/i
-for (const sourceFile of ['src/index.css', 'src/App.css', 'src/Home.css', 'src/Chart.css', 'src/ChartEditor.tsx', 'src/Viewer.tsx', 'src/smartCounter.ts']) {
+for (const sourceFile of ['src/index.css', 'src/App.css', 'src/AppDesignSystem.css', 'src/Home.css', 'src/Chart.css', 'src/ChartEditor.tsx', 'src/Viewer.tsx', 'src/smartCounter.ts']) {
   const content = readFileSync(path.join(projectRoot, sourceFile), 'utf8')
   if (legacyColors.test(content)) errors.push(`${sourceFile} still contains a retired core UI color`)
 }

@@ -1,4 +1,4 @@
-import type { CounterHistoryEntry, CounterKind, CounterSnapshot, CounterTaskKind, CounterTaskOccurrence, CounterTaskRule, CounterTaskStatus, CounterTimeLap, ProgressGuide } from './types'
+import type { CounterHistoryEntry, CounterKind, CounterSnapshot, CounterTaskKind, CounterTaskOccurrence, CounterTaskRule, CounterTaskStatus, ProgressGuide } from './types'
 import { guideRowPosition } from './progressLines'
 import { guideGeometryForRotation } from './focusGeometry'
 import { DEFAULT_COUNTER_COLORS } from './designTokens'
@@ -10,81 +10,6 @@ export const MAX_COUNTERS_PER_TYPE = 5
 export const MAX_COUNTERS = 80
 export const MAX_COUNTER_HISTORY = 200
 const MAX_COUNTER_TASK_OCCURRENCES = MAX_COUNTER_ROW * MAX_COUNTER_TASK_RULES
-
-export type CounterTimeLapSession = {
-  counterId: string
-  sessionId: string
-  laps: CounterTimeLap[]
-  startedAt: number
-  endedAt: number
-  rowCount: number
-}
-
-export function groupCounterTimeLaps(laps: readonly CounterTimeLap[]): CounterTimeLapSession[] {
-  const sessions = new Map<string, CounterTimeLap[]>()
-  for (const lap of laps) {
-    const key = `${lap.counterId}\0${lap.sessionId}`
-    const session = sessions.get(key) ?? []
-    session.push(lap)
-    sessions.set(key, session)
-  }
-  return [...sessions.values()].map((session) => {
-    session.sort((first, second) => first.recordedAt - second.recordedAt || first.id.localeCompare(second.id))
-    const first = session[0]
-    const last = session[session.length - 1]
-    return {
-      counterId: first.counterId,
-      sessionId: first.sessionId,
-      laps: [...session].reverse(),
-      startedAt: first.recordedAt - first.durationMs,
-      endedAt: last.recordedAt,
-      rowCount: Math.max(0, session.reduce((total, lap) => total + lap.rowDelta, 0)),
-    }
-  }).sort((first, second) => second.endedAt - first.endedAt || second.startedAt - first.startedAt)
-}
-
-export function normalizeCounterTimeLaps(value: unknown, history: CounterHistoryEntry[] = []): CounterTimeLap[] {
-  if (!Array.isArray(value)) return []
-  const ids = new Set<string>()
-  const laps: CounterTimeLap[] = []
-  for (const item of value) {
-    if (!item || typeof item !== 'object') continue
-    const lap = item as Partial<CounterTimeLap>
-    if (typeof lap.id !== 'string' || !lap.id || lap.id.length > 100 || ids.has(lap.id) || typeof lap.counterId !== 'string' || !lap.counterId || lap.counterId.length > 100 ||
-      typeof lap.sessionId !== 'string' || !lap.sessionId || lap.sessionId.length > 100 || typeof lap.historyEntryId !== 'string' || !lap.historyEntryId || lap.historyEntryId.length > 100 ||
-      !Number.isSafeInteger(lap.elapsedMs) || (lap.elapsedMs ?? -1) < 0 || !Number.isSafeInteger(lap.durationMs) || (lap.durationMs ?? -1) < 0 ||
-      (lap.durationMs ?? 0) > (lap.elapsedMs ?? 0) || (lap.rowDelta !== -1 && lap.rowDelta !== 1) ||
-      !Number.isSafeInteger(lap.recordedAt) || (lap.recordedAt ?? 0) < 0 ||
-      (lap.rowNumber !== undefined && (!Number.isSafeInteger(lap.rowNumber) || lap.rowNumber < 1 || lap.rowNumber > MAX_COUNTER_ROW))) continue
-    ids.add(lap.id)
-    let rowNumber = lap.rowNumber
-    if (rowNumber === undefined) {
-      const entry = history.find((candidate) => candidate.id === lap.historyEntryId && candidate.timeLapId === lap.id)
-      if (entry && entry.baseCounterId) {
-        if (lap.rowDelta === -1 && entry.actualRow >= 1 && entry.actualRow <= MAX_COUNTER_ROW) rowNumber = entry.actualRow
-        else if (lap.rowDelta === 1 && entry.actualRow >= 1 && entry.actualRow <= MAX_COUNTER_ROW) {
-          const base = entry.counters.find((counter) => counter.id === entry.baseCounterId)
-          if (base?.kind === 'simple' && base.unit === 'row') rowNumber = base.goalRow === base.value ? base.value : Math.min(MAX_COUNTER_ROW, entry.actualRow + 1)
-        }
-      }
-    }
-    laps.push({ ...lap, ...(rowNumber === undefined ? {} : { rowNumber }) } as CounterTimeLap)
-  }
-  return laps
-}
-
-export function counterTimeLapTiming(laps: readonly CounterTimeLap[], counterId: string, sessionId: string, recordedAt: number) {
-  let previous: CounterTimeLap | undefined
-  for (let index = laps.length - 1; index >= 0; index -= 1) {
-    const lap = laps[index]
-    if (lap.counterId === counterId && lap.sessionId === sessionId) {
-      previous = lap
-      break
-    }
-  }
-  const durationMs = previous ? Math.max(0, Math.floor(recordedAt) - previous.recordedAt) : 0
-  return { elapsedMs: (previous?.elapsedMs ?? 0) + durationMs, durationMs }
-}
 
 type LegacyCounter = {
   mode?: unknown
@@ -269,7 +194,7 @@ function normalizeNewCounter(value: unknown): CounterSnapshot | null {
   }
   if (kind === 'simple') return {
     ...common,
-    unit: value.unit === 'stitch' || value.unit === 'round' ? value.unit : 'row',
+    unit: 'row',
     knittingMode: value.knittingMode === 'round' ? 'round' : 'flat',
     ...(value.goalRow === null ? { goalRow: null } : Number.isSafeInteger(value.goalRow) && Number(value.goalRow) > 0 ? { goalRow: integer(value.goalRow, 1, 1) } : {}),
     ...(value.goalFinalSide === 'rs' || value.goalFinalSide === 'ws' ? { goalFinalSide: value.goalFinalSide } : {}),
@@ -334,25 +259,94 @@ export function repeatCounterProgress(counter: CounterSnapshot) {
   return { startRow, endRow, target, rangeLength, totalRows, completedRows, completedRepeats: Math.floor(completedRows / rangeLength), nextRow: complete ? null : startRow + completedRows % rangeLength, complete }
 }
 
-export function stepRepeatCounter(counters: CounterSnapshot[], counterId: string, direction: -1 | 1) {
+export type RepeatCounterStepBlockReason = 'missing' | 'minimum' | 'complete' | 'missing-base' | 'base-complete' | 'base-limit'
+
+export function repeatCounterStepBlock(counters: CounterSnapshot[], counterId: string, direction: -1 | 1): RepeatCounterStepBlockReason | null {
   const repeat = counters.find((counter) => counter.id === counterId && counter.kind === 'repeat')
-  if (!repeat || repeat.kind !== 'repeat') return { counters, blocked: 'missing' as const }
-  const progress = repeatCounterProgress(repeat)!
-  if (direction < 0) {
-    if (!repeat.value) return { counters, blocked: 'minimum' as const }
-    return { counters: counters.map((counter) => counter.id === repeat.id ? { ...counter, value: counter.value - 1 } : counter), blocked: null }
-  }
-  if (progress.complete) return { counters, blocked: 'complete' as const }
+  if (!repeat || repeat.kind !== 'repeat') return 'missing'
+  if (direction < 0) return repeat.value ? null : 'minimum'
+  if (repeatCounterProgress(repeat)?.complete) return 'complete'
   const base = repeat.repeatLinkedToId ? counters.find((counter) => counter.id === repeat.repeatLinkedToId && counter.kind === 'simple' && counter.unit === 'row' && !counter.linkedToId) : undefined
-  if (repeat.repeatLinkedToId && !base) return { counters, blocked: 'missing-base' as const }
-  if (base?.kind === 'simple' && (base.goalCompleted || base.goalRow != null && base.value >= base.goalRow)) return { counters, blocked: 'base-complete' as const }
-  if (base?.kind === 'simple' && base.value >= MAX_COUNTER_ROW) return { counters, blocked: 'base-limit' as const }
+  if (repeat.repeatLinkedToId && !base) return 'missing-base'
+  if (base?.kind === 'simple' && (base.goalCompleted || base.goalRow != null && base.value >= base.goalRow)) return 'base-complete'
+  if (base?.kind === 'simple' && base.value >= MAX_COUNTER_ROW) return 'base-limit'
+  return null
+}
+
+export function stepRepeatCounter(counters: CounterSnapshot[], counterId: string, direction: -1 | 1): { counters: CounterSnapshot[]; blocked: RepeatCounterStepBlockReason | null } {
+  const repeat = counters.find((counter) => counter.id === counterId && counter.kind === 'repeat')
+  if (!repeat || repeat.kind !== 'repeat') return { counters, blocked: 'missing' }
+  const blocked = repeatCounterStepBlock(counters, counterId, direction)
+  if (blocked) return { counters, blocked }
+  if (direction < 0) return { counters: counters.map((counter) => counter.id === repeat.id ? { ...counter, value: counter.value - 1 } : counter), blocked: null }
   return {
     counters: counters.map((counter) => counter.id === repeat.id
       ? { ...counter, value: counter.value + 1 }
-      : counter.id === base?.id && counter.kind === 'simple' ? { ...counter, value: counter.value + 1 } : counter),
+      : counter.id === repeat.repeatLinkedToId && counter.kind === 'simple' ? { ...counter, value: counter.value + 1 } : counter),
     blocked: null,
   }
+}
+
+export function stepAuxiliaryCounter(counters: CounterSnapshot[], counterId: string, direction: -1 | 1) {
+  const selected = counters.find((counter) => counter.id === counterId)
+  if (!selected || selected.kind === 'repeat') return { counters, blocked: 'missing' as const }
+  if (selected.kind === 'simple') {
+    const value = Math.max(0, Math.min(MAX_COUNTER_ROW, selected.value + direction))
+    if (value === selected.value) return { counters, blocked: direction < 0 ? 'minimum' as const : 'maximum' as const }
+    return { counters: counters.map((counter) => counter.id === selected.id ? { ...counter, value } : counter), blocked: null }
+  }
+  if (selected.kind === 'pattern') {
+    const length = selected.repeatLength ?? 1
+    const current = selected.patternRow ?? 1
+    const patternRow = direction > 0 ? current % length + 1 : (current - 2 + length) % length + 1
+    return { counters: counters.map((counter) => counter.id === selected.id ? { ...counter, value: patternRow, patternRow } : counter), blocked: null }
+  }
+  const completedCount = selected.completedCount ?? 0
+  if (direction > 0) {
+    if (completedCount >= (selected.total ?? 0)) return { counters, blocked: 'maximum' as const }
+    const row = selected.nextTaskRow ?? selected.firstTaskRow ?? 1
+    const taskRecords = [...(selected.taskRecords ?? [])]
+    const existing = taskRecords.findIndex((item) => item.row === row)
+    if (existing >= 0) taskRecords[existing] = { row, status: 'done' }
+    else taskRecords.push({ row, status: 'done' })
+    const nextCompleted = completedCount + 1
+    return {
+      counters: counters.map((counter) => counter.id === selected.id ? {
+        ...counter,
+        value: nextCompleted,
+        completedCount: nextCompleted,
+        nextTaskRow: nextCompleted < (selected.total ?? 0) ? Math.min(MAX_COUNTER_ROW, row + (selected.interval ?? 1)) : row,
+        taskRecords: taskRecords.slice(-MAX_COUNTER_TASK_OCCURRENCES),
+      } : counter),
+      blocked: null,
+    }
+  }
+  if (completedCount <= 0) return { counters, blocked: 'minimum' as const }
+  const taskRecords = [...(selected.taskRecords ?? [])]
+  let lastDoneIndex = -1
+  for (let index = taskRecords.length - 1; index >= 0; index -= 1) {
+    if (taskRecords[index].status === 'done') { lastDoneIndex = index; break }
+  }
+  const lastDone = lastDoneIndex >= 0 ? taskRecords.splice(lastDoneIndex, 1)[0] : undefined
+  const nextCompleted = completedCount - 1
+  return {
+    counters: counters.map((counter) => counter.id === selected.id ? {
+      ...counter,
+      value: nextCompleted,
+      completedCount: nextCompleted,
+      nextTaskRow: lastDone?.row ?? Math.max(selected.firstTaskRow ?? 1, (selected.nextTaskRow ?? selected.firstTaskRow ?? 1) - (selected.interval ?? 1)),
+      taskRecords,
+    } : counter),
+    blocked: null,
+  }
+}
+
+export function duplicateCounterSnapshot(counter: CounterSnapshot, name: string): CounterSnapshot {
+  const copy = { ...counter, id: crypto.randomUUID(), name, pinned: false }
+  if (counter.kind === 'simple') return { ...copy, value: 0 }
+  if (counter.kind === 'pattern') return { ...copy, value: 1, currentRow: 1, patternRow: 1, instructions: counter.instructions?.map((item) => ({ ...item })) }
+  if (counter.kind === 'task') return { ...copy, value: 0, completedCount: 0, currentRow: 1, nextTaskRow: counter.firstTaskRow ?? 1, taskRecords: [] }
+  return { ...copy, value: 0 }
 }
 
 export function counterPatternState(counter: CounterSnapshot) {
@@ -466,7 +460,10 @@ export function counterAlertState(counters: CounterSnapshot[], baseId?: string, 
   const alerts: { counterId: string; message: string }[] = []
   if (base.goalCompleted && base.goalAlertEnabled !== false) alerts.push({ counterId: base.id, message: '목표 ' + base.goalRow + '단을 완료했어요.' })
   related.forEach((counter) => {
-    if (counter.kind === 'task' && counter.nextTaskRow === row && (counter.completedCount ?? 0) < (counter.total ?? 0)) alerts.push({ counterId: counter.id, message: counter.name + ' · ' + (counter.taskKind === 'increase' ? '늘림' : '줄임') + ' 작업 단이에요.' })
+    if (counter.kind === 'task' && (
+      counter.taskRecords?.some((record) => record.row === row && record.status === 'done') ||
+      counter.nextTaskRow === row && (counter.completedCount ?? 0) < (counter.total ?? 0)
+    )) alerts.push({ counterId: counter.id, message: counter.name + ' · ' + (counter.taskKind === 'increase' ? '늘림' : '줄임') + ' 작업 단이에요.' })
     if (counter.kind === 'pattern' && counter.patternAlertEnabled !== false && nextPatternAlertRow(counter, row) === row) alerts.push({ counterId: counter.id, message: counter.name + ' · 무늬 반복 단이에요.' })
   })
   if (previewEnabled) {

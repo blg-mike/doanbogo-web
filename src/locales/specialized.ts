@@ -20,6 +20,7 @@ export const specializedTranslations: Record<'en' | 'ja' | 'de' | 'da' | 'nb' | 
     '도안보고': 'KnitPeek',
     '작업 파일을 열 수 없습니다. 도안보고에서 내보낸 .doanbogo 파일인지 확인해 주세요.': 'Unable to open this work file. Check that it was exported from KnitPeek.',
     '카운터와 타이머': 'Counter and timer',
+    '카운터 관리': 'Counter management',
     '카운터·타이머 설정': 'Counter and timer settings',
     '자동 시작': 'Start automatically',
     '오늘 처음 카운터를 조작하면 타이머를 자동으로 시작합니다.': 'Start the timer when you first use a counter today.',
@@ -52,6 +53,7 @@ export const specializedTranslations: Record<'en' | 'ja' | 'de' | 'da' | 'nb' | 
     '도안보고': 'KnitPeek',
     '작업 파일을 열 수 없습니다. 도안보고에서 내보낸 .doanbogo 파일인지 확인해 주세요.': '作業ファイルを開けません。KnitPeekからエクスポートした.doanbogoファイルか確認してください。',
     '카운터와 타이머': 'カウンターとタイマー',
+    '카운터 관리': 'カウンター管理',
     '카운터·타이머 설정': 'カウンター・タイマー設定',
     '자동 시작': '自動で開始',
     '오늘 처음 카운터를 조작하면 타이머를 자동으로 시작합니다.': 'その日に初めてカウンターを操作すると、タイマーを自動で開始します。',
@@ -84,6 +86,7 @@ export const specializedTranslations: Record<'en' | 'ja' | 'de' | 'da' | 'nb' | 
     '도안보고': 'KnitPeek',
     '작업 파일을 열 수 없습니다. 도안보고에서 내보낸 .doanbogo 파일인지 확인해 주세요.': 'Die Arbeitsdatei kann nicht geöffnet werden. Prüfen Sie, ob sie aus KnitPeek exportiert wurde.',
     '카운터와 타이머': 'Zähler und Timer',
+    '카운터 관리': 'Zählerverwaltung',
     '카운터·타이머 설정': 'Zähler- und Timer-Einstellungen',
     '자동 시작': 'Automatisch starten',
     '오늘 처음 카운터를 조작하면 타이머를 자동으로 시작합니다.': 'Der Timer startet, wenn Sie heute zum ersten Mal einen Zähler verwenden.',
@@ -116,6 +119,7 @@ export const specializedTranslations: Record<'en' | 'ja' | 'de' | 'da' | 'nb' | 
     '도안보고': 'KnitPeek',
     '작업 파일을 열 수 없습니다. 도안보고에서 내보낸 .doanbogo 파일인지 확인해 주세요.': 'Arbejdsfilen kunne ikke åbnes. Kontrollér, at den er eksporteret fra KnitPeek.',
     '카운터와 타이머': 'Tæller og timer',
+    '카운터 관리': 'Tælleradministration',
     '카운터·타이머 설정': 'Indstillinger for tæller og timer',
     '자동 시작': 'Start automatisk',
     '오늘 처음 카운터를 조작하면 타이머를 자동으로 시작합니다.': 'Start timeren, når du bruger en tæller for første gang i dag.',
@@ -148,6 +152,7 @@ export const specializedTranslations: Record<'en' | 'ja' | 'de' | 'da' | 'nb' | 
     '도안보고': 'KnitPeek',
     '작업 파일을 열 수 없습니다. 도안보고에서 내보낸 .doanbogo 파일인지 확인해 주세요.': 'Arbeidsfilen kunne ikke åpnes. Kontroller at den er eksportert fra KnitPeek.',
     '카운터와 타이머': 'Teller og timer',
+    '카운터 관리': 'Telleradministrasjon',
     '카운터·타이머 설정': 'Innstillinger for teller og timer',
     '자동 시작': 'Start automatisk',
     '오늘 처음 카운터를 조작하면 타이머를 자동으로 시작합니다.': 'Start timeren når du bruker en teller for første gang i dag.',
@@ -180,6 +185,7 @@ export const specializedTranslations: Record<'en' | 'ja' | 'de' | 'da' | 'nb' | 
     '도안보고': 'KnitPeek',
     '작업 파일을 열 수 없습니다. 도안보고에서 내보낸 .doanbogo 파일인지 확인해 주세요.': 'Työtiedostoa ei voi avata. Varmista, että se on viety KnitPeekistä.',
     '카운터와 타이머': 'Laskuri ja ajastin',
+    '카운터 관리': 'Laskurien hallinta',
     '카운터·타이머 설정': 'Laskurin ja ajastimen asetukset',
     '자동 시작': 'Käynnistä automaattisesti',
     '오늘 처음 카운터를 조작하면 타이머를 자동으로 시작합니다.': 'Käynnistä ajastin, kun käytät laskuria ensimmäisen kerran tänään.',
@@ -603,3 +609,40 @@ for (const locale of Object.keys(counterUiTranslations) as (keyof typeof counter
   Object.assign(specializedTranslations[locale], counterUiTranslations[locale])
   Object.assign(specializedTranslations[locale], repeatCounterTranslations[locale])
 }
+
+Object.assign(specializedTranslations.en, {
+  '무늬 반복 단이에요.': 'Pattern repeat row is due.', '{task} 작업 단이에요.': '{task} task row is due.',
+  '보조 카운터 줄이기': 'Decrease counter', '보조 카운터 늘리기': 'Increase counter', '선택한 카운터 {count}개': '{count} counters selected',
+  '카운터 순서 변경: {name}': 'Reorder {name}', '카운터 삭제: {name}': 'Delete {name}', '설정 수정': 'Edit settings', '복제': 'Duplicate', '복사본': 'copy',
+  '카운터를 삭제했습니다.': 'Counter deleted.', '카운터 순서를 저장하지 못했습니다.': 'Could not save counter order.', '카운터 복제에 실패했습니다.': 'Could not duplicate counter.', '카운터 추가': 'Add counter',
+})
+Object.assign(specializedTranslations.ja, {
+  '무늬 반복 단이에요.': '模様の繰り返し段です。', '{task} 작업 단이에요.': '{task}の作業段です。',
+  '보조 카운터 줄이기': 'カウンターを減らす', '보조 카운터 늘리기': 'カウンターを増やす', '선택한 카운터 {count}개': '{count}個のカウンターを選択中',
+  '카운터 순서 변경: {name}': '{name}の順序を変更', '카운터 삭제: {name}': '{name}を削除', '설정 수정': '設定を編集', '복제': '複製', '복사본': 'コピー',
+  '카운터를 삭제했습니다.': 'カウンターを削除しました。', '카운터 순서를 저장하지 못했습니다.': 'カウンターの順序を保存できませんでした。', '카운터 복제에 실패했습니다.': 'カウンターを複製できませんでした。', '카운터 추가': 'カウンターを追加',
+})
+Object.assign(specializedTranslations.de, {
+  '무늬 반복 단이에요.': 'Musterwiederholung ist fällig.', '{task} 작업 단이에요.': '{task}-Reihe ist fällig.',
+  '보조 카운터 줄이기': 'Zähler verringern', '보조 카운터 늘리기': 'Zähler erhöhen', '선택한 카운터 {count}개': '{count} Zähler ausgewählt',
+  '카운터 순서 변경: {name}': 'Reihenfolge von {name} ändern', '카운터 삭제: {name}': '{name} löschen', '설정 수정': 'Einstellungen bearbeiten', '복제': 'Duplizieren', '복사본': 'Kopie',
+  '카운터를 삭제했습니다.': 'Zähler gelöscht.', '카운터 순서를 저장하지 못했습니다.': 'Zählerreihenfolge konnte nicht gespeichert werden.', '카운터 복제에 실패했습니다.': 'Zähler konnte nicht dupliziert werden.', '카운터 추가': 'Zähler hinzufügen',
+})
+Object.assign(specializedTranslations.da, {
+  '무늬 반복 단이에요.': 'Mønsterpind er klar.', '{task} 작업 단이에요.': '{task}-pind er klar.',
+  '보조 카운터 줄이기': 'Sænk tæller', '보조 카운터 늘리기': 'Øg tæller', '선택한 카운터 {count}개': '{count} tællere valgt',
+  '카운터 순서 변경: {name}': 'Flyt {name}', '카운터 삭제: {name}': 'Slet {name}', '설정 수정': 'Rediger indstillinger', '복제': 'Dupliker', '복사본': 'kopi',
+  '카운터를 삭제했습니다.': 'Tæller slettet.', '카운터 순서를 저장하지 못했습니다.': 'Tællerens rækkefølge kunne ikke gemmes.', '카운터 복제에 실패했습니다.': 'Tælleren kunne ikke duplikeres.', '카운터 추가': 'Tilføj tæller',
+})
+Object.assign(specializedTranslations.nb, {
+  '무늬 반복 단이에요.': 'Mønsterrad er klar.', '{task} 작업 단이에요.': '{task}-rad er klar.',
+  '보조 카운터 줄이기': 'Reduser teller', '보조 카운터 늘리기': 'Øk teller', '선택한 카운터 {count}개': '{count} tellere valgt',
+  '카운터 순서 변경: {name}': 'Flytt {name}', '카운터 삭제: {name}': 'Slett {name}', '설정 수정': 'Rediger innstillinger', '복제': 'Dupliser', '복사본': 'kopi',
+  '카운터를 삭제했습니다.': 'Teller slettet.', '카운터 순서를 저장하지 못했습니다.': 'Kunne ikke lagre tellerrekkefølgen.', '카운터 복제에 실패했습니다.': 'Kunne ikke duplisere telleren.', '카운터 추가': 'Legg til teller',
+})
+Object.assign(specializedTranslations.fi, {
+  '무늬 반복 단이에요.': 'Mallikerta on vuorossa.', '{task} 작업 단이에요.': '{task}-kerros on vuorossa.',
+  '보조 카운터 줄이기': 'Vähennä laskuria', '보조 카운터 늘리기': 'Lisää laskuria', '선택한 카운터 {count}개': '{count} laskuria valittu',
+  '카운터 순서 변경: {name}': 'Järjestä {name}', '카운터 삭제: {name}': 'Poista {name}', '설정 수정': 'Muokkaa asetuksia', '복제': 'Monista', '복사본': 'kopio',
+  '카운터를 삭제했습니다.': 'Laskuri poistettu.', '카운터 순서를 저장하지 못했습니다.': 'Laskurien järjestystä ei voitu tallentaa.', '카운터 복제에 실패했습니다.': 'Laskurin monistaminen epäonnistui.', '카운터 추가': 'Lisää laskuri',
+})

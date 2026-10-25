@@ -1,8 +1,17 @@
 import { describe, expect, it } from 'vitest'
-import { advanceLinkedCounters, counterAlertState, counterSideForRow, counterTimeLapTiming, createCounter, createDefaultCounters, findCounterRewindCheckpoint, groupCounterTimeLaps, guidePositionForRow, isCounterSnapshots, isCurrentCounterSnapshots, isLegacyCounterSnapshots, maxCountersForType, nextPatternAlertRow, normalizeCounterSnapshots, normalizeCounterTimeLaps, patternRowAfterCompletion, progressGuideForCounter, reanchorProgressGuideForCounter, repeatCounterProgress, restoreCounterGroup, setCounterGroupRow, shouldPlayCounterTaskSound, stepRepeatCounter, taskSchedule } from './smartCounter'
+import { advanceLinkedCounters, counterAlertState, counterSideForRow, createCounter, createDefaultCounters, duplicateCounterSnapshot, findCounterRewindCheckpoint, guidePositionForRow, isCounterSnapshots, isCurrentCounterSnapshots, isLegacyCounterSnapshots, maxCountersForType, nextPatternAlertRow, normalizeCounterSnapshots, patternRowAfterCompletion, progressGuideForCounter, reanchorProgressGuideForCounter, repeatCounterProgress, repeatCounterStepBlock, restoreCounterGroup, setCounterGroupRow, shouldPlayCounterTaskSound, stepAuxiliaryCounter, stepRepeatCounter, taskSchedule, type RepeatCounterStepBlockReason } from './smartCounter'
 import type { CounterSnapshot, ProgressGuide } from './types'
 
 describe('counter model', () => {
+  it('converts existing free counter units to rows without changing their counts', () => {
+    const counters = (['row', 'stitch', 'round'] as const).map((unit, index) => ({ ...createCounter('simple', unit), id: unit, unit, value: index * 12 }))
+    expect(isCurrentCounterSnapshots(counters)).toBe(true)
+    const normalized = normalizeCounterSnapshots(counters)
+    expect(normalized).toMatchObject(counters.map((counter) => ({ ...counter, unit: 'row' })))
+    expect(counters.map((counter) => counter.unit)).toEqual(['row', 'stitch', 'round'])
+    expect(normalizeCounterSnapshots(normalized)).toEqual(normalized)
+  })
+
   it('starts with no counters and enforces each type limit in the model', () => {
     const counters = createDefaultCounters()
     expect(counters).toEqual([])
@@ -57,53 +66,51 @@ describe('counter model', () => {
     expect(normalizeCounterSnapshots([goalBase, linkedChild, { ...repeat, repeatLinkedToId: 'child' }]).find((counter) => counter.id === repeat.id)?.repeatLinkedToId).toBeUndefined()
   })
 
-  it('keeps only unique and valid saved counter time laps', () => {
-    const lap = { id: 'lap-1', counterId: 'main', sessionId: 'session-1', historyEntryId: 'history-1', elapsedMs: 120_000, durationMs: 60_000, rowDelta: 1 as const, recordedAt: 1 }
-    expect(normalizeCounterTimeLaps([
-      lap,
-      { ...lap, historyEntryId: 'duplicate' },
-      { ...lap, id: 'too-long', elapsedMs: 1, durationMs: 2 },
-      { ...lap, id: 'bad-direction', rowDelta: 0 },
-    ])).toEqual([lap])
-  })
-
-  it('stores each time-lap row and only reconstructs older rows from its exact history entry', () => {
-    const counter = { ...createCounter('simple', '몸판'), id: 'main', value: 12, unit: 'row' as const, goalRow: 36 }
-    const legacyLap = { id: 'lap-1', counterId: 'main', sessionId: 'session-1', historyEntryId: 'history-1', elapsedMs: 120_000, durationMs: 60_000, rowDelta: 1 as const, recordedAt: 1 }
-    const history = [{ id: 'history-1', label: '몸판 · 12단 완료', counters: [counter], guides: [], actualRow: 12, baseCounterId: 'main', timeLapId: 'lap-1', savedAt: 1 }]
-
-    expect(normalizeCounterTimeLaps([legacyLap], history)[0].rowNumber).toBe(13)
-    expect(normalizeCounterTimeLaps([legacyLap])[0]).not.toHaveProperty('rowNumber')
-    expect(normalizeCounterTimeLaps([{ ...legacyLap, rowNumber: 13 }])[0].rowNumber).toBe(13)
-    expect(normalizeCounterTimeLaps([{ ...legacyLap, rowNumber: 0 }])).toEqual([])
-    expect(normalizeCounterTimeLaps([legacyLap], [{ ...history[0], counters: [{ ...counter, goalRow: 12 }] }])[0].rowNumber).toBe(12)
-  })
-
-  it('measures lap intervals independently of the work timer within the viewer session', () => {
-    const laps = [
-      { id: 'old-session', counterId: 'body', sessionId: 'old', historyEntryId: 'history-1', elapsedMs: 90_000, durationMs: 90_000, rowDelta: 1 as const, recordedAt: 1_000 },
-      { id: 'baseline', counterId: 'body', sessionId: 'viewer', historyEntryId: 'history-2', elapsedMs: 0, durationMs: 0, rowDelta: 1 as const, recordedAt: 10_000 },
-      { id: 'other-counter', counterId: 'sleeve', sessionId: 'viewer', historyEntryId: 'history-3', elapsedMs: 5_000, durationMs: 5_000, rowDelta: 1 as const, recordedAt: 15_000 },
+  it('reads repeat step availability without changing progress and preserves boundary reasons', () => {
+    const base = { ...createCounter('simple'), id: 'base', unit: 'row' as const, value: 16 }
+    const repeat = { ...createCounter('repeat'), id: 'repeat', repeatLinkedToId: 'base', value: 1 }
+    const cases: { counters: CounterSnapshot[]; direction: -1 | 1; expected: RepeatCounterStepBlockReason | null }[] = [
+      { counters: [], direction: 1, expected: 'missing' },
+      { counters: [{ ...base, id: repeat.id }], direction: -1, expected: 'missing' },
+      { counters: [{ ...repeat, value: 0 }], direction: -1, expected: 'minimum' },
+      { counters: [{ ...repeat, value: 10 }], direction: 1, expected: 'complete' },
+      { counters: [repeat], direction: 1, expected: 'missing-base' },
+      { counters: [{ ...base, goalRow: 16 }, repeat], direction: 1, expected: 'base-complete' },
+      { counters: [{ ...base, goalCompleted: true }, repeat], direction: 1, expected: 'base-complete' },
+      { counters: [{ ...base, value: 9999 }, repeat], direction: 1, expected: 'base-limit' },
+      { counters: [base, repeat], direction: 1, expected: null },
+      { counters: [repeat], direction: -1, expected: null },
+      { counters: [{ ...repeat, value: 10 }], direction: -1, expected: null },
+      { counters: [{ ...repeat, repeatLinkedToId: undefined }], direction: 1, expected: null },
     ]
-
-    expect(counterTimeLapTiming(laps, 'body', 'viewer', 40_000)).toEqual({ elapsedMs: 30_000, durationMs: 30_000 })
-    expect(counterTimeLapTiming(laps, 'sleeve', 'viewer', 20_000)).toEqual({ elapsedMs: 10_000, durationMs: 5_000 })
-    expect(counterTimeLapTiming([], 'body', 'viewer', 50_000)).toEqual({ elapsedMs: 0, durationMs: 0 })
+    for (const { counters, direction, expected } of cases) {
+      const before = structuredClone(counters)
+      expect(repeatCounterStepBlock(counters, repeat.id, direction)).toBe(expected)
+      expect(counters).toEqual(before)
+      expect(stepRepeatCounter(counters, repeat.id, direction).blocked).toBe(expected)
+      expect(counters).toEqual(before)
+    }
   })
 
-  it('groups lap records by counter and session, preserves zero-time records, and sorts newest first', () => {
-    const laps = [
-      { id: 'old-1', counterId: 'body', sessionId: 'old', historyEntryId: 'h1', elapsedMs: 0, durationMs: 0, rowDelta: 1 as const, rowNumber: 4, recordedAt: 100 },
-      { id: 'new-2', counterId: 'body', sessionId: 'new', historyEntryId: 'h3', elapsedMs: 90, durationMs: 60, rowDelta: -1 as const, recordedAt: 320 },
-      { id: 'new-1', counterId: 'body', sessionId: 'new', historyEntryId: 'h2', elapsedMs: 30, durationMs: 0, rowDelta: 1 as const, recordedAt: 200 },
-      { id: 'same-session-other-counter', counterId: 'sleeve', sessionId: 'new', historyEntryId: 'h4', elapsedMs: 0, durationMs: 0, rowDelta: 1 as const, recordedAt: 150 },
-    ]
+  it('steps auxiliary counters independently and duplicates only their settings', () => {
+    const base = { ...createCounter('simple', '몸판'), id: 'base', unit: 'row' as const, value: 3 }
+    const pattern = { ...createCounter('pattern', '무늬'), id: 'pattern', linkedToId: base.id, currentRow: 3, repeatLength: 4, patternRow: 2 }
+    const task = { ...createCounter('task', '줄임'), id: 'task', linkedToId: base.id, currentRow: 3, firstTaskRow: 4, nextTaskRow: 4, interval: 6, total: 8 }
+    const stitch = { ...createCounter('simple', '코'), id: 'stitch', unit: 'stitch' as const, value: 8 }
+    const counters = [base, pattern, task, stitch]
 
-    expect(groupCounterTimeLaps(laps)).toMatchObject([
-      { counterId: 'body', sessionId: 'new', startedAt: 200, endedAt: 320, rowCount: 0, laps: [{ id: 'new-2' }, { id: 'new-1' }] },
-      { counterId: 'sleeve', sessionId: 'new', rowCount: 1 },
-      { counterId: 'body', sessionId: 'old', startedAt: 100, endedAt: 100, rowCount: 1, laps: [{ id: 'old-1', durationMs: 0 }] },
-    ])
+    const steppedPattern = stepAuxiliaryCounter(counters, pattern.id, 1)
+    expect(steppedPattern.counters).toMatchObject([{ id: 'base', value: 3 }, { id: 'pattern', currentRow: 3, patternRow: 3, value: 3 }, { id: 'task', completedCount: 0 }, { id: 'stitch', value: 8 }])
+    const steppedTask = stepAuxiliaryCounter(counters, task.id, 1)
+    expect(steppedTask.counters.find((counter) => counter.id === 'task')).toMatchObject({ completedCount: 1, nextTaskRow: 10, taskRecords: [{ row: 4, status: 'done' }] })
+    const advanced = advanceLinkedCounters(steppedTask.counters, base.id, base.value)
+    expect(advanced.find((counter) => counter.id === 'task')).toMatchObject({ completedCount: 1, taskRecords: [{ row: 4, status: 'done' }], nextTaskRow: 10 })
+    const undoneTask = stepAuxiliaryCounter(steppedTask.counters, task.id, -1)
+    expect(undoneTask.counters.find((counter) => counter.id === 'task')).toMatchObject({ completedCount: 0, nextTaskRow: 4, taskRecords: [] })
+    expect(stepAuxiliaryCounter(counters, stitch.id, 1).counters.find((counter) => counter.id === stitch.id)?.value).toBe(9)
+
+    const copy = duplicateCounterSnapshot(task, '줄임 복사본')
+    expect(copy).toMatchObject({ name: '줄임 복사본', linkedToId: base.id, taskKind: task.taskKind, total: task.total, completedCount: 0, value: 0, taskRecords: [] })
   })
 
   it('migrates old repeat and task data without losing counts or work records', () => {
@@ -265,6 +272,17 @@ describe('counter model', () => {
     const nextAlert = counterAlertState(secondStep, 'base')
     expect(nextAlert.messages).toEqual([])
     expect(nextAlert.key).not.toBe(due.key)
+  })
+
+  it('keeps a due task alert visible after its auxiliary counter is incremented until the main row advances', () => {
+    const base = { ...createCounter('simple'), id: 'base', value: 6, unit: 'row' as const }
+    const task = { ...createCounter('task', '줄임'), id: 'task', linkedToId: base.id, currentRow: 6, firstTaskRow: 6, nextTaskRow: 6, interval: 4, total: 8, completedCount: 0 }
+    const completed = stepAuxiliaryCounter([base, task], task.id, 1)
+    const afterTaskStep = counterAlertState(completed.counters, base.id)
+    expect(afterTaskStep.alerts.map(({ counterId }) => counterId)).toEqual([task.id])
+
+    const afterMainStep = advanceLinkedCounters(completed.counters, base.id, base.value)
+    expect(counterAlertState(afterMainStep, base.id).alerts).toEqual([])
   })
 
   it('restores only one linked group and recalculates dependent pattern and task state', () => {

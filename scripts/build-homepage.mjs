@@ -1,11 +1,19 @@
 import { mkdir, readFile, writeFile } from 'node:fs/promises'
-import { dirname, resolve } from 'node:path'
+import { dirname, relative, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { renderMarkdown } from './markdown-to-html.mjs'
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 const templatePath = resolve(root, 'homepage/index.html')
-const outputPath = resolve(root, 'portable/homepage.html')
+const options = new Map()
+for (let index = 2; index < process.argv.length; index += 2) {
+  const key = process.argv[index]
+  const value = process.argv[index + 1]
+  if (!['--output', '--app-url'].includes(key) || !value) throw new Error(`Invalid build-homepage option: ${key}`)
+  options.set(key, value)
+}
+const outputPath = resolve(root, options.get('--output') || 'portable/homepage.html')
+const appUrl = options.get('--app-url') || './index.html'
 const [template, stylesheet, pages, behavior, logo, viewer, favicon, generatedIcons, pretendard] = await Promise.all([
   readFile(templatePath, 'utf8'),
   readFile(resolve(root, 'homepage/homepage.css'), 'utf8'),
@@ -20,7 +28,7 @@ const [template, stylesheet, pages, behavior, logo, viewer, favicon, generatedIc
 const legalLocales = ['ko', 'en', 'ja', 'de', 'da', 'nb', 'fi']
 const legalTypes = ['terms', 'privacy']
 const legalDocuments = await Promise.all(legalTypes.flatMap((type) => legalLocales.map(async (locale) => {
-  const markdown = await readFile(resolve(root, '..', 'docs', `${type}-${locale}.md`), 'utf8')
+  const markdown = await readFile(resolve(root, 'homepage/legal', `${type}-${locale}.md`), 'utf8')
   return `<template id="legal-${type}-${locale}">${renderMarkdown(markdown)}</template>`
 })))
 const embeddedStylesheet = stylesheet.replace(
@@ -50,6 +58,7 @@ let html = template
   .replace('<script src="./homepage.js"></script>', `<script>\n${behavior}\n</script>`)
   .replace('@@LEGAL_DOCUMENTS@@', legalDocuments.join('\n'))
 for (const [placeholder, value] of replacements) html = html.replaceAll(placeholder, value)
+html = html.replaceAll('@@APP_URL@@', appUrl).replaceAll('./index.html', appUrl)
 
 if (/@@[A-Z_]+@@|(?:src|href)="\.\/(?:homepage|pages)\.(?:css|js)"|generated-icons\.png/.test(html)) {
   throw new Error('The homepage still has an external asset reference or unresolved asset placeholder.')
@@ -57,4 +66,4 @@ if (/@@[A-Z_]+@@|(?:src|href)="\.\/(?:homepage|pages)\.(?:css|js)"|generated-ico
 
 await mkdir(dirname(outputPath), { recursive: true })
 await writeFile(outputPath, html, 'utf8')
-console.log(`Created portable/homepage.html (${(Buffer.byteLength(html) / 1024).toFixed(1)} KiB)`)
+console.log(`Created ${relative(root, outputPath)} (${(Buffer.byteLength(html) / 1024).toFixed(1)} KiB)`)

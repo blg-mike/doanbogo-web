@@ -7,11 +7,12 @@ const pages = readFileSync(new URL('./pages.js', import.meta.url), 'utf8')
 const behavior = readFileSync(new URL('./homepage.js', import.meta.url), 'utf8')
 
 // Minimal DOM boundary: these tests verify behavior, not browser layout or rendering.
-function loadHomepage({ language = 'ko-KR', saved = null, storageUnavailable = false, reduced = false, hash = '' } = {}) {
+function loadHomepage({ language = 'ko-KR', saved = null, storageUnavailable = false, reduced = false, hash = '', appUrl = '/app/' } = {}) {
   const documentEvents = {}
   const mediaEvents = {}
   const windowEvents = {}
   const location = { hash, pathname: '/homepage.html', search: '' }
+  location.replace = vi.fn((url) => { location.replaced = url })
   const history = { replaceState: (_state, _title, url) => { if (url.startsWith('#')) location.hash = url } }
   const storage = new Map(saved ? [['doanbogo.homepage.language.v1', saved]] : [])
   const document = { documentElement: {}, visibilityState: 'visible', activeElement: null, createElement: () => element() }
@@ -41,6 +42,7 @@ function loadHomepage({ language = 'ko-KR', saved = null, storageUnavailable = f
   const brand = element()
   const selects = [element(), element()]
   const metas = new Map()
+  metas.set('meta[name="knitpeek-app-url"]', Object.assign(element(), { content: appUrl }))
   const infoPages = ['about', 'guide', 'features', 'faq', 'terms', 'privacy'].map((infoPage) => element({ infoPage }))
   const homeContent = element()
   const headings = new Map(['hero-title', 'feature-title', 'how-title', 'faq-title', 'about-title', 'guide-title', 'features-page-title', 'faq-page-title', 'terms-title', 'privacy-title'].map((id) => [id, element()]))
@@ -229,6 +231,15 @@ describe('portable homepage behavior', () => {
     expect(page.infoPages.find((item) => item.dataset.infoPage === 'terms').hidden).toBe(false)
     expect(page.document.activeElement).toBe(page.headings.get('terms-title'))
     expect(page.document.title).toContain('이용약관')
+  })
+
+  it.each(['/app/', './index.html'])('redirects legacy app hashes to %s while leaving homepage routes alone', (appUrl) => {
+    const page = loadHomepage({ hash: '#/viewer/document-1', appUrl })
+    expect(page.location.replace).toHaveBeenCalledWith(`${appUrl}#/viewer/document-1`)
+    expect(page.homeContent.hidden).toBe(false)
+    const homepageRoute = loadHomepage({ hash: '#page/guide', appUrl })
+    expect(homepageRoute.location.replace).not.toHaveBeenCalled()
+    expect(homepageRoute.infoPages.find((item) => item.dataset.infoPage === 'guide').hidden).toBe(false)
   })
 
   it('loads the selected translated legal document and redirects unknown pages home', () => {

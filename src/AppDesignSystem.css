@@ -1,0 +1,150 @@
+
+
+/* Shared reference system: quiet surfaces, divided rows and connected steppers. */
+.primary-button, .secondary-button, .danger-button { gap: 8px; font-size: 16px; box-shadow: none; }
+.primary-button { color: var(--color-primary-text); }
+.welcome-row h1, .modal-heading h2 { min-width: 0; overflow-wrap: anywhere; font-size: var(--font-title); font-weight: 700; }
+.welcome-copy, .modal-copy, .settings-copy p { font-size: var(--font-description); }
+.search-box, .workspace-language-select { gap: 8px; border-radius: var(--control-radius); }
+.search-box input, .workspace-language-select select, .modal-form input { font-size: 16px; }
+.modal-card { border: 1px solid var(--color-border); border-radius: var(--panel-radius); box-shadow: 0 8px 24px rgba(17,24,39,.10); }
+.modal-heading, .modal-form, .settings-copy { padding: 24px; }
+.modal-form label { color: var(--color-text-secondary); font-size: 16px; }
+.modal-actions { gap: 8px; margin-top: 24px; }
+.text-button.report-inspector-done { min-height: 44px; display: inline-flex; align-items: center; justify-content: center; gap: 8px; padding: 0 16px; border: 0; border-radius: var(--control-radius); color: var(--color-primary-text); background: var(--color-primary); font-size: 16px; font-weight: 600; }
+.text-button.report-inspector-done:hover:not(:disabled) { background: var(--color-primary-hover); }
+.viewer-floating-bar, .viewer-mini-bar, .viewer-mini-settings-panel { border-radius: var(--panel-radius); box-shadow: 0 4px 16px rgba(17,24,39,.08); }
+.viewer-mini-settings-panel { gap: 16px; padding: 24px; }
+.viewer-mini-settings-section { gap: 8px; }
+.viewer-mini-settings-section > strong { font-size: var(--font-section); font-weight: 700; }
+.viewer-mini-settings-section > label { font-size: var(--font-description); }
+.colorwork-settings-note, .colorwork-input-grid label span, .colorwork-dimension-result small, .colorwork-settings-error { font-size: var(--font-description); }
+.colorwork-settings-note { margin: 24px 24px 16px; }
+.colorwork-input-grid { gap: 16px; padding-inline: 24px; }
+.colorwork-input-grid label, .colorwork-input-grid input { font-size: 16px; }
+.colorwork-settings-actions { gap: 8px; padding-inline: 24px; }
+.icon-button.light { border: 0; background: transparent; }
+.viewer-shell:not(.report-mode) .viewer-timer-bar { gap: 8px; padding: 16px; border-radius: var(--panel-radius); }
+.viewer-shell:not(.report-mode) .viewer-counter-tools { flex: 0 0 auto; gap: 8px; }
+.viewer-shell:not(.report-mode) .viewer-floating-drag-handle { position: static; width: 44px; height: 44px; flex: 0 0 44px; color: var(--color-text-secondary); background: transparent; }
+.viewer-shell:not(.report-mode) .viewer-floating-drag-handle svg { display: block; width: 20px; height: 20px; stroke-width: 1.75; }
+.viewer-shell:not(.report-mode) .viewer-floating-drag-handle::after { content: none; }
+.viewer-mini-counter-step-group { gap: 0; overflow: hidden; border: 1px solid var(--color-border); border-radius: var(--control-radius); }
+.viewer-shell:not(.report-mode) .viewer-mini-counter-step-group > .viewer-mini-counter-step { height: 56px; display: grid; place-items: center; margin: 0; border: 0; border-radius: 0; color: var(--color-text); background: var(--color-surface); }
+.viewer-shell:not(.report-mode) .viewer-mini-counter-step-group > :not(:first-child) { border-left: 1px solid var(--color-border); }
+.viewer-shell:not(.report-mode) .viewer-mini-counter-step-group .viewer-mini-counter-row { width: 100px; min-width: 100px; height: 56px; flex: 0 0 100px; display: grid; grid-template-columns: auto auto; grid-template-rows: auto auto; justify-content: center; align-content: center; column-gap: 4px; margin: 0; padding: 4px 8px; border: 0; border-left: 1px solid var(--color-border); border-radius: 0; background: var(--color-primary-soft); }
+.viewer-shell:not(.report-mode) .viewer-mini-counter-row strong { grid-column: 1; grid-row: 1 / 3; align-self: center; font-size: 20px; font-weight: 700; }
+.viewer-shell:not(.report-mode) .viewer-mini-counter-row span, .viewer-shell:not(.report-mode) .viewer-mini-counter-row small { grid-column: 2; color: var(--color-text-secondary); font-size: 14px; }
+.viewer-shell:not(.report-mode) .viewer-mini-counter-step-group .viewer-mini-counter-row-input { width: 100px; min-width: 100px; height: 56px; flex: 0 0 100px; margin: 0; border: 0; border-left: 1px solid var(--color-border); border-radius: 0; font-size: 24px; }
+.viewer-shell:not(.report-mode) .viewer-counter-settings-toggle, .viewer-counter-mobile-more { border: 0; color: var(--color-primary); background: transparent; }
+.viewer-shell:not(.report-mode) .viewer-counter-settings-toggle.active { border: 1px solid var(--color-primary); background: var(--color-primary-soft); }
+.viewer-shell:not(.report-mode) .viewer-timer-bar .viewer-work-timer { gap: 8px; }
+.viewer-shell:not(.report-mode) .viewer-timer-bar .viewer-work-timer-elapsed { width: 100px; min-width: 100px; height: 56px; flex: 0 0 100px; font-size: 16px; font-weight: 600; }
+.viewer-shell:not(.report-mode) .viewer-timer-bar .viewer-work-timer-toggle { width: 56px; min-width: 56px; height: 56px; flex: 0 0 56px; border: 0; border-radius: 50%; }
+.viewer-shell:not(.report-mode) .viewer-timer-bar :is(button, summary) .lucide, .number-counter-panel :is(button, summary) .lucide { width: 20px; height: 20px; stroke-width: 1.75; }
+.viewer-counter-details { gap: 16px; padding: 16px 0 0; }
+.viewer-counter-details-header, .viewer-counter-details-header > div { gap: 8px; }
+.viewer-counter-details-header > strong { font-size: 14px; font-weight: 700; }
+.viewer-counter-add-button { gap: 8px; padding-inline: 12px; border: 0; border-radius: var(--control-radius); font-size: 13px; }
+.viewer-counter-add-button span { display: inline; }
+.viewer-shell:not(.report-mode) .viewer-counter-details-toggle { width: 44px; min-width: 44px; height: 44px; flex: 0 0 44px; display: grid; border: 0; border-radius: var(--control-radius); }
+.viewer-counter-details-toggle.active { color: var(--color-primary); background: var(--color-primary-soft); }
+.viewer-counter-details-list { max-height: max(44px, min(420px, calc(var(--viewer-viewport-height, 100dvh) - var(--viewer-header-height) - var(--viewer-footer-controls-height) - 240px))); }
+.viewer-counter-detail-item { --counter-color: var(--color-primary); grid-template-columns: 16px minmax(100px, 1fr) minmax(0, 1.2fr) auto; gap: 8px; padding: 12px 8px; border-inline-start: 1px solid transparent; }
+.viewer-counter-detail-item:not(.has-progress) { grid-template-columns: 16px minmax(0, 1fr) auto; }
+.viewer-counter-detail-color { width: 16px; height: 16px; align-self: start; margin-top: 4px; }
+.viewer-counter-detail-info { gap: 4px; }
+.viewer-counter-detail-info > strong { overflow-wrap: anywhere; font-size: 13px; font-weight: 600; text-overflow: clip; white-space: normal; }
+.viewer-counter-detail-info .viewer-counter-detail-summary, .viewer-counter-detail-progress-summary, .viewer-counter-detail-summary-repeat > strong, .viewer-counter-detail-summary-repeat > span, .viewer-counter-detail-summary-repeat > small { font-size: 12px; font-weight: 400; line-height: 1.5; }
+.viewer-counter-detail-progress-group { gap: 8px; }
+.viewer-counter-detail-progress { height: 8px; }
+.viewer-counter-detail-actions { gap: 8px; }
+.viewer-counter-detail-stepper, .counter-main-repeat-actions { display: inline-flex; flex: 0 0 auto; gap: 0; overflow: hidden; border: 1px solid var(--color-border); border-radius: var(--control-radius); }
+.viewer-counter-detail-stepper .viewer-mini-counter-step, .counter-main-repeat-actions .counter-repeat-step { width: 44px; min-width: 44px; height: 44px; display: grid; flex: 0 0 44px; place-items: center; padding: 0; border: 0; border-radius: 0; color: var(--color-text); background: var(--color-surface); }
+.viewer-counter-detail-stepper > button + button, .counter-main-repeat-actions > button + button { border-left: 1px solid var(--color-border); }
+.viewer-shell:not(.report-mode) :is(.viewer-mini-counter-step-group, .viewer-counter-detail-stepper) > :focus-visible, .number-counter-panel .counter-main-repeat-actions > :focus-visible { outline: 2px solid var(--color-focus-ring); outline-offset: -4px; }
+.viewer-counter-detail-alert { gap: 8px; padding: 4px 8px; border: 0; border-radius: var(--badge-radius); color: var(--counter-color, var(--color-primary)); background: var(--color-primary-soft); background: color-mix(in srgb, var(--counter-color, var(--color-primary)) 12%, white); font-size: 14px; }
+.viewer-counter-detail-alert > svg { width: 20px; height: 20px; color: inherit; stroke-width: 1.75; }
+.viewer-counter-detail-item.has-alert { border-inline-start-color: var(--counter-color); background: color-mix(in srgb, var(--counter-color) 6%, white); box-shadow: none; }
+.viewer-counter-action-menu > summary, .counter-item-menu-trigger, .counter-item-delete, .counter-order-handle { border: 0; border-radius: var(--control-radius); background: transparent; }
+.viewer-counter-action-menu > div, .counter-item-menu { border-radius: var(--control-radius); box-shadow: 0 4px 16px rgba(17,24,39,.08); }
+.viewer-counter-action-menu button, .counter-item-menu button { gap: 8px; font-size: 16px; }
+.number-counter-panel { border-radius: var(--panel-radius); box-shadow: 0 4px 16px rgba(17,24,39,.08); }
+.number-counter-panel .number-counter-header { gap: 8px; padding: 16px; }
+.number-counter-panel .counter-panel-title { flex: 1 1 120px; overflow: visible; overflow-wrap: anywhere; font-size: 18px; text-overflow: clip; white-space: normal; }
+.counter-panel-tabs { gap: 4px; }
+.counter-panel-tabs > button { border: 0; border-radius: var(--control-radius); }
+.counter-panel-tabs > button[aria-selected="true"] { border: 1px solid var(--color-primary); }
+.counter-panel-tabs > .counter-panel-close { border: 0; background: transparent; }
+.number-counter-panel .counter-popover-body { padding: 16px; }
+.number-counter-panel .counter-popover-footer { gap: 8px; padding: 12px 16px; font-size: 12px; }
+.number-counter-panel .counter-undo-button { border: 0; background: transparent; }
+.counter-panel-settings .counter-settings-body { gap: 16px; }
+.counter-main-design-section, .counter-panel-settings .counter-global-section { padding: 0; border: 0; border-radius: 0; }
+.counter-main-design-section > header, .counter-main-aux-section > header { min-height: 44px; gap: 8px; }
+.counter-main-design-section > header h3, .counter-main-aux-section > header h3, .counter-panel-settings .counter-global-section > h3 { font-size: 14px; font-weight: 700; }
+.counter-main-design-section > header strong, .counter-settings-note, .counter-field-hint, .counter-main-repeat-summary { font-size: 14px; }
+.counter-main-design-section > header strong { overflow: visible; overflow-wrap: anywhere; text-overflow: clip; white-space: normal; }
+.counter-main-setting-row { gap: 12px; padding-block: 12px; font-size: 13px; }
+.counter-settings-field, .counter-settings-choice, .counter-settings-checks, .counter-settings-checks label, .counter-settings-toggle { gap: 8px; font-size: 16px; }
+.counter-settings-field input:not([type="checkbox"]), .counter-settings-field select, .counter-goal-input-wrap input { min-height: 44px; border-radius: var(--control-radius); font-size: 16px; }
+.counter-settings-choice button, .counter-knitting-mode button { border-radius: var(--control-radius); font-size: 16px; }
+.number-counter-panel .counter-settings-choice > span, .number-counter-panel .counter-main-setting-row > span, .number-counter-panel .counter-main-setting-row > label, .number-counter-panel .counter-settings-field { font-size: 13px; font-weight: 600; }
+.number-counter-panel .counter-settings-choice > button, .number-counter-panel .counter-knitting-mode button, .number-counter-panel .counter-settings-field :is(input, select) { font-size: 16px; font-weight: 400; }
+.counter-panel-view-title, .counter-panel-editor .modal-heading h2 { font-size: 18px; font-weight: 700; }
+.counter-panel-editor .counter-settings-body { gap: 16px; }
+.counter-panel-editor .counter-editor-back { border: 0; background: transparent; }
+.counter-main-aux-list { gap: 0; }
+.counter-main-aux-card { gap: 8px; padding: 12px 0; border: 0; border-bottom: 1px solid var(--color-divider); border-radius: 0; box-shadow: none; }
+.counter-main-aux-card.selected { border: 1px solid var(--color-primary); border-radius: var(--control-radius); color: var(--color-primary); background: var(--color-primary-soft); }
+.counter-main-aux-card strong { overflow: visible; overflow-wrap: anywhere; font-size: 13px; font-weight: 600; text-overflow: clip; white-space: normal; }
+.counter-main-aux-card small, .counter-main-repeat-summary > span, .counter-main-repeat-summary > small { font-size: 12px; line-height: 1.5; }
+.counter-main-aux-copy small { overflow: visible; overflow-wrap: anywhere; text-overflow: clip; white-space: normal; }
+.counter-main-repeat-summary > strong, .counter-main-repeat-summary [role="status"] { color: var(--counter-color, var(--color-primary)); font-size: 14px; }
+.counter-main-add-button, .counter-management-mode-button { min-width: 44px; min-height: 44px; gap: 8px; border-radius: var(--control-radius); font-size: 13px; }
+.counter-management-mode-button[aria-pressed="true"]:last-child { color: var(--color-primary-text); background: var(--color-primary); }
+.counter-panel-editor .counter-editor-management button { border: 0; background: transparent; }
+@media (max-width: 900px) {
+  .viewer-counter-detail-item, .viewer-counter-detail-item:not(.has-progress) { grid-template-columns: 16px minmax(0, 1fr); }
+  .viewer-counter-detail-color { grid-row: 1; }
+  .viewer-shell:not(.report-mode) .viewer-counter-tools { flex-wrap: wrap; }
+}
+@media (max-width: 760px) {
+  .viewer-shell:not(.report-mode) .viewer-timer-bar { width: min(640px, calc(100% - 24px)); max-width: calc(100% - 24px); flex-wrap: wrap; }
+  .viewer-shell.counter-panel-visible:not(.report-mode) .viewer-timer-bar:not(.positioned) { right: 12px; width: min(640px, calc(100% - 24px)); max-width: calc(100% - 24px); }
+  .viewer-shell:not(.report-mode) .viewer-counter-tools { flex: 1 1 auto; }
+  .viewer-counter-details-header { flex-wrap: wrap; }
+  .viewer-counter-details-header > div { margin-left: auto; }
+  .viewer-counter-details-list { max-height: max(44px, min(260px, calc(var(--viewer-viewport-height, 100dvh) - var(--viewer-header-height) - var(--viewer-footer-controls-height) - 360px))); }
+  .number-counter-panel .number-counter-header { flex-wrap: wrap; }
+  .counter-panel-tabs { flex: 1 1 100%; }
+  .number-counter-panel.mobile-collapsed { height: auto; max-height: none; }
+  .counter-main-aux-section > header { flex-wrap: wrap; }
+  .counter-main-aux-section .counter-management-actions { margin-left: auto; }
+}
+
+/* Tool surfaces share compact type and borderless actions throughout the app. */
+.viewer-shell:not(.report-mode) .viewer-mini-counter-row span, .viewer-shell:not(.report-mode) .viewer-mini-counter-row small { font-size: 11px; }
+.viewer-shell:not(.report-mode) .viewer-mini-counter-step-group > .viewer-mini-counter-step,
+.viewer-shell:not(.report-mode) .viewer-mini-counter-step-group .viewer-mini-counter-row,
+.viewer-shell:not(.report-mode) .viewer-mini-counter-step-group .viewer-mini-counter-row-input { height: 44px; }
+.viewer-shell:not(.report-mode) .viewer-timer-bar .viewer-work-timer-elapsed { height: 44px; font-size: 13px; }
+.viewer-shell:not(.report-mode) .viewer-timer-bar .viewer-work-timer-toggle { width: 44px; min-width: 44px; height: 44px; flex-basis: 44px; }
+.viewer-counter-detail-alert, .counter-main-design-section > header strong, .counter-settings-note, .counter-field-hint, .counter-main-repeat-summary, .counter-main-repeat-summary > strong { font-size: 12px; }
+.number-counter-panel .counter-settings-choice > button, .number-counter-panel .counter-knitting-mode button { font-size: 13px; }
+.viewer-header .viewer-action, .viewer-footer button, .viewer-shell .viewer-tool,
+.viewer-shell .thumbnail-group-add, .viewer-shell .thumbnail-group-label,
+.number-counter-panel .counter-management-mode-button, .number-counter-panel .counter-settings-choice button,
+.number-counter-panel .counter-knitting-mode button, .viewer-shell:not(.report-mode) .viewer-counter-settings-toggle.active { border-color: transparent; background-clip: padding-box; }
+.viewer-header .viewer-action:not(.selected), .viewer-footer button:not(.selected):not(.active):not([aria-pressed="true"]),
+.viewer-shell .viewer-tool:not(.active), .viewer-shell .thumbnail-group-add,
+.number-counter-panel .counter-management-mode-button:not([aria-pressed="true"]) { background: transparent; }
+.viewer-header .viewer-action:hover:not(:disabled), .viewer-footer button:hover:not(:disabled), .viewer-shell .thumbnail-group-add:hover:not(:disabled) { color: var(--color-primary); background: var(--color-primary-soft); }
+.viewer-counter-detail-stepper, .counter-main-repeat-actions { border-color: var(--color-border); }
+
+/* Keep the two floating counter tools at half their previous visual size. */
+.viewer-shell:not(.report-mode) .viewer-timer-bar,
+.number-counter-panel { scale: .5; transform-origin: top right; }
+.viewer-shell:not(.report-mode) .viewer-timer-bar.positioned,
+.viewer-shell:not(.report-mode) .viewer-timer-bar.is-dragging,
+.number-counter-panel[style] { transform-origin: top left; }

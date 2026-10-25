@@ -291,6 +291,22 @@ describe('local document storage', () => {
     await deleteDocument(document.id)
   })
 
+  it('preserves current and undo counts when existing free counters become rows', async () => {
+    const document = makeDocument(crypto.randomUUID(), 'Free counter units.pdf', Date.now())
+    await addDocument(document)
+    const viewer = await getViewer(document.id, document.pageCount)
+    const counters = (['stitch', 'row', 'round'] as const).map((unit, index) => ({ ...createCounter('simple', unit), id: unit, unit, value: 12 + index }))
+    const history = { id: 'unit-history', label: 'free counter', counters: counters.map((counter) => ({ ...counter, value: counter.value - 1 })), guides: [], actualRow: 0, counterOnly: true, savedAt: 1 }
+    for (const save of [saveViewer, (snapshot: typeof viewer) => saveViewerAndPageWorks(snapshot, [])]) {
+      await save({ ...viewer, counters, counterHistory: [history] })
+      const restored = await getViewer(document.id, document.pageCount)
+      expect(restored.counters).toMatchObject([{ id: 'stitch', unit: 'row', value: 12 }, { id: 'row', unit: 'row', value: 13 }, { id: 'round', unit: 'row', value: 14 }])
+      expect(restored.counterMainId).toBe('row')
+      expect(restored.counterHistory).toMatchObject([{ id: history.id, counterOnly: true, counters: [{ id: 'stitch', unit: 'row', value: 11 }, { id: 'row', unit: 'row', value: 12 }, { id: 'round', unit: 'row', value: 13 }] }])
+    }
+    await deleteDocument(document.id)
+  })
+
   it('commits counter state and linked guide work in the same storage transaction', async () => {
     const document = makeDocument(crypto.randomUUID(), 'Counter transaction.pdf', Date.now())
     await addDocument(document)

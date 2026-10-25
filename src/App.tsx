@@ -3,6 +3,7 @@ import { HashRouter, Navigate, Route, Routes, useParams } from 'react-router-dom
 import BrandLoading from './BrandLoading'
 import PwaUpdatePrompt from './PwaUpdatePrompt'
 import './App.css'
+import './AppDesignSystem.css'
 import './Home.css'
 
 const Workspace = lazy(() => import('./Workspace'))

@@ -340,21 +340,8 @@ export interface CounterHistoryEntry {
   guides: { pageNumber: number; horizontalGuides: ProgressGuide[]; verticalGuides: ProgressGuide[] }[]
   actualRow: number
   baseCounterId?: string
-  timeLapId?: string
   counterOnly?: boolean
   savedAt: number
-}
-
-export interface CounterTimeLap {
-  id: string
-  counterId: string
-  sessionId: string
-  historyEntryId: string
-  elapsedMs: number
-  durationMs: number
-  rowDelta: -1 | 1
-  rowNumber?: number
-  recordedAt: number
 }
 
 export interface ViewerSnapshot {
@@ -370,7 +357,6 @@ export interface ViewerSnapshot {
   annotationSettings?: AnnotationSettings
   counters?: CounterSnapshot[]
   counterHistory?: CounterHistoryEntry[]
-  counterTimeLaps?: CounterTimeLap[]
   collapsedCounterKinds?: Partial<Record<CounterKind, boolean>>
   counterSoundEnabled?: boolean
   counterPreviewEnabled?: boolean

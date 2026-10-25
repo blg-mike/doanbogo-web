@@ -16,31 +16,31 @@
   -moz-osx-font-smoothing: grayscale;
   font-optical-sizing: auto;
   font-weight: 400;
-  --color-primary: #21A366;
-  --color-primary-text: #111111;
-  --color-primary-hover: #107C41;
-  --color-primary-pressed: #0B5A30;
-  --color-primary-soft: #E7F5EC;
-  --color-secondary: #111111;
-  --color-secondary-hover: #303030;
+  --color-primary: #00865D;
+  --color-primary-text: #FFFFFF;
+  --color-primary-hover: #006F4D;
+  --color-primary-pressed: #005B3F;
+  --color-primary-soft: #E8F6F0;
+  --color-secondary: #111827;
+  --color-secondary-hover: #334155;
   --color-secondary-soft: #FFFFFF;
-  --color-tertiary: #107C41;
-  --color-tertiary-soft: #E7F5EC;
+  --color-tertiary: #00865D;
+  --color-tertiary-soft: #E8F6F0;
   --color-background: #FFFFFF;
   --color-surface: #FFFFFF;
   --color-surface-subtle: #FFFFFF;
   --color-viewer-background: #E9E6DF;
-  --color-text: #111111;
-  --color-text-secondary: #525650;
-  --color-text-muted: #777C76;
-  --color-border: #CFCFC8;
-  --color-divider: #E4E2DC;
+  --color-text: #111827;
+  --color-text-secondary: #64748B;
+  --color-text-muted: #64748B;
+  --color-border: #E2E8F0;
+  --color-divider: #E2E8F0;
   --color-danger: #B9473F;
   --color-danger-soft: #F7E9E6;
   --color-warning: #B88732;
   --color-warning-soft: #F6EEDC;
-  --color-progress: #21A366;
-  --color-focus-ring: rgba(16, 124, 65, .42);
+  --color-progress: #00865D;
+  --color-focus-ring: rgba(0, 134, 93, .42);
   --space-1: 4px;
   --space-2: 8px;
   --space-3: 12px;
@@ -49,15 +49,27 @@
   --space-6: 32px;
   --control-height: 44px;
   --control-radius: 10px;
+  --panel-radius: 16px;
+  --badge-radius: 8px;
+  --font-title: 24px;
+  --font-section: 18px;
+  --font-label: 16px;
+  --font-description: 14px;
+  --icon-size: 20px;
+  --icon-stroke: 1.75;
   --motion-ui: 150ms;
 }
 * { box-sizing: border-box; }
 html, body, #root { width: 100%; min-width: 320px; min-height: 100%; margin: 0; }
 html { -webkit-tap-highlight-color: transparent; }
 body { min-height: 100vh; }
-h1, h2, h3 { color: var(--color-text); font-weight: 600; }
+h1, h2, h3 { color: var(--color-text); }
+h1 { font-size: var(--font-title); font-weight: 700; }
+h2 { font-size: var(--font-section); font-weight: 700; }
+h3 { font-size: var(--font-label); font-weight: 600; }
 button, input, select, textarea { font: inherit; }
 button { color: inherit; }
+:where(button, a, [role="button"]) .lucide { width: var(--icon-size); height: var(--icon-size); stroke-width: var(--icon-stroke); }
 button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible { outline: 3px solid var(--color-focus-ring); outline-offset: 2px; }
 button:disabled { cursor: not-allowed !important; opacity: .42; }
 @media (any-pointer: coarse) {
