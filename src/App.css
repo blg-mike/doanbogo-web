@@ -128,7 +128,7 @@ html.viewer-viewport-locked .viewer-shell { height: 100dvh; min-height: 0; flex:
 .pdf-document-area.single-pane { padding: 0; }
 .pdf-document-area.split-wide { flex-direction: row; }
 .pdf-document-area.split-tall { flex-direction: column; }
-.number-counter-panel { position: absolute; z-index: 40; top: 12px; right: 12px; box-sizing: border-box; width: 258px; max-height: calc(100% - 24px); display: flex; flex-direction: column; align-items: stretch; gap: 8px; padding: 10px; overflow-y: auto; border: 1px solid var(--color-border); border-radius: 14px; background: rgba(255,255,255,.98); box-shadow: 0 8px 24px rgba(27,35,51,.2); }
+.number-counter-panel { position: absolute; z-index: 40; top: 12px; right: 12px; box-sizing: border-box; width: 258px; max-height: calc(100% - 24px); display: flex; flex-direction: column; align-items: stretch; gap: 8px; padding: 10px; overflow-y: auto; border: 1px solid var(--color-border); border-radius: 14px; background: #fff; box-shadow: 0 8px 24px rgba(27,35,51,.2); }
 .number-counter-header { min-height: 30px; display: flex; align-items: center; gap: 7px; padding: 0 2px; color: #53627a; cursor: move; touch-action: none; user-select: none; }
 .number-counter-header strong { min-width: 0; overflow: hidden; color: var(--color-text); text-overflow: ellipsis; white-space: nowrap; font-size: 12px; }
 .number-counter-header span { flex: 1; color: #98a2b2; font-size: 9px; white-space: nowrap; }
@@ -210,8 +210,8 @@ html.viewer-viewport-locked .viewer-shell { height: 100dvh; min-height: 0; flex:
 .page-pdf-link:hover, .page-pdf-link:focus-visible, .page-qr-link:hover, .page-qr-link:focus-visible { border-color: var(--color-primary); background: rgba(75,99,52,.12); outline: 1px solid rgba(75,99,52,.32); }
 .split-divider { z-index: 1; flex: 0 0 14px; display: flex; align-items: center; justify-content: center; padding: 0; border: 0; outline: 0; background: #f7f8fa; touch-action: none; cursor: col-resize; }
 .split-divider:hover, .split-divider:active { background: var(--color-primary-soft); }
-.number-counter-panel { position: relative; z-index: 2; inset: auto; box-sizing: border-box; flex: 0 0 min(320px, 30vw); width: min(320px, 30vw); max-height: 100%; display: flex; flex-direction: column; align-items: stretch; gap: 8px; padding: 10px; overflow: auto; border: 0; border-left: 1px solid var(--color-border); border-radius: 0; background: #f9fbfd; box-shadow: -4px 0 14px rgba(27,35,51,.06); }
-.number-counter-header { position: sticky; top: 0; z-index: 1; justify-content: space-between; cursor: default; background: #f9fbfd; }
+.number-counter-panel { position: relative; z-index: 2; inset: auto; box-sizing: border-box; flex: 0 0 min(320px, 30vw); width: min(320px, 30vw); max-height: 100%; display: flex; flex-direction: column; align-items: stretch; gap: 8px; padding: 10px; overflow: auto; border: 0; border-left: 1px solid var(--color-border); border-radius: 0; background: #fff; box-shadow: -4px 0 14px rgba(27,35,51,.06); }
+.number-counter-header { position: sticky; top: 0; z-index: 1; justify-content: space-between; cursor: default; background: #fff; }
 .number-counter-header > div:first-child { display: flex; align-items: center; gap: 8px; }
 .number-counter-header-actions { display: flex; align-items: center; gap: 4px; }
 .counter-undo-button { min-height: 30px; display: inline-flex; align-items: center; gap: 5px; padding: 0 8px; border: 1px solid #e4e9f0; border-radius: 8px; color: #58677e; background: #fff; font-size: 10px; cursor: pointer; }
@@ -1058,7 +1058,7 @@ html.viewer-viewport-locked .viewer-shell { height: 100dvh; min-height: 0; flex:
 .guide-focus-settings { grid-column: 1 / -1; margin: 2px 0 6px 22px; padding: 7px 8px; border: 1px solid var(--color-border); border-radius: 7px; color: #65748a; background: var(--color-surface-subtle); font-size: 9px; }
 
 /* Counter quick-use popover */
-.number-counter-panel { position: absolute; z-index: 40; inset: 12px 12px auto auto; box-sizing: border-box; width: min(360px, calc(100% - 24px)); max-height: 75%; display: flex; flex-direction: column; gap: 0; padding: 12px; overflow: hidden; border: 1px solid #e8ded4; border-radius: 18px; background: rgba(255,253,250,.98); box-shadow: 0 12px 32px rgba(51,37,27,.2); }
+.number-counter-panel { position: absolute; z-index: 40; inset: 12px 12px auto auto; box-sizing: border-box; width: min(360px, calc(100% - 24px)); max-height: 75%; display: flex; flex-direction: column; gap: 0; padding: 12px; overflow: hidden; border: 1px solid #e8ded4; border-radius: 18px; background: #fff; box-shadow: 0 12px 32px rgba(51,37,27,.2); }
 .number-counter-header { position: relative; min-height: 38px; flex: 0 0 auto; display: flex; align-items: center; gap: 8px; padding: 0 0 8px; color: #47352a; background: transparent; cursor: grab; touch-action: none; }
 .number-counter-header:active { cursor: grabbing; }
 .number-counter-header > strong { flex: 1; color: #3c2b22; font-size: 15px; }
@@ -1560,7 +1560,7 @@ html.viewer-viewport-locked .viewer-shell { height: 100dvh; min-height: 0; flex:
 .counter-settings-modal .modal-heading > button { width: 44px; height: 44px; }
 .counter-settings-modal .counter-storage-error { color: var(--color-danger); }
 .counter-settings-modal .counter-settings-body { color: var(--color-text); }
-.counter-settings-modal .counter-global-section { border-color: var(--color-divider); border-radius: 12px; background: var(--color-surface-subtle); }
+.counter-settings-modal:not(.counter-panel-settings) .counter-global-section { border-color: var(--color-divider); border-radius: 12px; background: var(--color-surface-subtle); }
 .counter-settings-modal .counter-global-section > h3,
 .counter-settings-modal .counter-task-settings-heading { color: var(--color-text); }
 .counter-settings-modal .counter-global-section > h3 span,
@@ -1672,12 +1672,12 @@ html.viewer-viewport-locked .viewer-shell { height: 100dvh; min-height: 0; flex:
 .counter-panel-tabs > button[aria-selected="true"] { border-color: var(--color-primary-soft); color: var(--color-primary); background: var(--color-primary-soft); }
 .counter-panel-tabs > .counter-panel-close { margin-left: auto; border-color: var(--color-border); color: var(--color-text-secondary); background: var(--color-surface); }
 .counter-panel-tabs > .counter-collapse-mobile { display: none; }
-.number-counter-panel .counter-popover-body { min-height: 0; flex: 1 1 0%; padding: 12px; overflow-x: hidden; overflow-y: auto; overscroll-behavior: contain; }
+.number-counter-panel .counter-popover-body { min-height: 0; flex: 1 1 0%; padding: 0; overflow-x: hidden; overflow-y: auto; overscroll-behavior: contain; background-color: #fff; background-image: none; }
 .number-counter-panel .counter-popover-footer { min-height: 52px; flex: 0 0 auto; padding: 4px 12px 8px; border-top: 1px solid var(--color-divider); }
 .number-counter-panel .counter-undo-button { width: 44px; height: 44px; min-height: 44px; flex: 0 0 44px; border: 1px solid var(--color-border); border-radius: 9px; color: var(--color-text-secondary); background: var(--color-surface); }
-.counter-panel-settings { width: 100%; min-width: 0; display: block; overflow: visible; background: var(--color-surface); }
-.counter-panel-settings .counter-settings-body { max-height: none; display: grid; gap: 10px; overflow: visible; padding: 0; background: var(--color-surface); }
-.counter-panel-settings .counter-global-section { padding: 11px; background: var(--color-surface); }
+.counter-panel-settings { width: 100%; min-width: 0; display: block; overflow: visible; background: #fff; }
+.counter-panel-settings .counter-settings-body { max-height: none; display: grid; gap: 10px; overflow: visible; padding: 0; background: #fff; }
+.counter-panel-settings .counter-global-section { padding: 11px; background: #fff; }
 .counter-panel-settings .counter-global-section > h3 { font-size: 13px; }
 .counter-panel-settings .counter-settings-field input:not([type="checkbox"]),
 .counter-panel-settings .counter-settings-field select { min-width: 0; min-height: 44px; height: 44px; }
@@ -1709,7 +1709,7 @@ html.viewer-viewport-locked .viewer-shell { height: 100dvh; min-height: 0; flex:
   .number-counter-panel .number-counter-header { min-height: 60px; padding: 7px 0; }
   .counter-panel-tabs > .counter-collapse-mobile { width: 44px; height: 44px; display: grid; }
   .number-counter-panel.mobile-collapsed { height: 64px; max-height: 64px; }
-  .number-counter-panel .counter-popover-body { min-height: 0; flex: 1 1 0%; overflow-x: hidden; overflow-y: auto; overscroll-behavior-y: contain; -webkit-overflow-scrolling: touch; touch-action: pan-y; padding: 10px 0; }
+  .number-counter-panel .counter-popover-body { min-height: 0; flex: 1 1 0%; overflow-x: hidden; overflow-y: auto; overscroll-behavior-y: contain; -webkit-overflow-scrolling: touch; touch-action: pan-y; }
   .viewer-shell.counter-panel-visible:not(.report-mode) .viewer-timer-bar:not(.positioned) { right: 12px; }
 }
 

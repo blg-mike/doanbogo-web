@@ -76,7 +76,6 @@
 .counter-panel-tabs > button { border: 0; border-radius: var(--control-radius); }
 .counter-panel-tabs > button[aria-selected="true"] { border: 1px solid var(--color-primary); }
 .counter-panel-tabs > .counter-panel-close { border: 0; background: transparent; }
-.number-counter-panel .counter-popover-body { padding: 16px; }
 .number-counter-panel .counter-popover-footer { gap: 8px; padding: 12px 16px; font-size: 12px; }
 .number-counter-panel .counter-undo-button { border: 0; background: transparent; }
 .counter-panel-settings .counter-settings-body { gap: 16px; }
@@ -89,7 +88,7 @@
 .counter-settings-field, .counter-settings-choice, .counter-settings-checks, .counter-settings-checks label, .counter-settings-toggle { gap: 8px; font-size: 16px; }
 .counter-settings-field input:not([type="checkbox"]), .counter-settings-field select, .counter-goal-input-wrap input { min-height: 44px; border-radius: var(--control-radius); font-size: 16px; }
 .counter-settings-choice button, .counter-knitting-mode button { border-radius: var(--control-radius); font-size: 16px; }
-.number-counter-panel .counter-settings-choice > span, .number-counter-panel .counter-main-setting-row > span, .number-counter-panel .counter-main-setting-row > label, .number-counter-panel .counter-settings-field { font-size: 13px; font-weight: 600; }
+.number-counter-panel .counter-settings-choice > span, .number-counter-panel .counter-main-setting-row > span, .number-counter-panel .counter-main-setting-row > label, .number-counter-panel .counter-settings-field { font-size: var(--tool-font-13); font-weight: 500; }
 .number-counter-panel .counter-settings-choice > button, .number-counter-panel .counter-knitting-mode button, .number-counter-panel .counter-settings-field :is(input, select) { font-size: 16px; font-weight: 400; }
 .counter-panel-view-title, .counter-panel-editor .modal-heading h2 { font-size: 18px; font-weight: 700; }
 .counter-panel-editor .counter-settings-body { gap: 16px; }
@@ -148,3 +147,236 @@
 .viewer-shell:not(.report-mode) .viewer-timer-bar.positioned,
 .viewer-shell:not(.report-mode) .viewer-timer-bar.is-dragging,
 .number-counter-panel[style] { transform-origin: top left; }
+
+/* Authored values compensate for the tools' .75 visual scale. */
+.viewer-shell:not(.report-mode) .viewer-timer-bar,
+.number-counter-panel {
+  --tool-font-11: 14.6667px;
+  --tool-font-12: 16px;
+  --tool-font-13: 17.3333px;
+  --tool-font-14: 18.6667px;
+  --tool-font-16: 21.3333px;
+  --tool-font-20: 26.6667px;
+  --tool-control-size: 58.6667px;
+  color: var(--color-text);
+  font-family: inherit;
+  font-size: var(--tool-font-13);
+  font-weight: 400;
+  letter-spacing: -.2667px;
+}
+
+.viewer-shell:not(.report-mode) .viewer-timer-bar :is(button, input, select, textarea),
+.number-counter-panel :is(button, input, select, textarea) {
+  font-family: inherit;
+  letter-spacing: inherit;
+}
+
+.viewer-shell:not(.report-mode) .viewer-timer-bar :is(button, summary),
+.number-counter-panel button {
+  min-height: var(--tool-control-size);
+  font-size: var(--tool-font-13);
+}
+
+.viewer-shell:not(.report-mode) .viewer-timer-bar :is(button, summary) .lucide,
+.number-counter-panel .lucide {
+  width: 22.6667px;
+  height: 22.6667px;
+  stroke-width: 1.75;
+}
+
+.viewer-shell:not(.report-mode) .viewer-timer-bar { gap: 10.6667px; }
+.viewer-shell:not(.report-mode) .viewer-floating-drag-handle { width: var(--tool-control-size); min-width: var(--tool-control-size); height: var(--tool-control-size); flex-basis: var(--tool-control-size); }
+.viewer-shell:not(.report-mode) .viewer-mini-counter-step-group > .viewer-mini-counter-step,
+.viewer-shell:not(.report-mode) .viewer-mini-counter-step-group .viewer-mini-counter-row,
+.viewer-shell:not(.report-mode) .viewer-mini-counter-step-group .viewer-mini-counter-row-input { height: var(--tool-control-size); }
+.viewer-shell:not(.report-mode) .viewer-mini-counter-step-group > .viewer-mini-counter-step { width: var(--tool-control-size); min-width: var(--tool-control-size); flex-basis: var(--tool-control-size); }
+.viewer-shell:not(.report-mode) .viewer-mini-counter-row strong { font-size: var(--tool-font-20); font-weight: 600; }
+.viewer-shell:not(.report-mode) .viewer-mini-counter-row span { font-size: var(--tool-font-12); }
+.viewer-shell:not(.report-mode) .viewer-mini-counter-row small { font-size: var(--tool-font-11); }
+.viewer-shell:not(.report-mode) .viewer-mini-counter-step-group .viewer-mini-counter-row-input { font-size: var(--tool-font-20); }
+.viewer-shell:not(.report-mode) .viewer-counter-settings-toggle,
+.viewer-shell:not(.report-mode) .viewer-counter-details-toggle,
+.viewer-shell:not(.report-mode) .viewer-timer-bar .viewer-work-timer-toggle { width: var(--tool-control-size); min-width: var(--tool-control-size); height: var(--tool-control-size); flex-basis: var(--tool-control-size); }
+.viewer-shell:not(.report-mode) .viewer-timer-bar .viewer-work-timer-elapsed { height: var(--tool-control-size); font-size: var(--tool-font-13); font-weight: 500; }
+.viewer-shell:not(.report-mode) .viewer-counter-details-header > strong { font-size: var(--tool-font-14); font-weight: 600; }
+.viewer-shell:not(.report-mode) .viewer-counter-detail-item { padding: 10.6667px; font-size: var(--tool-font-13); }
+.viewer-shell:not(.report-mode) .viewer-counter-detail-color { width: 21.3333px; height: 21.3333px; }
+.viewer-shell:not(.report-mode) .viewer-counter-detail-info > strong { font-size: var(--tool-font-14); font-weight: 600; }
+.viewer-shell:not(.report-mode) .viewer-counter-detail-info .viewer-counter-detail-summary,
+.viewer-shell:not(.report-mode) .viewer-counter-detail-progress-summary,
+.viewer-shell:not(.report-mode) .viewer-counter-detail-summary-repeat > strong,
+.viewer-shell:not(.report-mode) .viewer-counter-detail-summary-repeat > span,
+.viewer-shell:not(.report-mode) .viewer-counter-detail-summary-repeat > small { font-size: var(--tool-font-12); }
+.viewer-shell:not(.report-mode) .viewer-counter-detail-alert { gap: 8px; padding: 5.3333px 10.6667px; border: 0; border-radius: 10.6667px; font-size: var(--tool-font-12); }
+.viewer-shell:not(.report-mode) .viewer-counter-detail-alert > svg { width: 22.6667px; height: 22.6667px; }
+.viewer-shell:not(.report-mode) .viewer-counter-detail-stepper .viewer-mini-counter-step { width: var(--tool-control-size); min-width: var(--tool-control-size); height: var(--tool-control-size); flex-basis: var(--tool-control-size); }
+.viewer-shell:not(.report-mode) .viewer-counter-action-menu > summary,
+.viewer-shell:not(.report-mode) .counter-item-menu-trigger,
+.viewer-shell:not(.report-mode) .counter-item-delete { width: var(--tool-control-size); min-width: var(--tool-control-size); height: var(--tool-control-size); }
+
+.number-counter-panel { font-size: var(--tool-font-13); }
+.number-counter-panel .counter-settings-modal :where(label, legend, p, span, strong, small) { font-size: var(--tool-font-13); }
+.number-counter-panel .number-counter-header { min-height: 60px; padding-inline: 16px; }
+.number-counter-panel .counter-drag-handle { width: var(--tool-control-size); height: var(--tool-control-size); flex-basis: var(--tool-control-size); }
+.number-counter-panel .number-counter-header > strong,
+.number-counter-panel .counter-panel-title,
+.number-counter-panel .counter-panel-view-title,
+.number-counter-panel .counter-panel-editor .modal-heading h2 { font-size: var(--tool-font-16); font-weight: 600; }
+.number-counter-panel .counter-main-design-section > header h3,
+.number-counter-panel .counter-main-aux-section > header h3,
+.number-counter-panel .counter-panel-settings .counter-global-section > h3,
+.number-counter-panel .counter-kind-picker > strong { font-size: var(--tool-font-14); font-weight: 600; }
+.number-counter-panel .counter-main-aux-card strong,
+.number-counter-panel .counter-kind-choice b { font-size: var(--tool-font-16); font-weight: 600; }
+.number-counter-panel .counter-main-aux-card small,
+.number-counter-panel .counter-main-repeat-summary > span,
+.number-counter-panel .counter-main-repeat-summary > small,
+.number-counter-panel .counter-kind-choice small,
+.number-counter-panel .counter-timer-link-option small { font-size: var(--tool-font-12); font-weight: 400; }
+.number-counter-panel .counter-settings-note,
+.number-counter-panel .counter-field-hint,
+.number-counter-panel .counter-link-editor > span,
+.number-counter-panel .counter-link-note,
+.number-counter-panel .counter-schedule-preview small,
+.number-counter-panel .counter-goal-setting-row > label small,
+.number-counter-panel .counter-panel-editor .eyebrow,
+.number-counter-panel .counter-popover-footer { font-size: var(--tool-font-12); }
+.number-counter-panel :is(input:not([type="checkbox"]):not([type="radio"]):not([type="color"]), select, textarea) { min-height: var(--tool-control-size); font-size: var(--tool-font-13); }
+.number-counter-panel .counter-popover-body { background-color: #fff; background-image: none; }
+.number-counter-panel .counter-popover-footer { min-height: 60px; padding: 4px 16px 8px; }
+.number-counter-panel .counter-undo-button,
+.number-counter-panel .counter-panel-editor .counter-editor-back { width: var(--tool-control-size); min-width: var(--tool-control-size); height: var(--tool-control-size); flex-basis: var(--tool-control-size); }
+.number-counter-panel .counter-panel-tabs > button { width: var(--tool-control-size); min-width: var(--tool-control-size); height: var(--tool-control-size); flex-basis: var(--tool-control-size); border-radius: 0; }
+.number-counter-panel .counter-panel-tabs > button[aria-selected="true"] { border: 0; border-bottom: 2px solid var(--color-primary); color: var(--color-primary); background: transparent; }
+.number-counter-panel .counter-panel-tabs > .counter-collapse-mobile { width: var(--tool-control-size); min-width: var(--tool-control-size); height: var(--tool-control-size); flex-basis: var(--tool-control-size); }
+.number-counter-panel .counter-main-design-section > header,
+.number-counter-panel .counter-main-aux-section > header { min-height: var(--tool-control-size); }
+.number-counter-panel .counter-settings-body,
+.number-counter-panel .counter-panel-settings .counter-settings-body,
+.number-counter-panel .counter-panel-editor .counter-settings-body { gap: 10.6667px; }
+.number-counter-panel .counter-main-setting-row { min-height: var(--tool-control-size); padding-block: 10.6667px; }
+.number-counter-panel .counter-settings-toggle,
+.number-counter-panel .counter-settings-checks label,
+.number-counter-panel .counter-timer-link-option { min-height: var(--tool-control-size); }
+.number-counter-panel .counter-settings-toggle input,
+.number-counter-panel .counter-settings-checks input,
+.number-counter-panel .counter-timer-link-option input { width: 21.3333px; height: 21.3333px; flex-basis: 21.3333px; }
+.number-counter-panel .counter-settings-choice button,
+.number-counter-panel .counter-knitting-mode button,
+.number-counter-panel .counter-task-kind-field button { min-height: var(--tool-control-size); font-size: var(--tool-font-13); }
+.number-counter-panel .counter-settings-choice button { min-width: var(--tool-control-size); }
+.number-counter-panel .counter-main-add-button,
+.number-counter-panel .counter-management-mode-button { min-width: var(--tool-control-size); min-height: var(--tool-control-size); }
+.number-counter-panel .counter-main-repeat-actions .counter-repeat-step { width: var(--tool-control-size); min-width: var(--tool-control-size); height: var(--tool-control-size); flex-basis: var(--tool-control-size); }
+.number-counter-panel :is(.counter-item-menu-trigger, .counter-order-handle, .counter-item-delete) { width: var(--tool-control-size); min-width: var(--tool-control-size); height: var(--tool-control-size); }
+.number-counter-panel .counter-color-presets button { width: var(--tool-control-size); height: var(--tool-control-size); flex-basis: var(--tool-control-size); }
+
+/* Keep counter choices flat; inputs and the floating popup retain their surfaces. */
+.number-counter-panel :is(.counter-main-design-section, .counter-main-aux-section, .counter-panel-settings .counter-global-section) {
+  padding: 0 0 16px;
+  border: 0;
+  border-bottom: 1px solid var(--color-divider);
+  border-radius: 0;
+  background: #fff;
+  box-shadow: none;
+}
+.number-counter-panel .counter-main-aux-card { padding-block: 10.6667px; border: 0; border-bottom: 1px solid var(--color-divider); border-radius: 0; background: transparent; box-shadow: none; }
+.number-counter-panel .counter-main-aux-card.selected { border: 0; border-bottom: 1px solid var(--color-divider); color: var(--color-primary); background: transparent; }
+.number-counter-panel .counter-main-aux-card.is-reordering { border-bottom: 2px solid var(--color-primary); box-shadow: none; }
+.number-counter-panel .counter-main-aux-copy { border: 0; border-radius: 0; background: transparent; }
+.number-counter-panel .counter-kind-picker { gap: 0; }
+.number-counter-panel .counter-kind-choice { min-height: var(--tool-control-size); padding: 10.6667px 16px; border: 0; border-bottom: 1px solid var(--color-divider); border-radius: 0; background: transparent; }
+.number-counter-panel .counter-kind-choice.selected { color: var(--color-primary); background: transparent; }
+.number-counter-panel .counter-kind-choice.selected b { color: var(--color-primary); }
+.number-counter-panel .counter-kind-choice > svg { width: 22.6667px; height: 22.6667px; }
+.number-counter-panel .counter-kind-choice > i { position: relative; width: 21.3333px; height: 21.3333px; border-color: var(--color-border); color: transparent; background: transparent; font-size: 0; }
+.number-counter-panel .counter-kind-choice > i::after { width: 10.6667px; height: 10.6667px; border-radius: 50%; background: transparent; content: ''; }
+.number-counter-panel .counter-kind-choice.selected > i { border-color: var(--color-primary); background: transparent; }
+.number-counter-panel .counter-kind-choice.selected > i::after { background: var(--color-primary); }
+.number-counter-panel .counter-main-setting-row { border-color: var(--color-divider); }
+.number-counter-panel .counter-settings-choice button,
+.number-counter-panel .counter-knitting-mode button,
+.number-counter-panel .counter-task-kind-field button { position: relative; display: inline-flex; align-items: center; justify-content: center; gap: 8px; padding-inline: 8px; border: 0; border-radius: 0; color: var(--color-text-secondary); background: transparent; }
+.number-counter-panel .counter-settings-choice button::before,
+.number-counter-panel .counter-knitting-mode button::before,
+.number-counter-panel .counter-task-kind-field button::before { width: 21.3333px; height: 21.3333px; flex: 0 0 21.3333px; border: 1px solid var(--color-border); border-radius: 50%; content: ''; }
+.number-counter-panel .counter-settings-choice button.selected,
+.number-counter-panel .counter-knitting-mode button.selected,
+.number-counter-panel .counter-task-kind-field button.selected { color: var(--color-primary); background: transparent; font-weight: 600; }
+.number-counter-panel .counter-settings-choice button.selected::before,
+.number-counter-panel .counter-knitting-mode button.selected::before,
+.number-counter-panel .counter-task-kind-field button.selected::before { border-color: var(--color-primary); background: radial-gradient(circle, var(--color-primary) 0 4px, transparent 4.5px); }
+.number-counter-panel .counter-knitting-mode,
+.number-counter-panel .counter-task-kind-field > div { gap: 0; padding: 0; border: 0; border-radius: 0; background: transparent; }
+.number-counter-panel .counter-timer-link-option { align-items: center; padding: 8px 0; border-radius: 0; border-bottom: 1px solid var(--color-divider); background: #fff; }
+.number-counter-panel .counter-timer-link-option:has(input:checked) { color: var(--color-primary); background: #fff; }
+.number-counter-panel .counter-manage-row { border: 0; border-bottom: 1px solid var(--color-divider); border-radius: 0; background: transparent; }
+.number-counter-panel .counter-manage-main,
+.number-counter-panel .counter-manage-main.selected { border-radius: 0; background: transparent; }
+.number-counter-panel .counter-settings-preview,
+.number-counter-panel .counter-schedule-preview,
+.number-counter-panel .counter-link-editor { padding-inline: 0; border: 0; border-top: 1px solid var(--color-divider); border-radius: 0; color: var(--color-text-secondary); background: transparent; box-shadow: none; }
+.number-counter-panel .counter-storage-error { padding: 8px 0 8px 12px; border: 0; border-left: 2px solid var(--color-danger); border-radius: 0; background: transparent; }
+
+.number-counter-panel,
+.number-counter-panel > .number-counter-header,
+.number-counter-panel > .counter-popover-footer { background-color: #fff; }
+.number-counter-panel .counter-panel-settings,
+.number-counter-panel .counter-panel-settings .counter-settings-body,
+.number-counter-panel .counter-panel-settings .counter-global-section,
+.number-counter-panel .counter-panel-settings .counter-timer-link-options,
+.number-counter-panel .counter-panel-settings .counter-timer-link-option,
+.number-counter-panel .counter-panel-settings .counter-settings-toggle,
+.number-counter-panel .counter-panel-settings .counter-settings-note { background-color: #fff; }
+.number-counter-panel .counter-panel-settings .counter-global-section { border: 0; border-bottom: 1px solid var(--color-divider); border-radius: 0; box-shadow: none; }
+.number-counter-panel .counter-panel-settings .counter-timer-link-options { gap: 0; }
+.number-counter-panel .counter-panel-settings { box-sizing: border-box; padding: 12px 12px 16px; }
+.number-counter-panel .counter-panel-editor { box-sizing: border-box; padding: 16px; background-color: #fff; }
+.number-counter-panel .counter-delete-undo-toast { margin: 16px 16px 0; }
+.number-counter-panel .counter-panel-settings .counter-timer-link-option:is(:hover, :active, :focus-within, :has(input:checked)) { background-color: #fff; }
+.number-counter-panel .counter-panel-settings-main,
+.number-counter-panel .counter-panel-settings-main .counter-settings-body,
+.number-counter-panel .counter-panel-settings-main .counter-main-design-section,
+.number-counter-panel .counter-panel-settings-main .counter-main-setting-row,
+.number-counter-panel .counter-panel-settings-main .counter-settings-field,
+.number-counter-panel .counter-panel-settings-main .counter-settings-choice,
+.number-counter-panel .counter-panel-settings-main .counter-settings-toggle,
+.number-counter-panel .counter-panel-settings-main .counter-knitting-mode,
+.number-counter-panel .counter-panel-settings-main .counter-goal-input-wrap,
+.number-counter-panel .counter-panel-settings-main .counter-main-aux-section,
+.number-counter-panel .counter-panel-settings-main .counter-main-aux-list,
+.number-counter-panel .counter-panel-settings-main .counter-main-aux-card,
+.number-counter-panel .counter-panel-settings-main .counter-main-aux-copy { background-color: #fff; }
+.number-counter-panel .counter-panel-settings-main .counter-main-aux-card:is(:hover, :active, .selected, :focus-visible),
+.number-counter-panel .counter-panel-settings-main .counter-settings-choice button:is(:hover, :active, .selected),
+.number-counter-panel .counter-panel-settings-main .counter-knitting-mode button:is(:hover, :active, .selected) { background-color: #fff; }
+.number-counter-panel .counter-panel-settings-main .counter-settings-choice button:hover:not(:disabled),
+.number-counter-panel .counter-panel-settings-main .counter-settings-choice button.selected:hover:not(:disabled) { background-color: #fff; }
+.number-counter-panel .counter-main-card { padding-inline: 0; border: 0; border-bottom: 1px solid var(--color-divider); border-radius: 0; background: transparent; box-shadow: none; }
+
+@media (hover: none) and (pointer: coarse) {
+  .number-counter-panel :is(input:not([type="checkbox"]):not([type="radio"]):not([type="color"]), select, textarea) { font-size: 21.3333px; }
+}
+
+/* Keep the counter tool flat; only actual controls and the floating shell have surfaces. */
+.number-counter-panel :is(.counter-main-add-button, .counter-management-mode-button) { border: 0; border-radius: 0; color: var(--color-primary); background: transparent; }
+.number-counter-panel .counter-management-mode-button[aria-pressed="true"] { color: var(--color-primary); background: var(--color-primary-soft); }
+.number-counter-panel :is(.counter-main-add-button, .counter-management-mode-button):hover:not(:disabled) { background: var(--color-primary-soft); }
+.number-counter-panel .counter-popover-body :is(input:not([type="checkbox"]):not([type="radio"]):not([type="color"]), select) {
+  box-sizing: border-box;
+  height: 48px;
+  min-height: 48px;
+  padding-inline: 4px;
+  border: 0;
+  border-bottom: 1px solid var(--color-divider);
+  border-radius: 0;
+  background: transparent;
+  font-size: var(--tool-font-13);
+}
+.number-counter-panel .counter-popover-body textarea { border: 1px solid var(--color-border); border-radius: 4px; background: var(--color-surface); }
+.number-counter-panel .counter-panel-editor .counter-task-settings { padding: 12px 0; border: 0; border-bottom: 1px solid var(--color-divider); border-radius: 0; background: transparent; box-shadow: none; }
+.number-counter-panel .counter-panel-editor :is(.counter-task-add, .counter-advanced-toggle) { border: 0; border-radius: 0; color: var(--color-secondary); background: transparent; }
+.number-counter-panel .counter-panel-editor :is(.counter-task-add, .counter-advanced-toggle):hover:not(:disabled) { color: var(--color-primary); background: var(--color-primary-soft); }
+@media (hover: none) and (pointer: coarse) {
+  .number-counter-panel .counter-popover-body :is(input:not([type="checkbox"]):not([type="radio"]):not([type="color"]), select) { height: 58.6667px; min-height: 58.6667px; font-size: 21.3333px; }
+}

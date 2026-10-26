@@ -738,6 +738,165 @@ body:has(.knitting-report-editor) .pwa-dismiss-button:focus-visible { outline: 3
 .knitting-report-editor .instagram-caption-count,
 .knitting-report-editor .instagram-caption-warning { font-size: 14px; }
 
+/* Flat report editing surface: keep structure, remove decorative card layers. */
+.knitting-report-editor {
+  --color-report-editor-background: #fff;
+  font-family: "Pretendard", "Noto Sans KR", "Segoe UI", system-ui, sans-serif;
+  font-size: 13px;
+  letter-spacing: -.2px;
+}
+.knitting-report-editor :is(.report-appbar, .report-workspace, .report-navigation, .report-scroll, .knitting-report-content, .report-cover-card, .report-form-main, .report-form-card, .report-yarn-needle-grid, .report-inspector, .report-bottom-actions) { background: #fff; box-shadow: none; }
+.knitting-report-editor .report-appbar { border-bottom: 1px solid var(--color-divider); }
+.knitting-report-editor .report-navigation { border-right: 1px solid var(--color-divider); border-radius: 0; }
+.knitting-report-editor .report-scroll { min-width: 0; }
+.knitting-report-editor .knitting-report-content { gap: 24px; padding: 20px; }
+.knitting-report-editor .report-cover-card { overflow: visible; border: 0; border-radius: 0; }
+.knitting-report-editor .report-cover-copy { gap: 12px; padding: 16px 20px; }
+.knitting-report-editor .report-cover-eyebrow,
+.knitting-report-editor .report-cover-dates,
+.knitting-report-editor .report-save-indicator { font-size: 12px; }
+.knitting-report-editor .report-cover-copy .report-title-row h1 { font-size: 24px; letter-spacing: -.4px; }
+.knitting-report-editor .report-cover-fields { gap: 12px; }
+.knitting-report-editor .report-form-main { gap: 24px; }
+.knitting-report-editor .report-yarn-needle-grid { gap: 24px; }
+.knitting-report-editor .report-form-card { padding: 0 0 24px; border: 0; border-bottom: 1px solid var(--color-divider); border-radius: 0; }
+.knitting-report-editor .report-form-card > header { min-height: 36px; margin-bottom: 12px; }
+.knitting-report-editor .report-form-card h2,
+.knitting-report-editor .report-detail-subheading h3,
+.knitting-report-editor .report-subheading h3,
+.knitting-report-editor .report-gauge-columns h3,
+.knitting-report-editor .report-gauge-columns h4 { font-size: 14px; font-weight: 600; letter-spacing: -.2px; }
+.knitting-report-editor .report-form-card > header p,
+.knitting-report-editor .report-form-card > header > small,
+.knitting-report-editor .report-field,
+.knitting-report-editor .report-detail-hint,
+.knitting-report-editor .report-field-hint,
+.knitting-report-editor .report-empty-hint,
+.knitting-report-editor .report-form-empty,
+.knitting-report-editor .report-measurement-empty,
+.knitting-report-editor .report-measurements-heading small,
+.knitting-report-editor .report-share-note,
+.knitting-report-editor .report-page-text-results li small { font-size: 12px; }
+.knitting-report-editor .report-entry-title,
+.knitting-report-editor .report-entry-title strong,
+.knitting-report-editor .report-measurement-label-display,
+.knitting-report-editor .report-add-action,
+.knitting-report-editor .report-add-button,
+.knitting-report-editor .report-nav-list button,
+.knitting-report-editor .report-worktime-hint,
+.knitting-report-editor .report-worktime-open { font-size: 13px; }
+.knitting-report-editor .report-entry-title strong { font-weight: 600; }
+.knitting-report-editor .report-yarn-card,
+.knitting-report-editor .report-needle-card,
+.knitting-report-editor .report-entry-card,
+.knitting-report-editor .report-entry-card.compact,
+.knitting-report-editor .report-finished-photos article,
+.knitting-report-editor .report-candidate-card,
+.knitting-report-editor .report-measurement-table,
+.knitting-report-editor .report-page-text-results,
+.knitting-report-editor .report-personal-inline,
+.knitting-report-editor .report-linked-file,
+.knitting-report-editor .report-pattern-size-head,
+.knitting-report-editor .report-tension,
+.knitting-report-editor .report-candidate-values { border: 0; border-bottom: 1px solid var(--color-divider); border-radius: 0; background: transparent; box-shadow: none; }
+.knitting-report-editor .report-yarn-card,
+.knitting-report-editor .report-needle-card,
+.knitting-report-editor .report-entry-card,
+.knitting-report-editor .report-entry-card.compact,
+.knitting-report-editor .report-candidate-card { padding: 12px 0; }
+.knitting-report-editor .report-page-text-results { gap: 12px; margin-top: 12px; padding: 12px 0; }
+.knitting-report-editor .report-page-text-results ol { gap: 0; }
+.knitting-report-editor .report-page-text-results li { padding: 12px 0; border: 0; border-bottom: 1px solid var(--color-divider); border-radius: 0; background: transparent; }
+.knitting-report-editor .report-page-text-results li p { font-size: 13px; }
+.knitting-report-editor .report-gauge-columns { gap: 16px; }
+.knitting-report-editor .report-gauge-columns > section { border-bottom-color: var(--color-divider); background: transparent; }
+.knitting-report-editor .report-gauge-summary { padding: 8px 0; border-radius: 0; border-bottom: 1px solid var(--color-divider); background: transparent; font-size: 12px; }
+.knitting-report-editor .report-measurements-heading { margin: 16px 0 8px; }
+.knitting-report-editor .report-measurement-edit-row { gap: 8px; border-bottom: 1px solid var(--color-divider); }
+.knitting-report-editor .report-notes-photos-content { gap: 16px; }
+.knitting-report-editor .report-photo-tile { padding: 12px 0; border: 0; border-bottom: 1px solid var(--color-divider); border-radius: 0; background: transparent; }
+.knitting-report-editor .report-photo-open > img { border-radius: 0; }
+.knitting-report-editor .report-photo-tools { border: 0; border-radius: 0; background: transparent; }
+.knitting-report-editor .report-photo-tools button,
+.knitting-report-editor .report-photo-delete,
+.knitting-report-editor .report-remove-photo,
+.knitting-report-editor .report-remove-action,
+.knitting-report-editor .report-icon-button,
+.knitting-report-editor .report-title-edit-trigger,
+.knitting-report-editor .report-title-action,
+.knitting-report-editor .report-more-trigger,
+.knitting-report-editor .report-measurement-rename { border: 0; border-radius: 0; background: transparent; }
+.knitting-report-editor .report-photo-delete,
+.knitting-report-editor .report-remove-photo { color: var(--color-danger); }
+.knitting-report-editor .report-share-note { padding: 12px 0; border-bottom: 1px solid var(--color-divider); border-radius: 0; background: transparent; }
+.knitting-report-editor .report-worktime-card { padding: 16px 0; border: 0; border-radius: 0; border-left: 1px solid var(--color-divider); background: transparent; }
+.knitting-report-editor .report-worktime-card:hover,
+.knitting-report-editor .report-cover-card > .report-worktime-card:hover { background: transparent; }
+.knitting-report-editor .report-worktime-title { font-size: 14px; font-weight: 600; }
+.knitting-report-editor .report-worktime-total { font-size: 22px; }
+.knitting-report-editor .report-worktime-hint,
+.knitting-report-editor .report-worktime-open { font-size: 12px; }
+.knitting-report-editor .report-add-action,
+.knitting-report-editor .report-add-button,
+.knitting-report-editor .report-caption-button,
+.knitting-report-editor .report-nav-add { min-height: 44px; padding-inline: 8px; border: 0; border-radius: 0; color: var(--color-primary); background: transparent; }
+.knitting-report-editor .report-add-action:hover:not(:disabled),
+.knitting-report-editor .report-add-button:hover:not(:disabled),
+.knitting-report-editor .report-caption-button:hover:not(:disabled),
+.knitting-report-editor .report-nav-add:hover:not(:disabled) { color: var(--color-primary-hover); background: var(--color-primary-soft); }
+.knitting-report-editor .report-nav-list button,
+.knitting-report-editor .report-nav-back { min-height: 44px; border: 0; border-radius: 0; background: transparent; }
+.knitting-report-editor .report-nav-list button { border-bottom: 1px solid var(--color-divider); }
+.knitting-report-editor .report-nav-list button.active { border-color: var(--color-primary); color: var(--color-primary); background: transparent; }
+.knitting-report-editor .report-nav-list button:hover:not(:disabled) { background: var(--color-primary-soft); }
+.knitting-report-editor .report-inspector { border: 0; border-left: 1px solid var(--color-divider); border-radius: 0; }
+.knitting-report-editor .report-detail-header { border-bottom: 1px solid var(--color-divider); }
+.knitting-report-editor .report-bottom-actions { border: 0; border-top: 1px solid var(--color-divider); border-radius: 0; }
+.knitting-report-editor .report-field input,
+.knitting-report-editor .report-field select,
+.knitting-report-editor .report-cover-status select,
+.knitting-report-editor .report-title-input,
+.knitting-report-editor .report-photo-label input,
+.knitting-report-editor .report-photo-date input,
+.knitting-report-editor .report-photo-tile > input,
+.knitting-report-editor .report-table-row > input,
+.knitting-report-editor .report-pattern-size-row > input,
+.knitting-report-editor .report-finished-photos input,
+.knitting-report-editor .report-measurement-edit-row > input,
+.knitting-report-editor .report-measurement-edit-row > select { box-sizing: border-box; height: 36px; min-height: 36px; padding: 0 2px; border: 0; border-bottom: 1px solid var(--color-divider); border-radius: 0; color: var(--color-text); background: transparent; font-size: 13px; }
+.knitting-report-editor .report-field textarea,
+.knitting-report-editor .report-candidate-values textarea { min-height: 72px; padding: 8px; border: 1px solid var(--color-border); border-radius: 4px; background: #fff; font-size: 13px; }
+.knitting-report-editor .report-field input:focus,
+.knitting-report-editor .report-field select:focus,
+.knitting-report-editor .report-field textarea:focus,
+.knitting-report-editor .report-measurement-edit-row > input:focus,
+.knitting-report-editor .report-measurement-edit-row > select:focus { border-color: var(--color-primary); box-shadow: none; }
+.knitting-report-editor .report-tag-options button { min-height: 36px; border: 0; border-bottom: 1px solid transparent; border-radius: 0; color: var(--color-text-secondary); background: transparent; font-size: 12px; }
+.knitting-report-editor .report-tag-options button.selected { border-color: var(--color-primary); color: var(--color-primary); background: transparent; }
+.knitting-report-editor .report-status-badge,
+.knitting-report-editor .report-recommended { border-radius: 4px; }
+.knitting-report-editor .report-form-card .report-fields { gap: 12px; }
+.knitting-report-editor .report-form-card .report-field { gap: 4px; font-size: 12px; }
+.knitting-report-editor .report-form-empty,
+.knitting-report-editor .report-empty-hint,
+.knitting-report-editor .report-detail-hint { color: var(--color-text-secondary); font-size: 12px; }
+.knitting-report-editor .report-measurement-label-display,
+.knitting-report-editor .report-entry-title strong { color: var(--color-text); font-weight: 500; }
+.knitting-report-editor .report-more-menu { box-shadow: 0 4px 16px rgba(17,24,39,.08); }
+.knitting-report-editor .report-detail-dialog,
+.knitting-report-editor .report-candidate-dialog,
+.knitting-report-editor .report-measurement-dialog { box-shadow: 0 4px 16px rgba(17,24,39,.08); }
+.report-worktime-dialog :is(.report-worktime-total-card, .report-worktime-chart-card, .report-worktime-days, .report-worktime-today-card, .report-worktime-session-list, .report-worktime-note, .worktime-record-form, .worktime-record-reset-confirm) { border: 0; border-bottom: 1px solid var(--color-divider); border-radius: 0; background: #fff; box-shadow: none; }
+.report-worktime-dialog .worktime-record-form { padding-inline: 0; }
+.report-worktime-dialog :is(.worktime-record-form input, .worktime-record-form select, .worktime-record-reset-confirm select) { height: 36px; min-height: 36px; padding-inline: 2px; border: 0; border-bottom: 1px solid var(--color-divider); border-radius: 0; background: transparent; font-size: 13px; }
+.report-worktime-dialog textarea { border: 1px solid var(--color-border); border-radius: 4px; background: #fff; }
+.report-worktime-dialog .report-worktime-tabs { border-radius: 0; border-bottom: 1px solid var(--color-divider); background: transparent; }
+.report-worktime-dialog .report-worktime-tabs button { border-radius: 0; font-size: 13px; }
+@media (hover: none) and (pointer: coarse) {
+  .knitting-report-editor :is(.report-field input, .report-field select, .report-measurement-edit-row > input, .report-measurement-edit-row > select, .report-photo-tile > input) { height: 44px; min-height: 44px; font-size: 16px; }
+  .report-worktime-dialog :is(.worktime-record-form input, .worktime-record-form select, .worktime-record-reset-confirm select) { height: 44px; min-height: 44px; font-size: 16px; }
+}
+
 @media (max-width: 767px) {
   .knitting-report-editor .instagram-caption-dialog { max-height: calc(100dvh - 24px); padding: 16px; }
 }
