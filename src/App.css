@@ -1347,7 +1347,7 @@ html.viewer-viewport-locked .viewer-shell { height: 100dvh; min-height: 0; flex:
 }
 
 /* Viewer floating tool and timer bars */
-.viewer-shell { position: relative; --viewer-header-height: 62px; --viewer-thumbnail-strip-height: 164px; --viewer-thumbnail-feedback-height: 0px; --viewer-footer-controls-height: calc(52px + env(safe-area-inset-bottom, 0px)); }
+.viewer-shell { position: relative; --viewer-header-height: 62px; --viewer-thumbnail-strip-height: 164px; --viewer-thumbnail-feedback-height: 0px; --viewer-footer-controls-height: calc(52px + env(safe-area-inset-bottom, 0px)); --viewer-popup-safe-inset-top: env(safe-area-inset-top, 0px); --viewer-popup-safe-inset-right: env(safe-area-inset-right, 0px); --viewer-popup-safe-inset-bottom: env(safe-area-inset-bottom, 0px); --viewer-popup-safe-inset-left: env(safe-area-inset-left, 0px); }
 .viewer-shell.thumbnail-collapsed { --viewer-thumbnail-strip-height: 0px; }
 .viewer-shell.thumbnail-feedback-visible:not(.thumbnail-collapsed) { --viewer-thumbnail-feedback-height: 22px; }
 .viewer-floating-layer { position: absolute; z-index: 30; inset: 0; pointer-events: none; }

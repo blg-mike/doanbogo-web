@@ -1,12 +1,15 @@
 import { formatNumber, t, type LocaleKey } from './locales/index'
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type FocusEvent as ReactFocusEvent, type FormEvent, type KeyboardEvent as ReactKeyboardEvent, type PointerEvent as ReactPointerEvent, type RefObject } from 'react'
 import { createPortal } from 'react-dom'
-import { ArrowDownUp, Bell, Check, ChevronDown, ChevronLeft, ChevronUp, Copy, GripVertical, Hash, Minus, MoreHorizontal, Pin, PinOff, Plus, Repeat, Repeat2, RotateCcw, Settings, Trash2, Vibrate, Volume2, X } from 'lucide-react'
+import { ArrowDownUp, Bell, Check, ChevronDown, ChevronLeft, ChevronUp, Copy, GripVertical, Hash, Minus, MoreHorizontal, MoveDiagonal, Pin, PinOff, Plus, Repeat, Repeat2, RotateCcw, Settings, Trash2, Vibrate, Volume2, X } from 'lucide-react'
 import type { CounterKind, CounterSnapshot, CounterTimerLinkMode, ViewerSnapshot } from './types'
 import { MAX_COUNTER_ROW, MAX_COUNTERS_PER_TYPE, counterAlertState, createCounter, duplicateCounterSnapshot, maxCountersForType, repeatCounterProgress, repeatCounterStepBlock, taskSchedule } from './smartCounter'
 import { repeatCounterBlockLabel } from './counterAlertText'
 import { ColorPresetButtons } from './ColorPresetButtons'
 import { canStartCounterPopoverDrag, COUNTER_POPOVER_LONG_PRESS_MS, getCounterPopoverDragPosition, shouldCancelCounterPopoverLongPress } from './counterPopoverDrag'
+import { getDefaultViewerPopupSize, getViewerPopupSize, getViewerPopupSizeClass, readViewerPopupAvailableBounds, type ViewerPopupRect } from './viewerPopupResize'
+import { readViewerToolSize, saveViewerToolSize, type ViewerToolSize } from './viewerToolSizes'
+import { useViewerPopupResize } from './useViewerPopupResize'
 import { CounterStepButton } from './CounterStepButton'
 
 const kinds: CounterKind[] = ['simple', 'pattern', 'task', 'repeat']
@@ -617,6 +620,10 @@ export default function CounterPanel({
   const [position, setPosition] = useState<{ left: number; top: number; viewport: boolean } | null>(null)
   const positionRef = useRef<{ left: number; top: number; viewport: boolean } | null>(null)
   const manuallyPositionedRef = useRef(false)
+  const resizingRef = useRef(false)
+  const coarsePointer = typeof window !== 'undefined' && window.matchMedia('(pointer: coarse)').matches
+  const [preferredSize, setPreferredSize] = useState<ViewerToolSize | null>(() => readViewerToolSize('counterPanel'))
+  const [displayedSize, setDisplayedSize] = useState<ViewerToolSize | null>(null)
   const collapsed = snapshot.counterPanelCollapsed === true
   const [activeTab, setActiveTab] = useState<'counter' | 'settings'>('counter')
   const [panelSaving, setPanelSaving] = useState(false)
@@ -643,6 +650,59 @@ export default function CounterPanel({
     onClose()
     requestAnimationFrame(() => triggerRef.current?.focus())
   }
+  function applyPopupResize(rect: ViewerPopupRect) {
+    const panel = panelRef.current
+    if (!panel) return
+    panel.style.position = 'fixed'
+    panel.style.left = rect.left + 'px'
+    panel.style.top = rect.top + 'px'
+    panel.style.right = 'auto'
+    panel.style.bottom = 'auto'
+    panel.style.width = rect.width + 'px'
+    panel.style.height = rect.height + 'px'
+    panel.style.maxWidth = 'none'
+    panel.style.maxHeight = 'none'
+    panel.dataset.popupSize = getViewerPopupSizeClass(rect.width)
+  }
+  function getPopupMinimumHeight() {
+    const panel = panelRef.current
+    const header = panel?.querySelector('.number-counter-header')?.getBoundingClientRect().height ?? 60
+    const footer = panel?.querySelector('.counter-popover-footer')?.getBoundingClientRect().height ?? 60
+    return Math.ceil(header + footer + 96 + 44 + 2)
+  }
+  function beginPopupResize(rect: ViewerPopupRect) {
+    dragRef.current?.cleanup()
+    resizingRef.current = true
+    manuallyPositionedRef.current = true
+    const next = { left: rect.left, top: rect.top, viewport: true }
+    positionRef.current = next
+    setPosition(next)
+  }
+  const resizeHandleProps = useViewerPopupResize({
+    enabled: coarsePointer && !collapsed,
+    elementRef: panelRef,
+    getBounds: () => {
+      const shell = panelRef.current?.closest<HTMLElement>('.viewer-shell')
+      return shell ? readViewerPopupAvailableBounds(shell) : null
+    },
+    getMinHeight: getPopupMinimumHeight,
+    onStart: beginPopupResize,
+    onApply: applyPopupResize,
+    onCommit: (rect) => {
+      resizingRef.current = false
+      const size = { width: rect.width, height: rect.height }
+      setDisplayedSize(size)
+      saveViewerToolSize('counterPanel', size)
+      setPreferredSize(size)
+      const next = { left: rect.left, top: rect.top, viewport: true }
+      positionRef.current = next
+      setPosition(next)
+    },
+    onCancel: (rect) => {
+      resizingRef.current = false
+      applyPopupResize(rect)
+    },
+  })
   useEffect(() => {
     if (panelSaving) return
     const outside = (event: PointerEvent) => {
@@ -776,10 +836,45 @@ export default function CounterPanel({
 
   useLayoutEffect(() => {
     const panel = panelRef.current
-    const shell = panel?.parentElement
-    const bar = shell?.querySelector<HTMLElement>('.viewer-timer-bar')
-    if (!panel || !shell || !bar) return
+    const container = panel?.parentElement
+    const viewer = panel?.closest<HTMLElement>('.viewer-shell')
+    const bar = viewer?.querySelector<HTMLElement>('.viewer-timer-bar')
+    if (!panel || !container || !viewer || !bar) return
     const place = () => {
+      if (resizingRef.current) return
+      if (coarsePointer) {
+        const bounds = readViewerPopupAvailableBounds(viewer)
+        if (!bounds) return
+        const minHeight = getPopupMinimumHeight()
+        const preferred = preferredSize ?? getDefaultViewerPopupSize('counterPanel', bounds, minHeight)
+        const size = preferred ? getViewerPopupSize(preferred, bounds, minHeight) : null
+        if (!size) return
+        setDisplayedSize((current) => current?.width === size.width && current.height === size.height ? current : size)
+        const panelRect = panel.getBoundingClientRect()
+        const height = collapsed ? panelRect.height : size.height
+        const barRect = bar.getBoundingClientRect()
+        let left: number
+        let top: number
+        if (manuallyPositionedRef.current && positionRef.current) {
+          left = clamp(positionRef.current.left, bounds.left, Math.max(bounds.left, bounds.left + bounds.width - size.width))
+          top = clamp(positionRef.current.top, bounds.top, Math.max(bounds.top, bounds.top + bounds.height - height))
+        } else {
+          const rightSide = barRect.right + 8
+          const leftSide = barRect.left - size.width - 8
+          left = rightSide + size.width <= bounds.left + bounds.width
+            ? rightSide
+            : leftSide >= bounds.left
+              ? leftSide
+              : bounds.left + bounds.width - size.width
+          top = clamp(barRect.top, bounds.top, Math.max(bounds.top, bounds.top + bounds.height - height))
+        }
+        const next = { left, top, viewport: true }
+        const current = positionRef.current
+        if (current?.viewport && Math.abs(current.left - left) < 1 && Math.abs(current.top - top) < 1) return
+        positionRef.current = next
+        setPosition(next)
+        return
+      }
       if (window.matchMedia('(max-width: 600px)').matches) {
         if (manuallyPositionedRef.current && positionRef.current) {
           const panelRect = panel.getBoundingClientRect()
@@ -795,7 +890,7 @@ export default function CounterPanel({
         setPosition(null)
         return
       }
-      const shellRect = shell.getBoundingClientRect()
+      const shellRect = container.getBoundingClientRect()
       const barRect = bar.getBoundingClientRect()
       const panelWidth = panel.getBoundingClientRect().width
       const panelHeight = panel.getBoundingClientRect().height
@@ -822,17 +917,21 @@ export default function CounterPanel({
     place()
     const observer = new ResizeObserver(place)
     observer.observe(panel)
-    observer.observe(shell)
+    observer.observe(container)
+    observer.observe(viewer)
     observer.observe(bar)
     window.addEventListener('resize', place)
+    window.visualViewport?.addEventListener('resize', place)
     return () => {
       observer.disconnect()
       window.removeEventListener('resize', place)
+      window.visualViewport?.removeEventListener('resize', place)
     }
-  }, [activeTab, collapsed, editingId, newCounterDraft, counters.length])
+  }, [activeTab, collapsed, editingId, newCounterDraft, counters.length, coarsePointer, preferredSize])
 
   function beginHeaderGesture(event: ReactPointerEvent<HTMLElement>) {
     if (event.pointerType === 'mouse' && event.button !== 0 || (event.target as HTMLElement).closest('button')) return
+    if (event.pointerType !== 'mouse' && !(event.target as HTMLElement).closest('.counter-drag-handle')) return
     dragRef.current?.cleanup()
     const rect = panelRef.current?.getBoundingClientRect()
     const parent = panelRef.current?.parentElement?.getBoundingClientRect()
@@ -928,7 +1027,10 @@ export default function CounterPanel({
     }
   }, [counterPanelRequest, counters, add])
 
-  return <aside ref={panelRef} className={'number-counter-panel' + (collapsed ? ' mobile-collapsed' : '') + (position?.viewport ? ' positioned-mobile' : '')} aria-label={t("카운터")} style={position ? { position: position.viewport ? 'fixed' : 'absolute', left: position.left, top: position.top, right: 'auto', bottom: 'auto' } : undefined}>
+  return <aside ref={panelRef} className={'number-counter-panel' + (collapsed ? ' mobile-collapsed' : '') + (position?.viewport ? ' positioned-mobile' : '')} data-popup-size={coarsePointer && displayedSize ? getViewerPopupSizeClass(displayedSize.width) : undefined} aria-label={t("카운터")} style={{
+    ...(position ? { position: position.viewport ? 'fixed' as const : 'absolute' as const, left: position.left, top: position.top, right: 'auto', bottom: 'auto' } : {}),
+    ...(coarsePointer && displayedSize ? { width: displayedSize.width, height: collapsed ? 'auto' : displayedSize.height, maxWidth: 'none', maxHeight: 'none' } : {}),
+  }}>
     <header className="number-counter-header" onPointerDown={beginHeaderGesture}>
       <div className="counter-drag-handle" aria-hidden="true"><GripVertical size={17} /></div>
       <strong className="counter-panel-title">{t('카운터 관리')}</strong>
@@ -949,5 +1051,9 @@ export default function CounterPanel({
           : <CounterSettings view="settings" snapshot={snapshot} counters={counters} timerLinkMode={timerLinkMode} onSave={onSettingsSave} onTimerLinkModeChange={onTimerLinkModeChange} onEdit={editCounter} onAdd={add} onRepeatStep={onRepeatStep} onCounterStep={onCounterStep} onDuplicate={duplicateCounter} onDeleteCounters={deleteCounters} onCounterChange={onChange} counterActionSaving={counterActionSaving} addButtonRef={addButtonRef} onSavingChange={(saving) => { setPanelSaving(saving); onSavingChange(saving) }} />)}
     </div>}
     {!collapsed && activeTab === 'counter' && <footer className="counter-popover-footer"><button type="button" className="counter-undo-button" aria-label={t("최근 카운터·진행선 작업 되돌리기")} title={t("최근 카운터·진행선 작업 되돌리기")} disabled={!snapshot.counterHistory?.length} onClick={onUndo}><RotateCcw size={16} /></button><span>{goalCompleted ? t('목표 완료') : t('현재 {row}단', { row: formatNumber(currentRow) })}</span></footer>}
+    {coarsePointer && !collapsed && <div className="number-counter-resize-handle-row">
+      <button type="button" aria-label={`${t('카운터 관리')} · ${t('크기 조절')}`} title={t('크기 조절')} className="number-counter-resize-handle bottom-left" {...resizeHandleProps('bottom-left')}><MoveDiagonal size={16} aria-hidden="true" /></button>
+      <button type="button" aria-label={`${t('카운터 관리')} · ${t('크기 조절')}`} title={t('크기 조절')} className="number-counter-resize-handle bottom-right" {...resizeHandleProps('bottom-right')}><MoveDiagonal size={16} aria-hidden="true" /></button>
+    </div>}
   </aside>
 }
