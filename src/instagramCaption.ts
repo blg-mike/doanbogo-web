@@ -17,6 +17,13 @@ function formatNumericText(value?: string) {
   return formatNumber(Number(value.trim().replace(',', '.')))
 }
 
+function modificationCaption(item: KnittingReport['modifications'][number]) {
+  const details = [item.memo, item.changed].map((value) => value.trim()).filter(Boolean)
+  const content = [item.section, ...(details.length ? details : [item.original])].map((value) => value.trim()).filter(Boolean)
+  const uniqueContent = [...new Set(content)]
+  return uniqueContent.length ? `- ${uniqueContent.join(' ')}` : ''
+}
+
 export function buildInstagramCaption(report: KnittingReport, selected: InstagramCaptionField[] = recommendedCaptionFields) {
   const fields = report.fields
   const include = new Set(selected)
@@ -42,7 +49,7 @@ export function buildInstagramCaption(report: KnittingReport, selected: Instagra
   if (include.has('needles')) {
     sections.push(line(t('Needles'), report.needles.map((needle) => [needle.section, needle.type, needle.brand, formatNeedleSize(needle)].filter(Boolean).join(' ')).filter(Boolean).join(' / ')))
   }
-  if (include.has('modifications')) sections.push(line(t('Modifications'), report.modifications.map((item) => `- ${[item.section, item.changed || item.memo].filter(Boolean).join(' ')}`).filter((item) => item !== '- ').join('\n')))
+  if (include.has('modifications')) sections.push(line(t('Modifications'), report.modifications.map(modificationCaption).filter(Boolean).join('\n')))
   if (include.has('oneLine')) sections.push(fields['review.nextChanges']?.trim() ?? '')
   if (include.has('gauge')) {
     const sideText = (side: 'before' | 'after') => {

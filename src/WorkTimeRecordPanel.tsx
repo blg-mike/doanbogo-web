@@ -4,6 +4,7 @@ import { createPortal } from 'react-dom'
 import { formatDate, formatDateTime, formatNumber, t } from './locales'
 import type { DocumentWorkTimeDay, DocumentWorkTimeSession } from './types'
 import { getDocument, saveDocumentWorkTimeNote } from './storage'
+import { REPORT_DATE_MAX, REPORT_DATE_MIN } from './reportDates'
 import { formatWorkTimeHoursMinutes, isWorkDateKey, localWorkDateKey, normalizeWorkTimeDays, parseManualWorkTime, summarizeWorkTime, workTimeChartAxisTicks, workTimeChartBuckets, type WorkTimeChartMode } from './workTime'
 
 type Props = {
@@ -341,7 +342,7 @@ export default function WorkTimeRecordPanel({ documentId, initialTotalWorkTimeMs
         </section>}
         {adding && <form className="worktime-record-form" onSubmit={(event) => void submitAdd(event)}>
           <header><h3>{t('작업시간 추가')}</h3><button type="button" aria-label={t('입력 취소')} disabled={closeLocked} onClick={() => { setAdding(false); setAddError('') }}><X size={17} /></button></header>
-          <label>{t('작업 날짜')}<input type="date" value={date} required disabled={closeLocked} onChange={(event) => setDate(event.currentTarget.value)} /></label>
+          <label>{t('작업 날짜')}<input type="date" min={REPORT_DATE_MIN} max={REPORT_DATE_MAX} value={date} required disabled={closeLocked} onChange={(event) => setDate(event.currentTarget.value)} /></label>
           <div className="worktime-record-time-fields">
             <label>{t('시간')}<input type="number" inputMode="numeric" min="0" max="9999" step="1" value={hours} disabled={closeLocked} onChange={(event) => setHours(event.currentTarget.value)} /></label>
             <label>{t('분')}<input type="number" inputMode="numeric" min="0" max="59" step="1" value={minutes} disabled={closeLocked} onChange={(event) => setMinutes(event.currentTarget.value)} /></label>

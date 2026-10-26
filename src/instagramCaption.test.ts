@@ -33,6 +33,30 @@ describe('Instagram report caption', () => {
     expect(buildInstagramCaption(report, [...recommendedCaptionFields, 'yarnMemo'])).toContain('세탁 후 늘어남')
   })
 
+  it('shares saved modification memos alongside distinct legacy changes and omits empty rows', () => {
+    const report = {
+      id: 'r', documentId: 'd', title: '숄', createdAt: 1, updatedAt: 1, fields: {}, representativePhoto: '', yarns: [], needles: [], accessories: [], measurements: [],
+      modifications: [
+        { id: 'memo', section: '몸판', original: '원래 20코', changed: '', memo: '메모 3코 줄임' },
+        { id: 'changed', section: '소매', original: '원래 10코', changed: '5코 줄임', memo: '' },
+        { id: 'both', section: '목둘레', original: '', changed: '고무단 추가', memo: '넥라인 수정' },
+        { id: 'same', section: '단추', original: '', changed: '간격 조정', memo: '간격 조정' },
+        { id: 'original', section: '밑단', original: '원래보다 2cm 길게', changed: '', memo: '' },
+        { id: 'empty', section: '', original: '', changed: '', memo: '' },
+      ], finishedPhotos: [], workPhotos: [],
+    } satisfies KnittingReport
+
+    const caption = buildInstagramCaption(report, ['modifications'])
+
+    expect(caption).toContain('- 몸판 메모 3코 줄임')
+    expect(caption).toContain('- 소매 5코 줄임')
+    expect(caption).toContain('- 목둘레 넥라인 수정 고무단 추가')
+    expect(caption).toContain('- 단추 간격 조정')
+    expect(caption).toContain('- 밑단 원래보다 2cm 길게')
+    expect(caption).not.toContain('-  ')
+    expect(caption.match(/간격 조정/g)).toHaveLength(1)
+  })
+
   it('prints saved gauge dimensions, measurement units, and the chosen needle notation', () => {
     const report = {
       id: 'r', documentId: 'd', title: '가디건', createdAt: 1, updatedAt: 1,

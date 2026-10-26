@@ -142,9 +142,9 @@
 .viewer-header .viewer-action:hover:not(:disabled), .viewer-footer button:hover:not(:disabled), .viewer-shell .thumbnail-group-add:hover:not(:disabled) { color: var(--color-primary); background: var(--color-primary-soft); }
 .viewer-counter-detail-stepper, .counter-main-repeat-actions { border-color: var(--color-border); }
 
-/* Keep the two floating counter tools at half their previous visual size. */
+/* Keep the floating counter tools compact while giving their controls room. */
 .viewer-shell:not(.report-mode) .viewer-timer-bar,
-.number-counter-panel { scale: .5; transform-origin: top right; }
+.number-counter-panel { scale: .75; transform-origin: top right; }
 .viewer-shell:not(.report-mode) .viewer-timer-bar.positioned,
 .viewer-shell:not(.report-mode) .viewer-timer-bar.is-dragging,
 .number-counter-panel[style] { transform-origin: top left; }

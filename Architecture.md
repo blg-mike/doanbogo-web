@@ -15,7 +15,7 @@ React·TypeScript·Vite·PDF.js·IndexedDB 기반이다. `App.tsx`는 시작·�
 | 필기 한도·텍스트 | `annotationLimits.ts`, `textNote.ts` |
 | 카운터·타이머 시작 연동 | `CounterPanel.tsx`, `smartCounter.ts`, `counterAlertText.ts`, `timerCounterLink.ts` |
 | 작업시간·기록 패널 | `DocumentWorkTimer.tsx`, `WorkTimeRecordPanel.tsx`, `ReportWorkTime.tsx`, `workTime.ts` |
-| 보고서·출력 | `KnittingReport.tsx`, `StandaloneReportRoute.tsx`, `reportFormatting.ts`, `reportMeasurementSelection.ts`, `knittingReportPdf.ts`, `InstagramReportDialog.tsx` |
+| 보고서·출력 | `KnittingReport.tsx`, `StandaloneReportRoute.tsx`, `reportFormatting.ts`, `reportMeasurementSelection.ts`, `reportDates.ts`, `knittingReportPdf.ts`, `instagramCaption.ts`, `InstagramCaptionDialog.tsx`, `InstagramReportDialog.tsx` |
 | 사진·렌더 자원·인식 | `photoImages.ts`, `photoDocument.ts`, `pdfPageRenderQueue.ts`, `pdfRenderResources.ts`, `pdfRecognition.ts` |
 | 타입·영속화·호환성 | `types.ts`, `storage.ts`, `backup.ts`, `viewerCounterState.ts` |
 | UI·다국어 | `designTokens.ts`, `index.css`, `App.css`, `AppDesignSystem.css`, `locales/` |
@@ -24,11 +24,12 @@ React·TypeScript·Vite·PDF.js·IndexedDB 기반이다. `App.tsx`는 시작·�
 - IndexedDB `doanbogo-web` v12: documents·pages·viewers·pageWorks·charts·knittingReportEntries·photoPages·pageRecognition·homeProjects·homeReports·preferences. v12 업그레이드는 Viewer의 과거 타임랩 필드와 이력 참조만 제거한다.
 - 문서는 원본·표지·총/오늘/일별 작업시간·세션·날짜별 메모를 보관한다. 문서와 프로젝트 요약의 시간 합계는 같은 트랜잭션에서 갱신한다.
 - 페이지 작업은 진행선·마커·필기·구간 강조·컬러워크를 원본 페이지 기준 정규화 좌표로 저장한다. 선택한 진행선의 위·아래 이동은 표시 두께를 페이지 좌표로 환산해 기존 실행 취소·저장 경로를 사용하며, 회전된 차트 자동 따라가기는 실제 표시 오프셋을 기준으로 이동한다. Viewer가 페이지 작업을 처음 불러올 때 주 진행선이 없으면 기본선을 만들어 같은 경로로 저장한다.
+- 집중선 밝은 띠 두께는 1~30% 범위에서 현재 값 기준 0.75%p씩 조절한다. 마우스 휠·키보드·포인터 입력은 같은 간격을 사용하며 저장 비율은 `ProgressGuide.focus.bandHeightRatio`에 유지한다.
 - `ProgressGuide.chartRegion`은 행별 양끝 좌표·진행 순서·분석 회전·따라가기 상태를 선택 필드로 저장한다. 화면 표시와 카운터 저장이 공통 행 좌표 계산을 사용한다.
 - `ViewerSnapshot`은 영역별 페이지·배율·중심·회전, 카운터·이력, 라벨·레일 순서를 보관한다.
 - `CounterSnapshot.knittingMode`는 선택 필드이며 누락값은 평면으로 정규화한다. 반복 카운터는 시작·종료 단, 목표 반복, 완료 단수와 별도 일반 카운터 연결 ID를 저장하며 진행 표시는 완료 단수에서 계산한다. 반복 `+`는 반복과 연결된 일반 숫자를 함께 저장하고 `−`는 반복만 되돌린다. IndexedDB는 v12이며 백업은 v16을 내보내고 v1~v16을 가져온다. 구버전 백업에서 타임랩 필드는 가져오기 전에 제거한다.
 - 자유 카운터는 단 단위만 사용한다. 기존 코·회 단위는 불러오기와 백업 복원에서 숫자·실행 취소 이력을 보존하며 단으로 정규화한다. 기존 단위 값은 구백업 검증용 타입에 유지한다. 저장·백업의 공통 카운터 호환성 변환은 `normalizeViewerCounterState`가 담당한다. 원래 단 단위의 메인 대상을 먼저 고른 뒤 현재 카운터와 실행 취소 이력을 정규화하며, 입력 검증·이력 한도와 DB 업그레이드는 각 경계에 유지한다.
-- UI의 색·글자·간격·모서리는 `designTokens.ts`와 `index.css`의 시맨틱 토큰을 따른다. 홈·보고서·차트·Viewer는 같은 기준을 사용하고 목록은 가로 구분선으로 나눈다. 문서·사진·저장된 작업 객체 색은 변경하지 않는다. 현재 공통 디자인 규칙은 `AppDesignSystem.css`에 두고 `App.css` 다음, `Home.css` 전에 불러와 우선순위를 유지한다.
+- UI의 색·글자·간격·모서리는 `designTokens.ts`와 `index.css`의 시맨틱 토큰을 따른다. 홈·보고서·차트·Viewer는 같은 기준을 사용하고 목록은 가로 구분선으로 나눈다. 문서·사진·저장된 작업 객체 색은 변경하지 않는다. 현재 공통 디자인 규칙은 `AppDesignSystem.css`에 두고 `App.css` 다음, `Home.css` 전에 불러와 우선순위를 유지한다. 작업 타이머 미니바와 카운터 팝업은 CSS scale `.75`로 표시한다.
 - 카운터 팝오버와 작업 타이머 미니바는 `CounterSnapshot`과 작업시간 상태를 표시한다. 미니바의 보조 알림은 진행 수치 위에, 연결된 `− / +`와 테두리 없는 `…`는 별도의 한 줄에 배치한다. 행의 `--counter-color`는 저장된 색을 받아 알림 글자·아이콘·연한 배경에 사용한다. 카운터 팝오버의 상단과 하단은 고정되고 본문만 스크롤한다.
 - 카운터 팝오버는 카운터·설정 탭을 제공한다. 카운터 탭에서 보조 카운터의 설정 수정·복제·단일/다중 삭제·재정렬을 제공하며 순서는 `counters` 배열에 저장한다. 직접 줄임·늘림은 완료 작업 기록을 갱신해 메인 단 진행에서 중복되지 않게 한다. 완료 기록이 현재 메인 단을 가리키면 해당 작업 알림을 유지하고, 메인 단 이동 후에는 해제한다. 반복 변경과 모든 보조 직접 조작은 counter-only 이력으로 저장해 진행선·다른 카운터·페이지 작업을 건드리지 않는다. `counterAlertState`는 알림 문구와 보조 카운터 ID를 제공한다. 설정 탭에는 알림·타이머 연동만 둔다.
 - 팝오버 이동은 마우스 헤더 드래그 또는 터치·펜 450ms 롱프레스 후 드래그로 수행하며, 뷰포트 경계 안에서만 위치를 변경한다. 위치는 저장하지 않는 세션 UI 상태다.
@@ -39,7 +40,7 @@ React·TypeScript·Vite·PDF.js·IndexedDB 기반이다. `App.tsx`는 시작·�
 - 페이지 읽기는 문서·페이지·요청 ID별로 추적한다. 실패를 빈 작업으로 대체하지 않고 준비 전 편집을 차단한다. 저장 실패 시 기존 데이터와 재시도 상태를 유지한다.
 - IndexedDB 불가 시 임시 메모리 경로를 사용하며 브라우저 종료 시 작업이 사라질 수 있음을 알린다.
 - 내부 백업은 `.doanbogo` v16을 내보내고 v1~v16 입력을 지원한다. 구버전 Viewer의 타임랩 필드는 가져오지 않는다. 작업시간 합계·세션·일별 기록은 보존한다. 인식 캐시는 재생성 가능한 데이터다.
-- 보고서는 기존 선택 필드에 게이지 무늬·전후 실측·단위와 바늘 브랜드·mm/us/uk/jp 표기를 저장한다. 화면에서 뜬 사이즈와 수정사항 상세값을 감춰도 저장된 값은 유지되며 공유·PDF 출력은 기존 필드를 계속 사용한다. 공유 문구 생성에는 `#니트피크 #knitpeek`을 포함하며 데이터 타입과 백업 버전을 유지한다.
+- 보고서는 기존 선택 필드에 게이지 무늬·전후 실측·단위와 바늘 브랜드·mm/us/uk/jp 표기를 저장한다. 도안 정보·수정사항·부자재는 추가 정보 컨테이너 없이 본문에서 편집하고, `ReportYarn.memo`는 각 사용 실의 메모다. 제거된 사이즈 편집과 전체 실 메모의 기존 값은 이동·삭제하지 않고 공유·PDF 호환을 위해 보존한다. 수정사항 공유에는 구간·저장 메모·서로 다른 기존 변경 값을 쓰고, 변경/메모가 비면 원래 값을 대체 설명으로 쓴다. 시작·완성·작업 사진·수동 작업시간 날짜는 연도 0001~9999 범위의 완전한 `YYYY-MM-DD`만 저장한다. 공유 직전 보고서를 저장하며 실패 시 공유창을 열지 않는다. 공유 문구 생성에는 `#니트피크 #knitpeek`을 포함하고 데이터 타입·DB·백업 버전을 유지한다.
 
 ## 시간·카운터
 - 측정은 시작 시각과 `Date.now()` 차이로 계산하고 화면 갱신은 타이머 내부에서 처리한다.

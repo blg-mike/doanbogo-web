@@ -6,6 +6,7 @@ import { focusBandHeightRatio, focusDimOpacity, guideGeometryForRotation, guideP
 import type { CounterSnapshot, PageRotation, PageWorkRecord, ProgressGuide, ProgressGuideScreenPosition } from './types'
 import { ColorPresetButtons } from './ColorPresetButtons'
 import { DESIGN_SYSTEM_COLORS, PROGRESS_LINE_COLOR_PRESETS } from './designTokens'
+import { snapFocusBandHeight, stepFocusBandHeight } from './progressLineBand'
 import { useDismissiblePopover } from './useDismissiblePopover'
 import { keepProgressLinePopoverOpenDuringZoom, progressGuideMoveExceededThreshold, progressLinePopoverPageAnchor, progressLinePopoverPlacement, progressLinePopoverScreenPoint, progressLineStrokeWidth, progressMarkerGeometry, progressMarkerOpacity, progressMarkerProgressFromPointer } from './progressLines'
 const minimumLength = 0.2
@@ -79,7 +80,7 @@ function styleValue(field: StyleField, guide: ProgressGuide, defaultOpacity: num
 }
 
 function styleInputValue(field: StyleField, value: number) {
-  return field === 'thickness' ? Math.round(value) : Math.round(value * 100)
+  return field === 'thickness' ? Math.round(value) : field === 'bandHeightRatio' ? value * 100 : Math.round(value * 100)
 }
 
 function styleStoredValue(field: StyleField, value: number) {
@@ -712,6 +713,16 @@ export function ProgressLineOverlay({ width, height, cssWidth, cssHeight, render
     setStyleDraft({ id: guide.id, field, value })
   }
 
+  function saveStyleValue(guide: ProgressGuide, field: StyleField, value: number, beforeWork: PageWorkRecord) {
+    const originalGuide = beforeWork.horizontalGuides?.find((item) => item.id === guide.id) ?? guide
+    const changes: Partial<ProgressGuide> = field === 'dimOpacity' || field === 'bandHeightRatio'
+      ? { focus: { ...(originalGuide.focus ?? initialFocusSettings(originalGuide)), [field]: value } }
+      : { [field]: value }
+    const shown = guideForDisplay(originalGuide, rotation)
+    const next = updateGuideWork(beforeWork, guide.id, changes, rotation, counters, shown)
+    onWorkChange(next, true, true, beforeWork)
+  }
+
   function finishStyleRange(event: ReactPointerEvent<HTMLInputElement>, guide: ProgressGuide, field: StyleField) {
     event.stopPropagation()
     const before = styleBeforeRef.current
@@ -722,13 +733,7 @@ export function ProgressLineOverlay({ width, height, cssWidth, cssHeight, render
     styleRangeChangedRef.current = false
     setStyleDraft(null)
     if (!changed || value === before.value) return
-    const originalGuide = before.work.horizontalGuides?.find((item) => item.id === guide.id) ?? guide
-    const changes: Partial<ProgressGuide> = field === 'dimOpacity' || field === 'bandHeightRatio'
-      ? { focus: { ...(originalGuide.focus ?? initialFocusSettings(originalGuide)), [field]: value } }
-      : { [field]: value }
-    const shown = guideForDisplay(originalGuide, rotation)
-    const next = updateGuideWork(before.work, guide.id, changes, rotation, counters, shown)
-    onWorkChange(next, true, true, before.work)
+    saveStyleValue(guide, field, value, before.work)
   }
 
   function cancelStyleRange(event: ReactPointerEvent<HTMLInputElement>) {
@@ -750,7 +755,7 @@ export function ProgressLineOverlay({ width, height, cssWidth, cssHeight, render
       type="range"
       min={min}
       max={max}
-      step="1"
+      step={field === 'bandHeightRatio' ? 'any' : '1'}
       aria-label={t(ariaLabel)}
       value={inputValue}
       style={{ '--range-progress': `${((inputValue - min) / (max - min)) * 100}%` } as CSSProperties}
@@ -758,14 +763,45 @@ export function ProgressLineOverlay({ width, height, cssWidth, cssHeight, render
       onPointerDown={(event) => beginStyleRange(event, guide, field)}
       onChange={(event) => {
         const nextValue = Number(event.currentTarget.value)
-        changeStyleRange(guide, field, styleStoredValue(field, nextValue))
+        const storedValue = field === 'bandHeightRatio'
+          ? snapFocusBandHeight(nextValue / 100, styleBeforeRef.current?.value ?? value)
+          : styleStoredValue(field, nextValue)
+        changeStyleRange(guide, field, storedValue)
       }}
+      onWheel={field === 'bandHeightRatio' ? (event) => {
+        event.preventDefault()
+        event.stopPropagation()
+        const current = styleDraft?.id === guide.id && styleDraft.field === field ? styleDraft.value : value
+        const next = stepFocusBandHeight(current, event.deltaY < 0 ? 1 : -1)
+        if (next !== current) {
+          const before = styleBeforeRef.current
+          const beforeWork = before?.guideId === guide.id && before.field === field ? before.work : work
+          styleBeforeRef.current = null
+          styleRangeChangedRef.current = false
+          setStyleDraft(null)
+          saveStyleValue(guide, field, next, beforeWork)
+        }
+      } : undefined}
       onPointerUp={(event) => finishStyleRange(event, guide, field)}
       onPointerCancel={cancelStyleRange}
       onLostPointerCapture={(event) => finishStyleRange(event, guide, field)}
       onFocus={(event) => { if (!styleBeforeRef.current) beginStyleRange(event as unknown as ReactPointerEvent<HTMLInputElement>, guide, field) }}
       onBlur={(event) => finishStyleRange(event as unknown as ReactPointerEvent<HTMLInputElement>, guide, field)}
-      onKeyDown={() => {
+      onKeyDown={(event) => {
+        if (field === 'bandHeightRatio') {
+          const steps = event.key === 'ArrowRight' || event.key === 'ArrowUp' ? 1 : event.key === 'ArrowLeft' || event.key === 'ArrowDown' ? -1 : 0
+          const endpoint = event.key === 'Home' ? 0.01 : event.key === 'End' ? 0.3 : undefined
+          if (steps || endpoint !== undefined) {
+            event.preventDefault()
+            const current = styleDraft?.id === guide.id && styleDraft.field === field ? styleDraft.value : styleValue(field, guide, defaultOpacity, defaultThickness)
+            if (!styleBeforeRef.current || styleBeforeRef.current.guideId !== guide.id || styleBeforeRef.current.field !== field) {
+              styleBeforeRef.current = { work, guideId: guide.id, field, value: current }
+              styleRangeChangedRef.current = false
+            }
+            changeStyleRange(guide, field, endpoint ?? stepFocusBandHeight(current, steps))
+            return
+          }
+        }
         if (!styleBeforeRef.current) {
           styleBeforeRef.current = { work, guideId: guide.id, field, value: styleValue(field, guide, defaultOpacity, defaultThickness) }
           styleRangeChangedRef.current = false
