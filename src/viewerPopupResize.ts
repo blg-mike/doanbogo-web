@@ -48,16 +48,26 @@ export function getViewerPopupSize(size: ViewerPopupSize, bounds: ViewerPopupRec
   }
 }
 
-export function getDefaultViewerPopupSize(tool: 'counterPanel' | 'timerBar', bounds: ViewerPopupRect, minHeight: number): ViewerPopupSize | null {
+export function getDefaultViewerPopupSize(tool: 'counterPanel' | 'timerBar', bounds: ViewerPopupRect, minHeight: number, minWidth = 260): ViewerPopupSize | null {
   const isCounter = tool === 'counterPanel'
   return getViewerPopupSize({
-    width: isCounter ? 360 : 400,
+    width: Math.max(minWidth, isCounter ? 360 : 400),
     height: Math.round(Math.min(isCounter ? 560 : 360, bounds.height * (isCounter ? 0.75 : 0.55))),
-  }, bounds, minHeight)
+  }, bounds, minHeight, minWidth)
 }
 
 export function getViewerPopupSizeClass(width: number): 'small' | 'medium' | 'large' {
   return width < 340 ? 'small' : width < 480 ? 'medium' : 'large'
+}
+
+export function getViewerPopupDragRect(start: ViewerPopupRect, bounds: ViewerPopupRect, deltaX: number, deltaY: number): ViewerPopupRect | null {
+  const values = [start.left, start.top, start.width, start.height, bounds.left, bounds.top, bounds.width, bounds.height, deltaX, deltaY]
+  if (!values.every(Number.isFinite) || start.width <= 0 || start.height <= 0 || bounds.width <= 0 || bounds.height <= 0) return null
+  return {
+    ...start,
+    left: Math.max(bounds.left, Math.min(bounds.left + bounds.width - start.width, start.left + deltaX)),
+    top: Math.max(bounds.top, Math.min(bounds.top + bounds.height - start.height, start.top + deltaY)),
+  }
 }
 
 export function getViewerPopupResizeRect({

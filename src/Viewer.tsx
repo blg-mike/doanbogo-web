@@ -40,6 +40,9 @@ import { nearestZoomLevel, stepZoomLevel, ZOOM_LEVELS } from './viewerInteractio
 import { getDefaultViewerPopupSize, getViewerPopupSize, getViewerPopupSizeClass, readViewerPopupAvailableBounds, type ViewerPopupRect } from './viewerPopupResize'
 import { readViewerToolSize, saveViewerToolSize, type ViewerToolSize } from './viewerToolSizes'
 import { useViewerPopupResize } from './useViewerPopupResize'
+import { useTouchTablet } from './useTouchTablet'
+import { useViewerPopupDrag } from './useViewerPopupDrag'
+import { createViewerToolPosition, getViewerToolPosition, readViewerToolPosition, saveViewerToolPosition, type ViewerToolPosition } from './viewerToolPositions'
 
 type Size = { width: number; height: number }
 type WorkAction = { before?: PageWorkRecord; after?: PageWorkRecord; cellChanges?: ColorworkCellChange[] }
@@ -305,7 +308,9 @@ export default function Viewer() {
   const [counterTimerPromptError, setCounterTimerPromptError] = useState('')
   const [timerPortalHost, setTimerPortalHost] = useState<HTMLDivElement | null>(null)
   const coarsePointer = typeof window !== 'undefined' && window.matchMedia('(pointer: coarse)').matches
+  const touchTablet = useTouchTablet()
   const [preferredTimerSize, setPreferredTimerSize] = useState<ViewerToolSize | null>(() => readViewerToolSize('timerBar'))
+  const [preferredTimerPosition, setPreferredTimerPosition] = useState<ViewerToolPosition | null>(() => readViewerToolPosition('timerBar'))
   const [displayedTimerSize, setDisplayedTimerSize] = useState<ViewerToolSize | null>(null)
   const timerBarRef = useRef<HTMLDivElement>(null)
   const [timerBarState, setTimerBarState] = useState<{ documentId: string; left: number | null; top: number }>(() => ({ documentId: id, left: null, top: 12 }))
@@ -315,6 +320,7 @@ export default function Viewer() {
   const timerBarDragRef = useRef<TimerBarDrag | null>(null)
   const timerBarPressRef = useRef<TimerBarPress | null>(null)
   const timerBarResizeActiveRef = useRef(false)
+  const timerTabletDragActiveRef = useRef(false)
   const timerBarClickSuppressUntilRef = useRef(0)
   useEffect(() => () => {
     timerBarPressRef.current?.cleanup()
@@ -1053,7 +1059,7 @@ export default function Viewer() {
     const bar = shell?.querySelector<HTMLElement>('.viewer-timer-bar')
     if (!shell || !bar) return
     const clampPosition = () => {
-      if (timerBarResizeActiveRef.current) return
+      if (timerBarResizeActiveRef.current || timerTabletDragActiveRef.current) return
       const shellRect = shell.getBoundingClientRect()
       const barRect = bar.getBoundingClientRect()
       const bounds = coarsePointer ? readViewerPopupAvailableBounds(shell) : null
@@ -1061,10 +1067,13 @@ export default function Viewer() {
       const minTop = bounds ? bounds.top - shellRect.top : window.matchMedia('(max-width: 600px)').matches ? focusView ? 100 : 44 : 0
       const maxLeft = bounds ? bounds.left + bounds.width - shellRect.left - barRect.width : Math.max(0, shellRect.width - barRect.width)
       const maxTop = bounds ? bounds.top + bounds.height - shellRect.top - barRect.height : Math.max(0, shellRect.height - barRect.height)
+      const savedPosition = touchTablet && bounds && preferredTimerPosition && displayedTimerSize
+        ? getViewerToolPosition(bounds, displayedTimerSize, preferredTimerPosition)
+        : null
       setTimerBarState((current) => {
         if (current.documentId !== id || current.left === null) return current
-        const left = clamp(current.left, minLeft, Math.max(minLeft, maxLeft))
-        const top = clamp(current.top, minTop, Math.max(minTop, maxTop))
+        const left = savedPosition ? savedPosition.left - shellRect.left : clamp(current.left, minLeft, Math.max(minLeft, maxLeft))
+        const top = savedPosition ? savedPosition.top - shellRect.top : clamp(current.top, minTop, Math.max(minTop, maxTop))
         return left === current.left && top === current.top ? current : { ...current, left, top }
       })
     }
@@ -1078,7 +1087,7 @@ export default function Viewer() {
       window.removeEventListener('resize', clampPosition)
       window.visualViewport?.removeEventListener('resize', clampPosition)
     }
-  }, [coarsePointer, focusView, id, reportMode, timerBarPositioned])
+  }, [coarsePointer, displayedTimerSize, focusView, id, preferredTimerPosition, reportMode, timerBarPositioned, touchTablet])
 
   useLayoutEffect(() => {
     if (!coarsePointer || reportMode) return
@@ -1086,15 +1095,16 @@ export default function Viewer() {
     const bar = shell?.querySelector<HTMLElement>('.viewer-timer-bar')
     if (!shell || !bar) return
     const updateSize = () => {
-      if (timerBarResizeActiveRef.current) return
+      if (timerBarResizeActiveRef.current || timerTabletDragActiveRef.current) return
       const bounds = readViewerPopupAvailableBounds(shell)
       if (!bounds) return
       const topRows = ['.viewer-counter-tools', '.viewer-timer-portal-host', '.viewer-counter-mobile-more']
         .map((selector) => bar.querySelector<HTMLElement>(selector)?.getBoundingClientRect().height ?? 0)
       const detailsHeader = bar.querySelector<HTMLElement>('.viewer-counter-details-header')?.getBoundingClientRect().height ?? 44
       const minHeight = Math.ceil(Math.max(...topRows, 44) + detailsHeader + (counterDetailsExpanded ? 96 + 44 : 0) + 24)
-      const preferred = preferredTimerSize ?? getDefaultViewerPopupSize('timerBar', bounds, minHeight)
-      const size = preferred ? getViewerPopupSize(preferred, bounds, minHeight) : null
+      const minWidth = touchTablet ? 480 : 260
+      const preferred = preferredTimerSize ?? getDefaultViewerPopupSize('timerBar', bounds, minHeight, minWidth)
+      const size = preferred ? getViewerPopupSize(preferred, bounds, minHeight, minWidth) : null
       if (!size) return
       setDisplayedTimerSize((current) => current?.width === size.width && current.height === size.height ? current : size)
       const shellRect = shell.getBoundingClientRect()
@@ -1105,8 +1115,11 @@ export default function Viewer() {
       setTimerBarState((current) => {
         if (current.documentId !== id) return current
         const barRect = bar.getBoundingClientRect()
-        const baseLeft = current.left ?? barRect.left - shellRect.left
-        const baseTop = current.left === null ? barRect.top - shellRect.top : current.top
+        const savedPosition = touchTablet && preferredTimerPosition
+          ? getViewerToolPosition(bounds, size, preferredTimerPosition)
+          : null
+        const baseLeft = current.left ?? (savedPosition ? savedPosition.left - shellRect.left : barRect.left - shellRect.left)
+        const baseTop = current.left === null ? (savedPosition ? savedPosition.top - shellRect.top : barRect.top - shellRect.top) : current.top
         const left = clamp(baseLeft, minLeft, Math.max(minLeft, maxLeft))
         const top = clamp(baseTop, minTop, Math.max(minTop, maxTop))
         return left === current.left && top === current.top ? current : { ...current, left, top }
@@ -1123,7 +1136,7 @@ export default function Viewer() {
       window.removeEventListener('resize', updateSize)
       window.visualViewport?.removeEventListener('resize', updateSize)
     }
-  }, [coarsePointer, counterDetailsExpanded, id, loadedId, pdf, preferredTimerSize, reportMode, timerBarPosition.left, timerPortalHost])
+  }, [coarsePointer, counterDetailsExpanded, id, loadedId, pdf, preferredTimerPosition, preferredTimerSize, reportMode, timerBarPosition.left, timerPortalHost, touchTablet])
 
   const orientation = areaSize.width >= areaSize.height ? 'wide' : 'tall'
   const ratio = snapshot ? (orientation === 'wide' ? snapshot.wideRatio : snapshot.tallRatio) : 0.5
@@ -2569,7 +2582,7 @@ export default function Viewer() {
   }
 
   function beginTimerBarTouchPress(event: ReactPointerEvent<HTMLDivElement>) {
-    if (event.pointerType !== 'touch') return
+    if (touchTablet || event.pointerType !== 'touch') return
     const target = event.target instanceof HTMLElement ? event.target : null
     if (!target || !target.closest('.viewer-floating-drag-handle') || target.closest('input,textarea,select,[contenteditable="true"],.viewer-timer-more-menu,.viewer-counter-details,.viewer-timer-resize-handle')) return
     const shell = viewerShellRef.current
@@ -2637,7 +2650,60 @@ export default function Viewer() {
     bar.classList.add('positioned')
   }
 
+  function applyTimerPopupDrag(rect: ViewerPopupRect) {
+    const shell = viewerShellRef.current
+    const bar = timerBarRef.current
+    if (!shell || !bar) return
+    const shellRect = shell.getBoundingClientRect()
+    bar.style.left = rect.left - shellRect.left + 'px'
+    bar.style.top = rect.top - shellRect.top + 'px'
+    bar.style.right = 'auto'
+    bar.classList.add('positioned')
+  }
+
+  const timerTabletDrag = useViewerPopupDrag({
+    enabled: touchTablet && !reportMode,
+    elementRef: timerBarRef,
+    getBounds: () => {
+      const shell = viewerShellRef.current
+      return shell ? readViewerPopupAvailableBounds(shell) : null
+    },
+    onStart: (rect) => {
+      timerTabletDragActiveRef.current = true
+      const shellRect = viewerShellRef.current?.getBoundingClientRect()
+      if (shellRect) setTimerBarState({ documentId: id, left: rect.left - shellRect.left, top: rect.top - shellRect.top })
+      timerBarRef.current?.classList.add('is-dragging')
+      applyTimerPopupDrag(rect)
+    },
+    onApply: applyTimerPopupDrag,
+    onCommit: (rect, bounds) => {
+      timerTabletDragActiveRef.current = false
+      const shellRect = viewerShellRef.current?.getBoundingClientRect()
+      if (shellRect) setTimerBarState({ documentId: id, left: rect.left - shellRect.left, top: rect.top - shellRect.top })
+      const position = createViewerToolPosition(bounds, rect)
+      if (position) {
+        saveViewerToolPosition('timerBar', position)
+        setPreferredTimerPosition(position)
+      }
+      timerBarClickSuppressUntilRef.current = Date.now() + 700
+      timerBarRef.current?.classList.remove('is-dragging')
+    },
+    onCancel: (rect) => {
+      timerTabletDragActiveRef.current = false
+      const shellRect = viewerShellRef.current?.getBoundingClientRect()
+      if (shellRect) setTimerBarState({ documentId: id, left: rect.left - shellRect.left, top: rect.top - shellRect.top })
+      applyTimerPopupDrag(rect)
+      timerBarRef.current?.classList.remove('is-dragging')
+    },
+  })
+
+  function handleTimerBarDrag(event: ReactPointerEvent<HTMLButtonElement>) {
+    if (touchTablet) timerTabletDrag.onPointerDown(event)
+    else beginTimerBarDrag(event)
+  }
+
   function beginTimerPopupResize(rect: ViewerPopupRect) {
+    timerTabletDrag.cancel()
     timerBarPressRef.current?.cleanup()
     const drag = timerBarDragRef.current
     if (drag?.frameId !== null && drag?.frameId !== undefined) cancelAnimationFrame(drag.frameId)
@@ -2664,6 +2730,7 @@ export default function Viewer() {
       const shell = viewerShellRef.current
       return shell ? readViewerPopupAvailableBounds(shell) : null
     },
+    getMinWidth: () => touchTablet ? 480 : 260,
     getMinHeight: getTimerPopupMinimumHeight,
     onStart: beginTimerPopupResize,
     onApply: applyTimerPopupResize,
@@ -2673,6 +2740,13 @@ export default function Viewer() {
       setDisplayedTimerSize(size)
       saveViewerToolSize('timerBar', size)
       setPreferredTimerSize(size)
+      const shell = viewerShellRef.current
+      const bounds = shell ? readViewerPopupAvailableBounds(shell) : null
+      const position = bounds ? createViewerToolPosition(bounds, rect) : null
+      if (touchTablet && position) {
+        saveViewerToolPosition('timerBar', position)
+        setPreferredTimerPosition(position)
+      }
       const shellRect = viewerShellRef.current?.getBoundingClientRect()
       if (shellRect) setTimerBarState({ documentId: id, left: rect.left - shellRect.left, top: rect.top - shellRect.top })
     },
@@ -3386,7 +3460,7 @@ export default function Viewer() {
           ...(timerBarPosition.left === null ? {} : { left: timerBarPosition.left, top: timerBarPosition.top, right: 'auto' }),
           ...(coarsePointer && !reportMode && displayedTimerSize ? { width: displayedTimerSize.width, height: counterDetailsExpanded ? displayedTimerSize.height : 'auto', maxWidth: 'none', maxHeight: 'none' } : {}),
         }} role="group" aria-label={`${t('카운터')} · ${t('작업 타이머')}`} onPointerDown={beginTimerBarTouchPress} onClickCapture={(event) => { if (Date.now() > timerBarClickSuppressUntilRef.current) return; timerBarClickSuppressUntilRef.current = 0; event.preventDefault(); event.stopPropagation() }}>
-          <button type="button" className="viewer-floating-drag-handle" aria-label={t('작업 타이머 이동')} title={t('작업 타이머 이동')} onPointerDown={beginTimerBarDrag} onPointerMove={moveTimerBarDrag} onPointerUp={finishTimerBarDrag} onPointerCancel={finishTimerBarDrag} onLostPointerCapture={finishTimerBarDrag}><GripVertical size={17} /></button>
+          <button type="button" className="viewer-floating-drag-handle" aria-label={t('작업 타이머 이동')} title={t('작업 타이머 이동')} onPointerDown={handleTimerBarDrag} onPointerMove={moveTimerBarDrag} onPointerUp={finishTimerBarDrag} onPointerCancel={finishTimerBarDrag} onLostPointerCapture={finishTimerBarDrag}><GripVertical size={17} /></button>
           {!reportMode && <div className="viewer-counter-tools" role="group" aria-label={t('카운터')}>
             <div className="viewer-mini-counter-step-group" role="group" aria-label={t('카운터')}>
             <button type="button" className="viewer-mini-counter-step" aria-label={t('이전 단으로 되돌리기')} title={mainCounterCanStepBack ? t('이전 단으로 되돌리기') : t('정확한 복원 이력이 없습니다')} disabled={!mainCounterCanStepBack || counterActionSaving} onClick={() => { if (mainCounter && mainCounter.value > 1) rewindCounter(mainCounter.id, mainCounter.value - 1) }}><Minus size={20} /></button>
@@ -3467,7 +3541,7 @@ export default function Viewer() {
             {miniBarAlerts.map((alert) => <span className="viewer-counter-detail-alert" style={{ '--counter-color': counters.find((counter) => counter.id === alert.counterId)?.color ?? 'var(--color-primary)' } as CSSProperties} key={alert.counterId}><Bell size={20} /><span>{translateCounterAlert(alert.message)}</span></span>)}
           </div>}
           {coarsePointer && !reportMode && counterDetailsExpanded && <div className="viewer-timer-resize-handle-row">
-            <button type="button" aria-label={`${t('작업 타이머')} · ${t('크기 조절')}`} title={t('크기 조절')} className="viewer-timer-resize-handle bottom-left" {...timerResizeHandleProps('bottom-left')}><MoveDiagonal size={16} aria-hidden="true" /></button>
+            {!touchTablet && <button type="button" aria-label={`${t('작업 타이머')} · ${t('크기 조절')}`} title={t('크기 조절')} className="viewer-timer-resize-handle bottom-left" {...timerResizeHandleProps('bottom-left')}><MoveDiagonal size={16} aria-hidden="true" /></button>}
             <button type="button" aria-label={`${t('작업 타이머')} · ${t('크기 조절')}`} title={t('크기 조절')} className="viewer-timer-resize-handle bottom-right" {...timerResizeHandleProps('bottom-right')}><MoveDiagonal size={16} aria-hidden="true" /></button>
           </div>}
         </div>

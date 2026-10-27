@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { getDefaultViewerPopupSize, getViewerPopupAvailableBounds, getViewerPopupResizeRect, getViewerPopupSize, getViewerPopupSizeClass, type ViewerPopupRect } from './viewerPopupResize'
+import { getDefaultViewerPopupSize, getViewerPopupAvailableBounds, getViewerPopupDragRect, getViewerPopupResizeRect, getViewerPopupSize, getViewerPopupSizeClass, type ViewerPopupRect } from './viewerPopupResize'
 
 const start: ViewerPopupRect = { left: 100, top: 80, width: 300, height: 240 }
 const bounds: ViewerPopupRect = { left: 0, top: 0, width: 500, height: 400 }
@@ -59,6 +59,14 @@ describe('counter popover resize', () => {
   it('uses the planned default sizes and width breakpoints', () => {
     expect(getDefaultViewerPopupSize('counterPanel', bounds, 200)).toEqual({ width: 360, height: 300 })
     expect(getDefaultViewerPopupSize('timerBar', bounds, 180)).toEqual({ width: 400, height: 220 })
+    expect(getDefaultViewerPopupSize('counterPanel', bounds, 200, 360)).toEqual({ width: 360, height: 300 })
+    expect(getDefaultViewerPopupSize('timerBar', bounds, 180, 480)).toEqual({ width: 480, height: 220 })
     expect([339, 340, 479, 480].map(getViewerPopupSizeClass)).toEqual(['small', 'medium', 'medium', 'large'])
+  })
+
+  it('moves from the original pointer offset and clamps the popup to screen bounds', () => {
+    expect(getViewerPopupDragRect(start, bounds, 50, 30)).toEqual({ left: 150, top: 110, width: 300, height: 240 })
+    expect(getViewerPopupDragRect(start, bounds, 500, 500)).toEqual({ left: 200, top: 160, width: 300, height: 240 })
+    expect(getViewerPopupDragRect(start, bounds, -500, -500)).toEqual({ left: 0, top: 0, width: 300, height: 240 })
   })
 })

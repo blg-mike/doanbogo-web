@@ -171,12 +171,12 @@ Object.assign(extendedTranslations.da, colorAndSymbolNames.da)
 Object.assign(extendedTranslations.nb, colorAndSymbolNames.nb)
 Object.assign(extendedTranslations.fi, colorAndSymbolNames.fi)
 const utilityLabels = {
-  en: { '실제': 'Actual', '뷰어 도구': 'Viewer tools', '도구 설정': 'Tool settings', '작업 타이머 이동': 'Move work timer' },
-  ja: { '실제': '実際', '뷰어 도구': 'ビューアツール', '도구 설정': 'ツール設定', '작업 타이머 이동': '作業タイマーを移動' },
-  de: { '실제': 'Tatsächlich', '뷰어 도구': 'Viewer-Werkzeuge', '도구 설정': 'Werkzeugeinstellungen', '작업 타이머 이동': 'Arbeitstimer verschieben' },
-  da: { '실제': 'Faktisk', '뷰어 도구': 'Visningsværktøjer', '도구 설정': 'Værktøjsindstillinger', '작업 타이머 이동': 'Flyt arbejdstimer' },
-  nb: { '실제': 'Faktisk', '뷰어 도구': 'Visningsverktøy', '도구 설정': 'Verktøyinnstillinger', '작업 타이머 이동': 'Flytt arbeidstimer' },
-  fi: { '실제': 'Todellinen', '뷰어 도구': 'Katselutyökalut', '도구 설정': 'Työkalun asetukset', '작업 타이머 이동': 'Siirrä työajastinta' },
+  en: { '실제': 'Actual', '뷰어 도구': 'Viewer tools', '도구 설정': 'Tool settings', '작업 타이머 이동': 'Move work timer', '카운터 이동': 'Move counter panel' },
+  ja: { '실제': '実際', '뷰어 도구': 'ビューアツール', '도구 설정': 'ツール設定', '작업 타이머 이동': '作業タイマーを移動', '카운터 이동': 'カウンターパネルを移動' },
+  de: { '실제': 'Tatsächlich', '뷰어 도구': 'Viewer-Werkzeuge', '도구 설정': 'Werkzeugeinstellungen', '작업 타이머 이동': 'Arbeitstimer verschieben', '카운터 이동': 'Zählerbereich verschieben' },
+  da: { '실제': 'Faktisk', '뷰어 도구': 'Visningsværktøjer', '도구 설정': 'Værktøjsindstillinger', '작업 타이머 이동': 'Flyt arbejdstimer', '카운터 이동': 'Flyt tællerpanel' },
+  nb: { '실제': 'Faktisk', '뷰어 도구': 'Visningsverktøy', '도구 설정': 'Verktøyinnstillinger', '작업 타이머 이동': 'Flytt arbeidstimer', '카운터 이동': 'Flytt tellerpanel' },
+  fi: { '실제': 'Todellinen', '뷰어 도구': 'Katselutyökalut', '도구 설정': 'Työkalun asetukset', '작업 타이머 이동': 'Siirrä työajastinta', '카운터 이동': 'Siirrä laskuripaneelia' },
 }
 Object.assign(extendedTranslations.en, utilityLabels.en)
 Object.assign(extendedTranslations.ja, utilityLabels.ja)

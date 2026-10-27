@@ -960,7 +960,7 @@ export default function KnittingReport({ documentId, fileName, pageCount, totalW
         </section>
         </div>
         <section className="report-form-card"><header><h2>{t('완성 실측')}</h2></header>{measurementEditor}</section>
-        <section className="report-form-card"><header><h2>{t('핏 · 완성 후기')}</h2></header><div className="report-fields">
+        <section className="report-form-card"><header><h2>{t('핏 · 완성 후기')}</h2></header><div className="report-fields report-fields-compact">
           {field('review.fit', '핏', 'select', ['작게 느껴짐', '딱 맞음', '여유 있음', '많이 여유 있음'])}{field('review.difficulty', '난이도', 'select', ['쉬움', '보통', '어려움'])}
           {field('review.satisfaction', '전체 만족도', 'select', ['1점', '2점', '3점', '4점', '5점'])}{field('review.yarnSatisfaction', '실 만족도', 'select', ['1점', '2점', '3점', '4점', '5점'])}
           {field('review.patternSatisfaction', '도안 만족도', 'select', ['1점', '2점', '3점', '4점', '5점'])}{field('review.makeAgain', '다시 뜰 의향', 'select', ['있음', '없음'])}

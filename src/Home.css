@@ -150,3 +150,31 @@
 .workspace-app-frame .project-filter-tabs button:not(.active) { background: transparent; }
 .workspace-app-frame .collection-toolbar button:hover:not(:disabled), .workspace-app-frame .project-actions button:not(.primary):hover:not(:disabled),
 .workspace-app-frame .project-filter-tabs button:hover:not(:disabled) { color: var(--color-primary); background: var(--color-primary-soft); }
+
+/* Foundation mapping for workspace chrome: flat rows, shared type scale, existing semantic tokens. */
+.app-page-frame, .workspace-app-frame { font-size: 13px; letter-spacing: -.2px; }
+.app-sidebar nav a { min-height: 44px; padding-inline: 10px; border: 0; border-left: 2px solid transparent; border-radius: 0; font-size: 13px; }
+.app-sidebar nav a.active, .app-sidebar nav a:hover, .app-mobile-nav a.active { border-left-color: var(--color-primary); color: var(--color-primary); background: transparent; }
+.app-mobile-nav a.active { border-left-color: transparent; border-bottom: 2px solid var(--color-primary); }
+.collection-header h1 { font-size: 16px; font-weight: 600; letter-spacing: -.2px; }
+.home-section-heading h2, .detail-title h2 { font-size: 14px; font-weight: 600; letter-spacing: -.2px; }
+.home-eyebrow, .app-sidebar-footer small, .home-report-info small, .new-project-options small { font-size: 12px; letter-spacing: -.2px; }
+.home-report-info strong { font-size: 14px; font-weight: 600; }
+.home-report-info b, .home-view-all, .collection-toolbar button, .project-actions button, .project-filter-tabs button { font-size: 13px; }
+.home-cover-placeholder { background: #fff; }
+.home-report-card, .detail-card, .new-project-options button { border: 0; border-radius: 0; color: var(--color-text); background: transparent; box-shadow: none; }
+.home-report-card { padding: 12px 0; border-bottom: 1px solid var(--color-divider); }
+.home-report-card:hover { border-color: var(--color-divider); color: var(--color-primary); background: transparent; box-shadow: none; }
+.detail-card { padding: 16px 0; }
+.new-project-options button { min-height: 82px; border-bottom: 1px solid var(--color-divider); }
+.workspace-app-frame .document-card { border: 0; border-bottom: 1px solid var(--color-divider); border-radius: 0; background: transparent; box-shadow: none; }
+.workspace-app-frame .document-card:hover { border-color: var(--color-divider); background: transparent; box-shadow: none; }
+.workspace-app-frame .collection-toolbar button, .workspace-app-frame .project-actions button:not(.primary), .workspace-app-frame .project-filter-tabs button { min-height: 44px; border: 0; border-bottom: 2px solid transparent; border-radius: 0; color: var(--color-text-secondary); background: transparent; }
+.workspace-app-frame .collection-toolbar button.active, .workspace-app-frame .project-filter-tabs button.active { border-bottom-color: var(--color-primary); color: var(--color-primary); background: transparent; }
+.workspace-app-frame .collection-toolbar button:hover:not(:disabled), .workspace-app-frame .project-actions button:not(.primary):hover:not(:disabled), .workspace-app-frame .project-filter-tabs button:hover:not(:disabled) { color: var(--color-primary); background: transparent; }
+.detail-state-row select, .project-detail-edit input { height: 36px; min-height: 36px; padding: 0 2px; border: 0; border-bottom: 1px solid var(--color-divider); border-radius: 0; color: var(--color-text); background: transparent; font-size: 13px; }
+.project-detail-edit .detail-save-button { min-height: 44px; border: 0; border-radius: 4px; font-size: 13px; }
+.workspace-app-frame .project-actions .primary { border-radius: 4px; font-size: 13px; }
+@media (any-pointer: coarse) {
+  .detail-state-row select, .project-detail-edit input { height: 44px; min-height: 44px; font-size: 16px; }
+}

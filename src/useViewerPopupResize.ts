@@ -7,6 +7,7 @@ type ActiveResize = {
   target: HTMLButtonElement
   start: ViewerPopupRect
   bounds: ViewerPopupRect
+  minWidth: number
   minHeight: number
   startX: number
   startY: number
@@ -20,6 +21,7 @@ type ResizeOptions = {
   enabled: boolean
   elementRef: RefObject<HTMLElement | null>
   getBounds: () => ViewerPopupRect | null
+  getMinWidth: () => number
   getMinHeight: () => number
   onStart: (rect: ViewerPopupRect) => void
   onApply: (rect: ViewerPopupRect) => void
@@ -62,7 +64,7 @@ export function useViewerPopupResize(options: ResizeOptions) {
     deltaX: clientX - active.startX,
     deltaY: clientY - active.startY,
     bounds: active.bounds,
-    minWidth: 260,
+    minWidth: active.minWidth,
     minHeight: active.minHeight,
   }), [])
 
@@ -131,6 +133,7 @@ export function useViewerPopupResize(options: ResizeOptions) {
       target: event.currentTarget,
       start,
       bounds,
+      minWidth: currentOptions.getMinWidth(),
       minHeight: currentOptions.getMinHeight(),
       startX: event.clientX,
       startY: event.clientY,
@@ -172,7 +175,7 @@ export function useViewerPopupResize(options: ResizeOptions) {
       deltaX,
       deltaY,
       bounds,
-      minWidth: 260,
+      minWidth: currentOptions.getMinWidth(),
       minHeight: currentOptions.getMinHeight(),
     })
     if (!rect) return

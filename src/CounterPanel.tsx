@@ -10,6 +10,9 @@ import { canStartCounterPopoverDrag, COUNTER_POPOVER_LONG_PRESS_MS, getCounterPo
 import { getDefaultViewerPopupSize, getViewerPopupSize, getViewerPopupSizeClass, readViewerPopupAvailableBounds, type ViewerPopupRect } from './viewerPopupResize'
 import { readViewerToolSize, saveViewerToolSize, type ViewerToolSize } from './viewerToolSizes'
 import { useViewerPopupResize } from './useViewerPopupResize'
+import { useTouchTablet } from './useTouchTablet'
+import { useViewerPopupDrag } from './useViewerPopupDrag'
+import { createViewerToolPosition, getViewerToolPosition, readViewerToolPosition, saveViewerToolPosition, type ViewerToolPosition } from './viewerToolPositions'
 import { CounterStepButton } from './CounterStepButton'
 
 const kinds: CounterKind[] = ['simple', 'pattern', 'task', 'repeat']
@@ -620,9 +623,12 @@ export default function CounterPanel({
   const [position, setPosition] = useState<{ left: number; top: number; viewport: boolean } | null>(null)
   const positionRef = useRef<{ left: number; top: number; viewport: boolean } | null>(null)
   const manuallyPositionedRef = useRef(false)
+  const tabletDraggingRef = useRef(false)
   const resizingRef = useRef(false)
   const coarsePointer = typeof window !== 'undefined' && window.matchMedia('(pointer: coarse)').matches
+  const touchTablet = useTouchTablet()
   const [preferredSize, setPreferredSize] = useState<ViewerToolSize | null>(() => readViewerToolSize('counterPanel'))
+  const [preferredPosition, setPreferredPosition] = useState<ViewerToolPosition | null>(() => readViewerToolPosition('counterPanel'))
   const [displayedSize, setDisplayedSize] = useState<ViewerToolSize | null>(null)
   const collapsed = snapshot.counterPanelCollapsed === true
   const [activeTab, setActiveTab] = useState<'counter' | 'settings'>('counter')
@@ -670,7 +676,55 @@ export default function CounterPanel({
     const footer = panel?.querySelector('.counter-popover-footer')?.getBoundingClientRect().height ?? 60
     return Math.ceil(header + footer + 96 + 44 + 2)
   }
+  function applyTabletPopupDrag(rect: ViewerPopupRect) {
+    const panel = panelRef.current
+    if (!panel) return
+    panel.style.position = 'fixed'
+    panel.style.left = rect.left + 'px'
+    panel.style.top = rect.top + 'px'
+    panel.style.right = 'auto'
+    panel.style.bottom = 'auto'
+  }
+  const tabletDrag = useViewerPopupDrag({
+    enabled: touchTablet && !collapsed,
+    elementRef: panelRef,
+    getBounds: () => {
+      const shell = panelRef.current?.closest<HTMLElement>('.viewer-shell')
+      return shell ? readViewerPopupAvailableBounds(shell) : null
+    },
+    onStart: (rect) => {
+      tabletDraggingRef.current = true
+      manuallyPositionedRef.current = true
+      const next = { left: rect.left, top: rect.top, viewport: true }
+      positionRef.current = next
+      setPosition(next)
+      applyTabletPopupDrag(rect)
+    },
+    onApply: (rect) => {
+      positionRef.current = { left: rect.left, top: rect.top, viewport: true }
+      applyTabletPopupDrag(rect)
+    },
+    onCommit: (rect, bounds) => {
+      tabletDraggingRef.current = false
+      const next = { left: rect.left, top: rect.top, viewport: true }
+      positionRef.current = next
+      setPosition(next)
+      const saved = createViewerToolPosition(bounds, rect)
+      if (saved) {
+        saveViewerToolPosition('counterPanel', saved)
+        setPreferredPosition(saved)
+      }
+    },
+    onCancel: (rect) => {
+      tabletDraggingRef.current = false
+      const next = { left: rect.left, top: rect.top, viewport: true }
+      positionRef.current = next
+      setPosition(next)
+      applyTabletPopupDrag(rect)
+    },
+  })
   function beginPopupResize(rect: ViewerPopupRect) {
+    tabletDrag.cancel()
     dragRef.current?.cleanup()
     resizingRef.current = true
     manuallyPositionedRef.current = true
@@ -685,6 +739,7 @@ export default function CounterPanel({
       const shell = panelRef.current?.closest<HTMLElement>('.viewer-shell')
       return shell ? readViewerPopupAvailableBounds(shell) : null
     },
+    getMinWidth: () => touchTablet ? 360 : 260,
     getMinHeight: getPopupMinimumHeight,
     onStart: beginPopupResize,
     onApply: applyPopupResize,
@@ -694,6 +749,13 @@ export default function CounterPanel({
       setDisplayedSize(size)
       saveViewerToolSize('counterPanel', size)
       setPreferredSize(size)
+      const shell = panelRef.current?.closest<HTMLElement>('.viewer-shell')
+      const bounds = shell ? readViewerPopupAvailableBounds(shell) : null
+      const saved = touchTablet && bounds ? createViewerToolPosition(bounds, rect) : null
+      if (saved) {
+        saveViewerToolPosition('counterPanel', saved)
+        setPreferredPosition(saved)
+      }
       const next = { left: rect.left, top: rect.top, viewport: true }
       positionRef.current = next
       setPosition(next)
@@ -846,8 +908,9 @@ export default function CounterPanel({
         const bounds = readViewerPopupAvailableBounds(viewer)
         if (!bounds) return
         const minHeight = getPopupMinimumHeight()
-        const preferred = preferredSize ?? getDefaultViewerPopupSize('counterPanel', bounds, minHeight)
-        const size = preferred ? getViewerPopupSize(preferred, bounds, minHeight) : null
+        const minWidth = touchTablet ? 360 : 260
+        const preferred = preferredSize ?? getDefaultViewerPopupSize('counterPanel', bounds, minHeight, minWidth)
+        const size = preferred ? getViewerPopupSize(preferred, bounds, minHeight, minWidth) : null
         if (!size) return
         setDisplayedSize((current) => current?.width === size.width && current.height === size.height ? current : size)
         const panelRect = panel.getBoundingClientRect()
@@ -855,7 +918,12 @@ export default function CounterPanel({
         const barRect = bar.getBoundingClientRect()
         let left: number
         let top: number
-        if (manuallyPositionedRef.current && positionRef.current) {
+        if (touchTablet && preferredPosition && !tabletDraggingRef.current) {
+          const saved = getViewerToolPosition(bounds, size, preferredPosition)
+          left = saved?.left ?? bounds.left
+          top = saved?.top ?? bounds.top
+          manuallyPositionedRef.current = true
+        } else if (manuallyPositionedRef.current && positionRef.current) {
           left = clamp(positionRef.current.left, bounds.left, Math.max(bounds.left, bounds.left + bounds.width - size.width))
           top = clamp(positionRef.current.top, bounds.top, Math.max(bounds.top, bounds.top + bounds.height - height))
         } else {
@@ -927,11 +995,13 @@ export default function CounterPanel({
       window.removeEventListener('resize', place)
       window.visualViewport?.removeEventListener('resize', place)
     }
-  }, [activeTab, collapsed, editingId, newCounterDraft, counters.length, coarsePointer, preferredSize])
+  }, [activeTab, collapsed, editingId, newCounterDraft, counters.length, coarsePointer, preferredPosition, preferredSize, touchTablet])
 
   function beginHeaderGesture(event: ReactPointerEvent<HTMLElement>) {
-    if (event.pointerType === 'mouse' && event.button !== 0 || (event.target as HTMLElement).closest('button')) return
-    if (event.pointerType !== 'mouse' && !(event.target as HTMLElement).closest('.counter-drag-handle')) return
+    const target = event.target instanceof Element ? event.target : null
+    const isDragHandle = Boolean(target?.closest('.counter-drag-handle'))
+    if (touchTablet || event.pointerType === 'mouse' && event.button !== 0 || target?.closest('button') && !isDragHandle) return
+    if (event.pointerType !== 'mouse' && !isDragHandle) return
     dragRef.current?.cleanup()
     const rect = panelRef.current?.getBoundingClientRect()
     const parent = panelRef.current?.parentElement?.getBoundingClientRect()
@@ -1032,7 +1102,7 @@ export default function CounterPanel({
     ...(coarsePointer && displayedSize ? { width: displayedSize.width, height: collapsed ? 'auto' : displayedSize.height, maxWidth: 'none', maxHeight: 'none' } : {}),
   }}>
     <header className="number-counter-header" onPointerDown={beginHeaderGesture}>
-      <div className="counter-drag-handle" aria-hidden="true"><GripVertical size={17} /></div>
+      <button type="button" className="counter-drag-handle" aria-label={t('카운터 이동')} title={t('카운터 이동')} onPointerDown={tabletDrag.onPointerDown}><GripVertical size={17} aria-hidden="true" /></button>
       <strong className="counter-panel-title">{t('카운터 관리')}</strong>
       <nav className="counter-panel-tabs" role="tablist" aria-label={t('카운터')}>
         <button type="button" role="tab" aria-selected={activeTab === 'counter'} aria-label={t('카운터')} title={t('카운터')} disabled={panelSaving} className={activeTab === 'counter' ? 'selected' : ''} onClick={() => setActiveTab('counter')}><Hash size={19} /></button>
@@ -1052,7 +1122,7 @@ export default function CounterPanel({
     </div>}
     {!collapsed && activeTab === 'counter' && <footer className="counter-popover-footer"><button type="button" className="counter-undo-button" aria-label={t("최근 카운터·진행선 작업 되돌리기")} title={t("최근 카운터·진행선 작업 되돌리기")} disabled={!snapshot.counterHistory?.length} onClick={onUndo}><RotateCcw size={16} /></button><span>{goalCompleted ? t('목표 완료') : t('현재 {row}단', { row: formatNumber(currentRow) })}</span></footer>}
     {coarsePointer && !collapsed && <div className="number-counter-resize-handle-row">
-      <button type="button" aria-label={`${t('카운터 관리')} · ${t('크기 조절')}`} title={t('크기 조절')} className="number-counter-resize-handle bottom-left" {...resizeHandleProps('bottom-left')}><MoveDiagonal size={16} aria-hidden="true" /></button>
+      {!touchTablet && <button type="button" aria-label={`${t('카운터 관리')} · ${t('크기 조절')}`} title={t('크기 조절')} className="number-counter-resize-handle bottom-left" {...resizeHandleProps('bottom-left')}><MoveDiagonal size={16} aria-hidden="true" /></button>}
       <button type="button" aria-label={`${t('카운터 관리')} · ${t('크기 조절')}`} title={t('크기 조절')} className="number-counter-resize-handle bottom-right" {...resizeHandleProps('bottom-right')}><MoveDiagonal size={16} aria-hidden="true" /></button>
     </div>}
   </aside>
