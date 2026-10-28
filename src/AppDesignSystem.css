@@ -773,3 +773,22 @@
 }
 
 .number-counter-panel .counter-drag-handle { appearance: none; border: 0; border-radius: 0; padding: 0; background: transparent; }
+
+.viewer-shell .viewer-timer-bar.is-minimized { width: 44px !important; min-width: 44px !important; max-width: 44px !important; height: 44px !important; min-height: 44px !important; max-height: 44px !important; display: grid; place-items: center; gap: 0; padding: 0; overflow: visible; border-radius: 12px; }
+.viewer-timer-bar.is-minimized > :not(.viewer-timer-restore) { display: none !important; }
+.viewer-shell .viewer-timer-bar .viewer-timer-restore { position: relative; width: 44px !important; min-width: 44px !important; height: 44px !important; min-height: 44px !important; display: grid; flex: 0 0 44px !important; place-items: center; padding: 0 !important; border: 0; border-radius: 11px; color: var(--color-primary); background: transparent; cursor: grab; touch-action: none; user-select: none; -webkit-user-select: none; }
+.viewer-timer-restore:hover { background: var(--color-primary-soft); }
+.viewer-timer-restore:active { color: var(--color-primary-pressed); cursor: grabbing; }
+.viewer-timer-restore:focus-visible, .viewer-work-timer-minimize:focus-visible { outline: 2px solid var(--color-focus-ring); outline-offset: 2px; }
+.viewer-timer-restore-error { position: absolute; top: 4px; right: 4px; width: 8px; height: 8px; border: 1px solid var(--color-surface); border-radius: 50%; background: var(--color-danger); }
+.viewer-shell .viewer-timer-bar .viewer-work-timer-minimize { width: 44px !important; min-width: 44px !important; height: 44px !important; display: grid; flex: 0 0 44px !important; place-items: center; padding: 0 !important; border: 0; border-radius: 10px; color: var(--color-text-secondary); background: transparent; cursor: pointer; }
+.viewer-work-timer-minimize:hover { color: var(--color-primary); background: var(--color-primary-soft); }
+
+@media (pointer: coarse) and (min-width: 600px) {
+  @container viewer-tool-popup (max-width: 520px) {
+    .viewer-shell:not(.report-mode) .viewer-timer-bar[data-popup-size].has-counter-details .viewer-mini-counter-step-group .viewer-mini-counter-row,
+    .viewer-shell:not(.report-mode) .viewer-timer-bar[data-popup-size].has-counter-details .viewer-mini-counter-step-group .viewer-mini-counter-row-input { width: clamp(64px, 14cqi, 76px); min-width: 64px; flex-basis: clamp(64px, 14cqi, 76px); }
+    .viewer-shell:not(.report-mode) .viewer-timer-bar[data-popup-size].has-counter-details .viewer-work-timer-elapsed { width: clamp(64px, 14cqi, 80px); min-width: 64px; }
+    .viewer-shell:not(.report-mode) .viewer-timer-bar[data-popup-size].has-counter-details .viewer-work-timer-minimize { width: 44px !important; min-width: 44px !important; flex-basis: 44px !important; }
+  }
+}

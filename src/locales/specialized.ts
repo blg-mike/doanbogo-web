@@ -646,3 +646,10 @@ Object.assign(specializedTranslations.fi, {
   '카운터 순서 변경: {name}': 'Järjestä {name}', '카운터 삭제: {name}': 'Poista {name}', '설정 수정': 'Muokkaa asetuksia', '복제': 'Monista', '복사본': 'kopio',
   '카운터를 삭제했습니다.': 'Laskuri poistettu.', '카운터 순서를 저장하지 못했습니다.': 'Laskurien järjestystä ei voitu tallentaa.', '카운터 복제에 실패했습니다.': 'Laskurin monistaminen epäonnistui.', '카운터 추가': 'Lisää laskuri',
 })
+
+Object.assign(specializedTranslations.en, { '작업 타이머 최소화': 'Minimize work timer', '작업 타이머 복원': 'Restore work timer' })
+Object.assign(specializedTranslations.ja, { '작업 타이머 최소화': '作業タイマーを最小化', '작업 타이머 복원': '作業タイマーを復元' })
+Object.assign(specializedTranslations.de, { '작업 타이머 최소화': 'Arbeitstimer minimieren', '작업 타이머 복원': 'Arbeitstimer wiederherstellen' })
+Object.assign(specializedTranslations.da, { '작업 타이머 최소화': 'Minimer arbejdstimer', '작업 타이머 복원': 'Gendan arbejdstimer' })
+Object.assign(specializedTranslations.nb, { '작업 타이머 최소화': 'Minimer arbeidstimer', '작업 타이머 복원': 'Gjenopprett arbeidstimer' })
+Object.assign(specializedTranslations.fi, { '작업 타이머 최소화': 'Pienennä työajastin', '작업 타이머 복원': 'Palauta työajastin' })

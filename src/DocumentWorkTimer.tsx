@@ -1,5 +1,5 @@
-import { Pause, Play } from 'lucide-react'
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { Minimize2, Pause, Play } from 'lucide-react'
+import { useCallback, useEffect, useRef, useState, type RefObject } from 'react'
 import { createPortal } from 'react-dom'
 import { t } from './locales'
 import { addDocumentWorkSessions, addDocumentWorkTime, resetDocumentWorkTime } from './storage'
@@ -19,6 +19,10 @@ type Props = {
   initialTodayWorkTimeMs?: number
   portalTarget: HTMLElement | null
   counterMiniBarLayout?: boolean
+  minimized?: boolean
+  restoreButtonRef?: RefObject<HTMLButtonElement | null>
+  onMinimize?: () => void
+  onErrorChange?: (hasError: boolean) => void
   onWorkTimeChange: (totals: DocumentWorkTimeTotals) => void
   onTodayWorkTimeChange: (date: string, elapsedMs: number) => void
   onUnsavedChange: (unsaved: boolean) => void
@@ -29,7 +33,7 @@ type Props = {
   onRecordPanelBlockingChange?: (blocked: boolean) => void
 }
 
-export default function DocumentWorkTimer({ documentId, initialTotalWorkTimeMs, initialWorkTimeDays, initialTodayWorkDate, initialTodayWorkTimeMs = 0, portalTarget, counterMiniBarLayout = false, onWorkTimeChange, onTodayWorkTimeChange, onUnsavedChange, onSavingChange, onClockChange, recordPanelOpen, onRecordPanelOpenChange, onRecordPanelBlockingChange }: Props) {
+export default function DocumentWorkTimer({ documentId, initialTotalWorkTimeMs, initialWorkTimeDays, initialTodayWorkDate, initialTodayWorkTimeMs = 0, portalTarget, counterMiniBarLayout = false, minimized = false, restoreButtonRef, onMinimize, onErrorChange, onWorkTimeChange, onTodayWorkTimeChange, onUnsavedChange, onSavingChange, onClockChange, recordPanelOpen, onRecordPanelOpenChange, onRecordPanelBlockingChange }: Props) {
   const [sessionId] = useState(() => crypto.randomUUID())
   const elapsedBaseRef = useRef(0)
   const initialTodayBase = initialTodayWorkDate === localWorkDateKey() ? initialTodayWorkTimeMs : 0
@@ -52,6 +56,15 @@ export default function DocumentWorkTimer({ documentId, initialTotalWorkTimeMs, 
   const [running, setRunning] = useState(false)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState(false)
+  const minimizeButtonRef = useRef<HTMLButtonElement>(null)
+  const wasMinimizedRef = useRef(false)
+
+  useEffect(() => onErrorChange?.(error), [error, onErrorChange])
+  useEffect(() => {
+    if (minimized) restoreButtonRef?.current?.focus()
+    else if (wasMinimizedRef.current) minimizeButtonRef.current?.focus()
+    wasMinimizedRef.current = minimized
+  }, [minimized, restoreButtonRef])
 
   useEffect(() => {
     if (runningRef.current || startedAtRef.current !== null || elapsedBaseRef.current > 0) return
@@ -330,9 +343,10 @@ export default function DocumentWorkTimer({ documentId, initialTotalWorkTimeMs, 
       {running ? <Pause size={17} /> : <Play size={17} />}
     </button>
   const elapsedButton = <button type="button" className="viewer-work-timer-elapsed" aria-haspopup="dialog" aria-expanded={recordPanelOpen} aria-label={`${t('오늘 누적 작업시간')} ${formatWorkTime(elapsedMs)} · ${t('작업 기록')}`} title={t('작업 기록')} aria-live="off" onClick={() => onRecordPanelOpenChange(true)}>{formatWorkTime(elapsedMs)}</button>
+  const minimizeButton = counterMiniBarLayout && <button ref={minimizeButtonRef} type="button" className="viewer-work-timer-minimize" aria-label={t('작업 타이머 최소화')} title={t('작업 타이머 최소화')} onClick={onMinimize}><Minimize2 size={18} /></button>
   return createPortal(<div className="viewer-work-timer" aria-label={t('작업 타이머')}>
-    {counterMiniBarLayout ? <>{elapsedButton}{toggleButton}</> : <>{toggleButton}{elapsedButton}</>}
-    {recordPanelOpen && <WorkTimeRecordPanel documentId={documentId} initialTotalWorkTimeMs={initialTotalWorkTimeMs} initialWorkTimeDays={initialWorkTimeDays} onClose={() => { onRecordPanelOpenChange(false); onRecordPanelBlockingChange?.(false) }} onAddWorkTime={addWorkTime} onResetWorkTime={resetWorkTime} onInteractionBlockingChange={onRecordPanelBlockingChange} onTotalsChange={(total, days) => {
+    {counterMiniBarLayout ? <>{elapsedButton}{toggleButton}{minimizeButton}</> : <>{toggleButton}{elapsedButton}</>}
+    {recordPanelOpen && <WorkTimeRecordPanel documentId={documentId} hidden={minimized} initialTotalWorkTimeMs={initialTotalWorkTimeMs} initialWorkTimeDays={initialWorkTimeDays} onClose={() => { onRecordPanelOpenChange(false); onRecordPanelBlockingChange?.(false) }} onAddWorkTime={addWorkTime} onResetWorkTime={resetWorkTime} onInteractionBlockingChange={onRecordPanelBlockingChange} onTotalsChange={(total, days) => {
       const currentDate = localWorkDateKey()
       onWorkTimeChange({ totalWorkTimeMs: total, todayWorkDate: currentDate, todayWorkTimeMs: days.find((day) => day.date === currentDate)?.elapsedMs ?? 0, workTimeDays: days })
     }} />}

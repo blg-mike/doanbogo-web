@@ -2,6 +2,10 @@ export type ViewerPopupRect = { left: number; top: number; width: number; height
 export type ViewerPopupResizeHandle = 'bottom-left' | 'bottom-right'
 export type ViewerPopupSize = { width: number; height: number }
 
+export function viewerPopupDragMoved(startX: number, startY: number, endX: number, endY: number) {
+  return Math.hypot(endX - startX, endY - startY) > 4
+}
+
 export function getViewerPopupAvailableBounds({ shell, viewport, safeArea, inset = 8 }: {
   shell: ViewerPopupRect
   viewport: ViewerPopupRect

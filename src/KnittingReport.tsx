@@ -883,13 +883,11 @@ export default function KnittingReport({ documentId, fileName, pageCount, totalW
     {gaugeField('gauge.pattern', '무늬')}
     <div className="report-gauge-columns">{([['before', '세탁 전'], ['after', '세탁 후']] as const).map(([side, label]) => {
       const gauge = getGaugeMeasurement(values, side)
-      const counts = [gauge.stitches && `${gauge.stitches}${t('코')}`, gauge.rows && `${gauge.rows}${t('단')}`].filter(Boolean).join(' · ')
-      const dimensions = gauge.width || gauge.height ? `${gauge.width || '—'} × ${gauge.height || '—'} ${gauge.unit === 'inch' ? t('inch') : 'cm'}` : ''
       return <section key={side}><h3>{t(label)}</h3><div className="report-gauge-counts">
         {gaugeField(`gauge.${side}Stitches`, '코', 'number')}{gaugeField(`gauge.${side}Rows`, '단', 'number')}
-      </div><h4>{t('측정 크기')}</h4><div className="report-gauge-size">
+      </div><div className="report-gauge-size">
         {gaugeField(`gauge.${side}Width`, '가로', 'positiveDecimal', undefined, gauge.width)}{gaugeField(`gauge.${side}Height`, '세로', 'positiveDecimal', undefined, gauge.height)}{gaugeField(`gauge.${side}Unit`, '표기', 'select', ['cm', 'inch'], gauge.unit)}
-      </div><p className="report-gauge-summary">{[counts, dimensions].filter(Boolean).join(' / ') || '—'}</p></section>
+      </div></section>
     })}</div>
   </div>
 

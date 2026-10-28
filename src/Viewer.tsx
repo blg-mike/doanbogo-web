@@ -37,7 +37,7 @@ import { useDismissiblePopover } from './useDismissiblePopover'
 import { getRequiredPageWorkPages, loadPageWorkWithTimeout, PageWorkLoadTimeoutError } from './pageWorkLoading'
 import { normalizeWorkTimeDays } from './workTime'
 import { nearestZoomLevel, stepZoomLevel, ZOOM_LEVELS } from './viewerInteraction'
-import { getDefaultViewerPopupSize, getViewerPopupSize, getViewerPopupSizeClass, readViewerPopupAvailableBounds, type ViewerPopupRect } from './viewerPopupResize'
+import { getDefaultViewerPopupSize, getViewerPopupSize, getViewerPopupSizeClass, readViewerPopupAvailableBounds, viewerPopupDragMoved, type ViewerPopupRect } from './viewerPopupResize'
 import { readViewerToolSize, saveViewerToolSize, type ViewerToolSize } from './viewerToolSizes'
 import { useViewerPopupResize } from './useViewerPopupResize'
 import { useTouchTablet } from './useTouchTablet'
@@ -93,7 +93,7 @@ type ThumbnailReorderGesture = {
   target?: ThumbnailReorderTarget
 }
 type CounterGuideAction = { kind: 'advance' | 'correct'; pageNumber: number; guideId: string }
-type TimerBarDrag = { pointerId: number; offsetX: number; offsetY: number; bar: HTMLElement; shell: HTMLElement; clientX: number; clientY: number; frameId: number | null }
+type TimerBarDrag = { pointerId: number; offsetX: number; offsetY: number; startX: number; startY: number; bar: HTMLElement; shell: HTMLElement; clientX: number; clientY: number; frameId: number | null }
 type TimerBarPress = { pointerId: number; startX: number; startY: number; bar: HTMLElement; shell: HTMLElement; timerId: number; active: boolean; cleanup: () => void }
 function createCounterSession(documentId: string) { return { documentId, visible: false } }
 
@@ -313,9 +313,22 @@ export default function Viewer() {
   const [preferredTimerPosition, setPreferredTimerPosition] = useState<ViewerToolPosition | null>(() => readViewerToolPosition('timerBar'))
   const [displayedTimerSize, setDisplayedTimerSize] = useState<ViewerToolSize | null>(null)
   const timerBarRef = useRef<HTMLDivElement>(null)
+  const timerRestoreButtonRef = useRef<HTMLButtonElement>(null)
+  const timerRestorePointerRef = useRef<{ pointerId: number; startX: number; startY: number; moved: boolean } | null>(null)
+  const timerRestorePositionRef = useRef(false)
   const [timerBarState, setTimerBarState] = useState<{ documentId: string; left: number | null; top: number }>(() => ({ documentId: id, left: null, top: 12 }))
-  if (timerBarState.documentId !== id) setTimerBarState({ documentId: id, left: null, top: 12 })
+  if (timerBarState.documentId !== id) {
+    setTimerBarState({ documentId: id, left: null, top: 12 })
+    timerRestorePositionRef.current = false
+    timerRestorePointerRef.current = null
+  }
   const timerBarPosition = timerBarState.documentId === id ? timerBarState : { documentId: id, left: null, top: 12 }
+  const [timerMinimizedUi, setTimerMinimizedUi] = useState(() => ({ documentId: id, minimized: false }))
+  if (timerMinimizedUi.documentId !== id) setTimerMinimizedUi({ documentId: id, minimized: false })
+  const timerMinimized = timerMinimizedUi.documentId === id && timerMinimizedUi.minimized
+  const [timerErrorUi, setTimerErrorUi] = useState(() => ({ documentId: id, hasError: false }))
+  if (timerErrorUi.documentId !== id) setTimerErrorUi({ documentId: id, hasError: false })
+  const timerSaveError = timerErrorUi.documentId === id && timerErrorUi.hasError
   const timerBarPositioned = timerBarPosition.left !== null
   const timerBarDragRef = useRef<TimerBarDrag | null>(null)
   const timerBarPressRef = useRef<TimerBarPress | null>(null)
@@ -345,6 +358,7 @@ export default function Viewer() {
   const displayDocumentName = documentKind === 'photos' ? documentName : documentName.replace(/\.pdf$/i, '')
   const onTimerUnsavedChange = useCallback((unsaved: boolean) => setTimerHasUnsaved(unsaved), [])
   const onTimerSavingChange = useCallback((saving: boolean) => setTimerSaving(saving), [])
+  const onTimerErrorChange = useCallback((hasError: boolean) => setTimerErrorUi({ documentId: id, hasError }), [id])
   const onTimerWorkTimeChange = useCallback((totals: DocumentWorkTimeTotals) => {
     setDocumentWorkTimeMs(totals.totalWorkTimeMs)
     setTodayWorkDate(totals.todayWorkDate)
@@ -385,13 +399,10 @@ export default function Viewer() {
   const footerMorePanelRef = useRef<HTMLDivElement>(null)
   const zoomMenuTriggerRef = useRef<HTMLButtonElement>(null)
   const zoomMenuPanelRef = useRef<HTMLDivElement>(null)
-  const timerMoreTriggerRef = useRef<HTMLButtonElement>(null)
-  const timerMorePanelRef = useRef<HTMLDivElement>(null)
   const counterPanelFocusRef = useRef<HTMLButtonElement>(null)
   const [headerMoreOpen, setHeaderMoreOpen] = useState(false)
   const [footerMoreOpen, setFooterMoreOpen] = useState(false)
   const [zoomMenuOpen, setZoomMenuOpen] = useState(false)
-  const [timerMoreOpen, setTimerMoreOpen] = useState(false)
   const requestViewerExit = useCallback(async () => {
     if (viewerExitInFlightRef.current) return
     viewerExitInFlightRef.current = true
@@ -1054,12 +1065,12 @@ export default function Viewer() {
   }, [pdf, loading])
 
   useEffect(() => {
-    if (!timerBarPositioned || reportMode) return
+    if (!timerBarPositioned || reportMode || timerMinimized) return
     const shell = viewerShellRef.current
     const bar = shell?.querySelector<HTMLElement>('.viewer-timer-bar')
     if (!shell || !bar) return
     const clampPosition = () => {
-      if (timerBarResizeActiveRef.current || timerTabletDragActiveRef.current) return
+      if (timerMinimized || timerBarResizeActiveRef.current || timerTabletDragActiveRef.current) return
       const shellRect = shell.getBoundingClientRect()
       const barRect = bar.getBoundingClientRect()
       const bounds = coarsePointer ? readViewerPopupAvailableBounds(shell) : null
@@ -1067,7 +1078,7 @@ export default function Viewer() {
       const minTop = bounds ? bounds.top - shellRect.top : window.matchMedia('(max-width: 600px)').matches ? 44 : 0
       const maxLeft = bounds ? bounds.left + bounds.width - shellRect.left - barRect.width : Math.max(0, shellRect.width - barRect.width)
       const maxTop = bounds ? bounds.top + bounds.height - shellRect.top - barRect.height : Math.max(0, shellRect.height - barRect.height)
-      const savedPosition = touchTablet && bounds && preferredTimerPosition && displayedTimerSize
+      const savedPosition = touchTablet && bounds && preferredTimerPosition && displayedTimerSize && !timerRestorePositionRef.current
         ? getViewerToolPosition(bounds, displayedTimerSize, preferredTimerPosition)
         : null
       setTimerBarState((current) => {
@@ -1087,7 +1098,7 @@ export default function Viewer() {
       window.removeEventListener('resize', clampPosition)
       window.visualViewport?.removeEventListener('resize', clampPosition)
     }
-  }, [coarsePointer, displayedTimerSize, id, preferredTimerPosition, reportMode, timerBarPositioned, touchTablet])
+  }, [coarsePointer, displayedTimerSize, id, preferredTimerPosition, reportMode, timerBarPositioned, timerMinimized, touchTablet])
 
   useLayoutEffect(() => {
     if (!coarsePointer || reportMode) return
@@ -1095,10 +1106,10 @@ export default function Viewer() {
     const bar = shell?.querySelector<HTMLElement>('.viewer-timer-bar')
     if (!shell || !bar) return
     const updateSize = () => {
-      if (timerBarResizeActiveRef.current || timerTabletDragActiveRef.current) return
+      if (timerMinimized || timerBarResizeActiveRef.current || timerTabletDragActiveRef.current) return
       const bounds = readViewerPopupAvailableBounds(shell)
       if (!bounds) return
-      const topRows = ['.viewer-counter-tools', '.viewer-timer-portal-host', '.viewer-counter-mobile-more']
+      const topRows = ['.viewer-counter-tools', '.viewer-timer-portal-host']
         .map((selector) => bar.querySelector<HTMLElement>(selector)?.getBoundingClientRect().height ?? 0)
       const detailsHeader = bar.querySelector<HTMLElement>('.viewer-counter-details-header')?.getBoundingClientRect().height ?? 44
       const minHeight = Math.ceil(Math.max(...topRows, 44) + detailsHeader + (counterDetailsExpanded ? 96 + 44 : 0) + 24)
@@ -1112,18 +1123,23 @@ export default function Viewer() {
       const minTop = bounds.top - shellRect.top
       const maxLeft = bounds.left + bounds.width - shellRect.left - size.width
       const maxTop = bounds.top + bounds.height - shellRect.top - (counterDetailsExpanded ? size.height : bar.getBoundingClientRect().height)
-      setTimerBarState((current) => {
-        if (current.documentId !== id) return current
-        const barRect = bar.getBoundingClientRect()
-        const savedPosition = touchTablet && preferredTimerPosition
+      const barRect = bar.getBoundingClientRect()
+      const savedPosition = touchTablet && preferredTimerPosition && !timerRestorePositionRef.current
           ? getViewerToolPosition(bounds, size, preferredTimerPosition)
           : null
-        const baseLeft = current.left ?? (savedPosition ? savedPosition.left - shellRect.left : barRect.left - shellRect.left)
-        const baseTop = current.left === null ? (savedPosition ? savedPosition.top - shellRect.top : barRect.top - shellRect.top) : current.top
-        const left = clamp(baseLeft, minLeft, Math.max(minLeft, maxLeft))
-        const top = clamp(baseTop, minTop, Math.max(minTop, maxTop))
-        return left === current.left && top === current.top ? current : { ...current, left, top }
-      })
+      const baseLeft = timerBarPosition.left ?? (savedPosition ? savedPosition.left - shellRect.left : barRect.left - shellRect.left)
+      const baseTop = timerBarPosition.left === null ? (savedPosition ? savedPosition.top - shellRect.top : barRect.top - shellRect.top) : timerBarPosition.top
+      const left = clamp(baseLeft, minLeft, Math.max(minLeft, maxLeft))
+      const top = clamp(baseTop, minTop, Math.max(minTop, maxTop))
+      if (timerRestorePositionRef.current) {
+        const position = touchTablet ? createViewerToolPosition(bounds, { left: shellRect.left + left, top: shellRect.top + top, width: size.width, height: size.height }) : null
+        if (position) {
+          saveViewerToolPosition('timerBar', position)
+          setPreferredTimerPosition(position)
+        }
+        timerRestorePositionRef.current = false
+      }
+      setTimerBarState((current) => current.documentId !== id || left === current.left && top === current.top ? current : { ...current, left, top })
     }
     updateSize()
     const observer = new ResizeObserver(updateSize)
@@ -1136,7 +1152,7 @@ export default function Viewer() {
       window.removeEventListener('resize', updateSize)
       window.visualViewport?.removeEventListener('resize', updateSize)
     }
-  }, [coarsePointer, counterDetailsExpanded, id, loadedId, pdf, preferredTimerPosition, preferredTimerSize, reportMode, timerBarPosition.left, timerPortalHost, touchTablet])
+  }, [coarsePointer, counterDetailsExpanded, id, loadedId, pdf, preferredTimerPosition, preferredTimerSize, reportMode, timerBarPosition.left, timerBarPosition.top, timerMinimized, timerPortalHost, touchTablet])
 
   const orientation = areaSize.width >= areaSize.height ? 'wide' : 'tall'
   const ratio = snapshot ? (orientation === 'wide' ? snapshot.wideRatio : snapshot.tallRatio) : 0.5
@@ -1216,7 +1232,6 @@ export default function Viewer() {
   useDismissiblePopover(headerMoreOpen, headerMorePanelRef, headerMoreTriggerRef, () => setHeaderMoreOpen(false))
   useDismissiblePopover(footerMoreOpen, footerMorePanelRef, footerMoreTriggerRef, () => setFooterMoreOpen(false))
   useDismissiblePopover(zoomMenuOpen, zoomMenuPanelRef, zoomMenuTriggerRef, () => setZoomMenuOpen(false))
-  useDismissiblePopover(timerMoreOpen, timerMorePanelRef, timerMoreTriggerRef, () => setTimerMoreOpen(false))
 
   useEffect(() => {
     if (!focusView) return
@@ -2470,7 +2485,6 @@ export default function Viewer() {
     setHeaderMoreOpen(false)
     setFooterMoreOpen(false)
     setZoomMenuOpen(false)
-    setTimerMoreOpen(false)
     setMiniBarSettingsOpen(false)
     setThumbnailGroupPopover(null)
     onWorkTimeRecordOpenChange(false)
@@ -2514,7 +2528,7 @@ export default function Viewer() {
     bar.style.left = left + 'px'
     bar.style.top = top + 'px'
     bar.style.right = 'auto'
-    timerBarDragRef.current = { pointerId: event.pointerId, offsetX: event.clientX - barRect.left, offsetY: event.clientY - barRect.top, bar, shell, clientX: event.clientX, clientY: event.clientY, frameId: null }
+    timerBarDragRef.current = { pointerId: event.pointerId, offsetX: event.clientX - barRect.left, offsetY: event.clientY - barRect.top, startX: event.clientX, startY: event.clientY, bar, shell, clientX: event.clientX, clientY: event.clientY, frameId: null }
     bar.classList.add('is-dragging')
     event.currentTarget.setPointerCapture(event.pointerId)
   }
@@ -2522,6 +2536,7 @@ export default function Viewer() {
   function moveTimerBarDrag(event: ReactPointerEvent<HTMLButtonElement>) {
     const drag = timerBarDragRef.current
     if (!drag || drag.pointerId !== event.pointerId) return
+    if (event.currentTarget.classList.contains('viewer-timer-restore') && viewerPopupDragMoved(drag.startX, drag.startY, event.clientX, event.clientY)) timerBarClickSuppressUntilRef.current = Date.now() + 700
     scheduleTimerBarPosition(drag, event.clientX, event.clientY)
   }
 
@@ -2561,7 +2576,7 @@ export default function Viewer() {
     bar.style.top = top + 'px'
     bar.style.right = 'auto'
     bar.classList.add('is-dragging')
-    timerBarDragRef.current = { pointerId, offsetX: clientX - barRect.left, offsetY: clientY - barRect.top, bar, shell, clientX, clientY, frameId: null }
+    timerBarDragRef.current = { pointerId, offsetX: clientX - barRect.left, offsetY: clientY - barRect.top, startX: clientX, startY: clientY, bar, shell, clientX, clientY, frameId: null }
   }
 
   function finishTimerBarDragById(pointerId: number, clientX?: number, clientY?: number) {
@@ -2580,7 +2595,7 @@ export default function Viewer() {
   function beginTimerBarTouchPress(event: ReactPointerEvent<HTMLDivElement>) {
     if (touchTablet || event.pointerType !== 'touch') return
     const target = event.target instanceof HTMLElement ? event.target : null
-    if (!target || !target.closest('.viewer-floating-drag-handle') || target.closest('input,textarea,select,[contenteditable="true"],.viewer-timer-more-menu,.viewer-counter-details,.viewer-timer-resize-handle')) return
+    if (!target || !target.closest('.viewer-floating-drag-handle, .viewer-timer-restore') || target.closest('input,textarea,select,[contenteditable="true"],.viewer-counter-details,.viewer-timer-resize-handle')) return
     const shell = viewerShellRef.current
     if (!shell) return
     const bar = event.currentTarget
@@ -2672,16 +2687,16 @@ export default function Viewer() {
       applyTimerPopupDrag(rect)
     },
     onApply: applyTimerPopupDrag,
-    onCommit: (rect, bounds) => {
+    onCommit: (rect, bounds, moved) => {
       timerTabletDragActiveRef.current = false
       const shellRect = viewerShellRef.current?.getBoundingClientRect()
       if (shellRect) setTimerBarState({ documentId: id, left: rect.left - shellRect.left, top: rect.top - shellRect.top })
       const position = createViewerToolPosition(bounds, rect)
-      if (position) {
+      if (moved && !timerMinimized && position) {
         saveViewerToolPosition('timerBar', position)
         setPreferredTimerPosition(position)
       }
-      timerBarClickSuppressUntilRef.current = Date.now() + 700
+      if (moved) timerBarClickSuppressUntilRef.current = Date.now() + 700
       timerBarRef.current?.classList.remove('is-dragging')
     },
     onCancel: (rect) => {
@@ -2696,6 +2711,50 @@ export default function Viewer() {
   function handleTimerBarDrag(event: ReactPointerEvent<HTMLButtonElement>) {
     if (touchTablet) timerTabletDrag.onPointerDown(event)
     else beginTimerBarDrag(event)
+  }
+
+  function minimizeTimerPopover() {
+    const shell = viewerShellRef.current
+    const bar = timerBarRef.current
+    if (shell && bar) {
+      const shellRect = shell.getBoundingClientRect()
+      const barRect = bar.getBoundingClientRect()
+      setTimerBarState({ documentId: id, left: barRect.left - shellRect.left, top: barRect.top - shellRect.top })
+    }
+    setTimerMinimizedUi({ documentId: id, minimized: true })
+  }
+
+  function restoreTimerPopover() {
+    if (!timerMinimized) return
+    timerRestorePositionRef.current = touchTablet && !reportMode
+    setTimerMinimizedUi({ documentId: id, minimized: false })
+  }
+
+  function beginTimerRestorePointer(event: ReactPointerEvent<HTMLButtonElement>) {
+    timerRestorePointerRef.current = { pointerId: event.pointerId, startX: event.clientX, startY: event.clientY, moved: false }
+    handleTimerBarDrag(event)
+  }
+
+  function moveTimerRestorePointer(event: ReactPointerEvent<HTMLButtonElement>) {
+    const pointer = timerRestorePointerRef.current
+    if (pointer?.pointerId === event.pointerId && viewerPopupDragMoved(pointer.startX, pointer.startY, event.clientX, event.clientY)) pointer.moved = true
+    moveTimerBarDrag(event)
+  }
+
+  function finishTimerRestorePointer(event: ReactPointerEvent<HTMLButtonElement>) {
+    const pointer = timerRestorePointerRef.current
+    if (pointer?.pointerId === event.pointerId && viewerPopupDragMoved(pointer.startX, pointer.startY, event.clientX, event.clientY)) pointer.moved = true
+    finishTimerBarDrag(event)
+    if (pointer?.pointerId === event.pointerId) {
+      if (pointer.moved) timerBarClickSuppressUntilRef.current = Date.now() + 700
+      else restoreTimerPopover()
+      timerRestorePointerRef.current = null
+    }
+  }
+
+  function cancelTimerRestorePointer(event: ReactPointerEvent<HTMLButtonElement>) {
+    finishTimerBarDrag(event)
+    if (timerRestorePointerRef.current?.pointerId === event.pointerId) timerRestorePointerRef.current = null
   }
 
   function beginTimerPopupResize(rect: ViewerPopupRect) {
@@ -2713,7 +2772,7 @@ export default function Viewer() {
   function getTimerPopupMinimumHeight() {
     const bar = viewerShellRef.current?.querySelector<HTMLElement>('.viewer-timer-bar')
     if (!bar) return 180
-    const topRows = ['.viewer-counter-tools', '.viewer-timer-portal-host', '.viewer-counter-mobile-more']
+    const topRows = ['.viewer-counter-tools', '.viewer-timer-portal-host']
       .map((selector) => bar.querySelector<HTMLElement>(selector)?.getBoundingClientRect().height ?? 0)
     const detailsHeader = bar.querySelector<HTMLElement>('.viewer-counter-details-header')?.getBoundingClientRect().height ?? 44
     return Math.ceil(Math.max(...topRows, 44) + detailsHeader + 96 + 44 + 24)
@@ -3274,7 +3333,7 @@ export default function Viewer() {
   }
 
   const timerPortalTarget = loadError?.id === id || suspended || loading || loadedId !== id || !pdf || !snapshot ? null : timerPortalHost
-  const timerElement = <DocumentWorkTimer key={id + ':' + timerSessionKey} documentId={id} initialTotalWorkTimeMs={documentWorkTimeMs} initialWorkTimeDays={documentWorkTimeDays} initialTodayWorkDate={todayWorkDate} initialTodayWorkTimeMs={todayWorkTimeMs} portalTarget={timerPortalTarget} counterMiniBarLayout={!reportMode} onWorkTimeChange={onTimerWorkTimeChange} onTodayWorkTimeChange={onTimerTodayWorkTimeChange} onUnsavedChange={onTimerUnsavedChange} onSavingChange={onTimerSavingChange} onClockChange={onTimerClockChange} recordPanelOpen={workTimeRecordOpen} onRecordPanelOpenChange={onWorkTimeRecordOpenChange} onRecordPanelBlockingChange={onWorkTimePanelBlockingChange} />
+  const timerElement = <DocumentWorkTimer key={id + ':' + timerSessionKey} documentId={id} initialTotalWorkTimeMs={documentWorkTimeMs} initialWorkTimeDays={documentWorkTimeDays} initialTodayWorkDate={todayWorkDate} initialTodayWorkTimeMs={todayWorkTimeMs} portalTarget={timerPortalTarget} counterMiniBarLayout={!reportMode} minimized={timerMinimized} restoreButtonRef={timerRestoreButtonRef} onMinimize={minimizeTimerPopover} onErrorChange={onTimerErrorChange} onWorkTimeChange={onTimerWorkTimeChange} onTodayWorkTimeChange={onTimerTodayWorkTimeChange} onUnsavedChange={onTimerUnsavedChange} onSavingChange={onTimerSavingChange} onClockChange={onTimerClockChange} recordPanelOpen={workTimeRecordOpen} onRecordPanelOpenChange={onWorkTimeRecordOpenChange} onRecordPanelBlockingChange={onWorkTimePanelBlockingChange} />
   const requestReportExit = () => {
     if (timerSaving) return
     if (timerHasUnsaved) {
@@ -3452,9 +3511,9 @@ export default function Viewer() {
       </section>
       <div className="viewer-floating-layer">
         {counterDeleteToastId && <div className="viewer-counter-delete-toast" role="status"><span>{t('카운터를 삭제했습니다.')}</span><button type="button" disabled={snapshot.counterHistory?.at(-1)?.id !== counterDeleteToastId} onClick={() => { if (snapshot.counterHistory?.at(-1)?.id === counterDeleteToastId) undoCounterAction(); setCounterDeleteToastId(null) }}>{t('실행 취소')}</button><button type="button" aria-label={t('닫기')} onClick={() => setCounterDeleteToastId(null)}><X size={15} /></button></div>}
-        <div ref={timerBarRef} className={'viewer-floating-bar viewer-timer-bar' + (!reportMode ? ' has-counter-details' : '') + (!reportMode && miniBarAlerts.length ? ' has-counter-alerts' : '') + (timerBarPosition.left === null ? '' : ' positioned')} data-popup-size={coarsePointer && !reportMode && displayedTimerSize ? getViewerPopupSizeClass(displayedTimerSize.width) : undefined} style={{
+        <div ref={timerBarRef} className={'viewer-floating-bar viewer-timer-bar' + (!reportMode ? ' has-counter-details' : '') + (!reportMode && miniBarAlerts.length ? ' has-counter-alerts' : '') + (timerMinimized ? ' is-minimized' : '') + (timerBarPosition.left === null ? '' : ' positioned')} data-popup-size={!timerMinimized && coarsePointer && !reportMode && displayedTimerSize ? getViewerPopupSizeClass(displayedTimerSize.width) : undefined} style={{
           ...(timerBarPosition.left === null ? {} : { left: timerBarPosition.left, top: timerBarPosition.top, right: 'auto' }),
-          ...(coarsePointer && !reportMode && displayedTimerSize ? { width: displayedTimerSize.width, height: counterDetailsExpanded ? displayedTimerSize.height : 'auto', maxWidth: 'none', maxHeight: 'none' } : {}),
+          ...(!timerMinimized && coarsePointer && !reportMode && displayedTimerSize ? { width: displayedTimerSize.width, height: counterDetailsExpanded ? displayedTimerSize.height : 'auto', maxWidth: 'none', maxHeight: 'none' } : {}),
         }} role="group" aria-label={`${t('카운터')} · ${t('작업 타이머')}`} onPointerDown={beginTimerBarTouchPress} onClickCapture={(event) => { if (Date.now() > timerBarClickSuppressUntilRef.current) return; timerBarClickSuppressUntilRef.current = 0; event.preventDefault(); event.stopPropagation() }}>
           <button type="button" className="viewer-floating-drag-handle" aria-label={t('작업 타이머 이동')} title={t('작업 타이머 이동')} onPointerDown={handleTimerBarDrag} onPointerMove={moveTimerBarDrag} onPointerUp={finishTimerBarDrag} onPointerCancel={finishTimerBarDrag} onLostPointerCapture={finishTimerBarDrag}><GripVertical size={17} /></button>
           {!reportMode && <div className="viewer-counter-tools" role="group" aria-label={t('카운터')}>
@@ -3472,13 +3531,6 @@ export default function Viewer() {
           </div>}
           {!reportMode && <span className="viewer-timer-divider" aria-hidden="true" />}
           <div className="viewer-timer-portal-host" ref={setTimerPortalHost} />
-          {!reportMode && <div className="viewer-timer-more-anchor">
-            <button ref={timerMoreTriggerRef} type="button" className="viewer-counter-mobile-more" aria-label={t('더보기')} title={t('더보기')} aria-haspopup="menu" aria-expanded={timerMoreOpen} onClick={() => setTimerMoreOpen((open) => !open)}><MoreHorizontal size={20} />{counterAlertPending && <i className="counter-notification-dot" aria-hidden="true" />}</button>
-            {timerMoreOpen && <div ref={timerMorePanelRef} className="viewer-compact-menu viewer-timer-more-menu" role="menu" aria-label={t('더보기')}>
-              <button type="button" role="menuitem" className={counterPanelVisible ? 'selected' : ''} aria-pressed={counterPanelVisible} disabled={counterSettingsSaving} onClick={() => { counterPanelFocusRef.current = timerMoreTriggerRef.current; setSavedCounterSession({ documentId: id, visible: !counterPanelVisible }); setTimerMoreOpen(false) }}><Settings2 size={18} /><span>{counterPanelVisible ? t('카운터 설정') + ' · ' + t('닫기') : t('카운터 설정')}</span>{counterAlertPending && <i className="counter-notification-dot" aria-hidden="true" />}</button>
-              <button type="button" role="menuitem" className={counterDetailsExpanded ? 'selected' : ''} aria-pressed={counterDetailsExpanded} onClick={() => { setCounterDetailsExpanded((expanded) => !expanded); setTimerMoreOpen(false) }}>{counterDetailsExpanded ? <ChevronUp size={18} /> : <ChevronDown size={18} />}<span>{counterDetailsExpanded ? t('보조 카운터 정보 접기') : t('보조 카운터 정보 펼치기')}</span></button>
-            </div>}
-          </div>}
           {!reportMode && <section id={'viewer-counter-details-' + id.replace(/[^a-zA-Z0-9_-]/g, '-')} className="viewer-counter-details" aria-label={t('보조 카운터 정보')}>
             <header className="viewer-counter-details-header">
               <strong>{t('보조 카운터')} · {formatNumber(auxiliaryCounters.length)}</strong>
@@ -3540,6 +3592,7 @@ export default function Viewer() {
             {!touchTablet && <button type="button" aria-label={`${t('작업 타이머')} · ${t('크기 조절')}`} title={t('크기 조절')} className="viewer-timer-resize-handle bottom-left" {...timerResizeHandleProps('bottom-left')}><MoveDiagonal size={16} aria-hidden="true" /></button>}
             <button type="button" aria-label={`${t('작업 타이머')} · ${t('크기 조절')}`} title={t('크기 조절')} className="viewer-timer-resize-handle bottom-right" {...timerResizeHandleProps('bottom-right')}><MoveDiagonal size={16} aria-hidden="true" /></button>
           </div>}
+          {timerMinimized && <button ref={timerRestoreButtonRef} type="button" className="viewer-timer-restore" aria-label={(timerSaveError ? t('저장 오류') + ' · ' : '') + t('작업 타이머 복원')} title={(timerSaveError ? t('저장 오류') + ' · ' : '') + t('작업 타이머 복원')} onPointerDown={beginTimerRestorePointer} onPointerMove={moveTimerRestorePointer} onPointerUp={finishTimerRestorePointer} onPointerCancel={cancelTimerRestorePointer} onLostPointerCapture={cancelTimerRestorePointer} onClick={restoreTimerPopover}><Maximize2 size={18} aria-hidden="true" />{timerSaveError && <i className="viewer-timer-restore-error" aria-hidden="true" />}</button>}
         </div>
         {!reportMode && <div ref={setTextStylePortalTarget} className={'viewer-floating-bar viewer-mini-bar' + (miniBarOpen ? ' expanded' : '')}>
           <button ref={miniBarAccordionButtonRef} type="button" className="viewer-mini-accordion-button" aria-label={t('뷰어 도구')} title={t('뷰어 도구')} aria-expanded={miniBarOpen} aria-controls={miniBarControlsId} onClick={() => { const open = !miniBarOpen; if (!open) closeMiniBarOnPdfActionRef.current = false; setMiniBarState({ documentId: id, open }); if (!open) setMiniBarSettingsOpen(false) }}>

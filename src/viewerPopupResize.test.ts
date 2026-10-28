@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { getDefaultViewerPopupSize, getViewerPopupAvailableBounds, getViewerPopupDragRect, getViewerPopupResizeRect, getViewerPopupSize, getViewerPopupSizeClass, type ViewerPopupRect } from './viewerPopupResize'
+import { getDefaultViewerPopupSize, getViewerPopupAvailableBounds, getViewerPopupDragRect, getViewerPopupResizeRect, getViewerPopupSize, getViewerPopupSizeClass, viewerPopupDragMoved, type ViewerPopupRect } from './viewerPopupResize'
 
 const start: ViewerPopupRect = { left: 100, top: 80, width: 300, height: 240 }
 const bounds: ViewerPopupRect = { left: 0, top: 0, width: 500, height: 400 }
@@ -8,6 +8,11 @@ const resize = (handle: 'bottom-left' | 'bottom-right', deltaX: number, deltaY: 
 })
 
 describe('counter popover resize', () => {
+  it('distinguishes a tap from a drag using a small pointer tolerance', () => {
+    expect(viewerPopupDragMoved(10, 10, 13, 12)).toBe(false)
+    expect(viewerPopupDragMoved(10, 10, 15, 10)).toBe(true)
+  })
+
   it('keeps the top-left anchor when resizing from the bottom-right', () => {
     expect(resize('bottom-right', 50, 30)).toEqual({ left: 100, top: 80, width: 350, height: 270 })
   })

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, type PointerEvent as ReactPointerEvent, type RefObject } from 'react'
-import { getViewerPopupDragRect, type ViewerPopupRect } from './viewerPopupResize'
+import { getViewerPopupDragRect, viewerPopupDragMoved, type ViewerPopupRect } from './viewerPopupResize'
 
 type ActiveDrag = {
   pointerId: number
@@ -20,7 +20,7 @@ type DragOptions = {
   getBounds: () => ViewerPopupRect | null
   onStart: (rect: ViewerPopupRect) => void
   onApply: (rect: ViewerPopupRect) => void
-  onCommit: (rect: ViewerPopupRect, bounds: ViewerPopupRect) => void
+  onCommit: (rect: ViewerPopupRect, bounds: ViewerPopupRect, moved: boolean) => void
   onCancel: (rect: ViewerPopupRect) => void
 }
 
@@ -79,7 +79,7 @@ export function useViewerPopupDrag(options: DragOptions) {
     const rect = getViewerPopupDragRect(active.start, active.bounds, active.clientX - active.startX, active.clientY - active.startY)
     if (rect) {
       optionsRef.current.onApply(rect)
-      optionsRef.current.onCommit(rect, active.bounds)
+      optionsRef.current.onCommit(rect, active.bounds, viewerPopupDragMoved(active.startX, active.startY, active.clientX, active.clientY))
     } else optionsRef.current.onCancel(active.start)
   }, [cleanup])
 

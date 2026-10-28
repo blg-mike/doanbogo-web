@@ -9,6 +9,7 @@ import { formatWorkTimeHoursMinutes, isWorkDateKey, localWorkDateKey, normalizeW
 
 type Props = {
   documentId: string
+  hidden?: boolean
   initialTotalWorkTimeMs: number
   initialWorkTimeDays: DocumentWorkTimeDay[]
   onClose: () => void
@@ -44,7 +45,7 @@ function chartBucketLabel(mode: WorkTimeChartMode, key: string, compact = false)
   return formatDate(date, mode === 'month' ? { year: 'numeric', month: 'long' } : { dateStyle: 'full' })
 }
 
-export default function WorkTimeRecordPanel({ documentId, initialTotalWorkTimeMs, initialWorkTimeDays, onClose, onAddWorkTime, onResetWorkTime, onTotalsChange, onInteractionBlockingChange }: Props) {
+export default function WorkTimeRecordPanel({ documentId, hidden = false, initialTotalWorkTimeMs, initialWorkTimeDays, onClose, onAddWorkTime, onResetWorkTime, onTotalsChange, onInteractionBlockingChange }: Props) {
   const [record, setRecord] = useState<WorkTimeRecord>(() => ({ totalWorkTimeMs: initialTotalWorkTimeMs, workTimeDays: initialWorkTimeDays, sessions: [], notes: {} }))
   const [loading, setLoading] = useState(true)
   const [loadError, setLoadError] = useState(false)
@@ -288,7 +289,7 @@ export default function WorkTimeRecordPanel({ documentId, initialTotalWorkTimeMs
     }
   }
 
-  return createPortal(<div className="report-worktime-backdrop" role="presentation" onPointerDown={(event) => { event.stopPropagation(); if (event.target === event.currentTarget && !closeLocked) onClose() }}>
+  return createPortal(<div className="report-worktime-backdrop" hidden={hidden} aria-hidden={hidden || undefined} style={hidden ? { display: 'none' } : undefined} role="presentation" onPointerDown={(event) => { event.stopPropagation(); if (event.target === event.currentTarget && !closeLocked) onClose() }}>
     <section className="report-worktime-dialog" role="dialog" aria-modal="true" aria-labelledby="report-worktime-title" onKeyDown={handleKeyDown}>
       <header className="report-worktime-dialog-header">
         {view === 'stats' && <button type="button" className="report-worktime-back" aria-label={t('뒤로')} onClick={() => setView('records')}><ArrowLeft size={19} /></button>}
