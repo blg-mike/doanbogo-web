@@ -1846,12 +1846,12 @@ html.viewer-viewport-locked .viewer-shell { height: 100dvh; min-height: 0; flex:
 .viewer-zoom-presets > button { min-width: 0; min-height: 44px; padding: 0 4px; border: 0; border-radius: 8px; color: var(--color-text-secondary); background: transparent; font: inherit; font-size: 12px; font-variant-numeric: tabular-nums; cursor: pointer; }
 .viewer-zoom-presets > button:hover, .viewer-zoom-presets > button.selected { color: var(--color-primary); background: var(--color-primary-soft); }
 .viewer-header-menu { top: calc(100% + 6px); right: 0; }
-.viewer-focus-restore { position: absolute; z-index: 35; top: max(8px, env(safe-area-inset-top, 0px)); left: 76px; min-width: 44px; min-height: 44px; display: inline-flex; align-items: center; justify-content: center; gap: 7px; padding: 0 12px; border: 1px solid var(--color-border); border-radius: 10px; color: var(--color-text-secondary); background: var(--color-surface); box-shadow: 0 3px 12px rgba(17,17,17,.12); font: inherit; font-size: 12px; cursor: pointer; }
+.viewer-focus-restore { position: absolute; z-index: 35; top: max(8px, env(safe-area-inset-top, 0px)); right: max(8px, env(safe-area-inset-right, 0px)); min-width: 44px; min-height: 44px; display: inline-flex; align-items: center; justify-content: center; gap: 7px; padding: 0 12px; border: 1px solid var(--color-border); border-radius: 10px; color: var(--color-text-secondary); background: var(--color-surface); box-shadow: 0 3px 12px rgba(17,17,17,.12); font: inherit; font-size: 12px; cursor: pointer; }
 .viewer-focus-restore:hover { border-color: var(--color-primary); color: var(--color-primary); background: var(--color-primary-soft); }
 .viewer-shell.focus-view { --viewer-header-height: 0px; --viewer-thumbnail-strip-height: 0px; --viewer-thumbnail-feedback-height: 0px; --viewer-footer-controls-height: 0px; }
 .viewer-shell.focus-view > .viewer-header, .viewer-shell.focus-view > .viewer-footer { display: none; }
-.viewer-shell.focus-view .viewer-mini-bar { top: 12px; }
-.viewer-shell.focus-view .viewer-timer-bar:not(.positioned) { top: 8px; }
+.viewer-shell.focus-view .viewer-floating-layer, .viewer-shell.focus-view .number-counter-panel { visibility: hidden; pointer-events: none; }
+.viewer-shell.focus-view .viewer-zoom-hint { display: none; }
 .viewer-footer-mobile-controls { display: none; }
 
 @media (max-width: 600px) {
@@ -1868,7 +1868,9 @@ html.viewer-viewport-locked .viewer-shell { height: 100dvh; min-height: 0; flex:
   .viewer-shell:not(.report-mode) .viewer-title-edit { display: none; }
   .viewer-shell:not(.report-mode) .viewer-header-actions { flex: 0 0 auto; gap: 4px; }
   .viewer-shell:not(.report-mode) .viewer-header-history { gap: 0; }
-  .viewer-shell:not(.report-mode) .viewer-header-history button:nth-child(2), .viewer-shell:not(.report-mode) .viewer-split-toggle, .viewer-shell:not(.report-mode) .viewer-focus-toggle { display: none; }
+  .viewer-shell:not(.report-mode) .viewer-header-history button:nth-child(2) { display: none; }
+  .viewer-shell:not(.report-mode) .viewer-split-toggle { width: 44px; min-width: 44px; justify-content: center; padding: 0; }
+  .viewer-shell:not(.report-mode) .viewer-split-toggle span { display: none; }
   .viewer-shell:not(.report-mode) .viewer-header-icon-action { width: 44px; min-width: 44px; height: 44px; }
   .viewer-shell:not(.report-mode) .viewer-header-more { width: 44px; min-width: 44px; height: 44px; display: inline-flex; justify-content: center; padding: 0; }
   .viewer-shell:not(.report-mode) .viewer-footer-controls { display: none; }
@@ -1907,8 +1909,6 @@ html.viewer-viewport-locked .viewer-shell { height: 100dvh; min-height: 0; flex:
   .viewer-counter-mobile-more .counter-notification-dot { position: absolute; top: 4px; right: 4px; width: 7px; height: 7px; border: 1px solid var(--color-surface); border-radius: 50%; background: var(--color-warning); }
   .viewer-timer-more-menu { top: calc(100% + 6px); right: 0; }
   .viewer-shell.focus-view { --viewer-header-height: 0px; --viewer-thumbnail-strip-height: 0px; --viewer-thumbnail-feedback-height: 0px; --viewer-footer-controls-height: 0px; }
-  .viewer-shell.focus-view .viewer-mini-bar { top: 12px; }
-  .viewer-shell.focus-view .viewer-timer-bar:not(.positioned) { top: 100px; }
   .viewer-shell.focus-view .viewer-focus-restore { width: 44px; min-width: 44px; height: 44px; padding: 0; }
   .viewer-shell.focus-view .viewer-focus-restore span { display: none; }
 }

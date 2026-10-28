@@ -1064,7 +1064,7 @@ export default function Viewer() {
       const barRect = bar.getBoundingClientRect()
       const bounds = coarsePointer ? readViewerPopupAvailableBounds(shell) : null
       const minLeft = bounds ? bounds.left - shellRect.left : 0
-      const minTop = bounds ? bounds.top - shellRect.top : window.matchMedia('(max-width: 600px)').matches ? focusView ? 100 : 44 : 0
+      const minTop = bounds ? bounds.top - shellRect.top : window.matchMedia('(max-width: 600px)').matches ? 44 : 0
       const maxLeft = bounds ? bounds.left + bounds.width - shellRect.left - barRect.width : Math.max(0, shellRect.width - barRect.width)
       const maxTop = bounds ? bounds.top + bounds.height - shellRect.top - barRect.height : Math.max(0, shellRect.height - barRect.height)
       const savedPosition = touchTablet && bounds && preferredTimerPosition && displayedTimerSize
@@ -1087,7 +1087,7 @@ export default function Viewer() {
       window.removeEventListener('resize', clampPosition)
       window.visualViewport?.removeEventListener('resize', clampPosition)
     }
-  }, [coarsePointer, displayedTimerSize, focusView, id, preferredTimerPosition, reportMode, timerBarPositioned, touchTablet])
+  }, [coarsePointer, displayedTimerSize, id, preferredTimerPosition, reportMode, timerBarPositioned, touchTablet])
 
   useLayoutEffect(() => {
     if (!coarsePointer || reportMode) return
@@ -1200,11 +1200,10 @@ export default function Viewer() {
     if (!miniBarOpen) return
     const closeOnEscape = (event: KeyboardEvent) => {
       if (event.key !== 'Escape') return
+      if (focusView) return
       if (event.target instanceof Element && event.target.closest('.counter-modal-backdrop')) return
-      if (!focusView) {
-        event.preventDefault()
-        event.stopPropagation()
-      }
+      event.preventDefault()
+      event.stopPropagation()
       closeMiniBarOnPdfActionRef.current = false
       setMiniBarState((current) => current.documentId === id ? { ...current, open: false } : current)
       setMiniBarSettingsOpen(false)
@@ -1225,7 +1224,7 @@ export default function Viewer() {
       if (event.key !== 'Escape' || event.defaultPrevented) return
       event.preventDefault()
       setFocusViewUi({ documentId: id, enabled: false })
-      window.requestAnimationFrame(() => (window.matchMedia('(max-width: 600px)').matches ? headerMoreTriggerRef.current : desktopFocusTriggerRef.current)?.focus())
+      window.requestAnimationFrame(() => desktopFocusTriggerRef.current?.focus())
     }
     window.addEventListener('keydown', exitOnEscape)
     return () => window.removeEventListener('keydown', exitOnEscape)
@@ -2464,17 +2463,14 @@ export default function Viewer() {
   function toggleFocusView() {
     if (focusView) {
       setFocusViewUi({ documentId: id, enabled: false })
-      window.requestAnimationFrame(() => (window.matchMedia('(max-width: 600px)').matches ? headerMoreTriggerRef.current : desktopFocusTriggerRef.current)?.focus())
+      window.requestAnimationFrame(() => desktopFocusTriggerRef.current?.focus())
       return
     }
     if (focusViewBlocked) return
-    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }))
     setHeaderMoreOpen(false)
     setFooterMoreOpen(false)
     setZoomMenuOpen(false)
     setTimerMoreOpen(false)
-    setSavedCounterSession({ documentId: id, visible: false })
-    setCounterDetailsExpanded(false)
     setMiniBarSettingsOpen(false)
     setThumbnailGroupPopover(null)
     onWorkTimeRecordOpenChange(false)
@@ -2512,7 +2508,7 @@ export default function Viewer() {
     const shellRect = shell.getBoundingClientRect()
     const barRect = bar.getBoundingClientRect()
     const left = clamp(barRect.left - shellRect.left, 0, Math.max(0, shellRect.width - barRect.width))
-    const minTop = window.matchMedia('(max-width: 600px)').matches ? focusView ? 100 : 44 : 0
+    const minTop = window.matchMedia('(max-width: 600px)').matches ? 44 : 0
     const top = clamp(barRect.top - shellRect.top, minTop, Math.max(minTop, shellRect.height - barRect.height))
     setTimerBarState({ documentId: id, left, top })
     bar.style.left = left + 'px'
@@ -2536,7 +2532,7 @@ export default function Viewer() {
   function applyTimerBarPosition(drag: TimerBarDrag, clientX: number, clientY: number) {
     const shellRect = drag.shell.getBoundingClientRect()
     const left = clamp(clientX - shellRect.left - drag.offsetX, 0, Math.max(0, shellRect.width - drag.bar.getBoundingClientRect().width))
-    const minTop = window.matchMedia('(max-width: 600px)').matches ? focusView ? 100 : 44 : 0
+    const minTop = window.matchMedia('(max-width: 600px)').matches ? 44 : 0
     const top = clamp(clientY - shellRect.top - drag.offsetY, minTop, Math.max(minTop, shellRect.height - drag.bar.getBoundingClientRect().height))
     drag.bar.style.left = left + 'px'
     drag.bar.style.top = top + 'px'
@@ -2558,7 +2554,7 @@ export default function Viewer() {
     const shellRect = shell.getBoundingClientRect()
     const barRect = bar.getBoundingClientRect()
     const left = clamp(barRect.left - shellRect.left, 0, Math.max(0, shellRect.width - barRect.width))
-    const minTop = window.matchMedia('(max-width: 600px)').matches ? focusView ? 100 : 44 : 0
+    const minTop = window.matchMedia('(max-width: 600px)').matches ? 44 : 0
     const top = clamp(barRect.top - shellRect.top, minTop, Math.max(minTop, shellRect.height - barRect.height))
     setTimerBarState({ documentId: id, left, top })
     bar.style.left = left + 'px'
@@ -3316,13 +3312,13 @@ export default function Viewer() {
               <button type="button" className="viewer-action viewer-header-icon-action" aria-label={t('다시 실행')} title={t('다시 실행')} disabled={!canRedo} onClick={() => undoRedo('redo')}><Redo2 size={18} /></button>
             </div>
             <button className={'viewer-action viewer-split-toggle ' + (snapshot.split ? 'selected' : '')} aria-label={snapshot.split ? t('한 영역 보기') : t('두 영역 보기')} title={snapshot.split ? t('한 영역 보기') : t('두 영역 보기')} aria-pressed={snapshot.split} onClick={toggleSplit}><Columns2 size={18} /><span>{snapshot.split ? t('한 영역 보기') : t('두 영역 보기')}</span></button>
-            <button ref={desktopFocusTriggerRef} type="button" className={'viewer-action viewer-focus-toggle' + (focusView ? ' selected' : '')} aria-label={t('집중 보기 켜기')} title={t('집중 보기 켜기')} disabled={focusViewBlocked} onClick={toggleFocusView}><Focus size={19} /></button>
+            <button ref={desktopFocusTriggerRef} type="button" className={'viewer-action viewer-focus-toggle' + (focusView ? ' selected' : '')} data-focus-view-trigger aria-label={t('도안만 보기')} title={t('도안만 보기')} aria-pressed={focusView} disabled={focusViewBlocked} onClick={toggleFocusView}><Focus size={19} /></button>
             <div className="viewer-header-more-anchor">
               <button ref={headerMoreTriggerRef} type="button" className="viewer-action viewer-header-more" aria-label={t('더보기')} title={t('더보기')} aria-haspopup="menu" aria-expanded={headerMoreOpen} onClick={() => setHeaderMoreOpen((open) => !open)}><MoreHorizontal size={20} /></button>
               {headerMoreOpen && <div ref={headerMorePanelRef} className="viewer-compact-menu viewer-header-menu" role="menu" aria-label={t('더보기')}>
                 <button type="button" role="menuitem" disabled={!canRedo} onClick={() => { setHeaderMoreOpen(false); undoRedo('redo') }}><Redo2 size={18} /><span>{t('다시 실행')}</span></button>
                 <button type="button" role="menuitem" className={snapshot.split ? 'selected' : ''} aria-pressed={snapshot.split} onClick={() => { setHeaderMoreOpen(false); toggleSplit() }}><Columns2 size={18} /><span>{snapshot.split ? t('한 영역 보기') : t('두 영역 보기')}</span></button>
-                <button type="button" role="menuitem" disabled={focusViewBlocked} onClick={toggleFocusView}><Focus size={18} /><span>{t('집중 보기 켜기')}</span></button>
+                <button type="button" role="menuitem" data-focus-view-trigger disabled={focusViewBlocked} onClick={toggleFocusView}><Focus size={18} /><span>{t('도안만 보기')}</span></button>
               </div>}
             </div>
           </>}

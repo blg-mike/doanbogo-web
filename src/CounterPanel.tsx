@@ -770,12 +770,12 @@ export default function CounterPanel({
     const outside = (event: PointerEvent) => {
       const target = event.target
       if (!(target instanceof Node) || panelRef.current?.contains(target) || triggerRef.current?.contains(target)) return
-      if (target instanceof Element && target.closest('.pdf-scroll-area, .viewer-floating-bar')) return
+      if (target instanceof Element && target.closest('.pdf-scroll-area, .viewer-floating-bar, [data-focus-view-trigger]')) return
       onClose()
       requestAnimationFrame(() => triggerRef.current?.focus())
     }
     const escape = (event: KeyboardEvent) => {
-      if (event.key !== 'Escape') return
+      if (event.key !== 'Escape' || panelRef.current?.closest('.viewer-shell.focus-view')) return
       event.preventDefault()
       onClose()
       requestAnimationFrame(() => triggerRef.current?.focus())
