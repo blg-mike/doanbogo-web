@@ -12,7 +12,6 @@ import { readViewerToolSize, saveViewerToolSize, type ViewerToolSize } from './v
 import { useViewerPopupResize } from './useViewerPopupResize'
 import { useTouchTablet } from './useTouchTablet'
 import { useViewerPopupDrag } from './useViewerPopupDrag'
-import { createViewerToolPosition, getViewerToolPosition, readViewerToolPosition, saveViewerToolPosition, type ViewerToolPosition } from './viewerToolPositions'
 import { CounterStepButton } from './CounterStepButton'
 
 const kinds: CounterKind[] = ['simple', 'pattern', 'task', 'repeat']
@@ -623,12 +622,10 @@ export default function CounterPanel({
   const [position, setPosition] = useState<{ left: number; top: number; viewport: boolean } | null>(null)
   const positionRef = useRef<{ left: number; top: number; viewport: boolean } | null>(null)
   const manuallyPositionedRef = useRef(false)
-  const tabletDraggingRef = useRef(false)
   const resizingRef = useRef(false)
   const coarsePointer = typeof window !== 'undefined' && window.matchMedia('(pointer: coarse)').matches
   const touchTablet = useTouchTablet()
   const [preferredSize, setPreferredSize] = useState<ViewerToolSize | null>(() => readViewerToolSize('counterPanel'))
-  const [preferredPosition, setPreferredPosition] = useState<ViewerToolPosition | null>(() => readViewerToolPosition('counterPanel'))
   const [displayedSize, setDisplayedSize] = useState<ViewerToolSize | null>(null)
   const collapsed = snapshot.counterPanelCollapsed === true
   const [activeTab, setActiveTab] = useState<'counter' | 'settings'>('counter')
@@ -654,7 +651,7 @@ export default function CounterPanel({
   function closePanel() {
     if (panelSaving) return
     onClose()
-    requestAnimationFrame(() => triggerRef.current?.focus())
+    requestAnimationFrame(() => triggerRef.current?.focus({ preventScroll: true }))
   }
   function applyPopupResize(rect: ViewerPopupRect) {
     const panel = panelRef.current
@@ -693,7 +690,6 @@ export default function CounterPanel({
       return shell ? readViewerPopupAvailableBounds(shell) : null
     },
     onStart: (rect) => {
-      tabletDraggingRef.current = true
       manuallyPositionedRef.current = true
       const next = { left: rect.left, top: rect.top, viewport: true }
       positionRef.current = next
@@ -704,19 +700,12 @@ export default function CounterPanel({
       positionRef.current = { left: rect.left, top: rect.top, viewport: true }
       applyTabletPopupDrag(rect)
     },
-    onCommit: (rect, bounds) => {
-      tabletDraggingRef.current = false
+    onCommit: (rect) => {
       const next = { left: rect.left, top: rect.top, viewport: true }
       positionRef.current = next
       setPosition(next)
-      const saved = createViewerToolPosition(bounds, rect)
-      if (saved) {
-        saveViewerToolPosition('counterPanel', saved)
-        setPreferredPosition(saved)
-      }
     },
     onCancel: (rect) => {
-      tabletDraggingRef.current = false
       const next = { left: rect.left, top: rect.top, viewport: true }
       positionRef.current = next
       setPosition(next)
@@ -749,13 +738,6 @@ export default function CounterPanel({
       setDisplayedSize(size)
       saveViewerToolSize('counterPanel', size)
       setPreferredSize(size)
-      const shell = panelRef.current?.closest<HTMLElement>('.viewer-shell')
-      const bounds = shell ? readViewerPopupAvailableBounds(shell) : null
-      const saved = touchTablet && bounds ? createViewerToolPosition(bounds, rect) : null
-      if (saved) {
-        saveViewerToolPosition('counterPanel', saved)
-        setPreferredPosition(saved)
-      }
       const next = { left: rect.left, top: rect.top, viewport: true }
       positionRef.current = next
       setPosition(next)
@@ -770,9 +752,7 @@ export default function CounterPanel({
     const outside = (event: PointerEvent) => {
       const target = event.target
       if (!(target instanceof Node) || panelRef.current?.contains(target) || triggerRef.current?.contains(target)) return
-      if (target instanceof Element && target.closest('.pdf-scroll-area, .viewer-floating-bar, [data-focus-view-trigger]')) return
       onClose()
-      requestAnimationFrame(() => triggerRef.current?.focus())
     }
     const escape = (event: KeyboardEvent) => {
       if (event.key !== 'Escape' || panelRef.current?.closest('.viewer-shell.focus-view')) return
@@ -900,9 +880,23 @@ export default function CounterPanel({
     const panel = panelRef.current
     const container = panel?.parentElement
     const viewer = panel?.closest<HTMLElement>('.viewer-shell')
-    const bar = viewer?.querySelector<HTMLElement>('.viewer-timer-bar')
-    if (!panel || !container || !viewer || !bar) return
+    const trigger = triggerRef.current
+    if (!panel || !container || !viewer || !trigger) return
     const place = () => {
+      const triggerRect = trigger.getBoundingClientRect()
+      const auxiliaryRail = trigger.closest<HTMLElement>('.viewer-footer-work-aux-list')
+      const railRect = auxiliaryRail?.getBoundingClientRect()
+      const viewport = window.visualViewport
+      const viewportLeft = viewport?.offsetLeft ?? 0
+      const viewportTop = viewport?.offsetTop ?? 0
+      const viewportRight = viewportLeft + (viewport?.width ?? window.innerWidth)
+      const viewportBottom = viewportTop + (viewport?.height ?? window.innerHeight)
+      const isInViewport = triggerRect.right > viewportLeft && triggerRect.left < viewportRight && triggerRect.bottom > viewportTop && triggerRect.top < viewportBottom
+      const isInRail = !railRect || triggerRect.right > railRect.left && triggerRect.left < railRect.right && triggerRect.bottom > railRect.top && triggerRect.top < railRect.bottom
+      if (!trigger.isConnected || !isInViewport || !isInRail) {
+        onClose()
+        return
+      }
       if (resizingRef.current) return
       if (coarsePointer) {
         const bounds = readViewerPopupAvailableBounds(viewer)
@@ -915,26 +909,14 @@ export default function CounterPanel({
         setDisplayedSize((current) => current?.width === size.width && current.height === size.height ? current : size)
         const panelRect = panel.getBoundingClientRect()
         const height = collapsed ? panelRect.height : size.height
-        const barRect = bar.getBoundingClientRect()
         let left: number
         let top: number
-        if (touchTablet && preferredPosition && !tabletDraggingRef.current) {
-          const saved = getViewerToolPosition(bounds, size, preferredPosition)
-          left = saved?.left ?? bounds.left
-          top = saved?.top ?? bounds.top
-          manuallyPositionedRef.current = true
-        } else if (manuallyPositionedRef.current && positionRef.current) {
+        if (manuallyPositionedRef.current && positionRef.current) {
           left = clamp(positionRef.current.left, bounds.left, Math.max(bounds.left, bounds.left + bounds.width - size.width))
           top = clamp(positionRef.current.top, bounds.top, Math.max(bounds.top, bounds.top + bounds.height - height))
         } else {
-          const rightSide = barRect.right + 8
-          const leftSide = barRect.left - size.width - 8
-          left = rightSide + size.width <= bounds.left + bounds.width
-            ? rightSide
-            : leftSide >= bounds.left
-              ? leftSide
-              : bounds.left + bounds.width - size.width
-          top = clamp(barRect.top, bounds.top, Math.max(bounds.top, bounds.top + bounds.height - height))
+          left = clamp(triggerRect.left + triggerRect.width / 2 - size.width / 2, bounds.left, Math.max(bounds.left, bounds.left + bounds.width - size.width))
+          top = clamp(triggerRect.top - height - 8, bounds.top, Math.max(bounds.top, bounds.top + bounds.height - height))
         }
         const next = { left, top, viewport: true }
         const current = positionRef.current
@@ -953,29 +935,33 @@ export default function CounterPanel({
           setPosition(next)
           return
         }
-        manuallyPositionedRef.current = false
-        positionRef.current = null
-        setPosition(null)
+        const bounds = readViewerPopupAvailableBounds(viewer)
+        if (!bounds) return
+        const viewportWidth = window.visualViewport?.width ?? window.innerWidth
+        const width = Math.min(440, Math.max(0, viewportWidth - 24))
+        const height = panel.getBoundingClientRect().height
+        const next = {
+          left: clamp(triggerRect.left + triggerRect.width / 2 - width / 2, bounds.left, Math.max(bounds.left, bounds.left + bounds.width - width)),
+          top: clamp(triggerRect.top - height - 8, bounds.top, Math.max(bounds.top, bounds.top + bounds.height - height)),
+          viewport: true,
+        }
+        const current = positionRef.current
+        if (current?.viewport && Math.abs(current.left - next.left) < 1 && Math.abs(current.top - next.top) < 1) return
+        positionRef.current = next
+        setPosition(next)
         return
       }
       const shellRect = container.getBoundingClientRect()
-      const barRect = bar.getBoundingClientRect()
       const panelWidth = panel.getBoundingClientRect().width
       const panelHeight = panel.getBoundingClientRect().height
       const min = 12
-      const rightSide = barRect.right - shellRect.left + 8
-      const leftSide = barRect.left - shellRect.left - panelWidth - 8
       const manualBase = positionRef.current?.viewport ? { left: panel.getBoundingClientRect().left - shellRect.left, top: panel.getBoundingClientRect().top - shellRect.top } : positionRef.current
       const left = manuallyPositionedRef.current && manualBase
         ? clamp(manualBase.left, min, Math.max(min, shellRect.width - panelWidth - min))
-        : rightSide + panelWidth <= shellRect.width - min
-          ? rightSide
-          : leftSide >= min
-            ? leftSide
-            : clamp(rightSide, min, Math.max(min, shellRect.width - panelWidth - min))
+        : clamp(triggerRect.left + triggerRect.width / 2 - shellRect.left - panelWidth / 2, min, Math.max(min, shellRect.width - panelWidth - min))
       const top = manuallyPositionedRef.current && manualBase
         ? clamp(manualBase.top, min, Math.max(min, shellRect.height - panelHeight - min))
-        : clamp(barRect.top - shellRect.top, min, Math.max(min, shellRect.height - panelHeight - min))
+        : clamp(triggerRect.top - shellRect.top - panelHeight - 8, min, Math.max(min, shellRect.height - panelHeight - min))
       const current = positionRef.current
       if (current && !current.viewport && Math.abs(current.left - left) < 1 && Math.abs(current.top - top) < 1) return
       const next = { left, top, viewport: false }
@@ -987,15 +973,19 @@ export default function CounterPanel({
     observer.observe(panel)
     observer.observe(container)
     observer.observe(viewer)
-    observer.observe(bar)
+    observer.observe(trigger)
     window.addEventListener('resize', place)
     window.visualViewport?.addEventListener('resize', place)
+    window.visualViewport?.addEventListener('scroll', place)
+    viewer.addEventListener('scroll', place, true)
     return () => {
       observer.disconnect()
       window.removeEventListener('resize', place)
       window.visualViewport?.removeEventListener('resize', place)
+      window.visualViewport?.removeEventListener('scroll', place)
+      viewer.removeEventListener('scroll', place, true)
     }
-  }, [activeTab, collapsed, editingId, newCounterDraft, counters.length, coarsePointer, preferredPosition, preferredSize, touchTablet])
+  }, [activeTab, collapsed, editingId, newCounterDraft, counters.length, coarsePointer, preferredSize, touchTablet, triggerRef, onClose])
 
   function beginHeaderGesture(event: ReactPointerEvent<HTMLElement>) {
     const target = event.target instanceof Element ? event.target : null

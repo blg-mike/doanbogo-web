@@ -6,6 +6,8 @@ import { pdfPageRenderQueue } from './pdfPageRenderQueue'
 import { viewerCanvasMemory } from './pdfRenderResources'
 import { openPdf } from './pdf'
 import { openPhotoDocument } from './photoDocument'
+import { PDF_RECOGNITION_VERSION } from './pdfRecognitionVersion'
+import { getPdfQrTileBounds, PDF_QR_TILE_AREA_FRACTION, type PdfQrTile } from './qrTileGrid'
 
 type RecognitionJob = {
   key: string
@@ -14,13 +16,14 @@ type RecognitionJob = {
   viewerPdf: PDFDocumentProxy | null
   cancelled: boolean
   yielded: boolean
+  force: boolean
   cancelCurrent?: () => void
 }
 
 export type PdfRecognitionEvent = { kind: 'result'; result: PageRecognitionRecord } | { kind: 'error' }
 type RecognitionListener = (documentId: string, pageNumber: number, event: PdfRecognitionEvent) => void
 type RecognitionResult = { id: number; links: PdfQrLink[]; error?: true }
-type QrRaster = { pixels: ImageData; release: () => void }
+type QrRaster = { pixels: ImageData; originX: number; originY: number; fullWidth: number; fullHeight: number; release: () => void }
 
 async function createQrWorker() {
   const { default: InlineQrWorker } = await import('./qrDecode.worker?worker&inline')
@@ -48,7 +51,7 @@ function publish(job: RecognitionJob, event: PdfRecognitionEvent) {
 }
 
 function resultFor(job: RecognitionJob, pdfLinksDone: boolean, pdfLinks: PdfQrLink[], qrLinksDone: boolean, qrLinks: PdfQrLink[], qrInputMaxDimension: number): PageRecognitionRecord {
-  return { documentId: job.record.id, pageNumber: job.pageNumber, version: 1, pdfLinksDone, pdfLinks, qrLinksDone, qrLinks, qrInputMaxDimension }
+  return { documentId: job.record.id, pageNumber: job.pageNumber, version: PDF_RECOGNITION_VERSION, pdfLinksDone, pdfLinks, qrLinksDone, qrLinks, qrInputMaxDimension }
 }
 
 async function saveResult(job: RecognitionJob, result: PageRecognitionRecord) {
@@ -112,7 +115,7 @@ function decodeQr(worker: Worker, image: ImageData, onCancelReady: (cancel: () =
   })
 }
 
-function renderQrRecognition(page: PDFPageProxy, onCancelReady: (cancel: () => void) => void) {
+function renderQrRaster(page: PDFPageProxy, scale: number, tile: PdfQrTile, fullWidth: number, fullHeight: number, onCancelReady: (cancel: () => void) => void) {
   const renderKey = {}
   return new Promise<QrRaster | null>((resolve, reject) => {
     let renderTask: RenderTask | undefined
@@ -122,17 +125,15 @@ function renderQrRecognition(page: PDFPageProxy, onCancelReady: (cancel: () => v
     const memoryKey = {}
     const cancel = pdfPageRenderQueue.enqueue(renderKey, async () => {
       try {
-        const base = page.getViewport({ scale: 1 })
-        const maxPixels = Math.min(2_097_152, Math.floor(viewerCanvasMemory.availableBytes() / 8))
-        if (maxPixels < 160_000) {
+        const width = Math.max(1, tile.right - tile.left)
+        const height = Math.max(1, tile.bottom - tile.top)
+        const maxPixels = Math.floor(viewerCanvasMemory.availableBytes() / 8)
+        if (width * height > maxPixels) {
           resolve(null)
           return
         }
-        const scale = Math.min(1400 / Math.max(base.width, base.height), Math.sqrt(maxPixels / (base.width * base.height)))
-        const viewport = page.getViewport({ scale })
+        const viewport = page.getViewport({ scale, offsetX: -tile.left, offsetY: -tile.top })
         const canvas = document.createElement('canvas')
-        const width = Math.max(1, Math.ceil(viewport.width))
-        const height = Math.max(1, Math.ceil(viewport.height))
         const bytes = width * height * 8
         if (!viewerCanvasMemory.reserve(memoryKey, bytes)) {
           resolve(null)
@@ -144,6 +145,8 @@ function renderQrRecognition(page: PDFPageProxy, onCancelReady: (cancel: () => v
           canvas.height = height
           const context = canvas.getContext('2d', { alpha: false, willReadFrequently: true })
           if (!context) throw new Error('QR 분석 캔버스를 만들 수 없습니다.')
+          context.fillStyle = '#fff'
+          context.fillRect(0, 0, width, height)
           renderTask = page.render({ canvas, canvasContext: context, viewport })
           let timedOut = false
           const timeoutId = window.setTimeout(() => {
@@ -160,6 +163,10 @@ function renderQrRecognition(page: PDFPageProxy, onCancelReady: (cancel: () => v
           keepReserved = true
           resolve({
             pixels,
+            originX: tile.left,
+            originY: tile.top,
+            fullWidth,
+            fullHeight,
             release: () => {
               if (!reserved) return
               reserved = false
@@ -191,6 +198,32 @@ function renderQrRecognition(page: PDFPageProxy, onCancelReady: (cancel: () => v
   })
 }
 
+function mapQrRasterLinks(links: PdfQrLink[], raster: QrRaster) {
+  return links.map((link) => ({
+    ...link,
+    x: (raster.originX + link.x * raster.pixels.width) / raster.fullWidth,
+    y: (raster.originY + link.y * raster.pixels.height) / raster.fullHeight,
+    width: link.width * raster.pixels.width / raster.fullWidth,
+    height: link.height * raster.pixels.height / raster.fullHeight,
+  }))
+}
+
+function addUniqueQrLink(links: PdfQrLink[], link: PdfQrLink) {
+  const duplicate = links.some((candidate) => {
+    if (candidate.href !== link.href) return false
+    const overlapWidth = Math.max(0, Math.min(candidate.x + candidate.width, link.x + link.width) - Math.max(candidate.x, link.x))
+    const overlapHeight = Math.max(0, Math.min(candidate.y + candidate.height, link.y + link.height) - Math.max(candidate.y, link.y))
+    const intersection = overlapWidth * overlapHeight
+    return intersection / Math.max(Number.EPSILON, Math.min(candidate.width * candidate.height, link.width * link.height)) >= 0.5
+  })
+  if (!duplicate) links.push(link)
+}
+
+function qrRenderScale(page: PDFPageProxy, maxDimension: number, maxPixels: number, tileFraction = 1) {
+  const base = page.getViewport({ scale: 1 })
+  return Math.min(maxDimension / Math.max(base.width, base.height), Math.sqrt(maxPixels * 0.99 / (base.width * base.height * tileFraction)))
+}
+
 async function runJob(job: RecognitionJob) {
   let owned: Awaited<ReturnType<typeof openPdf>> | null = null
   let worker: Worker | null = null
@@ -205,8 +238,8 @@ async function runJob(job: RecognitionJob) {
       return
     }
     if (job.cancelled) return
-    if (cached?.version !== 1) cached = undefined
-    if (cached?.version === 1 && cached.pdfLinksDone && cached.qrLinksDone) {
+    if (cached?.version !== 1 && cached?.version !== PDF_RECOGNITION_VERSION) cached = undefined
+    if (!job.force && cached?.version === PDF_RECOGNITION_VERSION && cached.pdfLinksDone && cached.qrLinksDone) {
       publish(job, { kind: 'result', result: cached })
       return
     }
@@ -222,11 +255,12 @@ async function runJob(job: RecognitionJob) {
     const page = await trackPdfOperation(pdf, () => pdf.getPage(job.pageNumber))
     if (job.cancelled) return
 
-    let pdfLinksDone = cached?.pdfLinksDone ?? false
+    const currentCache = !job.force && cached?.version === PDF_RECOGNITION_VERSION ? cached : undefined
+    let pdfLinksDone = currentCache?.pdfLinksDone ?? false
     let pdfLinks = cached?.pdfLinks ?? []
-    let qrLinksDone = cached?.qrLinksDone ?? false
+    let qrLinksDone = currentCache?.qrLinksDone ?? false
     let qrLinks = cached?.qrLinks ?? []
-    let qrInputMaxDimension = cached?.qrInputMaxDimension ?? 0
+    let qrInputMaxDimension = currentCache?.qrInputMaxDimension ?? 0
     if (!pdfLinksDone) {
       try {
         const [annotations, content] = await trackPdfOperation(pdf, () => Promise.all([
@@ -250,15 +284,39 @@ async function runJob(job: RecognitionJob) {
     if (!qrLinksDone && !job.cancelled) {
       let qrRaster: QrRaster | null = null
       try {
-        qrRaster = await renderQrRecognition(page, (cancel) => { job.cancelCurrent = cancel }).finally(() => { job.cancelCurrent = undefined })
+        const lowResPixels = Math.min(2_097_152, Math.floor(viewerCanvasMemory.availableBytes() / 8))
+        if (lowResPixels < 160_000) throw new Error('QR analysis memory is temporarily unavailable.')
+        const lowResScale = qrRenderScale(page, 1400, lowResPixels)
+        const lowResWidth = Math.max(1, Math.ceil(page.getViewport({ scale: lowResScale }).width))
+        const lowResHeight = Math.max(1, Math.ceil(page.getViewport({ scale: lowResScale }).height))
+        qrRaster = await renderQrRaster(page, lowResScale, { left: 0, top: 0, right: lowResWidth, bottom: lowResHeight }, lowResWidth, lowResHeight, (cancel) => { job.cancelCurrent = cancel }).finally(() => { job.cancelCurrent = undefined })
         if (job.cancelled) return
         if (!qrRaster) throw new Error('QR analysis memory is temporarily unavailable.')
         worker = await createQrWorker()
         if (job.cancelled) return
-        qrLinks = await decodeQr(worker, qrRaster.pixels, (cancel) => { job.cancelCurrent = cancel }).finally(() => { job.cancelCurrent = undefined })
+        qrLinks = mapQrRasterLinks(await decodeQr(worker, qrRaster.pixels, (cancel) => { job.cancelCurrent = cancel }).finally(() => { job.cancelCurrent = undefined }), qrRaster)
+        qrInputMaxDimension = Math.max(qrRaster.pixels.width, qrRaster.pixels.height)
+        qrRaster.release()
+        qrRaster = null
+        if (!qrLinks.length && !job.cancelled) {
+          const highResPixels = Math.floor(viewerCanvasMemory.availableBytes() / 8)
+          if (highResPixels < 160_000) throw new Error('QR analysis memory is temporarily unavailable.')
+          const highResScale = qrRenderScale(page, 2800, highResPixels, PDF_QR_TILE_AREA_FRACTION)
+          const highResWidth = Math.max(1, Math.ceil(page.getViewport({ scale: highResScale }).width))
+          const highResHeight = Math.max(1, Math.ceil(page.getViewport({ scale: highResScale }).height))
+          for (const tile of getPdfQrTileBounds(highResWidth, highResHeight)) {
+            qrRaster = await renderQrRaster(page, highResScale, tile, highResWidth, highResHeight, (cancel) => { job.cancelCurrent = cancel }).finally(() => { job.cancelCurrent = undefined })
+            if (job.cancelled) return
+            if (!qrRaster) throw new Error('QR analysis memory is temporarily unavailable.')
+            const tileLinks = mapQrRasterLinks(await decodeQr(worker, qrRaster.pixels, (cancel) => { job.cancelCurrent = cancel }).finally(() => { job.cancelCurrent = undefined }), qrRaster)
+            for (const link of tileLinks) addUniqueQrLink(qrLinks, link)
+            qrInputMaxDimension = Math.max(qrInputMaxDimension, Math.max(qrRaster.pixels.width, qrRaster.pixels.height))
+            qrRaster.release()
+            qrRaster = null
+          }
+        }
         if (job.cancelled) return
         qrLinksDone = true
-        qrInputMaxDimension = Math.max(qrRaster.pixels.width, qrRaster.pixels.height)
         const result = resultFor(job, pdfLinksDone, pdfLinks, qrLinksDone, qrLinks, qrInputMaxDimension)
         publish(job, { kind: 'result', result })
         await saveResult(job, result)
@@ -316,10 +374,14 @@ document.addEventListener('visibilitychange', () => {
   if (document.visibilityState === 'hidden') for (const job of [...jobs.values()]) stopJob(job)
 })
 
-export function requestPdfPageRecognition(record: Pick<DocumentRecord, 'id' | 'pageCount' | 'pdf' | 'kind'>, pageNumber: number, viewerPdf: PDFDocumentProxy, activePage = false) {
+export function requestPdfPageRecognition(record: Pick<DocumentRecord, 'id' | 'pageCount' | 'pdf' | 'kind'>, pageNumber: number, viewerPdf: PDFDocumentProxy, activePage = false, force = false) {
   if (pageNumber < 1 || pageNumber > record.pageCount || reportPausedDocuments.has(record.id) || document.visibilityState !== 'visible') return false
   const key = record.id + ':' + pageNumber
-  const existing = jobs.get(key)
+  let existing = jobs.get(key)
+  if (existing && force) {
+    stopJob(existing)
+    existing = undefined
+  }
   if (existing) {
     existing.record = record
     existing.viewerPdf = viewerPdf
@@ -329,7 +391,7 @@ export function requestPdfPageRecognition(record: Pick<DocumentRecord, 'id' | 'p
     }
     return true
   }
-  const job: RecognitionJob = { key, record, pageNumber, viewerPdf, cancelled: false, yielded: false }
+  const job: RecognitionJob = { key, record, pageNumber, viewerPdf, cancelled: false, yielded: false, force }
   jobs.set(key, job)
   if (activePage) queue.unshift(job)
   else queue.push(job)

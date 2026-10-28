@@ -16,7 +16,7 @@ React·TypeScript·Vite·PDF.js·IndexedDB 기반이다. `App.tsx`는 시작·�
 | 카운터·타이머 시작 연동 | `CounterPanel.tsx`, `smartCounter.ts`, `counterAlertText.ts`, `timerCounterLink.ts` |
 | 작업시간·기록 패널 | `DocumentWorkTimer.tsx`, `WorkTimeRecordPanel.tsx`, `ReportWorkTime.tsx`, `workTime.ts` |
 | 보고서·출력 | `KnittingReport.tsx`, `StandaloneReportRoute.tsx`, `reportFormatting.ts`, `reportMeasurementSelection.ts`, `reportDates.ts`, `knittingReportPdf.ts`, `instagramCaption.ts`, `InstagramCaptionDialog.tsx`, `InstagramReportDialog.tsx` |
-| 사진·렌더 자원·인식 | `photoImages.ts`, `photoDocument.ts`, `pdfPageRenderQueue.ts`, `pdfRenderResources.ts`, `pdfRecognition.ts` |
+| PDF·사진·URL·QR 인식 | `photoImages.ts`, `photoDocument.ts`, `pdfPageRenderQueue.ts`, `pdfRenderResources.ts`, `pdfRecognition.ts`, `pdfRecognitionVersion.ts`, `qr.ts`, `qrDecode.ts`·Worker, `qrTileGrid.ts` |
 | 타입·영속화·호환성 | `types.ts`, `storage.ts`, `backup.ts`, `viewerCounterState.ts` |
 | UI·다국어 | `designTokens.ts`, `index.css`, `App.css`, `AppDesignSystem.css`, `locales/` |
 
@@ -29,14 +29,14 @@ React·TypeScript·Vite·PDF.js·IndexedDB 기반이다. `App.tsx`는 시작·�
 - `ViewerSnapshot`은 영역별 페이지·배율·중심·회전, 카운터·이력, 라벨·레일 순서를 보관한다.
 - `CounterSnapshot.knittingMode`는 선택 필드이며 누락값은 평면으로 정규화한다. 반복 카운터는 시작·종료 단, 목표 반복, 완료 단수와 별도 일반 카운터 연결 ID를 저장하며 진행 표시는 완료 단수에서 계산한다. 반복 `+`는 반복과 연결된 일반 숫자를 함께 저장하고 `−`는 반복만 되돌린다. IndexedDB는 v12이며 백업은 v16을 내보내고 v1~v16을 가져온다. 구버전 백업에서 타임랩 필드는 가져오기 전에 제거한다.
 - 자유 카운터는 단 단위만 사용한다. 기존 코·회 단위는 불러오기와 백업 복원에서 숫자·실행 취소 이력을 보존하며 단으로 정규화한다. 기존 단위 값은 구백업 검증용 타입에 유지한다. 저장·백업의 공통 카운터 호환성 변환은 `normalizeViewerCounterState`가 담당한다. 원래 단 단위의 메인 대상을 먼저 고른 뒤 현재 카운터와 실행 취소 이력을 정규화하며, 입력 검증·이력 한도와 DB 업그레이드는 각 경계에 유지한다.
-- UI의 색·글자·간격·모서리는 `designTokens.ts`와 `index.css`의 시맨틱 토큰을 따른다. 홈·보고서·차트·Viewer는 같은 기준을 사용하고 목록은 가로 구분선으로 나눈다. 문서·사진·저장된 작업 객체 색은 변경하지 않는다. 현재 공통 디자인 규칙은 `AppDesignSystem.css`에 두고 `App.css` 다음, `Home.css` 전에 불러와 우선순위를 유지한다. 작업 타이머 미니바와 카운터 팝업은 데스크톱에서 CSS scale `.75`를 사용하고 coarse-pointer에서는 배율을 해제해 팝업의 실제 너비 기준 글자 크기로 전환한다. 카운터 관리창 내부 선택 목록은 라디오·체크와 1px 구분선으로 표현한다. 보고서 편집의 평면 UI 규칙은 `KnittingReport.tsx`에서 불러오는 `ReportDesignSystem.css`가 담당한다.
-- 카운터 팝오버와 작업 타이머 미니바는 `CounterSnapshot`과 작업시간 상태를 표시한다. 미니바의 보조 알림은 진행 수치 위에, 연결된 `− / +`와 테두리 없는 `…`는 별도의 한 줄에 배치한다. 행의 `--counter-color`는 저장된 색을 받아 알림 글자·아이콘·연한 배경에 사용한다. 카운터 팝오버의 상단과 하단은 고정되고 본문만 스크롤한다.
+- UI의 색·글자·간격·모서리는 `designTokens.ts`와 `index.css`의 시맨틱 토큰을 따른다. 홈·보고서·차트·Viewer는 같은 기준을 사용하고 목록은 가로 구분선으로 나눈다. 문서·사진·저장된 작업 객체 색은 변경하지 않는다. 현재 공통 디자인 규칙은 `AppDesignSystem.css`에 두고 `App.css` 다음, `Home.css` 전에 불러와 우선순위를 유지한다. 카운터 관리 팝업은 데스크톱에서 CSS scale `.75`를 사용하고 coarse-pointer에서는 배율을 해제해 실제 너비 기준 글자 크기로 전환한다. 푸터의 카운터·타이머는 일반 레이아웃과 44px 조작 영역을 사용한다. 카운터 관리창 내부 선택 목록은 라디오·체크와 1px 구분선으로 표현한다. 보고서 편집의 평면 UI 규칙은 `KnittingReport.tsx`에서 불러오는 `ReportDesignSystem.css`가 담당한다.
+- 카운터 관리는 `CounterSnapshot`, 작업 타이머는 작업시간 상태를 표시한다. Viewer 푸터에는 메인 뒤에 고정 여부와 관계없이 모든 보조 카운터를 `counters` 순서로 두고 관리 버튼·타이머·페이지 도구를 배치한다. 종류별 진행값은 기존 카운터 상태에서 계산한다. 이름 버튼은 설정 편집으로, `− / +`는 기존 증감·완료 이력으로 연결한다. 상세 팝업은 연결 버튼 기준으로 Viewer 내부 스크롤과 크기 변경 때 재배치하며 버튼이 레일·화면에서 완전히 벗어나면 닫는다. 타이머 시간은 작업 기록 패널을 열고 재생·일시정지는 기존 저장·오류 복구 경로를 사용한다. 관리 팝오버의 상단과 하단은 고정되고 본문만 스크롤한다.
 - 카운터 팝오버는 카운터·설정 탭을 제공한다. 카운터 탭에서 보조 카운터의 설정 수정·복제·단일/다중 삭제·재정렬을 제공하며 순서는 `counters` 배열에 저장한다. 직접 줄임·늘림은 완료 작업 기록을 갱신해 메인 단 진행에서 중복되지 않게 한다. 완료 기록이 현재 메인 단을 가리키면 해당 작업 알림을 유지하고, 메인 단 이동 후에는 해제한다. 반복 변경과 모든 보조 직접 조작은 counter-only 이력으로 저장해 진행선·다른 카운터·페이지 작업을 건드리지 않는다. `counterAlertState`는 알림 문구와 보조 카운터 ID를 제공한다. 설정 탭에는 알림·타이머 연동만 둔다.
 - 팝오버는 마우스 헤더 드래그, 600px 미만 터치의 기존 롱프레스, 또는 터치 태블릿(주 포인터 coarse·화면 폭 600px 이상)의 상단 핸들 즉시 드래그로 이동한다. 드래그는 Pointer Events·pointer capture와 화면 좌표를 사용하고 안전 영역 안에서 제한한다. 태블릿 위치는 버전 키 `knitpeek:viewer-tool-positions:v1`에 사용 가능 이동 범위 비율로 도구별 저장한다. DB·백업에는 포함하지 않는다.
-- 터치 태블릿의 타이머·카운터 팝업 최소 너비는 각각 480px·360px이며 상단 조작은 한 줄로 유지한다. 태블릿에서는 우하단 44px 핸들 하나로 크기를 조절하고, 600px 미만 coarse-pointer는 기존 좌·우 하단 핸들을 유지한다. 포인터 캡처·프레임 단위 반영을 쓰고 취소·뷰포트 변경은 시작 크기로 복구한다. 기본 크기 선호는 버전 키 `knitpeek:viewer-tool-sizes:v1`에 브라우저 로컬 UI 설정으로 저장한다. Viewer 영역, visualViewport와 safe area 안에서 표시 위치·크기를 보정한다.
+- 터치 태블릿의 카운터 관리 팝업은 가용 영역에 맞춰 표시하고 기존 44px 핸들로 크기를 조절한다. 포인터 캡처·프레임 단위 반영을 쓰고 취소·뷰포트 변경은 시작 크기로 복구한다. 크기 선호는 버전 키 `knitpeek:viewer-tool-sizes:v1`에 브라우저 로컬 UI 설정으로 저장한다. Viewer 영역, visualViewport와 safe area 안에서 표시 위치·크기를 보정한다. 작업 타이머는 푸터에 표시하며 이전 위치·크기 저장값은 변경하지 않고 새 배치에 적용하지 않는다.
 - `thumbnailGroups`는 라벨 순서, `thumbnailRailOrder`는 최상위 페이지·그룹 위치다. 소속 변경과 순서를 함께 정리·저장한다.
-- 선택·팝오버·드래그 상태와 도안만 보기는 세션 UI 상태이며, 터치 태블릿 팝업 위치·크기만 브라우저 로컬 UI 설정이다. 도안만 보기는 타이머·카운터 패널 표시 상태·위치·크기를 보존하고, 우측 상단 UI 복원 버튼이나 Escape로 돌아오며 Viewer 재진입 때 기본 UI로 시작한다. 저장 오류·필기 한도 안내는 숨기지 않는다.
-- Viewer 가용 너비 600px 이하에서만 모바일 헤더·푸터·카운터/타이머 배치를 압축한다. CSS 동적 뷰포트 갱신과 safe area를 사용하며 저장 형식은 바꾸지 않는다.
+- 선택·팝오버·드래그 상태와 도안만 보기는 세션 UI 상태이며, 터치 태블릿 카운터 팝업 위치·크기만 브라우저 로컬 UI 설정이다. 도안만 보기는 카운터·타이머 푸터를 유지하고 페이지·배율·중심을 보존한다. 우측 상단 UI 복원 버튼이나 Escape로 돌아오며 Viewer 재진입 때 기본 UI로 시작한다. 저장 오류·필기 한도 안내는 숨기지 않는다.
+- Viewer 가용 너비 1023px 이하에서는 작업 도구와 페이지 도구를 두 줄로 배치하고, 600px 이하에서는 전체 카운터 목록과 관리·타이머·페이지 도구를 두 줄에 배치한다. 카운터 목록만 독립 가로 스크롤하며 관리·타이머·페이지 도구도 좁은 화면에서 접근할 수 있다. CSS 동적 뷰포트 갱신과 safe area를 사용하며 저장 형식은 바꾸지 않는다.
 - dirty 페이지는 순차 저장하고 이동·종료·탭 전환 시 flush한다. 메인 카운터·연결 진행선은 `saveViewerAndPageWorks`로 함께 저장한다. 반복과 보조 직접 조작은 페이지 작업을 읽거나 변경하지 않고 카운터 스냅샷·이력만 저장한다.
 - 페이지 읽기는 문서·페이지·요청 ID별로 추적한다. 실패를 빈 작업으로 대체하지 않고 준비 전 편집을 차단한다. 저장 실패 시 기존 데이터와 재시도 상태를 유지한다.
 - IndexedDB 불가 시 임시 메모리 경로를 사용하며 브라우저 종료 시 작업이 사라질 수 있음을 알린다.
@@ -50,7 +50,7 @@ React·TypeScript·Vite·PDF.js·IndexedDB 기반이다. `App.tsx`는 시작·�
 - `addDocumentWorkTime`은 날짜별 수동 증가분만 합산하고 타이머 세션을 만들지 않는다.
 - 작업 기록의 날짜별 초기화는 해당 날짜의 합계·세션만 제거하고 메모를 보존하며, 전체 초기화는 합계·세션 전체를 비운다. Viewer 타이머는 초기화 전에 저장하고 실행 중이면 새 세션으로 이어간다.
 - 표시 시간 = 저장된 오늘 합계 − 현재 Viewer에서 이미 저장한 세션 시간 + 현재 Viewer의 오늘 측정 시간. 수동 추가 후 일시정지에서도 중복 합산하지 않는다.
-- Floating Bar는 600px 미만 터치에서 기존 450ms 롱프레스 후 이동하고, 터치 태블릿은 상단 핸들에서 즉시 이동한다. 포인터 캡처와 animation frame으로 위치를 갱신하며 태블릿의 확정 위치는 별도 브라우저 UI 설정에 저장한다.
+- 작업 타이머는 Viewer 푸터 안에서 이동·크기 조절 없이 표시한다. 기존 위치·크기 저장값은 유지하며 푸터 표시 위치에는 반영하지 않는다.
 - 카운터 타이머 시작 모드는 `auto/ask-once/independent`이며 기본은 `ask-once`다. 모드·확인 선택은 preference에 저장한다.
 - 저장하고 나가기는 조작을 잠그고 진행 중 저장→타이머→최신 페이지·카운터·뷰어 저장을 완료한 뒤 `/projects`로 이동한다.
 
@@ -72,7 +72,7 @@ React·TypeScript·Vite·PDF.js·IndexedDB 기반이다. `App.tsx`는 시작·�
 - 진행선 레이어는 텍스트·필기·강조 위에 있고 선 hit target만 이벤트를 받는다. 선 팝업은 변형되지 않는 Viewer 영역에 표시하고, 정규화된 선 기준점을 화면 좌표로 바꿔 위치를 유지한다. 핀치와 Viewer 배율 버튼 조작 중에는 열어 두며 팝업 입력은 페이지 제스처로 전파하지 않는다. Escape·바깥 클릭과 포커스 복원을 유지한다.
 - 썸네일 드래그 좌표·자동 스크롤은 ref·requestAnimationFrame으로 처리하며 대상 변경 때 UI를 갱신한다. 접힌 그룹과 화면 밖 썸네일 렌더를 제한한다.
 - 사진은 시그니처·EXIF를 확인하고 한 장씩 최대 2560px·6MP JPEG·320px 표지로 처리한다.
-- PDF 링크·텍스트 URL·QR은 Viewer에서 표시한 페이지를 300ms 안정 후 순차 인식한다. 완료 캐시는 즉시 재사용하고, 두 영역 보기에서는 활성 페이지를 먼저 분석하며 화면 전환·백그라운드에서 취소한다. URL 영역은 이동 도구에서만 클릭하고 8px 초과 드래그·핀치에서는 열지 않는다. QR은 저우선순위 렌더 큐와 1400px·2MP 상한을 사용한다.
+- PDF 링크·텍스트 URL·QR은 Viewer에서 표시한 페이지를 300ms 안정 후 순차 인식한다. 인식 캐시 v2는 DB 버전과 별개이며, v1 링크는 재분석 중 유지한다. 완료 캐시는 즉시 재사용하고 페이지 메뉴에서 현재 페이지를 다시 검사할 수 있다. 두 영역 보기에서는 활성 페이지를 먼저 분석하며 화면 전환·백그라운드에서 취소한다. URL 영역은 이동 도구에서만 클릭하고 8px 초과 드래그·핀치에서는 열지 않는다. QR은 저우선순위 렌더 큐에서 1400px 전체 검사 후 2×3 영역을 40% 겹쳐 검사한다. 미검출 시 최대 2800px 긴 변으로 다시 렌더하고 같은 영역을 순차 검사하며, 모든 단계가 성공한 경우에만 완료 캐시를 저장한다. URL 텍스트는 HTTP·HTTPS와 `www.` 주소를 지원하며 줄바꿈은 인접성·위치 조건이 맞을 때 연결한다.
 - 터치 정책 기기의 비활성 탭은 PDF/Worker를 해제하고 저장한 영역 상태로 재개한다.
 
 ## 브랜드·홈페이지·전달

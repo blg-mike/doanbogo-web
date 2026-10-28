@@ -33,11 +33,25 @@ export function isCurrentQrScanGeneration(capturedGeneration: number, currentGen
 
 export function safeQrHref(value: string) {
   try {
-    const url = new URL(value.trim())
+    const trimmed = value.trim()
+    const url = new URL(/^www\./i.test(trimmed) ? `https://${trimmed}` : trimmed)
     return url.protocol === 'http:' || url.protocol === 'https:' ? url.href : null
   } catch {
     return null
   }
+}
+
+function trimUrlSentencePunctuation(value: string) {
+  let result = value
+  let previous = ''
+  while (result && result !== previous) {
+    previous = result
+    result = result.replace(/[.,;!?]+$/, '')
+    const openingParentheses = (result.match(/\(/g) ?? []).length
+    const closingParentheses = (result.match(/\)/g) ?? []).length
+    if (result.endsWith(')') && closingParentheses > openingParentheses) result = result.slice(0, -1)
+  }
+  return result
 }
 
 export function shouldOpenLinkAfterGesture(startX: number, startY: number, endX: number, endY: number, pinched = false) {
@@ -70,7 +84,9 @@ export function extractPdfPageLinks(annotations: PdfExternalLinkAnnotation[], te
     return region ? [{ ...region, href }] : []
   })
 
-  const lines: { y: number; height: number; runs: { str: string; x: number; y: number; width: number; height: number }[] }[] = []
+  type TextRun = { str: string; x: number; y: number; width: number; height: number }
+  type TextSpan = { start: number; end: number; run: TextRun }
+  const lines: { y: number; height: number; runs: TextRun[] }[] = []
   for (const item of textRuns) {
     if (!item.str || !item.transform || item.transform.length < 6 || !Number.isFinite(item.width)) continue
     const height = Math.max(1, item.height ?? Math.hypot(item.transform[2], item.transform[3]))
@@ -85,11 +101,10 @@ export function extractPdfPageLinks(annotations: PdfExternalLinkAnnotation[], te
     line.height = Math.max(line.height, run.height)
   }
 
-  const textLinks: PdfQrLink[] = []
-  for (const line of lines) {
+  const textLines = lines.map((line) => {
     line.runs.sort((first, second) => first.x - second.x)
     let text = ''
-    const spans: { start: number; end: number; run: typeof line.runs[number] }[] = []
+    const spans: TextSpan[] = []
     let previousRight: number | null = null
     let previousText = ''
     for (const run of line.runs) {
@@ -103,22 +118,55 @@ export function extractPdfPageLinks(annotations: PdfExternalLinkAnnotation[], te
       previousText = run.str
     }
 
-    for (const match of text.matchAll(/https?:\/\/[^\s<>"']+/gi)) {
-      const raw = (match[0] ?? '').replace(/[),.;!?]+$/, '')
-      const href = safeQrHref(raw)
+    return { ...line, text, spans }
+  })
+
+  const textLinks: PdfQrLink[] = []
+  const readingLines = [...textLines].sort((first, second) => second.y - first.y)
+  for (let lineIndex = 0; lineIndex < readingLines.length; lineIndex++) {
+    const line = readingLines[lineIndex]
+    for (const match of line.text.matchAll(/(?:https?:\/\/|www\.)[^\s<>"']+/gi)) {
+      let raw = trimUrlSentencePunctuation(match[0] ?? '')
       const start = match.index ?? -1
-      if (!href || start < 0 || !raw) continue
-      const end = start + raw.length
-      const bounds = spans.flatMap((span) => {
-        const overlapStart = Math.max(start, span.start)
-        const overlapEnd = Math.min(end, span.end)
+      if (start < 0 || !raw) continue
+      const ranges: { line: typeof line; start: number; end: number }[] = [{ line, start, end: start + raw.length }]
+      const nextLine = readingLines[lineIndex + 1]
+      const isAtLineEnd = /^[),.;!?\s]*$/.test(line.text.slice(start + raw.length))
+      const nextPrefixMatch = nextLine?.text.match(/^([A-Za-z0-9/%?#&=+_.~-]+)(?:\s|$)/)
+      const nextPrefix = nextPrefixMatch?.[1]
+      if (nextLine && isAtLineEnd && nextPrefix && !/^(?:https?:\/\/|www\.)/i.test(nextPrefix)) {
+        const gap = line.y - nextLine.y
+        const startRun = line.spans.find((span) => start >= span.start && start < span.end)?.run
+        const firstRight = line.spans.flatMap((span) => {
+          const overlapStart = Math.max(start, span.start)
+          const overlapEnd = Math.min(start + raw.length, span.end)
+          if (overlapEnd <= overlapStart) return []
+          const charCount = Math.max(1, span.end - span.start)
+          return [span.run.x + span.run.width * (overlapEnd - span.start) / charCount]
+        }).at(-1) ?? 0
+        const nextStart = nextLine.runs[0]?.x ?? Infinity
+        const nearPageEdge = firstRight >= viewport.width * 0.78
+        const hasExplicitContinuation = /[/?#&=]$/.test(raw) && /^[A-Za-z]/.test(nextPrefix)
+        const urlLikeContinuation = /[0-9/%?#&=+_.~-]/.test(nextPrefix) || hasExplicitContinuation
+        const linesAreAdjacent = gap > 0 && gap <= Math.max(line.height, nextLine.height) * 1.8
+        const linesAreAligned = startRun !== undefined && Math.abs(nextStart - startRun.x) <= Math.max(line.height * 1.5, 6)
+        if (nearPageEdge && urlLikeContinuation && linesAreAdjacent && linesAreAligned) {
+          raw += nextPrefix
+          ranges.push({ line: nextLine, start: 0, end: nextPrefix.length })
+        }
+      }
+      const href = safeQrHref(raw)
+      if (!href) continue
+      const bounds = ranges.flatMap(({ line: sourceLine, start: rangeStart, end: rangeEnd }) => sourceLine.spans.flatMap((span) => {
+        const overlapStart = Math.max(rangeStart, span.start)
+        const overlapEnd = Math.min(rangeEnd, span.end)
         if (overlapEnd <= overlapStart) return []
         const run = span.run
         const charCount = Math.max(1, span.end - span.start)
         const left = run.x + run.width * (overlapStart - span.start) / charCount
         const right = run.x + run.width * (overlapEnd - span.start) / charCount
         return [[Math.min(left, right), run.y - run.height * 0.2, Math.max(left, right), run.y + run.height * 0.8]]
-      })
+      }))
       if (!bounds.length) continue
       const pdfRect = [Math.min(...bounds.map((rect) => rect[0])), Math.min(...bounds.map((rect) => rect[1])), Math.max(...bounds.map((rect) => rect[2])), Math.max(...bounds.map((rect) => rect[3]))]
       const region = normalizeRect(pdfRect, viewport)

@@ -76,6 +76,7 @@ export const nb: Record<string, string> = {
   "단위": "Enhet",
   "단": "Omganger",
   "코": "Masker",
+  "바퀴": "Runder",
   "회": "Ganger",
   "현재 숫자": "Gjeldende tall",
   "목표 없이 계속 뜨기": "Fortsett uten mål",

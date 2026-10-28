@@ -1,8 +1,8 @@
 import { formatNumber, t, translateMessage } from './locales/index'
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type DragEvent as ReactDragEvent, type FormEvent as ReactFormEvent, type MouseEvent as ReactMouseEvent, type PointerEvent as ReactPointerEvent, type ReactNode, type UIEvent as ReactUIEvent } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type DragEvent as ReactDragEvent, type FormEvent as ReactFormEvent, type MouseEvent as ReactMouseEvent, type PointerEvent as ReactPointerEvent, type ReactNode, type UIEvent as ReactUIEvent } from 'react'
 import type { PDFDocumentProxy } from 'pdfjs-dist'
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
-import { ArrowLeft, Bell, Bookmark, Check, ChevronDown, ChevronLeft, ChevronRight, ChevronUp, Columns2, Copy, Eraser, Eye, EyeClosed, EyeOff, Files, Focus, Grid3X3, GripVertical, Highlighter, Maximize2, Minus, Minimize2, MoreHorizontal, MoveDiagonal, MousePointer2, Pencil, Plus, Redo2, RefreshCw, ScanLine, Settings2, Square, Trash2, Type, Undo2, X } from 'lucide-react'
+import { ArrowLeft, Bookmark, Check, ChevronDown, ChevronLeft, ChevronRight, ChevronUp, Columns2, Eraser, Eye, EyeClosed, EyeOff, Files, Focus, Grid3X3, Highlighter, Maximize2, Minus, Minimize2, MoreHorizontal, MousePointer2, Pencil, Plus, Redo2, RefreshCw, ScanLine, Settings2, Square, Type, Undo2, X } from 'lucide-react'
 import { createPortal } from 'react-dom'
 import BrandLoading from './BrandLoading'
 import yyLogo from './assets/yy-logo.png'
@@ -13,12 +13,13 @@ import { pdfPageRenderQueue } from './pdfPageRenderQueue'
 import { openPdf, pdfErrorMessage } from './pdf'
 import { openPhotoDocument } from './photoDocument'
 import KnittingReport from './KnittingReport'
-import type { AnnotationSettings, AnnotationStyle, AnnotationTool, ColorworkCreateRequest, ColorworkSettings, CounterHistoryEntry, CounterSnapshot, CounterTimerLinkMode, DocumentRecord, DocumentWorkTimeDay, PageRecord, PageRotation, PageWorkRecord, PaneId, PaneSnapshot, ProgressGuide, ProgressSettings, ThumbnailGroup, ThumbnailRailOrderItem, ViewerSnapshot } from './types'
+import type { AnnotationSettings, AnnotationStyle, AnnotationTool, ColorworkCreateRequest, ColorworkSettings, CounterHistoryEntry, CounterSnapshot, CounterTimerLinkMode, DocumentRecord, DocumentWorkTimeDay, PageRecognitionRecord, PageRecord, PageRotation, PageWorkRecord, PaneId, PaneSnapshot, ProgressGuide, ProgressSettings, ThumbnailGroup, ThumbnailRailOrderItem, ViewerSnapshot } from './types'
 import { defaultColorworkSettings, getColorworkDimensions, resizeColorworkGrid } from './colorwork'
-import { MAX_COUNTERS_PER_TYPE, MAX_COUNTER_HISTORY, MAX_COUNTER_ROW, advanceLinkedCounters, counterAlertState, counterSideForRow, createCounter, duplicateCounterSnapshot, findCounterRewindCheckpoint, maxCountersForType, nextPatternAlertRow, normalizeCounterSnapshots, progressGuideForCounter, reanchorProgressGuideForCounter, repeatCounterProgress, repeatCounterStepBlock, restoreCounterGroup, setCounterGroupRow, stepAuxiliaryCounter, stepRepeatCounter } from './smartCounter'
+import { MAX_COUNTER_HISTORY, MAX_COUNTER_ROW, advanceLinkedCounters, counterAlertState, counterSideForRow, createCounter, findCounterRewindCheckpoint, normalizeCounterSnapshots, progressGuideForCounter, reanchorProgressGuideForCounter, repeatCounterProgress, repeatCounterStepBlock, restoreCounterGroup, setCounterGroupRow, stepAuxiliaryCounter, stepRepeatCounter } from './smartCounter'
 import { CounterStepButton } from './CounterStepButton'
+import { counterFooterName } from './counterFooterDisplay'
 import CounterPanel from './CounterPanel'
-import { repeatCounterBlockLabel, translateCounterAlert } from './counterAlertText'
+import { repeatCounterBlockLabel } from './counterAlertText'
 import DocumentWorkTimer, { type DocumentTimerClock, type DocumentWorkTimeTotals } from './DocumentWorkTimer'
 import { isCounterTimerLinkMode, resolveCounterTimerAction, type CounterTimerChoice } from './timerCounterLink'
 import type { PdfQrLink } from './qr'
@@ -37,12 +38,7 @@ import { useDismissiblePopover } from './useDismissiblePopover'
 import { getRequiredPageWorkPages, loadPageWorkWithTimeout, PageWorkLoadTimeoutError } from './pageWorkLoading'
 import { normalizeWorkTimeDays } from './workTime'
 import { nearestZoomLevel, stepZoomLevel, ZOOM_LEVELS } from './viewerInteraction'
-import { getDefaultViewerPopupSize, getViewerPopupSize, getViewerPopupSizeClass, readViewerPopupAvailableBounds, viewerPopupDragMoved, type ViewerPopupRect } from './viewerPopupResize'
-import { readViewerToolSize, saveViewerToolSize, type ViewerToolSize } from './viewerToolSizes'
-import { useViewerPopupResize } from './useViewerPopupResize'
-import { useTouchTablet } from './useTouchTablet'
-import { useViewerPopupDrag } from './useViewerPopupDrag'
-import { createViewerToolPosition, getViewerToolPosition, readViewerToolPosition, saveViewerToolPosition, type ViewerToolPosition } from './viewerToolPositions'
+import { PDF_RECOGNITION_VERSION } from './pdfRecognitionVersion'
 
 type Size = { width: number; height: number }
 type WorkAction = { before?: PageWorkRecord; after?: PageWorkRecord; cellChanges?: ColorworkCellChange[] }
@@ -93,8 +89,6 @@ type ThumbnailReorderGesture = {
   target?: ThumbnailReorderTarget
 }
 type CounterGuideAction = { kind: 'advance' | 'correct'; pageNumber: number; guideId: string }
-type TimerBarDrag = { pointerId: number; offsetX: number; offsetY: number; startX: number; startY: number; bar: HTMLElement; shell: HTMLElement; clientX: number; clientY: number; frameId: number | null }
-type TimerBarPress = { pointerId: number; startX: number; startY: number; bar: HTMLElement; shell: HTMLElement; timerId: number; active: boolean; cleanup: () => void }
 function createCounterSession(documentId: string) { return { documentId, visible: false } }
 
 const defaultProgressSettings: ProgressSettings = {
@@ -307,51 +301,13 @@ export default function Viewer() {
   const [counterTimerPromptSaving, setCounterTimerPromptSaving] = useState(false)
   const [counterTimerPromptError, setCounterTimerPromptError] = useState('')
   const [timerPortalHost, setTimerPortalHost] = useState<HTMLDivElement | null>(null)
-  const coarsePointer = typeof window !== 'undefined' && window.matchMedia('(pointer: coarse)').matches
-  const touchTablet = useTouchTablet()
-  const [preferredTimerSize, setPreferredTimerSize] = useState<ViewerToolSize | null>(() => readViewerToolSize('timerBar'))
-  const [preferredTimerPosition, setPreferredTimerPosition] = useState<ViewerToolPosition | null>(() => readViewerToolPosition('timerBar'))
-  const [displayedTimerSize, setDisplayedTimerSize] = useState<ViewerToolSize | null>(null)
-  const timerBarRef = useRef<HTMLDivElement>(null)
-  const timerRestoreButtonRef = useRef<HTMLButtonElement>(null)
-  const timerRestorePointerRef = useRef<{ pointerId: number; startX: number; startY: number; moved: boolean } | null>(null)
-  const timerRestorePositionRef = useRef(false)
-  const [timerBarState, setTimerBarState] = useState<{ documentId: string; left: number | null; top: number }>(() => ({ documentId: id, left: null, top: 12 }))
-  if (timerBarState.documentId !== id) {
-    setTimerBarState({ documentId: id, left: null, top: 12 })
-    timerRestorePositionRef.current = false
-    timerRestorePointerRef.current = null
-  }
-  const timerBarPosition = timerBarState.documentId === id ? timerBarState : { documentId: id, left: null, top: 12 }
-  const [timerMinimizedUi, setTimerMinimizedUi] = useState(() => ({ documentId: id, minimized: false }))
-  if (timerMinimizedUi.documentId !== id) setTimerMinimizedUi({ documentId: id, minimized: false })
-  const timerMinimized = timerMinimizedUi.documentId === id && timerMinimizedUi.minimized
   const [timerErrorUi, setTimerErrorUi] = useState(() => ({ documentId: id, hasError: false }))
   if (timerErrorUi.documentId !== id) setTimerErrorUi({ documentId: id, hasError: false })
-  const timerSaveError = timerErrorUi.documentId === id && timerErrorUi.hasError
-  const timerBarPositioned = timerBarPosition.left !== null
-  const timerBarDragRef = useRef<TimerBarDrag | null>(null)
-  const timerBarPressRef = useRef<TimerBarPress | null>(null)
-  const timerBarResizeActiveRef = useRef(false)
-  const timerTabletDragActiveRef = useRef(false)
-  const timerBarClickSuppressUntilRef = useRef(0)
-  useEffect(() => () => {
-    timerBarPressRef.current?.cleanup()
-    const drag = timerBarDragRef.current
-    if (drag?.frameId !== null && drag?.frameId !== undefined) cancelAnimationFrame(drag.frameId)
-    drag?.bar.classList.remove('is-dragging')
-    timerBarDragRef.current = null
-  }, [])
   const [timerHasUnsaved, setTimerHasUnsaved] = useState(false)
   const [timerSaving, setTimerSaving] = useState(false)
   const [counterActionSaving, setCounterActionSaving] = useState(false)
   const [counterSettingsSaving, setCounterSettingsSaving] = useState(false)
   const [counterPanelRequest, setCounterPanelRequest] = useState<{ id: number; action: 'add' | 'edit'; counterId?: string }>({ id: 0, action: 'add' })
-  const [counterDeleteToastId, setCounterDeleteToastId] = useState<string | null>(null)
-  const counterDeleteToastTimerRef = useRef<number | undefined>(undefined)
-  useEffect(() => () => {
-    if (counterDeleteToastTimerRef.current !== undefined) window.clearTimeout(counterDeleteToastTimerRef.current)
-  }, [])
   const [exitPromptOpen, setExitPromptOpen] = useState(false)
   const [exitPromptTarget, setExitPromptTarget] = useState<'home' | 'report'>('home')
   const [timerSessionKey, setTimerSessionKey] = useState(0)
@@ -450,19 +406,12 @@ export default function Viewer() {
   const mainCounter = mainCounterBases.find((counter) => counter.id === snapshot?.counterMainId) ?? mainCounterBases[0]
   const mainCounterCanStepBack = Boolean(snapshot && mainCounter && mainCounter.value > 1 && findCounterRewindCheckpoint(snapshot.counterHistory ?? [], counters, mainCounter.id, mainCounter.value - 1))
   const auxiliaryCounters = counters.filter((counter) => counter.id !== mainCounter?.id)
-  const [counterDetailsUi, setCounterDetailsUi] = useState(() => ({ documentId: id, expanded: true }))
-  const counterDetailsExpanded = counterDetailsUi.documentId === id ? counterDetailsUi.expanded : true
-  const setCounterDetailsExpanded = (next: boolean | ((expanded: boolean) => boolean)) => setCounterDetailsUi((current) => ({
-    documentId: id,
-    expanded: typeof next === 'function' ? next(current.documentId === id ? current.expanded : true) : next,
-  }))
   const [counterRowEditing, setCounterRowEditing] = useState(false)
   const [counterRowDraft, setCounterRowDraft] = useState('1')
   const counterRowInputRef = useRef<HTMLInputElement>(null)
   const skipCounterRowBlurRef = useRef(false)
   const currentCounterAlerts = snapshot ? counterAlertState(counters, snapshot.counterMainId, snapshot.counterPreviewEnabled === true) : { key: '', messages: [] as string[], alerts: [] as { counterId: string; message: string }[] }
   const counterAlertPending = Boolean(currentCounterAlerts.key && snapshot?.counterAlertAcknowledged !== currentCounterAlerts.key)
-  const miniBarAlerts = currentCounterAlerts.alerts.filter((alert) => !counterDetailsExpanded || alert.counterId === mainCounter?.id)
   const [pages, setPages] = useState<PageRecord[]>([])
   const [thumbnailUi, setThumbnailUi] = useState<{ documentId: string; selection: ThumbnailSelection | null }>(() => ({ documentId: id, selection: null }))
   const thumbnailSelection = thumbnailUi.documentId === id ? thumbnailUi.selection : null
@@ -537,12 +486,15 @@ export default function Viewer() {
   const [pdfLinksByPage, setPdfLinksByPage] = useState<Record<number, PdfQrLink[]>>({})
   const pdfLinkPagesRef = useRef(new Map<number, true>())
   const recognitionLoadPendingRef = useRef(new Set<string>())
+  const recognitionCacheLoadedRef = useRef(new Set<number>())
+  const recognitionStateRef = useRef(new Map<number, Pick<PageRecognitionRecord, 'version' | 'pdfLinksDone' | 'qrLinksDone'>>())
   const [qrLinksByPage, setQrLinksByPage] = useState<Record<number, PdfQrLink[]>>({})
   const qrLinksRef = useRef(new Map<number, PdfQrLink[]>())
   const recognitionRecordRef = useRef<Pick<DocumentRecord, 'id' | 'pageCount' | 'pdf' | 'kind'> | null>(null)
   const recognitionRequestTimerRef = useRef<number | undefined>(undefined)
   const recognitionRequestViewKeyRef = useRef('')
   const [recognitionErrorPages, setRecognitionErrorPages] = useState<Record<number, true>>({})
+  const [recognitionRescanPages, setRecognitionRescanPages] = useState<Record<number, true>>({})
   const [recognitionVisible, setRecognitionVisible] = useState(false)
   const [loading, setLoading] = useState(true)
   const [loadError, setLoadError] = useState<{ id: string; message: string } | null>(null)
@@ -725,8 +677,12 @@ export default function Viewer() {
     const activePage = current[current.activePane].page
     const otherPane = current.activePane === 'primary' ? 'secondary' : 'primary'
     const visiblePages = orderVisibleRecognitionPages(activePage, current.split ? [current[otherPane].page] : [])
+    setRecognitionRescanPages((pending) => Object.keys(pending).some((page) => !visiblePages.includes(Number(page)))
+      ? Object.fromEntries(Object.entries(pending).filter(([page]) => visiblePages.includes(Number(page))))
+      : pending)
     for (const pageNumber of visiblePages) {
-      if (pdfLinkPagesRef.current.has(pageNumber) && qrLinksRef.current.has(pageNumber)) continue
+      const recognition = recognitionStateRef.current.get(pageNumber)
+      if (recognition?.version === PDF_RECOGNITION_VERSION && recognition.pdfLinksDone && recognition.qrLinksDone) continue
       requestPdfPageRecognition(record, pageNumber, viewerPdf, pageNumber === activePage)
     }
   }, [id, reportMode])
@@ -745,12 +701,17 @@ export default function Viewer() {
     const scanKey = id + ':' + pageNumber
     if (reportMode || viewerLifecycleRef.current !== 'active') return
     scheduleVisibleRecognition()
-    if (pdfLinkPagesRef.current.has(pageNumber) && qrLinksRef.current.has(pageNumber) || recognitionLoadPendingRef.current.has(scanKey)) return
+    if (recognitionStateRef.current.get(pageNumber)?.version === PDF_RECOGNITION_VERSION && recognitionStateRef.current.get(pageNumber)?.pdfLinksDone && recognitionStateRef.current.get(pageNumber)?.qrLinksDone || recognitionCacheLoadedRef.current.has(pageNumber) || recognitionLoadPendingRef.current.has(scanKey)) return
     recognitionLoadPendingRef.current.add(scanKey)
     const task = (async () => {
       const storedRecognition = await getPageRecognition(id, pageNumber).catch(() => undefined)
-      const cached = storedRecognition?.version === 1 ? storedRecognition : undefined
+      recognitionCacheLoadedRef.current.add(pageNumber)
       if (viewerLifecycleRef.current !== 'active' || recognitionRecordRef.current?.id !== id) return
+      if (recognitionStateRef.current.get(pageNumber)?.version === PDF_RECOGNITION_VERSION && recognitionStateRef.current.get(pageNumber)?.pdfLinksDone && recognitionStateRef.current.get(pageNumber)?.qrLinksDone) return
+      const cached = storedRecognition?.version === 1 || storedRecognition?.version === PDF_RECOGNITION_VERSION ? storedRecognition : undefined
+      if (cached && (!recognitionStateRef.current.has(pageNumber) || (recognitionStateRef.current.get(pageNumber)?.version ?? 0) <= cached.version)) {
+        recognitionStateRef.current.set(pageNumber, { version: cached.version, pdfLinksDone: cached.pdfLinksDone, qrLinksDone: cached.qrLinksDone })
+      }
 
       if (!pdfLinkPagesRef.current.has(pageNumber) && cached?.pdfLinksDone) {
         rememberRecentPage(pdfLinkPagesRef.current, pageNumber, true)
@@ -771,9 +732,16 @@ export default function Viewer() {
   useEffect(() => subscribePdfRecognition((documentId, pageNumber, result) => {
     if (documentId !== id || viewerLifecycleRef.current !== 'active') return
     if (result.kind === 'error') {
+      setRecognitionRescanPages((current) => {
+        if (!current[pageNumber]) return current
+        const next = { ...current }
+        delete next[pageNumber]
+        return next
+      })
       setRecognitionErrorPages((current) => ({ ...current, [pageNumber]: true }))
       return
     }
+    recognitionStateRef.current.set(pageNumber, { version: result.result.version, pdfLinksDone: result.result.pdfLinksDone, qrLinksDone: result.result.qrLinksDone })
     if (result.result.pdfLinksDone) {
       rememberRecentPage(pdfLinkPagesRef.current, pageNumber, true)
       setPdfLinksByPage((current) => withRecentPdfLinks(current, pageNumber, result.result.pdfLinks))
@@ -783,6 +751,12 @@ export default function Viewer() {
       setQrLinksByPage((current) => withRecentPdfLinks(current, pageNumber, result.result.qrLinks))
     }
     if (result.result.pdfLinksDone && result.result.qrLinksDone) {
+      setRecognitionRescanPages((current) => {
+        if (!current[pageNumber]) return current
+        const next = { ...current }
+        delete next[pageNumber]
+        return next
+      })
       setRecognitionErrorPages((current) => {
         if (!current[pageNumber]) return current
         const next = { ...current }
@@ -791,6 +765,12 @@ export default function Viewer() {
       })
     }
   }), [id])
+
+  useEffect(() => {
+    const clearPendingWhenHidden = () => { if (document.visibilityState === 'hidden') setRecognitionRescanPages({}) }
+    document.addEventListener('visibilitychange', clearPendingWhenHidden)
+    return () => document.removeEventListener('visibilitychange', clearPendingWhenHidden)
+  }, [])
 
   useEffect(() => {
     const linkTasks = linkTasksRef.current
@@ -856,8 +836,11 @@ export default function Viewer() {
       recognitionRecordRef.current = { id, pageCount: record.pageCount, pdf: record.pdf, kind: record.kind }
       pdfLinkPagesRef.current.clear()
       recognitionLoadPendingRef.current.clear()
+      recognitionCacheLoadedRef.current.clear()
+      recognitionStateRef.current.clear()
       qrLinksRef.current.clear()
       setRecognitionErrorPages({})
+      setRecognitionRescanPages({})
       session = { pdf: opened.document, dispose: opened.dispose, released: false }
       pdfSessionRef.current = session
       if (firstOpen) {
@@ -1064,96 +1047,6 @@ export default function Viewer() {
     }
   }, [pdf, loading])
 
-  useEffect(() => {
-    if (!timerBarPositioned || reportMode || timerMinimized) return
-    const shell = viewerShellRef.current
-    const bar = shell?.querySelector<HTMLElement>('.viewer-timer-bar')
-    if (!shell || !bar) return
-    const clampPosition = () => {
-      if (timerMinimized || timerBarResizeActiveRef.current || timerTabletDragActiveRef.current) return
-      const shellRect = shell.getBoundingClientRect()
-      const barRect = bar.getBoundingClientRect()
-      const bounds = coarsePointer ? readViewerPopupAvailableBounds(shell) : null
-      const minLeft = bounds ? bounds.left - shellRect.left : 0
-      const minTop = bounds ? bounds.top - shellRect.top : window.matchMedia('(max-width: 600px)').matches ? 44 : 0
-      const maxLeft = bounds ? bounds.left + bounds.width - shellRect.left - barRect.width : Math.max(0, shellRect.width - barRect.width)
-      const maxTop = bounds ? bounds.top + bounds.height - shellRect.top - barRect.height : Math.max(0, shellRect.height - barRect.height)
-      const savedPosition = touchTablet && bounds && preferredTimerPosition && displayedTimerSize && !timerRestorePositionRef.current
-        ? getViewerToolPosition(bounds, displayedTimerSize, preferredTimerPosition)
-        : null
-      setTimerBarState((current) => {
-        if (current.documentId !== id || current.left === null) return current
-        const left = savedPosition ? savedPosition.left - shellRect.left : clamp(current.left, minLeft, Math.max(minLeft, maxLeft))
-        const top = savedPosition ? savedPosition.top - shellRect.top : clamp(current.top, minTop, Math.max(minTop, maxTop))
-        return left === current.left && top === current.top ? current : { ...current, left, top }
-      })
-    }
-    const observer = new ResizeObserver(clampPosition)
-    observer.observe(shell)
-    observer.observe(bar)
-    window.addEventListener('resize', clampPosition)
-    window.visualViewport?.addEventListener('resize', clampPosition)
-    return () => {
-      observer.disconnect()
-      window.removeEventListener('resize', clampPosition)
-      window.visualViewport?.removeEventListener('resize', clampPosition)
-    }
-  }, [coarsePointer, displayedTimerSize, id, preferredTimerPosition, reportMode, timerBarPositioned, timerMinimized, touchTablet])
-
-  useLayoutEffect(() => {
-    if (!coarsePointer || reportMode) return
-    const shell = viewerShellRef.current
-    const bar = shell?.querySelector<HTMLElement>('.viewer-timer-bar')
-    if (!shell || !bar) return
-    const updateSize = () => {
-      if (timerMinimized || timerBarResizeActiveRef.current || timerTabletDragActiveRef.current) return
-      const bounds = readViewerPopupAvailableBounds(shell)
-      if (!bounds) return
-      const topRows = ['.viewer-counter-tools', '.viewer-timer-portal-host']
-        .map((selector) => bar.querySelector<HTMLElement>(selector)?.getBoundingClientRect().height ?? 0)
-      const detailsHeader = bar.querySelector<HTMLElement>('.viewer-counter-details-header')?.getBoundingClientRect().height ?? 44
-      const minHeight = Math.ceil(Math.max(...topRows, 44) + detailsHeader + (counterDetailsExpanded ? 96 + 44 : 0) + 24)
-      const minWidth = touchTablet ? 480 : 260
-      const preferred = preferredTimerSize ?? getDefaultViewerPopupSize('timerBar', bounds, minHeight, minWidth)
-      const size = preferred ? getViewerPopupSize(preferred, bounds, minHeight, minWidth) : null
-      if (!size) return
-      setDisplayedTimerSize((current) => current?.width === size.width && current.height === size.height ? current : size)
-      const shellRect = shell.getBoundingClientRect()
-      const minLeft = bounds.left - shellRect.left
-      const minTop = bounds.top - shellRect.top
-      const maxLeft = bounds.left + bounds.width - shellRect.left - size.width
-      const maxTop = bounds.top + bounds.height - shellRect.top - (counterDetailsExpanded ? size.height : bar.getBoundingClientRect().height)
-      const barRect = bar.getBoundingClientRect()
-      const savedPosition = touchTablet && preferredTimerPosition && !timerRestorePositionRef.current
-          ? getViewerToolPosition(bounds, size, preferredTimerPosition)
-          : null
-      const baseLeft = timerBarPosition.left ?? (savedPosition ? savedPosition.left - shellRect.left : barRect.left - shellRect.left)
-      const baseTop = timerBarPosition.left === null ? (savedPosition ? savedPosition.top - shellRect.top : barRect.top - shellRect.top) : timerBarPosition.top
-      const left = clamp(baseLeft, minLeft, Math.max(minLeft, maxLeft))
-      const top = clamp(baseTop, minTop, Math.max(minTop, maxTop))
-      if (timerRestorePositionRef.current) {
-        const position = touchTablet ? createViewerToolPosition(bounds, { left: shellRect.left + left, top: shellRect.top + top, width: size.width, height: size.height }) : null
-        if (position) {
-          saveViewerToolPosition('timerBar', position)
-          setPreferredTimerPosition(position)
-        }
-        timerRestorePositionRef.current = false
-      }
-      setTimerBarState((current) => current.documentId !== id || left === current.left && top === current.top ? current : { ...current, left, top })
-    }
-    updateSize()
-    const observer = new ResizeObserver(updateSize)
-    observer.observe(shell)
-    observer.observe(bar)
-    window.addEventListener('resize', updateSize)
-    window.visualViewport?.addEventListener('resize', updateSize)
-    return () => {
-      observer.disconnect()
-      window.removeEventListener('resize', updateSize)
-      window.visualViewport?.removeEventListener('resize', updateSize)
-    }
-  }, [coarsePointer, counterDetailsExpanded, id, loadedId, pdf, preferredTimerPosition, preferredTimerSize, reportMode, timerBarPosition.left, timerBarPosition.top, timerMinimized, timerPortalHost, touchTablet])
-
   const orientation = areaSize.width >= areaSize.height ? 'wide' : 'tall'
   const ratio = snapshot ? (orientation === 'wide' ? snapshot.wideRatio : snapshot.tallRatio) : 0.5
   const activePage = snapshot ? snapshot[snapshot.activePane].page : 1
@@ -1210,7 +1103,9 @@ export default function Viewer() {
       delete next[pageNumber]
       return next
     })
-    requestPdfPageRecognition(record, pageNumber, viewerPdf, current[current.activePane].page === pageNumber)
+    setRecognitionRescanPages((pending) => ({ ...pending, [pageNumber]: true }))
+    const accepted = requestPdfPageRecognition(record, pageNumber, viewerPdf, current[current.activePane].page === pageNumber, true)
+    if (!accepted) setRecognitionRescanPages((pending) => { const next = { ...pending }; delete next[pageNumber]; return next })
   }, [id])
   useEffect(() => {
     if (!miniBarOpen) return
@@ -1613,38 +1508,6 @@ export default function Viewer() {
     setCounterPanelRequest((current) => ({ id: current.id + 1, action, ...(counterId ? { counterId } : {}) }))
     updateCounterSnapshot({ counterPanelCollapsed: false })
     setSavedCounterSession({ documentId: id, visible: true })
-  }
-
-  async function duplicateCounterAction(counterId: string) {
-    const current = snapshotRef.current
-    if (!current) return false
-    const currentCounters = normalizeCounterSnapshots(current.counters)
-    const selected = currentCounters.find((counter) => counter.id === counterId)
-    if (!selected || maxCountersForType(currentCounters, selected.kind) >= MAX_COUNTERS_PER_TYPE) return false
-    const duplicate = duplicateCounterSnapshot(selected, `${selected.name} (${t('복사본')})`)
-    const next = [...currentCounters]
-    next.splice(next.findIndex((counter) => counter.id === selected.id) + 1, 0, duplicate)
-    return (await updateCounterPanel(next, '카운터 복제')) !== false
-  }
-
-  async function deleteCounterAction(counterId: string) {
-    const current = snapshotRef.current
-    if (!current) return false
-    const currentCounters = normalizeCounterSnapshots(current.counters)
-    const selected = currentCounters.find((counter) => counter.id === counterId)
-    if (!selected || !window.confirm(t('카운터를 삭제할까요?') + ' (' + formatNumber(1) + ')\n' + selected.name)) return false
-    const next = currentCounters.filter((counter) => counter.id !== selected.id).map((counter) => ({
-      ...counter,
-      ...(counter.linkedToId === selected.id ? { linkedToId: undefined } : {}),
-      ...(counter.repeatLinkedToId === selected.id ? { repeatLinkedToId: undefined } : {}),
-    }))
-    const deleted = (await updateCounterPanel(next, '카운터 삭제')) !== false
-    if (deleted) {
-      setCounterDeleteToastId(snapshotRef.current?.counterHistory?.at(-1)?.id ?? null)
-      if (counterDeleteToastTimerRef.current !== undefined) window.clearTimeout(counterDeleteToastTimerRef.current)
-      counterDeleteToastTimerRef.current = window.setTimeout(() => setCounterDeleteToastId(null), 6000)
-    }
-    return deleted
   }
 
   function counterGuideCorrection(current: ViewerSnapshot, nextCounters: CounterSnapshot[]): CounterGuideAction | undefined {
@@ -2513,304 +2376,6 @@ export default function Viewer() {
     setSplitPreview(ratio)
   }
 
-  function beginTimerBarDrag(event: ReactPointerEvent<HTMLButtonElement>) {
-    if (event.pointerType === 'touch' || event.pointerType === 'mouse' && event.button !== 0) return
-    const shell = viewerShellRef.current
-    const bar = event.currentTarget.closest<HTMLElement>('.viewer-timer-bar')
-    if (!shell || !bar) return
-    event.preventDefault()
-    const shellRect = shell.getBoundingClientRect()
-    const barRect = bar.getBoundingClientRect()
-    const left = clamp(barRect.left - shellRect.left, 0, Math.max(0, shellRect.width - barRect.width))
-    const minTop = window.matchMedia('(max-width: 600px)').matches ? 44 : 0
-    const top = clamp(barRect.top - shellRect.top, minTop, Math.max(minTop, shellRect.height - barRect.height))
-    setTimerBarState({ documentId: id, left, top })
-    bar.style.left = left + 'px'
-    bar.style.top = top + 'px'
-    bar.style.right = 'auto'
-    timerBarDragRef.current = { pointerId: event.pointerId, offsetX: event.clientX - barRect.left, offsetY: event.clientY - barRect.top, startX: event.clientX, startY: event.clientY, bar, shell, clientX: event.clientX, clientY: event.clientY, frameId: null }
-    bar.classList.add('is-dragging')
-    event.currentTarget.setPointerCapture(event.pointerId)
-  }
-
-  function moveTimerBarDrag(event: ReactPointerEvent<HTMLButtonElement>) {
-    const drag = timerBarDragRef.current
-    if (!drag || drag.pointerId !== event.pointerId) return
-    if (event.currentTarget.classList.contains('viewer-timer-restore') && viewerPopupDragMoved(drag.startX, drag.startY, event.clientX, event.clientY)) timerBarClickSuppressUntilRef.current = Date.now() + 700
-    scheduleTimerBarPosition(drag, event.clientX, event.clientY)
-  }
-
-  function finishTimerBarDrag(event: ReactPointerEvent<HTMLButtonElement>) {
-    finishTimerBarDragById(event.pointerId, event.clientX, event.clientY)
-  }
-
-  function applyTimerBarPosition(drag: TimerBarDrag, clientX: number, clientY: number) {
-    const shellRect = drag.shell.getBoundingClientRect()
-    const left = clamp(clientX - shellRect.left - drag.offsetX, 0, Math.max(0, shellRect.width - drag.bar.getBoundingClientRect().width))
-    const minTop = window.matchMedia('(max-width: 600px)').matches ? 44 : 0
-    const top = clamp(clientY - shellRect.top - drag.offsetY, minTop, Math.max(minTop, shellRect.height - drag.bar.getBoundingClientRect().height))
-    drag.bar.style.left = left + 'px'
-    drag.bar.style.top = top + 'px'
-    drag.bar.style.right = 'auto'
-    return { left, top }
-  }
-
-  function scheduleTimerBarPosition(drag: TimerBarDrag, clientX: number, clientY: number) {
-    drag.clientX = clientX
-    drag.clientY = clientY
-    if (drag.frameId !== null) return
-    drag.frameId = requestAnimationFrame(() => {
-      drag.frameId = null
-      if (timerBarDragRef.current === drag) applyTimerBarPosition(drag, drag.clientX, drag.clientY)
-    })
-  }
-
-  function startTimerBarDrag(pointerId: number, bar: HTMLElement, shell: HTMLElement, clientX: number, clientY: number) {
-    const shellRect = shell.getBoundingClientRect()
-    const barRect = bar.getBoundingClientRect()
-    const left = clamp(barRect.left - shellRect.left, 0, Math.max(0, shellRect.width - barRect.width))
-    const minTop = window.matchMedia('(max-width: 600px)').matches ? 44 : 0
-    const top = clamp(barRect.top - shellRect.top, minTop, Math.max(minTop, shellRect.height - barRect.height))
-    setTimerBarState({ documentId: id, left, top })
-    bar.style.left = left + 'px'
-    bar.style.top = top + 'px'
-    bar.style.right = 'auto'
-    bar.classList.add('is-dragging')
-    timerBarDragRef.current = { pointerId, offsetX: clientX - barRect.left, offsetY: clientY - barRect.top, startX: clientX, startY: clientY, bar, shell, clientX, clientY, frameId: null }
-  }
-
-  function finishTimerBarDragById(pointerId: number, clientX?: number, clientY?: number) {
-    const drag = timerBarDragRef.current
-    if (!drag || drag.pointerId !== pointerId) return
-    if (drag.frameId !== null) cancelAnimationFrame(drag.frameId)
-    drag.frameId = null
-    const pointX = clientX ?? drag.clientX
-    const pointY = clientY ?? drag.clientY
-    const position = applyTimerBarPosition(drag, pointX, pointY)
-    drag.bar.classList.remove('is-dragging')
-    setTimerBarState({ documentId: id, ...position })
-    timerBarDragRef.current = null
-  }
-
-  function beginTimerBarTouchPress(event: ReactPointerEvent<HTMLDivElement>) {
-    if (touchTablet || event.pointerType !== 'touch') return
-    const target = event.target instanceof HTMLElement ? event.target : null
-    if (!target || !target.closest('.viewer-floating-drag-handle, .viewer-timer-restore') || target.closest('input,textarea,select,[contenteditable="true"],.viewer-counter-details,.viewer-timer-resize-handle')) return
-    const shell = viewerShellRef.current
-    if (!shell) return
-    const bar = event.currentTarget
-    const press: TimerBarPress = { pointerId: event.pointerId, startX: event.clientX, startY: event.clientY, bar, shell, timerId: 0, active: false, cleanup: () => undefined }
-    const cleanup = () => {
-      window.clearTimeout(press.timerId)
-      window.removeEventListener('pointermove', move, true)
-      window.removeEventListener('pointerup', finish, true)
-      window.removeEventListener('pointercancel', finish, true)
-      window.removeEventListener('resize', cancel, true)
-      bar.removeEventListener('lostpointercapture', finish)
-      if (timerBarPressRef.current === press) timerBarPressRef.current = null
-    }
-    const move = (pointer: PointerEvent) => {
-      if (pointer.pointerId !== press.pointerId) return
-      if (!press.active && Math.hypot(pointer.clientX - press.startX, pointer.clientY - press.startY) > 8) {
-        cleanup()
-        return
-      }
-      if (press.active) {
-        const drag = timerBarDragRef.current
-        if (drag?.pointerId === press.pointerId) scheduleTimerBarPosition(drag, pointer.clientX, pointer.clientY)
-      }
-    }
-    const finish = (pointer: Event) => {
-      if ('pointerId' in pointer && pointer.pointerId !== press.pointerId) return
-      if (press.active) {
-        const point = pointer instanceof PointerEvent ? pointer : undefined
-        finishTimerBarDragById(press.pointerId, point?.clientX, point?.clientY)
-      }
-      cleanup()
-    }
-    const cancel = () => finish(new Event('cancel'))
-    press.cleanup = cleanup
-    timerBarPressRef.current = press
-    press.timerId = window.setTimeout(() => {
-      if (timerBarPressRef.current !== press) return
-      press.active = true
-      timerBarClickSuppressUntilRef.current = Date.now() + 700
-      startTimerBarDrag(press.pointerId, bar, shell, press.startX, press.startY)
-      try { bar.setPointerCapture(press.pointerId) } catch { /* Window listeners retain the drag if capture is unavailable. */ }
-    }, 450)
-    window.addEventListener('pointermove', move, true)
-    window.addEventListener('pointerup', finish, true)
-    window.addEventListener('pointercancel', finish, true)
-    window.addEventListener('resize', cancel, true)
-    bar.addEventListener('lostpointercapture', finish)
-  }
-
-  function applyTimerPopupResize(rect: ViewerPopupRect) {
-    const shell = viewerShellRef.current
-    const bar = shell?.querySelector<HTMLElement>('.viewer-timer-bar')
-    if (!shell || !bar) return
-    const shellRect = shell.getBoundingClientRect()
-    bar.style.left = rect.left - shellRect.left + 'px'
-    bar.style.top = rect.top - shellRect.top + 'px'
-    bar.style.right = 'auto'
-    bar.style.width = rect.width + 'px'
-    bar.style.height = rect.height + 'px'
-    bar.style.maxWidth = 'none'
-    bar.style.maxHeight = 'none'
-    bar.dataset.popupSize = getViewerPopupSizeClass(rect.width)
-    bar.classList.add('positioned')
-  }
-
-  function applyTimerPopupDrag(rect: ViewerPopupRect) {
-    const shell = viewerShellRef.current
-    const bar = timerBarRef.current
-    if (!shell || !bar) return
-    const shellRect = shell.getBoundingClientRect()
-    bar.style.left = rect.left - shellRect.left + 'px'
-    bar.style.top = rect.top - shellRect.top + 'px'
-    bar.style.right = 'auto'
-    bar.classList.add('positioned')
-  }
-
-  const timerTabletDrag = useViewerPopupDrag({
-    enabled: touchTablet && !reportMode,
-    elementRef: timerBarRef,
-    getBounds: () => {
-      const shell = viewerShellRef.current
-      return shell ? readViewerPopupAvailableBounds(shell) : null
-    },
-    onStart: (rect) => {
-      timerTabletDragActiveRef.current = true
-      const shellRect = viewerShellRef.current?.getBoundingClientRect()
-      if (shellRect) setTimerBarState({ documentId: id, left: rect.left - shellRect.left, top: rect.top - shellRect.top })
-      timerBarRef.current?.classList.add('is-dragging')
-      applyTimerPopupDrag(rect)
-    },
-    onApply: applyTimerPopupDrag,
-    onCommit: (rect, bounds, moved) => {
-      timerTabletDragActiveRef.current = false
-      const shellRect = viewerShellRef.current?.getBoundingClientRect()
-      if (shellRect) setTimerBarState({ documentId: id, left: rect.left - shellRect.left, top: rect.top - shellRect.top })
-      const position = createViewerToolPosition(bounds, rect)
-      if (moved && !timerMinimized && position) {
-        saveViewerToolPosition('timerBar', position)
-        setPreferredTimerPosition(position)
-      }
-      if (moved) timerBarClickSuppressUntilRef.current = Date.now() + 700
-      timerBarRef.current?.classList.remove('is-dragging')
-    },
-    onCancel: (rect) => {
-      timerTabletDragActiveRef.current = false
-      const shellRect = viewerShellRef.current?.getBoundingClientRect()
-      if (shellRect) setTimerBarState({ documentId: id, left: rect.left - shellRect.left, top: rect.top - shellRect.top })
-      applyTimerPopupDrag(rect)
-      timerBarRef.current?.classList.remove('is-dragging')
-    },
-  })
-
-  function handleTimerBarDrag(event: ReactPointerEvent<HTMLButtonElement>) {
-    if (touchTablet) timerTabletDrag.onPointerDown(event)
-    else beginTimerBarDrag(event)
-  }
-
-  function minimizeTimerPopover() {
-    const shell = viewerShellRef.current
-    const bar = timerBarRef.current
-    if (shell && bar) {
-      const shellRect = shell.getBoundingClientRect()
-      const barRect = bar.getBoundingClientRect()
-      setTimerBarState({ documentId: id, left: barRect.left - shellRect.left, top: barRect.top - shellRect.top })
-    }
-    setTimerMinimizedUi({ documentId: id, minimized: true })
-  }
-
-  function restoreTimerPopover() {
-    if (!timerMinimized) return
-    timerRestorePositionRef.current = touchTablet && !reportMode
-    setTimerMinimizedUi({ documentId: id, minimized: false })
-  }
-
-  function beginTimerRestorePointer(event: ReactPointerEvent<HTMLButtonElement>) {
-    timerRestorePointerRef.current = { pointerId: event.pointerId, startX: event.clientX, startY: event.clientY, moved: false }
-    handleTimerBarDrag(event)
-  }
-
-  function moveTimerRestorePointer(event: ReactPointerEvent<HTMLButtonElement>) {
-    const pointer = timerRestorePointerRef.current
-    if (pointer?.pointerId === event.pointerId && viewerPopupDragMoved(pointer.startX, pointer.startY, event.clientX, event.clientY)) pointer.moved = true
-    moveTimerBarDrag(event)
-  }
-
-  function finishTimerRestorePointer(event: ReactPointerEvent<HTMLButtonElement>) {
-    const pointer = timerRestorePointerRef.current
-    if (pointer?.pointerId === event.pointerId && viewerPopupDragMoved(pointer.startX, pointer.startY, event.clientX, event.clientY)) pointer.moved = true
-    finishTimerBarDrag(event)
-    if (pointer?.pointerId === event.pointerId) {
-      if (pointer.moved) timerBarClickSuppressUntilRef.current = Date.now() + 700
-      else restoreTimerPopover()
-      timerRestorePointerRef.current = null
-    }
-  }
-
-  function cancelTimerRestorePointer(event: ReactPointerEvent<HTMLButtonElement>) {
-    finishTimerBarDrag(event)
-    if (timerRestorePointerRef.current?.pointerId === event.pointerId) timerRestorePointerRef.current = null
-  }
-
-  function beginTimerPopupResize(rect: ViewerPopupRect) {
-    timerTabletDrag.cancel()
-    timerBarPressRef.current?.cleanup()
-    const drag = timerBarDragRef.current
-    if (drag?.frameId !== null && drag?.frameId !== undefined) cancelAnimationFrame(drag.frameId)
-    drag?.bar.classList.remove('is-dragging')
-    timerBarDragRef.current = null
-    timerBarResizeActiveRef.current = true
-    const shellRect = viewerShellRef.current?.getBoundingClientRect()
-    if (shellRect) setTimerBarState({ documentId: id, left: rect.left - shellRect.left, top: rect.top - shellRect.top })
-  }
-
-  function getTimerPopupMinimumHeight() {
-    const bar = viewerShellRef.current?.querySelector<HTMLElement>('.viewer-timer-bar')
-    if (!bar) return 180
-    const topRows = ['.viewer-counter-tools', '.viewer-timer-portal-host']
-      .map((selector) => bar.querySelector<HTMLElement>(selector)?.getBoundingClientRect().height ?? 0)
-    const detailsHeader = bar.querySelector<HTMLElement>('.viewer-counter-details-header')?.getBoundingClientRect().height ?? 44
-    return Math.ceil(Math.max(...topRows, 44) + detailsHeader + 96 + 44 + 24)
-  }
-
-  const timerResizeHandleProps = useViewerPopupResize({
-    enabled: coarsePointer && !reportMode && counterDetailsExpanded,
-    elementRef: timerBarRef,
-    getBounds: () => {
-      const shell = viewerShellRef.current
-      return shell ? readViewerPopupAvailableBounds(shell) : null
-    },
-    getMinWidth: () => touchTablet ? 480 : 260,
-    getMinHeight: getTimerPopupMinimumHeight,
-    onStart: beginTimerPopupResize,
-    onApply: applyTimerPopupResize,
-    onCommit: (rect) => {
-      timerBarResizeActiveRef.current = false
-      const size = { width: rect.width, height: rect.height }
-      setDisplayedTimerSize(size)
-      saveViewerToolSize('timerBar', size)
-      setPreferredTimerSize(size)
-      const shell = viewerShellRef.current
-      const bounds = shell ? readViewerPopupAvailableBounds(shell) : null
-      const position = bounds ? createViewerToolPosition(bounds, rect) : null
-      if (touchTablet && position) {
-        saveViewerToolPosition('timerBar', position)
-        setPreferredTimerPosition(position)
-      }
-      const shellRect = viewerShellRef.current?.getBoundingClientRect()
-      if (shellRect) setTimerBarState({ documentId: id, left: rect.left - shellRect.left, top: rect.top - shellRect.top })
-    },
-    onCancel: (rect) => {
-      timerBarResizeActiveRef.current = false
-      applyTimerPopupResize(rect)
-    },
-  })
-
   function moveDivider(event: ReactPointerEvent<HTMLButtonElement>) {
     const drag = dragRef.current
     if (!drag || drag.pointerId !== event.pointerId) return
@@ -3333,7 +2898,7 @@ export default function Viewer() {
   }
 
   const timerPortalTarget = loadError?.id === id || suspended || loading || loadedId !== id || !pdf || !snapshot ? null : timerPortalHost
-  const timerElement = <DocumentWorkTimer key={id + ':' + timerSessionKey} documentId={id} initialTotalWorkTimeMs={documentWorkTimeMs} initialWorkTimeDays={documentWorkTimeDays} initialTodayWorkDate={todayWorkDate} initialTodayWorkTimeMs={todayWorkTimeMs} portalTarget={timerPortalTarget} counterMiniBarLayout={!reportMode} minimized={timerMinimized} restoreButtonRef={timerRestoreButtonRef} onMinimize={minimizeTimerPopover} onErrorChange={onTimerErrorChange} onWorkTimeChange={onTimerWorkTimeChange} onTodayWorkTimeChange={onTimerTodayWorkTimeChange} onUnsavedChange={onTimerUnsavedChange} onSavingChange={onTimerSavingChange} onClockChange={onTimerClockChange} recordPanelOpen={workTimeRecordOpen} onRecordPanelOpenChange={onWorkTimeRecordOpenChange} onRecordPanelBlockingChange={onWorkTimePanelBlockingChange} />
+  const timerElement = <DocumentWorkTimer key={id + ':' + timerSessionKey} documentId={id} initialTotalWorkTimeMs={documentWorkTimeMs} initialWorkTimeDays={documentWorkTimeDays} initialTodayWorkDate={todayWorkDate} initialTodayWorkTimeMs={todayWorkTimeMs} portalTarget={timerPortalTarget} counterMiniBarLayout={!reportMode} minimized={false} onErrorChange={onTimerErrorChange} onWorkTimeChange={onTimerWorkTimeChange} onTodayWorkTimeChange={onTimerTodayWorkTimeChange} onUnsavedChange={onTimerUnsavedChange} onSavingChange={onTimerSavingChange} onClockChange={onTimerClockChange} recordPanelOpen={workTimeRecordOpen} onRecordPanelOpenChange={onWorkTimeRecordOpenChange} onRecordPanelBlockingChange={onWorkTimePanelBlockingChange} />
   const requestReportExit = () => {
     if (timerSaving) return
     if (timerHasUnsaved) {
@@ -3378,6 +2943,7 @@ export default function Viewer() {
                 <button type="button" role="menuitem" disabled={!canRedo} onClick={() => { setHeaderMoreOpen(false); undoRedo('redo') }}><Redo2 size={18} /><span>{t('다시 실행')}</span></button>
                 <button type="button" role="menuitem" className={snapshot.split ? 'selected' : ''} aria-pressed={snapshot.split} onClick={() => { setHeaderMoreOpen(false); toggleSplit() }}><Columns2 size={18} /><span>{snapshot.split ? t('한 영역 보기') : t('두 영역 보기')}</span></button>
                 <button type="button" role="menuitem" data-focus-view-trigger disabled={focusViewBlocked} onClick={toggleFocusView}><Focus size={18} /><span>{t('도안만 보기')}</span></button>
+                <button type="button" role="menuitem" disabled={!pdf || Boolean(recognitionRescanPages[activePage])} onClick={() => { setHeaderMoreOpen(false); retryPageRecognition(activePage) }}><ScanLine size={18} /><span>{t('QR·링크 다시 검사')}</span></button>
               </div>}
             </div>
           </>}
@@ -3392,7 +2958,7 @@ export default function Viewer() {
           <div className="split-section split-section-secondary" style={orientation === 'wide' ? { flex: '0 0 ' + splitBasis(1 - displayedRatio) } : { width: '100%', flex: '0 0 ' + splitBasis(1 - displayedRatio) }}>{renderPane('secondary', snapshot.secondary, snapshot.activePane === 'secondary')}</div>
         </> : renderPane(snapshot.activePane, snapshot[snapshot.activePane], true)}
         </div>
-        {!reportMode && counterPanelVisible && <CounterPanel snapshot={snapshot} counters={counters} timerLinkMode={counterTimerMode} counterPanelRequest={counterPanelRequest} onChange={updateCounterPanel} onUndo={undoCounterAction} onRepeatStep={stepRepeatCounterAction} onCounterStep={stepAuxiliaryCounterAction} counterActionSaving={counterActionSaving} onSettingsSave={saveCounterSettings} onTimerLinkModeChange={changeCounterTimerLinkMode} onSnapshotUpdate={updateCounterSnapshot} triggerRef={counterPanelFocusRef} onSavingChange={setCounterSettingsSaving} onClose={() => { setSavedCounterSession({ documentId: id, visible: false }); setCounterSettingsSaving(false); requestAnimationFrame(() => counterPanelFocusRef.current?.focus()) }} />}
+        {!reportMode && counterPanelVisible && <CounterPanel snapshot={snapshot} counters={counters} timerLinkMode={counterTimerMode} counterPanelRequest={counterPanelRequest} onChange={updateCounterPanel} onUndo={undoCounterAction} onRepeatStep={stepRepeatCounterAction} onCounterStep={stepAuxiliaryCounterAction} counterActionSaving={counterActionSaving} onSettingsSave={saveCounterSettings} onTimerLinkModeChange={changeCounterTimerLinkMode} onSnapshotUpdate={updateCounterSnapshot} triggerRef={counterPanelFocusRef} onSavingChange={setCounterSettingsSaving} onClose={() => { setSavedCounterSession({ documentId: id, visible: false }); setCounterSettingsSaving(false) }} />}
       </section>
       <section className={'viewer-footer' + (thumbnailCollapsed ? ' thumbnail-collapsed' : '')}>
         <div id={thumbnailContentId} className="thumbnail-content" hidden={thumbnailCollapsed || focusView}>
@@ -3458,6 +3024,78 @@ export default function Viewer() {
         </div>}
         </>}
         </div>
+        <div className="viewer-footer-control-row">
+        {!reportMode && <div className="viewer-footer-work-tools" role="group" aria-label={t('카운터')}>
+          <div className="viewer-footer-work-main">
+            {mainCounter && <div className="viewer-footer-work-counter" style={{ '--counter-color': mainCounter.color } as CSSProperties}>
+              <span className="viewer-footer-work-aux-color" style={{ background: mainCounter.color }} aria-hidden="true" />
+              <button type="button" className="viewer-footer-work-counter-name" aria-label={`${mainCounter.name} · ${t('설정 수정')}`} title={mainCounter.name} disabled={counterSettingsSaving} onClick={(event) => { counterPanelFocusRef.current = event.currentTarget; requestCounterPanelAction('edit', mainCounter.id) }}>{counterFooterName(mainCounter.name)}</button>
+              <div className="viewer-footer-work-stepper" role="group" aria-label={mainCounter.name}>
+                <button type="button" className="viewer-mini-counter-step" aria-label={t('이전 단으로 되돌리기')} title={mainCounterCanStepBack ? t('이전 단으로 되돌리기') : t('정확한 복원 이력이 없습니다')} disabled={!mainCounterCanStepBack || counterActionSaving} onClick={() => { if (mainCounter.value > 1) rewindCounter(mainCounter.id, mainCounter.value - 1) }}><Minus size={18} /></button>
+                {counterRowEditing
+                  ? <input ref={counterRowInputRef} className="viewer-mini-counter-row-input" aria-label={t('단 번호 입력')} type="number" inputMode="numeric" min="1" max={MAX_COUNTER_ROW} step="1" autoFocus disabled={counterActionSaving} value={counterRowDraft} onChange={(event) => setCounterRowDraft(event.currentTarget.value)} onBlur={() => { if (skipCounterRowBlurRef.current) { skipCounterRowBlurRef.current = false; return } finishCounterRowEdit() }} onKeyDown={(event) => {
+                    if (event.key === 'Enter') { event.preventDefault(); event.currentTarget.blur() }
+                    if (event.key === 'Escape') { event.preventDefault(); skipCounterRowBlurRef.current = true; setCounterRowDraft(String(mainCounter.value)); setCounterRowEditing(false); event.currentTarget.blur() }
+                  }} />
+                  : <button type="button" className="viewer-mini-counter-row" aria-label={t('현재 단 입력')} title={t('현재 단 입력')} disabled={counterActionSaving} onClick={beginCounterRowEdit}><strong>{formatNumber(mainCounter.value)}</strong><small>{counterSideForRow(mainCounter, mainCounter.value).toUpperCase()}</small></button>}
+                <button type="button" className="viewer-mini-counter-step" aria-label={t('현재 단 완료 후 다음 단으로 이동')} title={t('현재 단 완료 후 다음 단으로 이동')} disabled={counterActionSaving || mainCounter.goalCompleted === true || mainCounter.value >= MAX_COUNTER_ROW && mainCounter.goalRow !== mainCounter.value} onClick={() => advanceCounterGroup(mainCounter.id)}><Plus size={18} /></button>
+              </div>
+            </div>}
+            <div className="viewer-footer-work-aux-list" role="group" aria-label={t('보조 카운터')}>
+              {auxiliaryCounters.map((counter) => {
+                const repeatProgress = counter.kind === 'repeat' ? repeatCounterProgress(counter) : null
+                const repeatBlock = counter.kind === 'repeat' ? repeatCounterStepBlock(counters, counter.id, 1) : null
+                const decreaseDisabled = counter.kind === 'simple' ? counter.value <= 0 : counter.kind === 'task' ? (counter.completedCount ?? 0) <= 0 : counter.kind === 'repeat' ? counter.value <= 0 : false
+                const increaseDisabled = counter.kind === 'task' ? (counter.completedCount ?? 0) >= (counter.total ?? 0) : counter.kind === 'repeat' ? repeatProgress?.complete === true || Boolean(repeatBlock) : false
+                const unitLabel = counter.unit === 'stitch' ? t('코') : counter.unit === 'round' ? t('바퀴') : ''
+                const value = counter.kind === 'task'
+                  ? `${formatNumber(counter.completedCount ?? 0)}/${formatNumber(counter.total ?? 0)}${t('회')}`
+                  : counter.kind === 'pattern'
+                  ? `${formatNumber(counter.patternRow ?? 1)}/${formatNumber(counter.repeatLength ?? 1)}`
+                    : counter.kind === 'repeat'
+                      ? `${formatNumber(repeatProgress?.completedRows ?? 0)}/${formatNumber(repeatProgress?.totalRows ?? 0)}`
+                      : `${formatNumber(counter.value)}${unitLabel}`
+                const step = (direction: -1 | 1) => counter.kind === 'repeat' ? stepRepeatCounterAction(counter.id, direction) : stepAuxiliaryCounterAction(counter.id, direction)
+                return <div className="viewer-footer-work-aux-counter" style={{ '--counter-color': counter.color } as CSSProperties} key={counter.id}>
+                  <span className="viewer-footer-work-aux-color" style={{ background: counter.color }} aria-hidden="true" />
+                  <button type="button" className="viewer-footer-work-counter-name" aria-label={`${counter.name} · ${t('설정 수정')}`} title={counter.name} disabled={counterSettingsSaving} onClick={(event) => { counterPanelFocusRef.current = event.currentTarget; requestCounterPanelAction('edit', counter.id) }}>{counterFooterName(counter.name)}</button>
+                  <div className="viewer-footer-work-stepper" role="group" aria-label={counter.name}>
+                    <CounterStepButton className="viewer-mini-counter-step" label={`${counter.name} · ${t('보조 카운터 줄이기')}`} disabled={counterActionSaving || decreaseDisabled} onStep={() => step(-1)}><Minus size={18} /></CounterStepButton>
+                    <span className="viewer-footer-work-value" aria-label={value}>{value}</span>
+                    <CounterStepButton className="viewer-mini-counter-step" label={`${counter.name} · ${t('보조 카운터 늘리기')}`} title={repeatBlock ? repeatCounterBlockLabel(repeatBlock) ?? undefined : undefined} disabled={counterActionSaving || increaseDisabled} onStep={() => step(1)}><Plus size={18} /></CounterStepButton>
+                  </div>
+                </div>
+              })}
+            </div>
+          </div>
+          <div className="viewer-footer-work-secondary">
+            <button ref={counterPanelFocusRef} type="button" className="viewer-footer-work-manage" aria-label={t('카운터 관리')} title={t('카운터 관리')} aria-pressed={counterPanelVisible} disabled={counterSettingsSaving} onClick={(event) => { counterPanelFocusRef.current = event.currentTarget; setSavedCounterSession({ documentId: id, visible: !counterPanelVisible }) }}><Settings2 size={18} />{counterAlertPending && <i className="counter-notification-dot" aria-hidden="true" />}</button>
+            <div className="viewer-footer-work-timer" role="group" aria-label={t('작업 타이머')}><div className="viewer-timer-portal-host" ref={setTimerPortalHost} /></div>
+            {!reportMode && <div className="viewer-footer-mobile-controls">
+          <button type="button" className="viewer-page-control-button" aria-label={t('이전')} title={t('이전')} disabled={activeVisiblePageIndex <= 0} onClick={() => navigateVisiblePage(-1)}><ChevronLeft size={20} /></button>
+          <span className="viewer-footer-page-count" aria-label={t('페이지') + ' ' + activePage + ' / ' + pdf.numPages} title={t('페이지') + ' ' + activePage + ' / ' + pdf.numPages}>{formatNumber(activePage)} / {formatNumber(pdf.numPages)}</span>
+          <button type="button" className="viewer-page-control-button" aria-label={t('다음')} title={t('다음')} disabled={activeVisiblePageIndex < 0 || activeVisiblePageIndex >= visiblePageNumbers.length - 1} onClick={() => navigateVisiblePage(1)}><ChevronRight size={20} /></button>
+          <div className="viewer-mobile-menu-anchor">
+            <button ref={zoomMenuTriggerRef} type="button" className="viewer-mobile-zoom-trigger" aria-haspopup="menu" aria-expanded={zoomMenuOpen} aria-label={t('확대 배율 {zoom}%', { zoom: Math.round(activeZoom * 100) })} title={t('확대 배율 {zoom}%', { zoom: Math.round(activeZoom * 100) })} onClick={() => setZoomMenuOpen((open) => !open)}>{Math.round(activeZoom * 100)}%</button>
+            {zoomMenuOpen && <div ref={zoomMenuPanelRef} className="viewer-compact-menu viewer-zoom-menu" role="menu" aria-label={t('확대 배율 {zoom}%', { zoom: Math.round(activeZoom * 100) })}>
+              <div className="viewer-zoom-presets" role="group" aria-label={t('확대 배율 {zoom}%', { zoom: Math.round(activeZoom * 100) })}>
+                {ZOOM_LEVELS.map((zoom) => <button key={zoom} type="button" role="menuitemradio" aria-checked={Math.abs(activeZoom - zoom) < 0.0001} aria-label={t('확대 배율 {zoom}%', { zoom: zoom * 100 })} className={Math.abs(activeZoom - zoom) < 0.0001 ? 'selected' : ''} onClick={() => { changePane(snapshot.activePane, (pane) => ({ ...pane, zoom }), true); setZoomMenuOpen(false) }}>{zoom * 100}%</button>)}
+              </div>
+              <button type="button" role="menuitem" aria-label={t('화면 맞춤')} title={t('100% 확대와 페이지 중앙으로 맞춤')} onClick={() => { changePane(snapshot.activePane, (pane) => ({ ...pane, zoom: 1, centerX: 0.5, centerY: 0.5 }), true); setZoomMenuOpen(false) }}><Maximize2 size={18} /><span>{t('화면 맞춤')}</span></button>
+            </div>}
+          </div>
+          <div className="viewer-mobile-menu-anchor">
+            <button ref={footerMoreTriggerRef} type="button" className="viewer-page-control-button" aria-label={t('더보기')} title={t('더보기')} aria-haspopup="menu" aria-expanded={footerMoreOpen} onClick={() => setFooterMoreOpen((open) => !open)}><MoreHorizontal size={20} /></button>
+            {footerMoreOpen && <div ref={footerMorePanelRef} className="viewer-compact-menu viewer-footer-more-menu" role="menu" aria-label={t('더보기')}>
+              <button type="button" role="menuitem" disabled={!pageWorks[activePage]} onClick={() => { setFooterMoreOpen(false); rotatePage(snapshot.activePane, activePage) }}><RefreshCw size={18} /><span>{t('시계 방향 90도 회전')}</span></button>
+              <button type="button" role="menuitem" className={isBookmarked ? 'selected' : ''} aria-pressed={isBookmarked} onClick={() => { setFooterMoreOpen(false); void toggleBookmark() }}><Bookmark size={18} fill={isBookmarked ? 'currentColor' : 'none'} /><span>{isBookmarked ? t('북마크 해제') : t('북마크')}</span></button>
+              <button type="button" role="menuitem" className={!thumbnailCollapsed ? 'selected' : ''} aria-pressed={!thumbnailCollapsed} onClick={() => { setFooterMoreOpen(false); toggleThumbnailAccordion() }}>{thumbnailCollapsed ? <ChevronDown size={18} /> : <ChevronUp size={18} />}<span>{thumbnailCollapsed ? t('썸네일 펼치기') : t('썸네일 접기')}</span></button>
+              <button type="button" role="menuitem" disabled={!pdf || Boolean(recognitionRescanPages[activePage])} onClick={() => { setFooterMoreOpen(false); retryPageRecognition(activePage) }}><ScanLine size={18} /><span>{t('QR·링크 다시 검사')}</span></button>
+            </div>}
+          </div>
+        </div>}
+          </div>
+        </div>}
         {!reportMode && <div className="viewer-footer-controls">
           <div className="viewer-footer-primary-controls">
           <div className="viewer-footer-zoom-controls" role="group" aria-label={t('축소') + ' / ' + t('확대')}>
@@ -3466,7 +3104,7 @@ export default function Viewer() {
             <button type="button" className="viewer-page-control-button" aria-label={t("확대")} title={t("확대")} disabled={activeZoom >= ZOOM_LEVELS[ZOOM_LEVELS.length - 1]} onClick={() => changePane(snapshot.activePane, (pane) => ({ ...pane, zoom: stepZoomLevel(pane.zoom, 1) }), true)}><Plus size={17} /></button>
             <button type="button" className="viewer-page-control-button" aria-label={t("화면 맞춤")} title={t("100% 확대와 페이지 중앙으로 맞춤")} onClick={() => changePane(snapshot.activePane, (pane) => ({ ...pane, zoom: 1, centerX: 0.5, centerY: 0.5 }), true)}><Maximize2 size={16} /></button>
           </div>
-          <button type="button" className="viewer-page-control-button" aria-label={t('시계 방향 90도 회전')} title={t('90도 회전 · 현재 {angle}도', { angle: activeRotation })} disabled={!pageWorks[activePage]} onClick={() => rotatePage(snapshot.activePane, activePage)}><RefreshCw size={17} /></button>
+          <button type="button" className="viewer-page-control-button" aria-label={t('시계 방향 90도 회전')} title={t('90도 회전 · 현재 {angle}도', { angle: activeRotation })} disabled={!pageWorks[activePage]} onClick={() => rotatePage(snapshot.activePane, activePage)}><svg width="24" height="24" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M5 16a8 8 0 1 1 14-6" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"/><path d="m16 8 3.2 2.3L20 6.5" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/><text x="11" y="20" fill="currentColor" fontSize="8" fontWeight="700" fontFamily="sans-serif">90°</text></svg></button>
           <button
             type="button"
             className="thumbnail-accordion-button"
@@ -3486,114 +3124,12 @@ export default function Viewer() {
             <button type="button" className="viewer-page-control-button" aria-label={t('다음')} title={t('다음')} disabled={activeVisiblePageIndex < 0 || activeVisiblePageIndex >= visiblePageNumbers.length - 1} onClick={() => navigateVisiblePage(1)}><ChevronRight size={18} /></button>
           </div>
         </div>}
-        {!reportMode && <div className="viewer-footer-mobile-controls">
-          <button type="button" className="viewer-page-control-button" aria-label={t('이전')} title={t('이전')} disabled={activeVisiblePageIndex <= 0} onClick={() => navigateVisiblePage(-1)}><ChevronLeft size={20} /></button>
-          <span className="viewer-footer-page-count" aria-label={t('페이지') + ' ' + activePage + ' / ' + pdf.numPages} title={t('페이지') + ' ' + activePage + ' / ' + pdf.numPages}>{formatNumber(activePage)} / {formatNumber(pdf.numPages)}</span>
-          <button type="button" className="viewer-page-control-button" aria-label={t('다음')} title={t('다음')} disabled={activeVisiblePageIndex < 0 || activeVisiblePageIndex >= visiblePageNumbers.length - 1} onClick={() => navigateVisiblePage(1)}><ChevronRight size={20} /></button>
-          <div className="viewer-mobile-menu-anchor">
-            <button ref={zoomMenuTriggerRef} type="button" className="viewer-mobile-zoom-trigger" aria-haspopup="menu" aria-expanded={zoomMenuOpen} aria-label={t('확대 배율 {zoom}%', { zoom: Math.round(activeZoom * 100) })} title={t('확대 배율 {zoom}%', { zoom: Math.round(activeZoom * 100) })} onClick={() => setZoomMenuOpen((open) => !open)}>{Math.round(activeZoom * 100)}%</button>
-            {zoomMenuOpen && <div ref={zoomMenuPanelRef} className="viewer-compact-menu viewer-zoom-menu" role="menu" aria-label={t('확대 배율 {zoom}%', { zoom: Math.round(activeZoom * 100) })}>
-              <div className="viewer-zoom-presets" role="group" aria-label={t('확대 배율 {zoom}%', { zoom: Math.round(activeZoom * 100) })}>
-                {ZOOM_LEVELS.map((zoom) => <button key={zoom} type="button" role="menuitemradio" aria-checked={Math.abs(activeZoom - zoom) < 0.0001} aria-label={t('확대 배율 {zoom}%', { zoom: zoom * 100 })} className={Math.abs(activeZoom - zoom) < 0.0001 ? 'selected' : ''} onClick={() => { changePane(snapshot.activePane, (pane) => ({ ...pane, zoom }), true); setZoomMenuOpen(false) }}>{zoom * 100}%</button>)}
-              </div>
-              <button type="button" role="menuitem" aria-label={t('화면 맞춤')} title={t('100% 확대와 페이지 중앙으로 맞춤')} onClick={() => { changePane(snapshot.activePane, (pane) => ({ ...pane, zoom: 1, centerX: 0.5, centerY: 0.5 }), true); setZoomMenuOpen(false) }}><Maximize2 size={18} /><span>{t('화면 맞춤')}</span></button>
-            </div>}
-          </div>
-          <div className="viewer-mobile-menu-anchor">
-            <button ref={footerMoreTriggerRef} type="button" className="viewer-page-control-button" aria-label={t('더보기')} title={t('더보기')} aria-haspopup="menu" aria-expanded={footerMoreOpen} onClick={() => setFooterMoreOpen((open) => !open)}><MoreHorizontal size={20} /></button>
-            {footerMoreOpen && <div ref={footerMorePanelRef} className="viewer-compact-menu viewer-footer-more-menu" role="menu" aria-label={t('더보기')}>
-              <button type="button" role="menuitem" disabled={!pageWorks[activePage]} onClick={() => { setFooterMoreOpen(false); rotatePage(snapshot.activePane, activePage) }}><RefreshCw size={18} /><span>{t('시계 방향 90도 회전')}</span></button>
-              <button type="button" role="menuitem" className={isBookmarked ? 'selected' : ''} aria-pressed={isBookmarked} onClick={() => { setFooterMoreOpen(false); void toggleBookmark() }}><Bookmark size={18} fill={isBookmarked ? 'currentColor' : 'none'} /><span>{isBookmarked ? t('북마크 해제') : t('북마크')}</span></button>
-              <button type="button" role="menuitem" className={!thumbnailCollapsed ? 'selected' : ''} aria-pressed={!thumbnailCollapsed} onClick={() => { setFooterMoreOpen(false); toggleThumbnailAccordion() }}>{thumbnailCollapsed ? <ChevronDown size={18} /> : <ChevronUp size={18} />}<span>{thumbnailCollapsed ? t('썸네일 펼치기') : t('썸네일 접기')}</span></button>
-            </div>}
-          </div>
-        </div>}
+        </div>
+
+
       </section>
       <div className="viewer-floating-layer">
-        {counterDeleteToastId && <div className="viewer-counter-delete-toast" role="status"><span>{t('카운터를 삭제했습니다.')}</span><button type="button" disabled={snapshot.counterHistory?.at(-1)?.id !== counterDeleteToastId} onClick={() => { if (snapshot.counterHistory?.at(-1)?.id === counterDeleteToastId) undoCounterAction(); setCounterDeleteToastId(null) }}>{t('실행 취소')}</button><button type="button" aria-label={t('닫기')} onClick={() => setCounterDeleteToastId(null)}><X size={15} /></button></div>}
-        <div ref={timerBarRef} className={'viewer-floating-bar viewer-timer-bar' + (!reportMode ? ' has-counter-details' : '') + (!reportMode && miniBarAlerts.length ? ' has-counter-alerts' : '') + (timerMinimized ? ' is-minimized' : '') + (timerBarPosition.left === null ? '' : ' positioned')} data-popup-size={!timerMinimized && coarsePointer && !reportMode && displayedTimerSize ? getViewerPopupSizeClass(displayedTimerSize.width) : undefined} style={{
-          ...(timerBarPosition.left === null ? {} : { left: timerBarPosition.left, top: timerBarPosition.top, right: 'auto' }),
-          ...(!timerMinimized && coarsePointer && !reportMode && displayedTimerSize ? { width: displayedTimerSize.width, height: counterDetailsExpanded ? displayedTimerSize.height : 'auto', maxWidth: 'none', maxHeight: 'none' } : {}),
-        }} role="group" aria-label={`${t('카운터')} · ${t('작업 타이머')}`} onPointerDown={beginTimerBarTouchPress} onClickCapture={(event) => { if (Date.now() > timerBarClickSuppressUntilRef.current) return; timerBarClickSuppressUntilRef.current = 0; event.preventDefault(); event.stopPropagation() }}>
-          <button type="button" className="viewer-floating-drag-handle" aria-label={t('작업 타이머 이동')} title={t('작업 타이머 이동')} onPointerDown={handleTimerBarDrag} onPointerMove={moveTimerBarDrag} onPointerUp={finishTimerBarDrag} onPointerCancel={finishTimerBarDrag} onLostPointerCapture={finishTimerBarDrag}><GripVertical size={17} /></button>
-          {!reportMode && <div className="viewer-counter-tools" role="group" aria-label={t('카운터')}>
-            <div className="viewer-mini-counter-step-group" role="group" aria-label={t('카운터')}>
-            <button type="button" className="viewer-mini-counter-step" aria-label={t('이전 단으로 되돌리기')} title={mainCounterCanStepBack ? t('이전 단으로 되돌리기') : t('정확한 복원 이력이 없습니다')} disabled={!mainCounterCanStepBack || counterActionSaving} onClick={() => { if (mainCounter && mainCounter.value > 1) rewindCounter(mainCounter.id, mainCounter.value - 1) }}><Minus size={20} /></button>
-            {mainCounter && (counterRowEditing
-              ? <input ref={counterRowInputRef} className="viewer-mini-counter-row-input" aria-label={t('단 번호 입력')} type="number" inputMode="numeric" min="1" max={MAX_COUNTER_ROW} step="1" autoFocus disabled={counterActionSaving} value={counterRowDraft} onChange={(event) => setCounterRowDraft(event.currentTarget.value)} onBlur={() => { if (skipCounterRowBlurRef.current) { skipCounterRowBlurRef.current = false; return } finishCounterRowEdit() }} onKeyDown={(event) => {
-                if (event.key === 'Enter') { event.preventDefault(); event.currentTarget.blur() }
-                if (event.key === 'Escape') { event.preventDefault(); skipCounterRowBlurRef.current = true; setCounterRowDraft(String(mainCounter.value)); setCounterRowEditing(false); event.currentTarget.blur() }
-              }} />
-              : <button type="button" className="viewer-mini-counter-row" aria-label={t('현재 단 입력')} title={t('현재 단 입력')} disabled={counterActionSaving} onClick={beginCounterRowEdit}><strong>{formatNumber(mainCounter.value)}</strong><span>{t('단')}</span><small>{counterSideForRow(mainCounter, mainCounter.value).toUpperCase()}</small></button>)}
-            <button type="button" className="viewer-mini-counter-step" aria-label={t('현재 단 완료 후 다음 단으로 이동')} disabled={!mainCounter || counterActionSaving || mainCounter.goalCompleted === true || mainCounter.value >= MAX_COUNTER_ROW && mainCounter.goalRow !== mainCounter.value} onClick={() => { if (mainCounter) advanceCounterGroup(mainCounter.id) }}><Plus size={20} /></button>
-            </div>
-            <button ref={counterPanelFocusRef} type="button" className={'viewer-counter-settings-toggle' + (counterPanelVisible ? ' active' : '')} aria-label={t('카운터 설정')} title={t('카운터 설정')} aria-pressed={counterPanelVisible} disabled={counterSettingsSaving} onClick={(event) => { counterPanelFocusRef.current = event.currentTarget; setSavedCounterSession({ documentId: id, visible: !counterPanelVisible }) }}><Settings2 size={16} />{counterAlertPending && <i className="counter-notification-dot" aria-hidden="true" />}</button>
-          </div>}
-          {!reportMode && <span className="viewer-timer-divider" aria-hidden="true" />}
-          <div className="viewer-timer-portal-host" ref={setTimerPortalHost} />
-          {!reportMode && <section id={'viewer-counter-details-' + id.replace(/[^a-zA-Z0-9_-]/g, '-')} className="viewer-counter-details" aria-label={t('보조 카운터 정보')}>
-            <header className="viewer-counter-details-header">
-              <strong>{t('보조 카운터')} · {formatNumber(auxiliaryCounters.length)}</strong>
-              <div>
-                <button type="button" className="viewer-counter-add-button" aria-label={t('카운터 추가')} title={t('카운터 추가')} onClick={() => requestCounterPanelAction('add')}><Plus size={15} /><span>{t('카운터 추가')}</span></button>
-                <button type="button" className={'viewer-counter-details-toggle' + (counterDetailsExpanded ? ' active' : '')} aria-label={counterDetailsExpanded ? t('보조 카운터 정보 접기') : t('보조 카운터 정보 펼치기')} title={counterDetailsExpanded ? t('보조 카운터 정보 접기') : t('보조 카운터 정보 펼치기')} aria-expanded={counterDetailsExpanded} aria-controls={'viewer-counter-details-list-' + id.replace(/[^a-zA-Z0-9_-]/g, '-')} onClick={() => setCounterDetailsExpanded((expanded) => !expanded)}>{counterDetailsExpanded ? <ChevronUp size={16} /> : <ChevronDown size={16} />}</button>
-              </div>
-            </header>
-            {counterDetailsExpanded && <div id={'viewer-counter-details-list-' + id.replace(/[^a-zA-Z0-9_-]/g, '-')} className="viewer-counter-details-list">
-            {auxiliaryCounters.length ? auxiliaryCounters.map((counter) => {
-              const alerts = currentCounterAlerts.alerts.filter((alert) => alert.counterId === counter.id).map((alert) => translateCounterAlert(alert.message, false))
-              const repeatProgress = counter.kind === 'repeat' ? repeatCounterProgress(counter) : null
-              const progressPercent = counter.kind === 'pattern' ? Math.round((counter.patternRow ?? 1) / Math.max(1, counter.repeatLength ?? 1) * 100)
-                : counter.kind === 'task' ? Math.round((counter.completedCount ?? 0) / Math.max(1, counter.total ?? 1) * 100)
-                  : repeatProgress ? Math.round(repeatProgress.completedRows / Math.max(1, repeatProgress.totalRows) * 100) : null
-              const repeatBlock = counter.kind === 'repeat' ? repeatCounterStepBlock(counters, counter.id, 1) : null
-              const repeatBlockLabel = repeatCounterBlockLabel(repeatBlock)
-              const decreaseDisabled = counter.kind === 'simple' ? counter.value <= 0 : counter.kind === 'task' ? (counter.completedCount ?? 0) <= 0 : counter.kind === 'repeat' ? counter.value <= 0 : false
-              const increaseDisabled = counter.kind === 'task' ? (counter.completedCount ?? 0) >= (counter.total ?? 0) : counter.kind === 'repeat' ? repeatProgress?.complete === true || Boolean(repeatBlock) : false
-              const progressSummary = counter.kind === 'pattern'
-                ? t('무늬 {current} / {total}단 · 다음 {next}단', { current: formatNumber(counter.patternRow ?? 1), total: formatNumber(counter.repeatLength ?? 1), next: formatNumber(nextPatternAlertRow(counter, mainCounter?.value ?? 1) ?? 1) })
-                : counter.kind === 'task'
-                  ? t('{task} {completed} / {total}회 · 다음 {row}단', { task: t(counter.taskKind === 'increase' ? '늘림' : '줄임'), completed: formatNumber(counter.completedCount ?? 0), total: formatNumber(counter.total ?? 0), row: formatNumber(counter.nextTaskRow ?? counter.firstTaskRow ?? 1) })
-                  : counter.kind === 'repeat' && repeatProgress
-                    ? <span className="viewer-counter-detail-summary-repeat">
-                      <strong>{t('반복 {start}~{end}단 × {target}회', { start: formatNumber(repeatProgress.startRow), end: formatNumber(repeatProgress.endRow), target: formatNumber(repeatProgress.target) })}</strong>
-                      <span>{t('완료 반복 {completed} / {target}회', { completed: formatNumber(repeatProgress.completedRepeats), target: formatNumber(repeatProgress.target) })} · {repeatProgress.complete ? <strong role="status">{t('목표 반복 완료')}</strong> : t('현재 {row}단 진행 예정', { row: formatNumber(repeatProgress.nextRow ?? repeatProgress.startRow) })}</span>
-                      <span>{t('총 {completed} / {total}단 완료', { completed: formatNumber(repeatProgress.completedRows), total: formatNumber(repeatProgress.totalRows) })}</span>
-                      {repeatBlockLabel && <small>{repeatBlockLabel}</small>}
-                    </span>
-                    : null
-              const step = (direction: -1 | 1) => counter.kind === 'repeat' ? stepRepeatCounterAction(counter.id, direction) : stepAuxiliaryCounterAction(counter.id, direction)
-              return <article className={'viewer-counter-detail-item' + (progressPercent !== null ? ' has-progress' : '') + (alerts.length ? ' has-alert' : '')} style={{ '--counter-color': counter.color } as CSSProperties} key={counter.id}>
-                <span className="viewer-counter-detail-color" style={{ background: counter.color }} />
-                <div className="viewer-counter-detail-info"><strong>{counter.name}</strong><span className="viewer-counter-detail-summary">{counter.kind === 'task' ? t(counter.taskKind === 'increase' ? '늘림' : '줄임') : counter.kind === 'simple' ? `${formatNumber(counter.value)} ${t('단')}` : t(counter.kind === 'pattern' ? '무늬 카운터' : '반복 카운터')}</span></div>
-                {progressPercent !== null && <div className="viewer-counter-detail-progress-group">
-                  {alerts.map((alert, index) => <span className="viewer-counter-detail-alert" role="status" key={counter.id + '-alert-' + index}><Bell size={12} /><span>{alert}</span></span>)}
-                  <div className="viewer-counter-detail-progress-summary">{progressSummary}</div><span className="viewer-counter-detail-progress" role="progressbar" aria-valuemin={0} aria-valuemax={100} aria-valuenow={progressPercent} aria-label={`${counter.name} ${progressPercent}%`}><i style={{ width: progressPercent + '%', background: counter.color }} /></span>
-                </div>}
-                <div className="viewer-counter-detail-actions">
-                  <div className="viewer-counter-detail-stepper" role="group" aria-label={counter.name}>
-                    <CounterStepButton className="viewer-mini-counter-step" label={`${counter.name} · ${t('보조 카운터 줄이기')}`} disabled={counterActionSaving || decreaseDisabled} onStep={() => step(-1)}><Minus size={20} /></CounterStepButton>
-                    <CounterStepButton className="viewer-mini-counter-step" label={`${counter.name} · ${t('보조 카운터 늘리기')}`} title={repeatBlockLabel} disabled={counterActionSaving || increaseDisabled} onStep={() => step(1)}><Plus size={20} /></CounterStepButton>
-                  </div>
-                  <details className="viewer-counter-action-menu"><summary aria-label={`${counter.name} · ${t('더보기')}`} title={t('더보기')}><MoreHorizontal size={18} /></summary><div role="menu">
-                    <button type="button" role="menuitem" onClick={() => requestCounterPanelAction('edit', counter.id)}><Settings2 size={15} />{t('설정 수정')}</button>
-                    <button type="button" role="menuitem" disabled={maxCountersForType(counters, counter.kind) >= MAX_COUNTERS_PER_TYPE} onClick={() => void duplicateCounterAction(counter.id)}><Copy size={15} />{t('복제')}</button>
-                    <button type="button" role="menuitem" onClick={() => void deleteCounterAction(counter.id)}><Trash2 size={15} />{t('삭제')}</button>
-                  </div></details>
-                </div>
-              </article>
-            }) : <p>{t('연결된 보조 카운터가 없습니다.')}</p>}
-            </div>}
-          </section>}
-          {!reportMode && miniBarAlerts.length > 0 && <div className="viewer-mini-counter-alerts" role="status" aria-label={t('알림')}>
-            {miniBarAlerts.map((alert) => <span className="viewer-counter-detail-alert" style={{ '--counter-color': counters.find((counter) => counter.id === alert.counterId)?.color ?? 'var(--color-primary)' } as CSSProperties} key={alert.counterId}><Bell size={20} /><span>{translateCounterAlert(alert.message)}</span></span>)}
-          </div>}
-          {coarsePointer && !reportMode && counterDetailsExpanded && <div className="viewer-timer-resize-handle-row">
-            {!touchTablet && <button type="button" aria-label={`${t('작업 타이머')} · ${t('크기 조절')}`} title={t('크기 조절')} className="viewer-timer-resize-handle bottom-left" {...timerResizeHandleProps('bottom-left')}><MoveDiagonal size={16} aria-hidden="true" /></button>}
-            <button type="button" aria-label={`${t('작업 타이머')} · ${t('크기 조절')}`} title={t('크기 조절')} className="viewer-timer-resize-handle bottom-right" {...timerResizeHandleProps('bottom-right')}><MoveDiagonal size={16} aria-hidden="true" /></button>
-          </div>}
-          {timerMinimized && <button ref={timerRestoreButtonRef} type="button" className="viewer-timer-restore" aria-label={(timerSaveError ? t('저장 오류') + ' · ' : '') + t('작업 타이머 복원')} title={(timerSaveError ? t('저장 오류') + ' · ' : '') + t('작업 타이머 복원')} onPointerDown={beginTimerRestorePointer} onPointerMove={moveTimerRestorePointer} onPointerUp={finishTimerRestorePointer} onPointerCancel={cancelTimerRestorePointer} onLostPointerCapture={cancelTimerRestorePointer} onClick={restoreTimerPopover}><Maximize2 size={18} aria-hidden="true" />{timerSaveError && <i className="viewer-timer-restore-error" aria-hidden="true" />}</button>}
-        </div>
+        {reportMode && <div className="viewer-floating-bar viewer-timer-bar" role="group" aria-label={t('작업 타이머')}><div className="viewer-timer-portal-host" ref={setTimerPortalHost} /></div>}
         {!reportMode && <div ref={setTextStylePortalTarget} className={'viewer-floating-bar viewer-mini-bar' + (miniBarOpen ? ' expanded' : '')}>
           <button ref={miniBarAccordionButtonRef} type="button" className="viewer-mini-accordion-button" aria-label={t('뷰어 도구')} title={t('뷰어 도구')} aria-expanded={miniBarOpen} aria-controls={miniBarControlsId} onClick={() => { const open = !miniBarOpen; if (!open) closeMiniBarOnPdfActionRef.current = false; setMiniBarState({ documentId: id, open }); if (!open) setMiniBarSettingsOpen(false) }}>
             <img className="viewer-mini-accordion-icon" src={viewerToolsIcon} alt="" aria-hidden="true" /><span aria-hidden="true">{miniBarOpen ? <ChevronUp size={16} /> : <ChevronDown size={16} />}</span>

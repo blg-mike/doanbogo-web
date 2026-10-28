@@ -1,0 +1,1 @@
+export const PDF_RECOGNITION_VERSION = 2

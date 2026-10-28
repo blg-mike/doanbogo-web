@@ -251,7 +251,7 @@ describe('local document storage', () => {
       { documentId: document.id, pageNumber: 5, hidden: false, bookmarked: true },
     ])
     expect(await getPageRecognition(document.id, 5)).toMatchObject({
-      version: 1,
+      version: 2,
       pdfLinksDone: true,
       pdfLinks: [pdfLink],
       qrLinksDone: true,

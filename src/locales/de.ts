@@ -76,6 +76,7 @@ export const de: Record<string, string> = {
   "단위": "Einheit",
   "단": "Reihen",
   "코": "Maschen",
+  "바퀴": "Runden",
   "회": "Mal",
   "현재 숫자": "Aktueller Wert",
   "목표 없이 계속 뜨기": "Ohne Ziel fortfahren",

@@ -343,7 +343,7 @@ export default function DocumentWorkTimer({ documentId, initialTotalWorkTimeMs, 
       {running ? <Pause size={17} /> : <Play size={17} />}
     </button>
   const elapsedButton = <button type="button" className="viewer-work-timer-elapsed" aria-haspopup="dialog" aria-expanded={recordPanelOpen} aria-label={`${t('오늘 누적 작업시간')} ${formatWorkTime(elapsedMs)} · ${t('작업 기록')}`} title={t('작업 기록')} aria-live="off" onClick={() => onRecordPanelOpenChange(true)}>{formatWorkTime(elapsedMs)}</button>
-  const minimizeButton = counterMiniBarLayout && <button ref={minimizeButtonRef} type="button" className="viewer-work-timer-minimize" aria-label={t('작업 타이머 최소화')} title={t('작업 타이머 최소화')} onClick={onMinimize}><Minimize2 size={18} /></button>
+  const minimizeButton = counterMiniBarLayout && onMinimize && <button ref={minimizeButtonRef} type="button" className="viewer-work-timer-minimize" aria-label={t('작업 타이머 최소화')} title={t('작업 타이머 최소화')} onClick={onMinimize}><Minimize2 size={18} /></button>
   return createPortal(<div className="viewer-work-timer" aria-label={t('작업 타이머')}>
     {counterMiniBarLayout ? <>{elapsedButton}{toggleButton}{minimizeButton}</> : <>{toggleButton}{elapsedButton}</>}
     {recordPanelOpen && <WorkTimeRecordPanel documentId={documentId} hidden={minimized} initialTotalWorkTimeMs={initialTotalWorkTimeMs} initialWorkTimeDays={initialWorkTimeDays} onClose={() => { onRecordPanelOpenChange(false); onRecordPanelBlockingChange?.(false) }} onAddWorkTime={addWorkTime} onResetWorkTime={resetWorkTime} onInteractionBlockingChange={onRecordPanelBlockingChange} onTotalsChange={(total, days) => {

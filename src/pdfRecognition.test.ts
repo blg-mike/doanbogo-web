@@ -28,4 +28,24 @@ describe('page recognition cache failures', () => {
     expect(savePageRecognition).not.toHaveBeenCalled()
     unsubscribe()
   })
+
+  it('reuses complete version 2 recognition records', async () => {
+    vi.stubGlobal('document', { visibilityState: 'visible', addEventListener: vi.fn() })
+    const cached = {
+      documentId: 'document', pageNumber: 2, version: 2 as const,
+      pdfLinksDone: true, pdfLinks: [], qrLinksDone: true, qrLinks: [], qrInputMaxDimension: 1400,
+    }
+    vi.mocked(getPageRecognition).mockResolvedValueOnce(cached)
+    const { requestPdfPageRecognition, subscribePdfRecognition } = await import('./pdfRecognition')
+    const listener = vi.fn()
+    const unsubscribe = subscribePdfRecognition(listener)
+    const pdf = { getPage: vi.fn() } as unknown as PDFDocumentProxy
+
+    requestPdfPageRecognition({ id: 'document', pageCount: 3, pdf: new Blob(), kind: 'pdf' }, 2, pdf, true)
+    await vi.waitFor(() => expect(listener).toHaveBeenCalledWith('document', 2, { kind: 'result', result: cached }))
+
+    expect(pdf.getPage).not.toHaveBeenCalled()
+    expect(savePageRecognition).not.toHaveBeenCalled()
+    unsubscribe()
+  })
 })

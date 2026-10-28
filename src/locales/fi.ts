@@ -76,6 +76,7 @@ export const fi: Record<string, string> = {
   "단위": "Yksikkö",
   "단": "Kerrosta",
   "코": "Silmukkaa",
+  "바퀴": "Kierrosta",
   "회": "Kertaa",
   "현재 숫자": "Nykyinen arvo",
   "목표 없이 계속 뜨기": "Jatka ilman tavoitetta",

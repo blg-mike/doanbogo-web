@@ -233,7 +233,7 @@ export interface PhotoPageRecord {
 export interface PageRecognitionRecord {
   documentId: string
   pageNumber: number
-  version: 1
+  version: 1 | 2
   pdfLinksDone: boolean
   pdfLinks: { x: number; y: number; width: number; height: number; href: string }[]
   qrLinksDone: boolean

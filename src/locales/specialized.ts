@@ -22,6 +22,7 @@ export const specializedTranslations: Record<'en' | 'ja' | 'de' | 'da' | 'nb' | 
     '카운터와 타이머': 'Counter and timer',
     '카운터 관리': 'Counter management',
     '카운터·타이머 설정': 'Counter and timer settings',
+    'QR·링크 다시 검사': 'Rescan QR codes and links',
     '자동 시작': 'Start automatically',
     '오늘 처음 카운터를 조작하면 타이머를 자동으로 시작합니다.': 'Start the timer when you first use a counter today.',
     '처음 한 번 확인 (추천)': 'Ask once (recommended)',
@@ -55,6 +56,7 @@ export const specializedTranslations: Record<'en' | 'ja' | 'de' | 'da' | 'nb' | 
     '카운터와 타이머': 'カウンターとタイマー',
     '카운터 관리': 'カウンター管理',
     '카운터·타이머 설정': 'カウンター・タイマー設定',
+    'QR·링크 다시 검사': 'QRコード・リンクを再スキャン',
     '자동 시작': '自動で開始',
     '오늘 처음 카운터를 조작하면 타이머를 자동으로 시작합니다.': 'その日に初めてカウンターを操作すると、タイマーを自動で開始します。',
     '처음 한 번 확인 (추천)': '最初に一度確認（おすすめ）',
@@ -88,6 +90,7 @@ export const specializedTranslations: Record<'en' | 'ja' | 'de' | 'da' | 'nb' | 
     '카운터와 타이머': 'Zähler und Timer',
     '카운터 관리': 'Zählerverwaltung',
     '카운터·타이머 설정': 'Zähler- und Timer-Einstellungen',
+    'QR·링크 다시 검사': 'QR-Codes und Links erneut suchen',
     '자동 시작': 'Automatisch starten',
     '오늘 처음 카운터를 조작하면 타이머를 자동으로 시작합니다.': 'Der Timer startet, wenn Sie heute zum ersten Mal einen Zähler verwenden.',
     '처음 한 번 확인 (추천)': 'Einmal nachfragen (empfohlen)',
@@ -121,6 +124,7 @@ export const specializedTranslations: Record<'en' | 'ja' | 'de' | 'da' | 'nb' | 
     '카운터와 타이머': 'Tæller og timer',
     '카운터 관리': 'Tælleradministration',
     '카운터·타이머 설정': 'Indstillinger for tæller og timer',
+    'QR·링크 다시 검사': 'Søg efter QR-koder og links igen',
     '자동 시작': 'Start automatisk',
     '오늘 처음 카운터를 조작하면 타이머를 자동으로 시작합니다.': 'Start timeren, når du bruger en tæller for første gang i dag.',
     '처음 한 번 확인 (추천)': 'Spørg første gang (anbefalet)',
@@ -165,6 +169,7 @@ export const specializedTranslations: Record<'en' | 'ja' | 'de' | 'da' | 'nb' | 
     '아니요, 기억': 'Nei, husk',
     '타이머 연동 설정을 저장하지 못했습니다. 다시 시도해 주세요.': 'Kunne ikke lagre timerkoblingen. Prøv igjen.',
     '오늘 누적 작업시간': 'Samlet arbeidstid i dag',
+    'QR·링크 다시 검사': 'Søk etter QR-koder og lenker på nytt',
   },
   fi: {
     '목표 {row}단을 완료했어요.': 'Tavoitekerros {row} on valmis.',
@@ -198,6 +203,7 @@ export const specializedTranslations: Record<'en' | 'ja' | 'de' | 'da' | 'nb' | 
     '아니요, 기억': 'Ei, muista valinta',
     '타이머 연동 설정을 저장하지 못했습니다. 다시 시도해 주세요.': 'Ajastimen linkitysasetusta ei voitu tallentaa. Yritä uudelleen.',
     '오늘 누적 작업시간': 'Tämän päivän kertynyt työaika',
+    'QR·링크 다시 검사': 'Etsi QR-koodeja ja linkkejä uudelleen',
   },
 }
 

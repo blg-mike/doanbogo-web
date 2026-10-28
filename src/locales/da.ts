@@ -76,6 +76,7 @@ export const da: Record<string, string> = {
   "단위": "Enhed",
   "단": "Pinde",
   "코": "Masker",
+  "바퀴": "Omgange",
   "회": "Gange",
   "현재 숫자": "Aktuelt tal",
   "목표 없이 계속 뜨기": "Fortsæt uden mål",

@@ -10,6 +10,7 @@ describe('PDF QR link targets', () => {
   it('accepts HTTP and HTTPS destinations', () => {
     expect(safeQrHref('https://example.com/pattern')).toBe('https://example.com/pattern')
     expect(safeQrHref(' http://example.com ')).toBe('http://example.com/')
+    expect(safeQrHref('www.example.com/pattern')).toBe('https://www.example.com/pattern')
   })
 
   it('rejects non-web and malformed QR contents', () => {
@@ -40,6 +41,77 @@ describe('PDF QR link targets', () => {
     expect(links[1].href).toBe('https://example.com/pattern')
     expect(links[1].x).toBe(0.05)
     expect(links[1].width).toBeCloseTo(0.675)
+  })
+
+  it('joins a URL wrapped to an aligned adjacent line and includes both line bounds', () => {
+    const links = extractPdfPageLinks(
+      [],
+      [
+        { str: 'https://example.com/', transform: [1, 0, 0, 10, 10, 50], width: 180, height: 10 },
+        { str: '2hd02', transform: [1, 0, 0, 10, 10, 40], width: 30, height: 10 },
+      ],
+      { width: 200, height: 200, transform: [1, 0, 0, 1, 0, 0] },
+    )
+
+    expect(links).toHaveLength(1)
+    expect(links[0].href).toBe('https://example.com/2hd02')
+    expect(links[0]).toMatchObject({ x: 0.05, y: 0.19, width: 0.9, height: 0.1 })
+  })
+
+  it('joins an alphabetic URL path continuation only after an explicit URL separator', () => {
+    const continuation = extractPdfPageLinks(
+      [],
+      [
+        { str: 'https://example.com/', transform: [1, 0, 0, 10, 10, 50], width: 180, height: 10 },
+        { str: 'article', transform: [1, 0, 0, 10, 10, 40], width: 40, height: 10 },
+      ],
+      { width: 200, height: 200, transform: [1, 0, 0, 1, 0, 0] },
+    )
+    const prose = extractPdfPageLinks(
+      [],
+      [
+        { str: 'https://example.com', transform: [1, 0, 0, 10, 10, 50], width: 180, height: 10 },
+        { str: 'article', transform: [1, 0, 0, 10, 10, 40], width: 40, height: 10 },
+      ],
+      { width: 200, height: 200, transform: [1, 0, 0, 1, 0, 0] },
+    )
+
+    expect(continuation[0].href).toBe('https://example.com/article')
+    expect(prose[0].href).toBe('https://example.com/')
+  })
+
+  it('preserves balanced parentheses in URLs while trimming unmatched sentence punctuation', () => {
+    const [link] = extractPdfPageLinks(
+      [],
+      [{ str: 'https://example.com/path(foo)).', transform: [1, 0, 0, 10, 10, 50], width: 180, height: 10 }],
+      { width: 200, height: 200, transform: [1, 0, 0, 1, 0, 0] },
+    )
+
+    expect(link.href).toBe('https://example.com/path(foo)')
+  })
+
+  it('trims mixed sentence punctuation after an unmatched closing parenthesis', () => {
+    const [link] = extractPdfPageLinks(
+      [],
+      [{ str: 'https://example.com/path(foo)!)', transform: [1, 0, 0, 10, 10, 50], width: 180, height: 10 }],
+      { width: 200, height: 200, transform: [1, 0, 0, 1, 0, 0] },
+    )
+
+    expect(link.href).toBe('https://example.com/path(foo)')
+  })
+
+  it('strips sentence punctuation and does not join following prose to a URL', () => {
+    const links = extractPdfPageLinks(
+      [],
+      [
+        { str: 'www.example.com/pattern,', transform: [1, 0, 0, 10, 10, 50], width: 180, height: 10 },
+        { str: 'and more details', transform: [1, 0, 0, 10, 10, 40], width: 80, height: 10 },
+      ],
+      { width: 200, height: 200, transform: [1, 0, 0, 1, 0, 0] },
+    )
+
+    expect(links).toHaveLength(1)
+    expect(links[0].href).toBe('https://www.example.com/pattern')
   })
 
   it('maps link annotation bounds through the PDF viewport transform', () => {

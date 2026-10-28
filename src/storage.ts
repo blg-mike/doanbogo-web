@@ -4,6 +4,7 @@ import { isWorkDateKey, localWorkDateKey, normalizeWorkTimeDays } from './workTi
 import { MAX_COUNTER_HISTORY, normalizeCounterSnapshots } from './smartCounter'
 import { normalizeThumbnailGroups, normalizeThumbnailRailOrder, normalizeVisiblePageRecord } from './pageManagement'
 import { normalizeViewerCounterState } from './viewerCounterState'
+import { PDF_RECOGNITION_VERSION } from './pdfRecognitionVersion'
 
 interface DoanBogoDB extends DBSchema {
   documents: {
@@ -887,7 +888,6 @@ export async function savePageRecognition(id: string, pageNumber: number, change
     await tx.store.put({
       documentId: id,
       pageNumber,
-      version: 1,
       pdfLinksDone: false,
       pdfLinks: [],
       qrLinksDone: false,
@@ -895,6 +895,7 @@ export async function savePageRecognition(id: string, pageNumber: number, change
       qrInputMaxDimension: 0,
       ...current,
       ...change,
+      version: PDF_RECOGNITION_VERSION,
     })
     await tx.done
   }, () => {
@@ -902,7 +903,6 @@ export async function savePageRecognition(id: string, pageNumber: number, change
     temporary.pageRecognition.set(key, {
       documentId: id,
       pageNumber,
-      version: 1,
       pdfLinksDone: false,
       pdfLinks: [],
       qrLinksDone: false,
@@ -910,6 +910,7 @@ export async function savePageRecognition(id: string, pageNumber: number, change
       qrInputMaxDimension: 0,
       ...current,
       ...change,
+      version: PDF_RECOGNITION_VERSION,
     })
   })
 }

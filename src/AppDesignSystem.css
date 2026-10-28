@@ -792,3 +792,10 @@
     .viewer-shell:not(.report-mode) .viewer-timer-bar[data-popup-size].has-counter-details .viewer-work-timer-minimize { width: 44px !important; min-width: 44px !important; flex-basis: 44px !important; }
   }
 }
+
+.viewer-shell:not(.report-mode) .viewer-footer-work-counter .viewer-mini-counter-row strong { font-size: 15px; font-weight: 600; }
+.viewer-shell:not(.report-mode) .viewer-footer-work-counter .viewer-mini-counter-row span { color: var(--color-text-secondary); font-size: 10px; }
+.viewer-shell:not(.report-mode) .viewer-footer-work-counter .viewer-mini-counter-row small { color: var(--color-text-secondary); font-size: 9px; }
+.viewer-shell:not(.report-mode) .viewer-footer-work-timer .viewer-work-timer { gap: 2px; }
+.viewer-shell:not(.report-mode) .viewer-footer-work-timer .viewer-work-timer-elapsed { width: 80px; min-width: 80px; height: 44px; flex: 0 0 80px; padding: 0 2px; font-size: 12px; }
+.viewer-shell:not(.report-mode) .viewer-footer-work-timer .viewer-work-timer-toggle { width: 44px; min-width: 44px; height: 44px; flex: 0 0 44px; border: 0; border-radius: 50%; }
