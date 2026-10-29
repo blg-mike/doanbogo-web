@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type CSSProperties, type FormEvent, type KeyboardEvent } from 'react'
+import { useEffect, useRef, useState, type CSSProperties, type FormEvent, type KeyboardEvent, type PointerEvent as ReactPointerEvent } from 'react'
 import { ArrowLeft, BarChart3, ChevronDown, Plus, RotateCcw, X } from 'lucide-react'
 import { createPortal } from 'react-dom'
 import { formatDate, formatDateTime, formatNumber, t } from './locales'
@@ -289,7 +289,20 @@ export default function WorkTimeRecordPanel({ documentId, hidden = false, initia
     }
   }
 
-  return createPortal(<div className="report-worktime-backdrop" hidden={hidden} aria-hidden={hidden || undefined} style={hidden ? { display: 'none' } : undefined} role="presentation" onPointerDown={(event) => { event.stopPropagation(); if (event.target === event.currentTarget && !closeLocked) onClose() }}>
+  function handleBackdropPointerDown(event: ReactPointerEvent<HTMLDivElement>) {
+    event.stopPropagation()
+    if (event.target !== event.currentTarget) return
+    // shortcut: only one Viewer is mounted; pass a scoped ref if multiple Viewers can coexist.
+    const toggle = document.querySelector<HTMLButtonElement>('.viewer-footer-tools-toggle')
+    const bounds = toggle?.getBoundingClientRect()
+    if (toggle && bounds && event.clientX >= bounds.left && event.clientX <= bounds.right && event.clientY >= bounds.top && event.clientY <= bounds.bottom) {
+      if (!closeLocked && !toggle.disabled) toggle.click()
+      return
+    }
+    if (!closeLocked) onClose()
+  }
+
+  return createPortal(<div className="report-worktime-backdrop" hidden={hidden} aria-hidden={hidden || undefined} style={hidden ? { display: 'none' } : undefined} role="presentation" onPointerDown={handleBackdropPointerDown}>
     <section className="report-worktime-dialog" role="dialog" aria-modal="true" aria-labelledby="report-worktime-title" onKeyDown={handleKeyDown}>
       <header className="report-worktime-dialog-header">
         {view === 'stats' && <button type="button" className="report-worktime-back" aria-label={t('뒤로')} onClick={() => setView('records')}><ArrowLeft size={19} /></button>}

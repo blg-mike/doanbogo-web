@@ -481,13 +481,21 @@ export function findCounterRewindCheckpoint(history: CounterHistoryEntry[], coun
   const base = counters.find((counter) => counter.id === baseId)
   if (!base || base.kind !== 'simple' || targetRow < 1 || targetRow >= base.value) return undefined
   const duplicateName = counters.filter((counter) => counter.kind === 'simple' && counter.unit === 'row' && counter.name === base.name).length > 1
-  return [...history].reverse().find((entry) => {
+  const recent = [...history].reverse()
+  const checkpoint = recent.find((entry) => {
     if (entry.actualRow !== targetRow || !(entry.label.endsWith('단 완료') || entry.label.endsWith('목표 완료'))) return false
     const savedBase = entry.counters.find((counter) => counter.id === baseId)
     if (!savedBase || savedBase.kind !== 'simple' || savedBase.value !== targetRow) return false
     if (entry.baseCounterId !== undefined) return entry.baseCounterId === baseId
     return !duplicateName && entry.label.startsWith(base.name + ' · ')
   })
+  const latestCorrection = recent.find((entry) => {
+    if (entry.label !== base.name + ' 숫자 보정') return false
+    if (entry.baseCounterId !== undefined) return entry.baseCounterId === baseId
+    const savedBase = entry.counters.find((counter) => counter.id === baseId)
+    return savedBase?.kind === 'simple' && savedBase.value !== base.value
+  })
+  return checkpoint && (!latestCorrection || history.indexOf(checkpoint) > history.indexOf(latestCorrection)) ? checkpoint : undefined
 }
 
 export function restoreCounterGroup(current: CounterSnapshot[], saved: CounterSnapshot[], baseId: string) {

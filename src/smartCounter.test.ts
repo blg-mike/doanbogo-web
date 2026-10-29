@@ -349,6 +349,10 @@ describe('counter model', () => {
     const checkpointPattern = { ...pattern, currentRow: 24, patternRow: 4 }
     const checkpoint = { id: 'row-24', label: '몸판 · 24단 완료', counters: [checkpointBase, checkpointPattern, other], guides: [], actualRow: 24, baseCounterId: 'base', savedAt: 24 }
     expect(findCounterRewindCheckpoint([checkpoint], [base, pattern, other], 'base', 24)).toBe(checkpoint)
+    const correction = { ...checkpoint, id: 'manual-correction', label: '몸판 숫자 보정', counters: [{ ...base, value: 40 }, pattern, other], actualRow: 25, baseCounterId: 'base' }
+    expect(findCounterRewindCheckpoint([checkpoint, correction], [base, pattern, other], 'base', 24)).toBeUndefined()
+    const nextCheckpoint = { ...checkpoint, id: 'row-25', label: '몸판 · 25단 완료', counters: [base, pattern, other], actualRow: 25 }
+    expect(findCounterRewindCheckpoint([checkpoint, correction, nextCheckpoint], [{ ...base, value: 26 }, pattern, other], 'base', 25)).toBe(nextCheckpoint)
     const restored = restoreCounterGroup([base, pattern, other], [checkpointBase, checkpointPattern, other], 'base')
     expect(restored).toMatchObject([{ id: 'base', value: 24 }, { id: 'pattern', currentRow: 24, patternRow: 4 }, { id: 'other', value: 9 }])
     expect(findCounterRewindCheckpoint([checkpoint], [base, pattern, other], 'other', 24)).toBeUndefined()

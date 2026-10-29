@@ -14,10 +14,10 @@
 .text-button.report-inspector-done { min-height: 44px; display: inline-flex; align-items: center; justify-content: center; gap: 8px; padding: 0 16px; border: 0; border-radius: var(--control-radius); color: var(--color-primary-text); background: var(--color-primary); font-size: 16px; font-weight: 600; }
 .text-button.report-inspector-done:hover:not(:disabled) { background: var(--color-primary-hover); }
 .viewer-floating-bar, .viewer-mini-bar, .viewer-mini-settings-panel { border-radius: var(--panel-radius); box-shadow: 0 4px 16px rgba(17,24,39,.08); }
-.viewer-mini-settings-panel { gap: 16px; padding: 24px; }
+.viewer-mini-settings-panel { gap: 16px; padding: 12px; }
 .viewer-mini-settings-section { gap: 8px; }
-.viewer-mini-settings-section > strong { font-size: var(--font-section); font-weight: 700; }
-.viewer-mini-settings-section > label { font-size: var(--font-description); }
+.viewer-mini-settings-section > strong { color: var(--color-text); font-size: 16px; font-weight: 600; }
+.viewer-mini-settings-section > label { color: var(--color-text-secondary); font-size: 13px; font-weight: 400; }
 .colorwork-settings-note, .colorwork-input-grid label span, .colorwork-dimension-result small, .colorwork-settings-error { font-size: var(--font-description); }
 .colorwork-settings-note { margin: 24px 24px 16px; }
 .colorwork-input-grid { gap: 16px; padding-inline: 24px; }
@@ -229,7 +229,7 @@
 .number-counter-panel .counter-panel-settings .counter-global-section > h3,
 .number-counter-panel .counter-kind-picker > strong { font-size: var(--tool-font-14); font-weight: 600; }
 .number-counter-panel .counter-main-aux-card strong,
-.number-counter-panel .counter-kind-choice b { font-size: var(--tool-font-16); font-weight: 600; }
+.number-counter-panel .counter-kind-choice b { font-size: var(--tool-font-14); font-weight: 600; }
 .number-counter-panel .counter-main-aux-card small,
 .number-counter-panel .counter-main-repeat-summary > span,
 .number-counter-panel .counter-main-repeat-summary > small,
@@ -793,9 +793,49 @@
   }
 }
 
-.viewer-shell:not(.report-mode) .viewer-footer-work-counter .viewer-mini-counter-row strong { font-size: 15px; font-weight: 600; }
-.viewer-shell:not(.report-mode) .viewer-footer-work-counter .viewer-mini-counter-row span { color: var(--color-text-secondary); font-size: 10px; }
-.viewer-shell:not(.report-mode) .viewer-footer-work-counter .viewer-mini-counter-row small { color: var(--color-text-secondary); font-size: 9px; }
+@media (pointer: coarse) {
+  .number-counter-panel[data-popup-size] {
+    --tool-font-11: 12px;
+    --tool-font-12: 12px;
+    --tool-font-13: 13px;
+    --tool-font-14: 14px;
+    --tool-font-16: 16px;
+    --tool-font-20: 20px;
+    font-size: 13px;
+    letter-spacing: -.2px;
+  }
+  .number-counter-panel[data-popup-size] .counter-panel-title { font-size: var(--tool-font-16); }
+  .number-counter-panel[data-popup-size] .counter-popover-body { font-size: 13px; }
+  .number-counter-panel[data-popup-size] .counter-popover-body :is(button, summary, input:not([type="checkbox"]):not([type="radio"]):not([type="color"]), select, textarea) { font-size: 13px; }
+  .number-counter-panel[data-popup-size] .counter-popover-footer { font-size: var(--tool-font-12); }
+}
+
+.text-style-toolbar .text-style-color,
+.text-style-toolbar .text-style-size > span,
+.text-style-toolbar .text-style-opacity > span { color: var(--color-text-secondary); font-size: 13px; font-weight: 400; }
+.text-style-toolbar input[type="number"] { font-size: 13px; }
+
+.number-counter-panel .counter-popover-body { color: var(--color-text); }
+.number-counter-panel :is(.counter-main-design-section > header h3, .counter-main-aux-section > header h3, .counter-panel-settings .counter-global-section > h3, .counter-kind-picker > strong) { color: var(--color-text); font-size: var(--tool-font-14); font-weight: 600; }
+.number-counter-panel :is(.counter-main-aux-card strong, .counter-kind-choice b) { color: var(--color-text); font-size: var(--tool-font-14); font-weight: 600; }
+.number-counter-panel .counter-main-aux-card.selected strong, .number-counter-panel .counter-kind-choice.selected b { color: var(--color-primary); }
+.number-counter-panel :is(.counter-main-setting-row > span, .counter-main-setting-row > label, .counter-settings-field, .counter-settings-choice > span, .counter-settings-checks label, .counter-settings-toggle, .counter-task-kind-field legend) { color: var(--color-text-secondary); font-size: var(--tool-font-13); font-weight: 400; }
+.number-counter-panel :is(.counter-settings-note, .counter-field-hint, .counter-main-aux-card small, .counter-main-repeat-summary > span, .counter-main-repeat-summary > small, .counter-kind-choice small, .counter-timer-link-option small, .counter-link-note, .counter-schedule-preview small, .counter-goal-setting-row > label small, .counter-panel-editor .eyebrow, .counter-popover-footer) { color: var(--color-text-secondary); font-size: var(--tool-font-12); font-weight: 400; }
+.number-counter-panel :is(.counter-settings-choice button, .counter-knitting-mode button, .counter-task-kind-field button, .counter-editor-management button, .counter-panel-editor .modal-actions button) { color: var(--color-text-secondary); font-size: var(--tool-font-13); font-weight: 500; }
+.number-counter-panel .counter-panel-editor .modal-actions > .primary-button { color: var(--color-primary-text); }
+.number-counter-panel :is(.counter-settings-choice button.selected, .counter-knitting-mode button.selected, .counter-task-kind-field button.selected, .counter-main-add-button, .counter-management-mode-button[aria-pressed="true"]) { color: var(--color-primary); }
+.number-counter-panel .counter-popover-body :is(input:not([type="checkbox"]):not([type="radio"]):not([type="color"]), select, textarea) { color: var(--color-text); font-size: var(--tool-font-13); }
+
+.viewer-shell:not(.report-mode) .viewer-footer-control-row { color: var(--color-text-secondary); font-size: 13px; font-weight: 400; letter-spacing: -.2px; }
+.viewer-shell:not(.report-mode) .viewer-footer-work-counter-name { color: var(--color-text); font-size: 13px; font-weight: 500; letter-spacing: -.2px; }
+.viewer-shell:not(.report-mode) .viewer-footer-work-counter .viewer-mini-counter-row strong,
+.viewer-shell:not(.report-mode) .viewer-footer-work-counter .viewer-mini-counter-row-input,
+.viewer-shell:not(.report-mode) .viewer-footer-work-value { color: var(--color-text); font-size: 16px; font-weight: 600; font-variant-numeric: tabular-nums; }
+.viewer-shell:not(.report-mode) .viewer-footer-work-counter .viewer-mini-counter-row { column-gap: 4px; }
+.viewer-shell:not(.report-mode) .viewer-footer-work-counter .viewer-mini-counter-row small { color: var(--color-text-secondary); font-size: 12px; font-weight: 400; }
+.viewer-shell:not(.report-mode) .viewer-footer-control-row :is(.viewer-footer-zoom, .viewer-footer-page-count, .viewer-mobile-zoom-trigger) { color: var(--color-text-secondary); font-size: 13px; font-weight: 500; letter-spacing: -.2px; }
+.viewer-shell:not(.report-mode) .viewer-footer-work-stepper .viewer-mini-counter-step { border: 0; border-radius: 0; background: transparent; }
+.viewer-shell:not(.report-mode) :is(.viewer-footer-work-counter .viewer-mini-counter-row, .viewer-footer-work-value) { border: 0; border-radius: 0; background: var(--color-surface); box-shadow: none; }
 .viewer-shell:not(.report-mode) .viewer-footer-work-timer .viewer-work-timer { gap: 2px; }
-.viewer-shell:not(.report-mode) .viewer-footer-work-timer .viewer-work-timer-elapsed { width: 80px; min-width: 80px; height: 44px; flex: 0 0 80px; padding: 0 2px; font-size: 12px; }
+.viewer-shell:not(.report-mode) .viewer-footer-work-timer .viewer-work-timer-elapsed { width: 80px; min-width: 80px; height: 44px; flex: 0 0 80px; padding: 0 2px; color: var(--color-text-secondary); font-size: 13px; font-weight: 500; font-variant-numeric: tabular-nums; }
 .viewer-shell:not(.report-mode) .viewer-footer-work-timer .viewer-work-timer-toggle { width: 44px; min-width: 44px; height: 44px; flex: 0 0 44px; border: 0; border-radius: 50%; }

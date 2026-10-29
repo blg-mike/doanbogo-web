@@ -2,7 +2,7 @@ import { formatNumber, t, translateMessage } from './locales/index'
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type DragEvent as ReactDragEvent, type FormEvent as ReactFormEvent, type MouseEvent as ReactMouseEvent, type PointerEvent as ReactPointerEvent, type ReactNode, type UIEvent as ReactUIEvent } from 'react'
 import type { PDFDocumentProxy } from 'pdfjs-dist'
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
-import { ArrowLeft, Bookmark, Check, ChevronDown, ChevronLeft, ChevronRight, ChevronUp, Columns2, Eraser, Eye, EyeClosed, EyeOff, Files, Focus, Grid3X3, Highlighter, Maximize2, Minus, Minimize2, MoreHorizontal, MousePointer2, Pencil, Plus, Redo2, RefreshCw, ScanLine, Settings2, Square, Type, Undo2, X } from 'lucide-react'
+import { ArrowLeft, ArrowLeftToLine, ArrowRightToLine, Bookmark, Check, ChevronDown, ChevronLeft, ChevronRight, ChevronUp, Columns2, Eraser, Eye, EyeClosed, EyeOff, Files, Grid3X3, Highlighter, Maximize2, Minus, Minimize2, MoreHorizontal, MousePointer2, Pencil, Plus, Redo2, RefreshCw, ScanLine, Settings2, Square, Type, Undo2, X } from 'lucide-react'
 import { createPortal } from 'react-dom'
 import BrandLoading from './BrandLoading'
 import yyLogo from './assets/yy-logo.png'
@@ -359,6 +359,9 @@ export default function Viewer() {
   const [headerMoreOpen, setHeaderMoreOpen] = useState(false)
   const [footerMoreOpen, setFooterMoreOpen] = useState(false)
   const [zoomMenuOpen, setZoomMenuOpen] = useState(false)
+  const [footerToolsUi, setFooterToolsUi] = useState(() => ({ documentId: id, collapsed: false }))
+  if (footerToolsUi.documentId !== id) setFooterToolsUi({ documentId: id, collapsed: false })
+  const footerToolsCollapsed = footerToolsUi.documentId === id && footerToolsUi.collapsed
   const requestViewerExit = useCallback(async () => {
     if (viewerExitInFlightRef.current) return
     viewerExitInFlightRef.current = true
@@ -1656,7 +1659,7 @@ export default function Viewer() {
     const edited = next.find((counter) => counter.id === counterId)
     if (!acquireCounterActionLock()) return
     handleCounterTimerInteraction()
-    void commitCounterTransaction(next, (edited?.name ?? '카운터') + ' 숫자 보정', edited?.kind === 'simple' ? edited.value : edited?.currentRow ?? 0, undefined, true, undefined, undefined, undefined, counterGuideCorrection(current, next)).finally(releaseCounterActionLock)
+    void commitCounterTransaction(next, (edited?.name ?? '카운터') + ' 숫자 보정', edited?.kind === 'simple' ? edited.value : edited?.currentRow ?? 0, undefined, true, undefined, isMainRow ? counterId : undefined, undefined, counterGuideCorrection(current, next)).finally(releaseCounterActionLock)
   }
 
   function undoCounterAction() {
@@ -2920,11 +2923,11 @@ export default function Viewer() {
   return (
     <>
     {timerElement}
-    <main ref={viewerShellRef} className={'viewer-shell' + (reportMode ? ' report-mode' : '') + (focusView && !reportMode ? ' focus-view' : '') + (thumbnailCollapsed ? ' thumbnail-collapsed' : '') + (selectedThumbnailPages.length > 0 || thumbnailGroupError ? ' thumbnail-feedback-visible' : '') + (counterPanelVisible && !reportMode ? ' counter-panel-visible' : '')} onContextMenu={reportMode ? undefined : preventViewerContextMenu}>
+    <main ref={viewerShellRef} className={'viewer-shell' + (reportMode ? ' report-mode' : '') + (focusView && !reportMode ? ' focus-view' : '') + (footerToolsCollapsed && !reportMode ? ' footer-tools-collapsed' : '') + (thumbnailCollapsed ? ' thumbnail-collapsed' : '') + (selectedThumbnailPages.length > 0 || thumbnailGroupError ? ' thumbnail-feedback-visible' : '') + (counterPanelVisible && !reportMode ? ' counter-panel-visible' : '')} onContextMenu={reportMode ? undefined : preventViewerContextMenu}>
       {suspendError && <div className="viewer-save-warning" role="alert"><span>{translateMessage(suspendError)}</span><button type="button" aria-label={t("저장 알림 닫기")} onClick={() => setSuspendError('')}><X size={14} /></button></div>}
       {annotationLimitNotice && <div className="viewer-limit-notice" role="status" aria-live="polite">{annotationLimitNotice}</div>}
       {showZoomHint && !reportMode && <aside className="viewer-zoom-hint" role="status"><span>{t("마우스 휠로 확대 · 이동 도구에서 드래그로 이동")}</span><button type="button" aria-label={t("확대·이동 안내 닫기")} onClick={() => setShowZoomHint(false)}><X size={15} /></button></aside>}
-      {focusView && !reportMode && <button ref={focusRestoreButtonRef} type="button" className="viewer-focus-restore" aria-label={t('UI 복원')} title={t('UI 복원')} onClick={toggleFocusView}><Minimize2 size={20} /><span>{t('UI 복원')}</span></button>}
+      {focusView && !reportMode && <button ref={focusRestoreButtonRef} type="button" className="viewer-focus-restore" aria-label={t('집중 보기 끄기')} title={t('집중 보기 끄기')} onClick={toggleFocusView}><Maximize2 size={20} /><span>{t('집중 보기 끄기')}</span></button>}
       <header className="viewer-header">
         <div className="viewer-brand"><img src={yyLogo} alt={t("도안보고 로고")} /><small>{t("YY공동제작")}</small></div>
         <button className="viewer-back" aria-label={t('저장하고 나가기')} disabled={timerSaving || viewerExitSaving} onClick={() => void requestViewerExit()}><ArrowLeft size={20} /><span>{t('저장하고 나가기')}</span></button>
@@ -2936,13 +2939,13 @@ export default function Viewer() {
               <button type="button" className="viewer-action viewer-header-icon-action" aria-label={t('다시 실행')} title={t('다시 실행')} disabled={!canRedo} onClick={() => undoRedo('redo')}><Redo2 size={18} /></button>
             </div>
             <button className={'viewer-action viewer-split-toggle ' + (snapshot.split ? 'selected' : '')} aria-label={snapshot.split ? t('한 영역 보기') : t('두 영역 보기')} title={snapshot.split ? t('한 영역 보기') : t('두 영역 보기')} aria-pressed={snapshot.split} onClick={toggleSplit}><Columns2 size={18} /><span>{snapshot.split ? t('한 영역 보기') : t('두 영역 보기')}</span></button>
-            <button ref={desktopFocusTriggerRef} type="button" className={'viewer-action viewer-focus-toggle' + (focusView ? ' selected' : '')} data-focus-view-trigger aria-label={t('도안만 보기')} title={t('도안만 보기')} aria-pressed={focusView} disabled={focusViewBlocked} onClick={toggleFocusView}><Focus size={19} /></button>
+            <button ref={desktopFocusTriggerRef} type="button" className={'viewer-action viewer-focus-toggle' + (focusView ? ' selected' : '')} data-focus-view-trigger aria-label={t('집중 보기 켜기')} title={t('집중 보기 켜기')} aria-pressed={focusView} disabled={focusViewBlocked} onClick={toggleFocusView}><Minimize2 size={19} /></button>
             <div className="viewer-header-more-anchor">
               <button ref={headerMoreTriggerRef} type="button" className="viewer-action viewer-header-more" aria-label={t('더보기')} title={t('더보기')} aria-haspopup="menu" aria-expanded={headerMoreOpen} onClick={() => setHeaderMoreOpen((open) => !open)}><MoreHorizontal size={20} /></button>
               {headerMoreOpen && <div ref={headerMorePanelRef} className="viewer-compact-menu viewer-header-menu" role="menu" aria-label={t('더보기')}>
                 <button type="button" role="menuitem" disabled={!canRedo} onClick={() => { setHeaderMoreOpen(false); undoRedo('redo') }}><Redo2 size={18} /><span>{t('다시 실행')}</span></button>
                 <button type="button" role="menuitem" className={snapshot.split ? 'selected' : ''} aria-pressed={snapshot.split} onClick={() => { setHeaderMoreOpen(false); toggleSplit() }}><Columns2 size={18} /><span>{snapshot.split ? t('한 영역 보기') : t('두 영역 보기')}</span></button>
-                <button type="button" role="menuitem" data-focus-view-trigger disabled={focusViewBlocked} onClick={toggleFocusView}><Focus size={18} /><span>{t('도안만 보기')}</span></button>
+                <button type="button" role="menuitem" data-focus-view-trigger disabled={focusViewBlocked} onClick={toggleFocusView}><Minimize2 size={18} /><span>{t('집중 보기 켜기')}</span></button>
                 <button type="button" role="menuitem" disabled={!pdf || Boolean(recognitionRescanPages[activePage])} onClick={() => { setHeaderMoreOpen(false); retryPageRecognition(activePage) }}><ScanLine size={18} /><span>{t('QR·링크 다시 검사')}</span></button>
               </div>}
             </div>
@@ -3024,14 +3027,19 @@ export default function Viewer() {
         </div>}
         </>}
         </div>
-        <div className="viewer-footer-control-row">
+        <div className={'viewer-footer-control-row' + (footerToolsCollapsed && !reportMode ? ' footer-tools-collapsed' : '')}>
         {!reportMode && <div className="viewer-footer-work-tools" role="group" aria-label={t('카운터')}>
           <div className="viewer-footer-work-main">
             {mainCounter && <div className="viewer-footer-work-counter" style={{ '--counter-color': mainCounter.color } as CSSProperties}>
               <span className="viewer-footer-work-aux-color" style={{ background: mainCounter.color }} aria-hidden="true" />
               <button type="button" className="viewer-footer-work-counter-name" aria-label={`${mainCounter.name} · ${t('설정 수정')}`} title={mainCounter.name} disabled={counterSettingsSaving} onClick={(event) => { counterPanelFocusRef.current = event.currentTarget; requestCounterPanelAction('edit', mainCounter.id) }}>{counterFooterName(mainCounter.name)}</button>
               <div className="viewer-footer-work-stepper" role="group" aria-label={mainCounter.name}>
-                <button type="button" className="viewer-mini-counter-step" aria-label={t('이전 단으로 되돌리기')} title={mainCounterCanStepBack ? t('이전 단으로 되돌리기') : t('정확한 복원 이력이 없습니다')} disabled={!mainCounterCanStepBack || counterActionSaving} onClick={() => { if (mainCounter.value > 1) rewindCounter(mainCounter.id, mainCounter.value - 1) }}><Minus size={18} /></button>
+                <button type="button" className="viewer-mini-counter-step" aria-label={t('이전 단으로 되돌리기')} title={t('이전 단으로 되돌리기')} disabled={mainCounter.value <= 1 || counterActionSaving} onClick={() => {
+                  if (mainCounter.value <= 1) return
+                  const targetRow = mainCounter.value - 1
+                  if (mainCounterCanStepBack) rewindCounter(mainCounter.id, targetRow)
+                  else setCounterValue(mainCounter.id, targetRow)
+                }}><Minus size={18} /></button>
                 {counterRowEditing
                   ? <input ref={counterRowInputRef} className="viewer-mini-counter-row-input" aria-label={t('단 번호 입력')} type="number" inputMode="numeric" min="1" max={MAX_COUNTER_ROW} step="1" autoFocus disabled={counterActionSaving} value={counterRowDraft} onChange={(event) => setCounterRowDraft(event.currentTarget.value)} onBlur={() => { if (skipCounterRowBlurRef.current) { skipCounterRowBlurRef.current = false; return } finishCounterRowEdit() }} onKeyDown={(event) => {
                     if (event.key === 'Enter') { event.preventDefault(); event.currentTarget.blur() }
@@ -3071,6 +3079,15 @@ export default function Viewer() {
           <div className="viewer-footer-work-secondary">
             <button ref={counterPanelFocusRef} type="button" className="viewer-footer-work-manage" aria-label={t('카운터 관리')} title={t('카운터 관리')} aria-pressed={counterPanelVisible} disabled={counterSettingsSaving} onClick={(event) => { counterPanelFocusRef.current = event.currentTarget; setSavedCounterSession({ documentId: id, visible: !counterPanelVisible }) }}><Settings2 size={18} />{counterAlertPending && <i className="counter-notification-dot" aria-hidden="true" />}</button>
             <div className="viewer-footer-work-timer" role="group" aria-label={t('작업 타이머')}><div className="viewer-timer-portal-host" ref={setTimerPortalHost} /></div>
+            <button type="button" className="viewer-footer-tools-toggle" aria-label={t(footerToolsCollapsed ? '푸터 도구 펼치기' : '푸터 도구 접기')} title={t(footerToolsCollapsed ? '푸터 도구 펼치기' : '푸터 도구 접기')} aria-expanded={!footerToolsCollapsed} disabled={counterSettingsSaving || !footerToolsCollapsed && workTimePanelBlocking} onClick={() => {
+              if (counterSettingsSaving || !footerToolsCollapsed && workTimePanelBlocking) return
+              const collapsed = !footerToolsCollapsed
+              if (collapsed) {
+                setZoomMenuOpen(false)
+                setFooterMoreOpen(false)
+              }
+              setFooterToolsUi({ documentId: id, collapsed })
+            }}>{footerToolsCollapsed ? <ArrowLeftToLine size={18} /> : <ArrowRightToLine size={18} />}</button>
             {!reportMode && <div className="viewer-footer-mobile-controls">
           <button type="button" className="viewer-page-control-button" aria-label={t('이전')} title={t('이전')} disabled={activeVisiblePageIndex <= 0} onClick={() => navigateVisiblePage(-1)}><ChevronLeft size={20} /></button>
           <span className="viewer-footer-page-count" aria-label={t('페이지') + ' ' + activePage + ' / ' + pdf.numPages} title={t('페이지') + ' ' + activePage + ' / ' + pdf.numPages}>{formatNumber(activePage)} / {formatNumber(pdf.numPages)}</span>

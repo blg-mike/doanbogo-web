@@ -6,6 +6,7 @@ import type { CounterKind, CounterSnapshot, CounterTimerLinkMode, ViewerSnapshot
 import { MAX_COUNTER_ROW, MAX_COUNTERS_PER_TYPE, counterAlertState, createCounter, duplicateCounterSnapshot, maxCountersForType, repeatCounterProgress, repeatCounterStepBlock, taskSchedule } from './smartCounter'
 import { repeatCounterBlockLabel } from './counterAlertText'
 import { ColorPresetButtons } from './ColorPresetButtons'
+import { ANNOTATION_COLOR_PRESETS } from './designTokens'
 import { canStartCounterPopoverDrag, COUNTER_POPOVER_LONG_PRESS_MS, getCounterPopoverDragPosition, shouldCancelCounterPopoverLongPress } from './counterPopoverDrag'
 import { getDefaultViewerPopupSize, getViewerPopupSize, getViewerPopupSizeClass, readViewerPopupAvailableBounds, type ViewerPopupRect } from './viewerPopupResize'
 import { readViewerToolSize, saveViewerToolSize, type ViewerToolSize } from './viewerToolSizes'
@@ -213,7 +214,7 @@ function CounterEditor({ counter, counters, isNew = false, portal = true, inline
           })}
         </section>}
         <label className="counter-settings-field">{t("이름")}<input required maxLength={100} autoFocus value={draft.name} onChange={(event) => set('name', event.currentTarget.value)} /></label>
-        <label className="counter-settings-field">{t("표시 색상")}<ColorPresetButtons label={t("카운터 색상")} className="counter-color-presets" value={draft.color} onChange={(color) => setAndSave('color', color)} /></label>
+        <label className="counter-settings-field">{t("표시 색상")}<ColorPresetButtons label={t("카운터 색상")} className="counter-color-presets" presets={ANNOTATION_COLOR_PRESETS} includeCurrentColor={false} value={draft.color} onChange={(color) => setAndSave('color', color)} /></label>
         {draft.kind === 'simple' && <>
           <label className="counter-settings-field">{t("현재 숫자")}<input type="number" min="0" max={MAX_COUNTER_ROW} value={draft.value} onChange={(event) => set('value', Number(event.currentTarget.value))} /></label>
         </>}
