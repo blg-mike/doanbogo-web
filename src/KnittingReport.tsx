@@ -330,10 +330,10 @@ export default function KnittingReport({ documentId, fileName, pageCount, totalW
       setMoreOpen(false)
       moreTriggerRef.current?.focus()
     }
-    document.addEventListener('pointerdown', handlePointerDown)
+    document.addEventListener('pointerdown', handlePointerDown, true)
     document.addEventListener('keydown', handleKeyDown)
     return () => {
-      document.removeEventListener('pointerdown', handlePointerDown)
+      document.removeEventListener('pointerdown', handlePointerDown, true)
       document.removeEventListener('keydown', handleKeyDown)
     }
   }, [moreOpen])

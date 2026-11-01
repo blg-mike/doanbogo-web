@@ -16,14 +16,17 @@ import { appendInkPoint, createInkAnnotation, createInkId, type ActiveInkStroke,
 import { shouldPreventTextNotePointerDefault, textNoteBoxAt, textNoteCounterRotation, textNoteGestureExceededThreshold } from './textNote'
 import { safeQrHref, shouldOpenLinkAfterGesture, type PdfQrLink } from './qr'
 import { rotatedPageSize } from './pageGeometry'
+import { annotationSelectionBounds, clampAnnotationDelta, selectAnnotationsInRect, translateAnnotations, type AnnotationDelta, type AnnotationRect } from './annotationSelection'
 import { displayRectToPageRect, focusBandHeightRatio, focusDimOpacity, focusRowSpacing, guideGeometryForRotation, pageRectToDisplayRect } from './focusGeometry'
-import { canStartPaneGesture, clientPointForPagePosition, classifyWheelInput, isEditableTarget, isZoomFocusCurrent, nearestZoomLevel, pagePositionAtClientPoint, pinchPreviewTranslation, regionHighlightPointerAction, scrollOffsetForZoomFocus, visiblePageCrop, visiblePageFocus, wheelActionForBurst, wheelZoom, type WheelInput, type ZoomFocus } from './viewerInteraction'
+import { canStartPaneGesture, clientPointForPagePosition, classifyWheelInput, isEditableTarget, isZoomFocusCurrent, MAX_ZOOM, MIN_ZOOM, nearestZoomLevel, pagePositionAtClientPoint, pinchPreviewTranslation, regionHighlightPointerAction, scrollOffsetForZoomFocus, visiblePageCrop, visiblePageFocus, wheelActionForBurst, wheelZoom, type WheelInput, type ZoomFocus } from './viewerInteraction'
+import { useDismissiblePopover } from './useDismissiblePopover'
 import { acquireThumbnailCache, getViewerResourcePolicy, MAX_PDF_CANVAS_PIXELS, pdfRasterScale, releaseCanvasWhenSettled, viewerCanvasMemory } from './pdfRenderResources'
 import { pdfPageRenderQueue } from './pdfPageRenderQueue'
 import type { LimitedAnnotationKind } from './annotationLimits'
 
 type Point = { x: number; y: number }
 type Size = { width: number; height: number }
+type AnnotationSelectionGesture = { kind: 'area' | 'move'; pointerId: number; start: Point; before: PageWorkRecord; ids: string[] }
 type ColorworkTransform = {
   pointerId: number
   kind: 'move' | 'resize'
@@ -426,7 +429,7 @@ function withTextBox(annotation: AnnotationRecord, pageHeight: number): Annotati
   return { ...annotation, points: [{ x: box.x, y: box.y }], boxWidth: box.width, boxHeight: box.height }
 }
 
-export function PdfPage({ pdf, page, paneId, pane, paneGestureOwnerRef, splitView, rotation, active, tool, lineSettings, counters, mainCounterId, annotationStyle, work, colorworkEnabled, workReady, canCreateLimitedAnnotation, pageWorkLoadError, onRetryPageWork, recognitionError, onRetryRecognition, colorworkBrushColor, colorworkBrushOpacity, colorworkEraser, createColorworkRequest, pageLinks, qrLinks, textStylePortalTarget, onPageRendered, onActivate, onWorkChange, onChartRowsApply, onZoom, onCenter, onColorworkRequestHandled, onTextToolConsumed, onRegionHighlightToolConsumed }: {
+export function PdfPage({ pdf, page, paneId, pane, paneGestureOwnerRef, splitView, rotation, active, tool, lineSettings, counters, mainCounterId, annotationStyle, work, colorworkEnabled, workReady, canCreateLimitedAnnotation, pageWorkLoadError, onRetryPageWork, recognitionError, onRetryRecognition, colorworkBrushColor, colorworkBrushOpacity, colorworkEraser, createColorworkRequest, pageLinks, qrLinks, textStylePortalTarget, onPageRendered, onActivate, onWorkChange, onAnnotationSelectionMove, onChartRowsApply, onZoom, onCenter, onColorworkRequestHandled, onTextToolConsumed, onRegionHighlightToolConsumed }: {
   pdf: PDFDocumentProxy
   page: number
   paneId: PaneId
@@ -458,6 +461,7 @@ export function PdfPage({ pdf, page, paneId, pane, paneGestureOwnerRef, splitVie
   onPageRendered: (pageNumber: number, canvas: HTMLCanvasElement) => void
   onActivate: () => void
   onWorkChange: (work: PageWorkRecord, immediate: boolean, recordHistory?: boolean, historyBefore?: PageWorkRecord, cellChanges?: { index: number; before: ColorworkCell | null; after: ColorworkCell | null }[]) => boolean
+  onAnnotationSelectionMove: (work: PageWorkRecord, before: PageWorkRecord) => Promise<boolean>
   onChartRowsApply: (work: PageWorkRecord, before: PageWorkRecord) => Promise<boolean>
   onZoom: (zoom: number, focus?: ZoomFocus) => void
   onCenter: (x: number, y: number) => void
@@ -519,6 +523,21 @@ export function PdfPage({ pdf, page, paneId, pane, paneGestureOwnerRef, splitVie
     | null
   >(null)
   const strokeRef = useRef<ActiveInkStroke | null>(null)
+  const annotationSelectionGesture = useRef<AnnotationSelectionGesture | null>(null)
+  const annotationSelectionSavingRef = useRef(false)
+  const annotationSelectionContextRef = useRef(0)
+  const failedAnnotationSelectionMove = useRef<{ ids: string[]; delta: AnnotationDelta } | null>(null)
+  const selectedAnnotationIdsRef = useRef<string[]>([])
+  const annotationSelectionFrameRef = useRef<AnnotationRect | null>(null)
+  const [selectedAnnotationIds, setSelectedAnnotationIds] = useState<string[]>([])
+  const [annotationSelectionDraft, setAnnotationSelectionDraft] = useState<AnnotationRect | null>(null)
+  const [annotationSelectionMovePreview, setAnnotationSelectionMovePreview] = useState<{ ids: string[]; delta: AnnotationDelta } | null>(null)
+  const [annotationSelectionSaving, setAnnotationSelectionSaving] = useState(false)
+  const [annotationSelectionSaveError, setAnnotationSelectionSaveError] = useState(false)
+  const annotationSelectionFrame = selectedAnnotationIds.length && displayedSize
+    ? annotationSelectionBounds(work.annotations.filter((annotation) => selectedAnnotationIds.includes(annotation.id)), displayedSize.page, rotation)
+    : null
+  annotationSelectionFrameRef.current = annotationSelectionFrame
   const strokePreviewFrameRef = useRef<number | null>(null)
   const strokeListenersRef = useRef<{ svg: SVGSVGElement; move: (event: PointerEvent) => void; up: (event: PointerEvent) => void; cancel: (event: PointerEvent) => void; lost: (event: PointerEvent) => void } | null>(null)
   const failedStrokeRef = useRef<{ work: PageWorkRecord; before: PageWorkRecord; annotation: AnnotationRecord } | null>(null)
@@ -534,7 +553,13 @@ export function PdfPage({ pdf, page, paneId, pane, paneGestureOwnerRef, splitVie
   const onWorkChangeRef = useRef(onWorkChange)
   onWorkChangeRef.current = onWorkChange
   const [selectedNoteId, setSelectedNoteId] = useState<string | null>(null)
+  const textStyleToolbarRef = useRef<HTMLDivElement>(null)
+  const textStyleTriggerRef = useRef<HTMLDivElement>(null)
+  useDismissiblePopover(active && selectedNoteId !== null, textStyleToolbarRef, textStyleTriggerRef, () => setSelectedNoteId(null))
   const [editingNoteId, setEditingNoteId] = useState<string | null>(null)
+  const editingNoteIdRef = useRef(editingNoteId)
+  editingNoteIdRef.current = editingNoteId
+  const finishTextEditRef = useRef<(id: string) => void>(() => undefined)
   const [textDraft, setTextDraft] = useState<{ id: string; value: string } | null>(null)
   const [textPreviewPoint, setTextPreviewPoint] = useState<Point | null>(null)
   const [fontSizeDraft, setFontSizeDraft] = useState<{ id: string; value: string } | null>(null)
@@ -555,6 +580,40 @@ export function PdfPage({ pdf, page, paneId, pane, paneGestureOwnerRef, splitVie
     selectedRegionIdRef.current = id
     setSelectedRegionId(id)
     setRegionPopoverPosition(null)
+  }, [])
+  useEffect(() => {
+    annotationSelectionContextRef.current += 1
+    cancelAnnotationSelectionGesture(true)
+    // oxlint-disable-next-line react/set-state-in-effect -- Drop transient selection when its page or tool context changes.
+    updateAnnotationSelection([])
+    failedAnnotationSelectionMove.current = null
+    // oxlint-disable-next-line react/set-state-in-effect -- Clear the error for a different page or tool selection.
+    setAnnotationSelectionSaveError(false)
+    if (tool === 'selection') {
+      updateSelectedNoteId(null)
+      if (editingNoteIdRef.current !== null) finishTextEditRef.current(editingNoteIdRef.current)
+      setEditingNoteId(null)
+      setRegionPopoverOpen(false)
+      updateSelectedRegionId(null)
+    }
+  }, [tool, page, paneId, work.documentId, updateSelectedNoteId, updateSelectedRegionId])
+  useEffect(() => {
+    if (tool !== 'selection') return
+    const clearOnEscape = (event: KeyboardEvent) => {
+      if (event.key !== 'Escape' || (!annotationSelectionGesture.current && !selectedAnnotationIdsRef.current.length)) return
+      event.preventDefault()
+      event.stopPropagation()
+      clearAnnotationSelection()
+    }
+    window.addEventListener('keydown', clearOnEscape, true)
+    return () => window.removeEventListener('keydown', clearOnEscape, true)
+  }, [tool])
+  useEffect(() => () => {
+    const current = annotationSelectionGesture.current
+    annotationSelectionGesture.current = null
+    if (!current) return
+    const area = scrollRef.current
+    try { if (area?.hasPointerCapture(current.pointerId)) area.releasePointerCapture(current.pointerId) } catch { /* The browser may already have released it during unmount. */ }
   }, [])
   useEffect(() => {
     if (previousToolRef.current !== tool && tool === 'region-highlight') {
@@ -1516,8 +1575,126 @@ export function PdfPage({ pdf, page, paneId, pane, paneGestureOwnerRef, splitVie
     setRegionPopoverOpen(false)
   }
 
+  function updateAnnotationSelection(ids: string[]) {
+    selectedAnnotationIdsRef.current = ids
+    setSelectedAnnotationIds(ids)
+  }
+
+  function cancelAnnotationSelectionGesture(releaseCapture: boolean) {
+    const current = annotationSelectionGesture.current
+    annotationSelectionGesture.current = null
+    setAnnotationSelectionDraft(null)
+    setAnnotationSelectionMovePreview(null)
+    if (releaseCapture && current) {
+      const area = scrollRef.current
+      try { if (area?.hasPointerCapture(current.pointerId)) area.releasePointerCapture(current.pointerId) } catch { /* The browser may have already released the pointer. */ }
+    }
+  }
+
+  function clearAnnotationSelection() {
+    cancelAnnotationSelectionGesture(true)
+    updateAnnotationSelection([])
+    failedAnnotationSelectionMove.current = null
+    setAnnotationSelectionSaveError(false)
+  }
+
+  function beginAnnotationSelection(pointerId: number, pointerType: string, button: number, point: Point) {
+    if (!workReady || !displayedSize || annotationSelectionSavingRef.current || (pointerType === 'mouse' && button !== 0)) return
+    if (annotationSelectionGesture.current?.pointerId === pointerId) return
+    if (editingNoteId !== null) finishTextEdit(editingNoteId)
+    onActivate()
+    updateSelectedNoteId(null)
+    setEditingNoteId(null)
+    setTextPreviewPoint(null)
+    setRegionPopoverOpen(false)
+    updateSelectedRegionId(null)
+    const start = boundedPagePoint(point)
+    const ids = selectedAnnotationIdsRef.current
+    const frame = annotationSelectionFrameRef.current
+    const moveSelected = Boolean(frame && ids.length && start.x >= frame.x && start.x <= frame.x + frame.width && start.y >= frame.y && start.y <= frame.y + frame.height)
+    const before = currentWorkRef.current
+    const selected = moveSelected ? before.annotations.filter((annotation) => ids.includes(annotation.id)) : []
+    annotationSelectionGesture.current = {
+      kind: moveSelected ? 'move' : 'area',
+      pointerId,
+      start,
+      before,
+      ids: moveSelected ? ids : [],
+    }
+    setAnnotationSelectionDraft(moveSelected ? null : { x: start.x, y: start.y, width: 0, height: 0 })
+    setAnnotationSelectionMovePreview(moveSelected ? { ids, delta: { x: 0, y: 0 } } : null)
+    failedAnnotationSelectionMove.current = null
+    setAnnotationSelectionSaveError(false)
+    if (!selected.length && moveSelected) cancelAnnotationSelectionGesture(false)
+  }
+
+  async function persistAnnotationSelectionMove(work: PageWorkRecord, before: PageWorkRecord, ids: string[], delta: AnnotationDelta) {
+    if (annotationSelectionSavingRef.current) return false
+    annotationSelectionSavingRef.current = true
+    const context = annotationSelectionContextRef.current
+    setAnnotationSelectionSaving(true)
+    setAnnotationSelectionSaveError(false)
+    try {
+      const saved = await onAnnotationSelectionMove(work, before)
+      if (context !== annotationSelectionContextRef.current) return saved
+      if (!saved) {
+        failedAnnotationSelectionMove.current = { ids, delta }
+        setAnnotationSelectionSaveError(true)
+        return false
+      }
+      currentWorkRef.current = work
+      failedAnnotationSelectionMove.current = null
+      updateAnnotationSelection(ids)
+      return true
+    } catch {
+      if (context !== annotationSelectionContextRef.current) return false
+      failedAnnotationSelectionMove.current = { ids, delta }
+      setAnnotationSelectionSaveError(true)
+      return false
+    } finally {
+      annotationSelectionSavingRef.current = false
+      setAnnotationSelectionSaving(false)
+    }
+  }
+
+  async function retryAnnotationSelectionMove() {
+    const failed = failedAnnotationSelectionMove.current
+    const pageSize = displayedSize?.page
+    if (!failed || !pageSize || annotationSelectionSavingRef.current) return
+    const before = currentWorkRef.current
+    const selectedIds = new Set(failed.ids)
+    const selected = before.annotations.filter((annotation) => selectedIds.has(annotation.id))
+    const delta = clampAnnotationDelta(selected, failed.delta, pageSize, rotation)
+    const next = { ...before, annotations: translateAnnotations(before.annotations, selectedIds, delta, pageSize, rotation) }
+    await persistAnnotationSelectionMove(next, before, failed.ids, delta)
+  }
+
+  function finishAnnotationSelectionGesture(event: ReactPointerEvent<HTMLDivElement>, cancelled: boolean) {
+    const current = annotationSelectionGesture.current
+    const pageLayer = annotationLayerRef.current
+    const pageSize = displayedSize?.page
+    if (!current || current.pointerId !== event.pointerId || !pageLayer || !pageSize) return
+    annotationSelectionGesture.current = null
+    setAnnotationSelectionDraft(null)
+    setAnnotationSelectionMovePreview(null)
+    if (cancelled) return
+    const end = boundedPagePoint(pointFromEvent(event, pageLayer, rotation))
+    if (current.kind === 'area') {
+      const selection = regionFromPoints(current.start, end)
+      const matches = selectAnnotationsInRect(current.before.annotations, selection, pageSize, rotation)
+      const ids = matches.map((annotation) => annotation.id)
+      updateAnnotationSelection(ids)
+      return
+    }
+    const delta = clampAnnotationDelta(current.before.annotations.filter((annotation) => current.ids.includes(annotation.id)), { x: end.x - current.start.x, y: end.y - current.start.y }, pageSize, rotation)
+    if (Math.abs(delta.x) < 0.000001 && Math.abs(delta.y) < 0.000001) return
+    const ids = new Set(current.ids)
+    const next = { ...current.before, annotations: translateAnnotations(current.before.annotations, ids, delta, pageSize, rotation) }
+    void persistAnnotationSelectionMove(next, current.before, current.ids, delta)
+  }
+
   function handlePanePointerDownCapture(event: ReactPointerEvent<HTMLDivElement>) {
-    if (tool === 'pan' && !canStartPaneGesture(paneGestureOwnerRef.current, paneId)) {
+    if ((tool === 'pan' || tool === 'selection') && !canStartPaneGesture(paneGestureOwnerRef.current, paneId)) {
       event.preventDefault()
       event.stopPropagation()
       return
@@ -1534,6 +1711,42 @@ export function PdfPage({ pdf, page, paneId, pane, paneGestureOwnerRef, splitVie
     if (!(target instanceof Element) || !target.closest('.page-note, [data-region-highlight-id], [data-region-highlight-handle]')) {
       updateSelectedNoteId(null)
       updateSelectedRegionId(null)
+    }
+    if (tool === 'selection') {
+      if (event.pointerType === 'mouse' && event.button !== 0) return
+      const area = scrollRef.current
+      if (!area || !canStartPaneGesture(paneGestureOwnerRef.current, paneId) || pointers.current.has(event.pointerId)) return
+      pointers.current.set(event.pointerId, { x: event.clientX, y: event.clientY })
+      const selection = annotationSelectionGesture.current
+      if (selection?.pointerId === event.pointerId) {
+        paneGestureOwnerRef.current = paneId
+        try { event.currentTarget.setPointerCapture(event.pointerId) } catch { /* Pointer events can still bubble without capture. */ }
+        return
+      }
+      if (pointers.current.size < 2) return
+      const firstEntry = [...pointers.current.entries()].find(([pointerId]) => pointerId !== event.pointerId)
+      const layer = rotationLayerRef.current
+      if (!firstEntry || !layer) return
+      cancelAnnotationSelectionGesture(false)
+      linkGesturesRef.current.forEach((current) => { current.pinched = true })
+      paneGestureOwnerRef.current = paneId
+      try { event.currentTarget.setPointerCapture(event.pointerId) } catch { /* Pinch tracking also works without capture. */ }
+      const first = firstEntry[1]
+      const midpointX = (first.x + event.clientX) / 2
+      const midpointY = (first.y + event.clientY) / 2
+      const layerRect = layer.getBoundingClientRect()
+      cancelDetailRender()
+      gesture.current = {
+        kind: 'pinch', firstId: firstEntry[0], secondId: event.pointerId,
+        distance: Math.max(1, Math.hypot(event.clientX - first.x, event.clientY - first.y)),
+        zoom: pinchZoom.current ?? pane.zoom,
+        pagePoint: pagePositionAtClientPoint(layerRect, layer.clientWidth, layer.clientHeight, rotation, zoomPreviewScale, midpointX, midpointY),
+        pageWidth: layer.clientWidth,
+        pageHeight: layer.clientHeight,
+        layerCenterX: layerRect.left + layerRect.width / 2,
+        layerCenterY: layerRect.top + layerRect.height / 2,
+      }
+      return
     }
     if (tool !== 'pan' || (event.pointerType === 'mouse' && event.button !== 0)) return
     const area = scrollRef.current
@@ -1576,9 +1789,24 @@ export function PdfPage({ pdf, page, paneId, pane, paneGestureOwnerRef, splitVie
     const current = gesture.current
     const linkGesture = linkGesturesRef.current.get(event.pointerId)
     if (linkGesture && !shouldOpenLinkAfterGesture(linkGesture.startX, linkGesture.startY, event.clientX, event.clientY)) linkGesture.moved = true
-    if (tool !== 'pan' || !area || !current || !pointers.current.has(event.pointerId)) return
+    if (!area || !pointers.current.has(event.pointerId)) return
     pointers.current.set(event.pointerId, { x: event.clientX, y: event.clientY })
-    if (current.kind === 'pan' && current.pointerId === event.pointerId) {
+    if (tool === 'selection' && current?.kind !== 'pinch') {
+      const selection = annotationSelectionGesture.current
+      const pageLayer = annotationLayerRef.current
+      if (!selection || selection.pointerId !== event.pointerId || !pageLayer || !displayedSize) return
+      const point = boundedPagePoint(pointFromEvent(event, pageLayer, rotation))
+      if (selection.kind === 'area') {
+        setAnnotationSelectionDraft(regionFromPoints(selection.start, point))
+      } else {
+        const selected = selection.before.annotations.filter((annotation) => selection.ids.includes(annotation.id))
+        setAnnotationSelectionMovePreview({ ids: selection.ids, delta: clampAnnotationDelta(selected, { x: point.x - selection.start.x, y: point.y - selection.start.y }, displayedSize.page, rotation) })
+      }
+      return
+    }
+    if (tool !== 'pan' && !(tool === 'selection' && current?.kind === 'pinch')) return
+    if (!current) return
+    if (tool === 'pan' && current.kind === 'pan' && current.pointerId === event.pointerId) {
       area.scrollLeft = current.scrollLeft - (event.clientX - current.x)
       area.scrollTop = current.scrollTop - (event.clientY - current.y)
       return
@@ -1587,7 +1815,7 @@ export function PdfPage({ pdf, page, paneId, pane, paneGestureOwnerRef, splitVie
       const first = pointers.current.get(current.firstId)
       const second = pointers.current.get(current.secondId)
       if (!first || !second) return
-      const zoom = Math.min(5, Math.max(0.5, current.zoom * Math.hypot(second.x - first.x, second.y - first.y) / current.distance))
+      const zoom = Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, current.zoom * Math.hypot(second.x - first.x, second.y - first.y) / current.distance))
       pinchZoom.current = zoom
       const layer = rotationLayerRef.current
       if (layer) {
@@ -1603,6 +1831,7 @@ export function PdfPage({ pdf, page, paneId, pane, paneGestureOwnerRef, splitVie
     const area = scrollRef.current
     if (!pointers.current.has(event.pointerId)) return
     if (event.type === 'pointercancel') {
+      cancelAnnotationSelectionGesture(false)
       pointers.current.clear()
       linkGesturesRef.current.clear()
       gesture.current = null
@@ -1614,16 +1843,19 @@ export function PdfPage({ pdf, page, paneId, pane, paneGestureOwnerRef, splitVie
       return
     }
     pointers.current.set(event.pointerId, { x: event.clientX, y: event.clientY })
+    if (tool === 'selection' && gesture.current?.kind !== 'pinch' && annotationSelectionGesture.current?.pointerId === event.pointerId) {
+      finishAnnotationSelectionGesture(event, false)
+    }
     const linkGesture = linkGesturesRef.current.get(event.pointerId)
     if (tool === 'pan' && linkGesture && !linkGesture.moved && shouldOpenLinkAfterGesture(linkGesture.startX, linkGesture.startY, event.clientX, event.clientY, linkGesture.pinched)) {
       window.open(linkGesture.href, '_blank', 'noopener,noreferrer')
     }
     linkGesturesRef.current.delete(event.pointerId)
-    if (tool === 'pan' && current?.kind === 'pinch' && area) {
+    if ((tool === 'pan' || tool === 'selection') && current?.kind === 'pinch' && area) {
       const first = pointers.current.get(current.firstId)
       const second = pointers.current.get(current.secondId)
       if (first && second) {
-        const zoom = nearestZoomLevel(Math.min(5, Math.max(0.5, current.zoom * Math.hypot(second.x - first.x, second.y - first.y) / current.distance)))
+        const zoom = nearestZoomLevel(Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, current.zoom * Math.hypot(second.x - first.x, second.y - first.y) / current.distance)))
         const midpointX = (first.x + second.x) / 2
         const midpointY = (first.y + second.y) / 2
         const focus: ZoomFocus = { ...current.pagePoint, clientX: midpointX, clientY: midpointY, zoom, paneId, page, rotation }
@@ -1651,6 +1883,7 @@ export function PdfPage({ pdf, page, paneId, pane, paneGestureOwnerRef, splitVie
 
   function pointerCaptureLost(event: ReactPointerEvent<HTMLDivElement>) {
     if (!pointers.current.has(event.pointerId)) return
+    cancelAnnotationSelectionGesture(false)
     pointers.current.clear()
     linkGesturesRef.current.clear()
     gesture.current = null
@@ -2117,6 +2350,7 @@ export function PdfPage({ pdf, page, paneId, pane, paneGestureOwnerRef, splitVie
     setEditingNoteId((active) => active === id ? null : active)
     if (!annotation.text?.trim()) updateSelectedNoteId(null)
   }
+  finishTextEditRef.current = finishTextEdit
 
   function startTextEdit(id: string) {
     if (editingNoteId !== null && editingNoteId !== id && textEditBefore.current.has(editingNoteId)) finishTextEdit(editingNoteId)
@@ -2247,8 +2481,16 @@ export function PdfPage({ pdf, page, paneId, pane, paneGestureOwnerRef, splitVie
   }
 
   function handleTextNotePointerDown(event: ReactPointerEvent<HTMLDivElement>, annotation: AnnotationRecord) {
+    if (tool === 'selection') {
+      if (!pointers.current.size && annotationLayerRef.current) {
+        event.preventDefault()
+        beginAnnotationSelection(event.pointerId, event.pointerType, event.button, pointFromEvent(event, annotationLayerRef.current, rotation))
+      }
+      return
+    }
     event.stopPropagation()
     onActivate()
+    textStyleTriggerRef.current = event.currentTarget
     updateSelectedNoteId(annotation.id)
     const target = event.target
     const editingTarget = target instanceof Element && Boolean(target.closest('textarea'))
@@ -2311,6 +2553,12 @@ export function PdfPage({ pdf, page, paneId, pane, paneGestureOwnerRef, splitVie
       chartSelectionRef.current = { pointerId: event.pointerId, start }
       setChartSelectionPreview({ x: start.x, y: start.y, width: 0, height: 0 })
       try { event.currentTarget.setPointerCapture(event.pointerId) } catch { /* Page selection remains available without pointer capture. */ }
+      return
+    }
+    if (tool === 'selection') {
+      if (pointers.current.size) return
+      event.preventDefault()
+      beginAnnotationSelection(event.pointerId, event.pointerType, event.button, pointFromEvent(event, event.currentTarget, rotation))
       return
     }
     if (tool === 'pan') {
@@ -2386,11 +2634,13 @@ export function PdfPage({ pdf, page, paneId, pane, paneGestureOwnerRef, splitVie
   }
 
   function handleSvgPointerUp(event: ReactPointerEvent<SVGSVGElement>) {
+    if (tool === 'selection') return
     event.stopPropagation()
     finishSvgPointer(event, false)
   }
 
   function handleSvgPointerCancel(event: ReactPointerEvent<SVGSVGElement>) {
+    if (tool === 'selection') return
     event.stopPropagation()
     finishSvgPointer(event, true)
   }
@@ -2535,6 +2785,7 @@ export function PdfPage({ pdf, page, paneId, pane, paneGestureOwnerRef, splitVie
       <div className="pane-label">{active ? t('현재 작업 영역') : t('보조 영역')}</div>
       {recognitionError && <div className="pdf-recognition-retry" role="status"><span>{t('페이지 링크를 인식하지 못했습니다. 다시 시도해 주세요.')}</span><button type="button" onClick={onRetryRecognition}>{t('다시 시도')}</button></div>}
       {strokeError && <div className="ink-save-error" role="alert"><span>{t("필기를 반영하지 못했습니다.")}</span><button type="button" onClick={retryStrokeSave}>{t("다시 시도")}</button></div>}
+      {annotationSelectionSaveError && <div className="ink-save-error" role="alert"><span>{t('선택한 내용을 저장하지 못했습니다. 다시 이동해 주세요.')}</span><button type="button" disabled={annotationSelectionSaving} onClick={() => { void retryAnnotationSelectionMove() }}>{t('다시 시도')}</button></div>}
       <div className={'pdf-scroll-area' + (splitView && pane.zoom <= 1 ? ' is-fit-zoom' : '')} ref={scrollRef} onScroll={recordCenter} onPointerDownCapture={beginChartSelectionCapture} onPointerDown={pointerDown} onPointerMove={pointerMove} onPointerUp={pointerEnd} onPointerCancel={pointerEnd} onLostPointerCapture={pointerCaptureLost} onDoubleClick={doubleTap}>
         <div className="pdf-page-wrap" style={pageWrapStyle}>
           <div ref={rotationLayerRef} className="pdf-rotation-content" style={cssSize ? { width: cssSize.width, height: cssSize.height, transform: 'rotate(' + rotation + 'deg) scale(' + zoomPreviewScale + ')' } : undefined}>
@@ -2545,7 +2796,7 @@ export function PdfPage({ pdf, page, paneId, pane, paneGestureOwnerRef, splitVie
             {pageSize && cssSize && <>
             <svg
                 ref={pageSvgRef}
-                className={'pdf-svg-overlay ' + (tool === 'pan' ? 'pan-mode' : tool === 'text' ? 'text-mode' : 'draw-mode') + (chartRecognition?.stage === 'select' ? ' chart-row-selecting' : '')}
+                className={'pdf-svg-overlay ' + (tool === 'pan' ? 'pan-mode' : tool === 'text' ? 'text-mode' : tool === 'selection' ? 'annotation-selection-mode' : 'draw-mode') + (chartRecognition?.stage === 'select' ? ' chart-row-selecting' : '')}
                 viewBox={'0 0 ' + pageSize.width + ' ' + pageSize.height}
                 preserveAspectRatio="none"
               onPointerDown={handleSvgPointerDown}
@@ -2596,9 +2847,10 @@ export function PdfPage({ pdf, page, paneId, pane, paneGestureOwnerRef, splitVie
                 strokeDasharray="6 4"
                 style={{ pointerEvents: 'none' }}
               />}
-              {work.annotations.filter((annotation) => annotation.type !== 'text').map((annotation) =>
-                <path key={annotation.id} d={annotationPath(annotation, pageSize.width, pageSize.height)} fill="none" stroke={annotation.style.color} strokeWidth={annotation.style.thickness} strokeOpacity={annotation.style.opacity} strokeLinecap="round" strokeLinejoin="round" style={{ mixBlendMode: annotation.type === 'highlight' ? 'multiply' : 'normal', pointerEvents: tool === 'text' ? 'auto' : 'none' }} />,
-              )}
+              {work.annotations.filter((annotation) => annotation.type !== 'text').map((annotation) => {
+                const move = annotationSelectionMovePreview?.ids.includes(annotation.id) ? annotationSelectionMovePreview.delta : null
+                return <path key={annotation.id} d={annotationPath(annotation, pageSize.width, pageSize.height)} transform={move ? 'translate(' + move.x * pageSize.width + ' ' + move.y * pageSize.height + ')' : undefined} fill="none" stroke={annotation.style.color} strokeWidth={annotation.style.thickness} strokeOpacity={annotation.style.opacity} strokeLinecap="round" strokeLinejoin="round" style={{ mixBlendMode: annotation.type === 'highlight' ? 'multiply' : 'normal', pointerEvents: tool === 'text' ? 'auto' : 'none' }} />
+              })}
               {visiblePendingStrokePreviews.map(({ annotation }) => <path key={'pending-' + annotation.id} d={annotationPath(annotation, pageSize.width, pageSize.height)} fill="none" stroke={annotation.style.color} strokeWidth={annotation.style.thickness} strokeOpacity={annotation.style.opacity} strokeLinecap="round" strokeLinejoin="round" style={{ mixBlendMode: annotation.type === 'highlight' ? 'multiply' : 'normal', pointerEvents: 'none' }} />)}
               {currentDraft && <path d={annotationPath(currentDraft, pageSize.width, pageSize.height)} fill="none" stroke={currentDraft.style.color} strokeWidth={currentDraft.style.thickness} strokeOpacity={currentDraft.style.opacity} strokeLinecap="round" strokeLinejoin="round" style={{ mixBlendMode: currentDraft.type === 'highlight' ? 'multiply' : 'normal', pointerEvents: 'none' }} />}
               {selectedRegion && active && tool === 'pan' && <rect
@@ -2636,6 +2888,11 @@ export function PdfPage({ pdf, page, paneId, pane, paneGestureOwnerRef, splitVie
                 strokeWidth={cssSize ? pageSize.width / Math.max(cssSize.width, 1) * 1.5 : 1.5}
                 style={{ pointerEvents: 'none' }}
               />)}
+              {annotationSelectionDraft && <rect className="annotation-selection-draft" x={annotationSelectionDraft.x * pageSize.width} y={annotationSelectionDraft.y * pageSize.height} width={annotationSelectionDraft.width * pageSize.width} height={annotationSelectionDraft.height * pageSize.height} pointerEvents="none" />}
+              {annotationSelectionFrame && selectedAnnotationIds.length > 0 && (() => {
+                const move = annotationSelectionMovePreview?.delta
+                return <rect className="annotation-selection-frame" x={(annotationSelectionFrame.x + (move?.x ?? 0)) * pageSize.width} y={(annotationSelectionFrame.y + (move?.y ?? 0)) * pageSize.height} width={annotationSelectionFrame.width * pageSize.width} height={annotationSelectionFrame.height * pageSize.height} pointerEvents="none" />
+              })()}
               {chartRecognition?.stage === 'select' && <rect x="0" y="0" width={pageSize.width} height={pageSize.height} fill="transparent" pointerEvents="all" />}
               {chartSelectionPreview && <rect className="chart-row-selection-preview" x={chartSelectionPreview.x * pageSize.width} y={chartSelectionPreview.y * pageSize.height} width={chartSelectionPreview.width * pageSize.width} height={chartSelectionPreview.height * pageSize.height} />}
             </svg>
@@ -2646,15 +2903,18 @@ export function PdfPage({ pdf, page, paneId, pane, paneGestureOwnerRef, splitVie
               })()}
               {work.annotations.filter((annotation) => annotation.type === 'text').map((annotation) => {
                 const box = textBox(annotation, pageSize.height)
+                const selectionMove = annotationSelectionMovePreview?.ids.includes(annotation.id) ? annotationSelectionMovePreview.delta : null
                 const selected = annotation.id === selectedNoteId
                 const editing = editingNoteId === annotation.id
                 const fontSize = annotation.style.fontSize * cssSize.width / pageSize.width
                 return <div
                   key={annotation.id}
+                  ref={selected ? textStyleTriggerRef : undefined}
                   className={'page-note ' + (selected ? 'selected' : '') + (editing ? ' editing' : '')}
                   role="group"
+                  tabIndex={0}
                   aria-label={t("페이지 노트")}
-                  style={{ left: box.x * cssSize.width, top: box.y * cssSize.height, width: box.width * cssSize.width, height: box.height * cssSize.height, color: annotation.style.color, fontSize, transform: 'rotate(' + textNoteCounterRotation(rotation) + 'deg)' }}
+                  style={{ left: (box.x + (selectionMove?.x ?? 0)) * cssSize.width, top: (box.y + (selectionMove?.y ?? 0)) * cssSize.height, width: box.width * cssSize.width, height: box.height * cssSize.height, color: annotation.style.color, fontSize, transform: 'rotate(' + textNoteCounterRotation(rotation) + 'deg)' }}
                   onPointerDown={(event) => handleTextNotePointerDown(event, annotation)}
                   onPointerMove={movePendingTextGesture}
                   onPointerUp={(event) => finishPendingTextGesture(event)}
@@ -2686,6 +2946,7 @@ export function PdfPage({ pdf, page, paneId, pane, paneGestureOwnerRef, splitVie
                 const annotation = work.annotations.find((item) => item.id === selectedNoteId && item.type === 'text' && item.text?.trim())
                 if (!annotation) return null
                 return createPortal(<div
+                  ref={textStyleToolbarRef}
                   className="text-style-toolbar viewer-mini-settings-panel"
                   role="toolbar"
                   aria-label={t("선택한 텍스트 설정")}

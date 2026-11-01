@@ -227,6 +227,22 @@ Object.assign(extendedTranslations.da, regionHighlightTranslations.da)
 Object.assign(extendedTranslations.nb, regionHighlightTranslations.nb)
 Object.assign(extendedTranslations.fi, regionHighlightTranslations.fi)
 
+const annotationSelectionTranslations = {
+  en: { '구간 선택': 'Range select', '구간 선택 설명': 'Drag to select and move pen, highlighter, and text together.', '선택한 내용을 저장하지 못했습니다. 다시 이동해 주세요.': 'Could not save the selection. Try moving it again.' },
+  ja: { '구간 선택': '範囲選択', '구간 선택 설명': 'ドラッグしてペン、蛍光ペン、テキストを選択し、一緒に移動します。', '선택한 내용을 저장하지 못했습니다. 다시 이동해 주세요.': '選択範囲を保存できませんでした。もう一度移動してください。' },
+  de: { '구간 선택': 'Bereichsauswahl', '구간 선택 설명': 'Ziehen Sie, um Stift, Marker und Text gemeinsam auszuwählen und zu verschieben.', '선택한 내용을 저장하지 못했습니다. 다시 이동해 주세요.': 'Die Auswahl konnte nicht gespeichert werden. Verschieben Sie sie erneut.' },
+  da: { '구간 선택': 'Områdevalg', '구간 선택 설명': 'Træk for at vælge og flytte pen, overstregning og tekst samlet.', '선택한 내용을 저장하지 못했습니다. 다시 이동해 주세요.': 'Valget kunne ikke gemmes. Prøv at flytte det igen.' },
+  nb: { '구간 선택': 'Områdevalg', '구간 선택 설명': 'Dra for å velge og flytte penn, markeringstusj og tekst samlet.', '선택한 내용을 저장하지 못했습니다. 다시 이동해 주세요.': 'Utvalget kunne ikke lagres. Prøv å flytte det igjen.' },
+  fi: { '구간 선택': 'Aluevalinta', '구간 선택 설명': 'Valitse ja siirrä kynä, korostuskynä ja teksti yhdessä vetämällä.', '선택한 내용을 저장하지 못했습니다. 다시 이동해 주세요.': 'Valintaa ei voitu tallentaa. Yritä siirtää se uudelleen.' },
+} satisfies Record<'en' | 'ja' | 'de' | 'da' | 'nb' | 'fi', Record<string, string>>
+
+Object.assign(extendedTranslations.en, annotationSelectionTranslations.en)
+Object.assign(extendedTranslations.ja, annotationSelectionTranslations.ja)
+Object.assign(extendedTranslations.de, annotationSelectionTranslations.de)
+Object.assign(extendedTranslations.da, annotationSelectionTranslations.da)
+Object.assign(extendedTranslations.nb, annotationSelectionTranslations.nb)
+Object.assign(extendedTranslations.fi, annotationSelectionTranslations.fi)
+
 const thumbnailGroupTranslations: Record<string, Record<string, string>> = {
   en: {
     '그룹 추가': 'Add group', '썸네일 그룹': 'Thumbnail groups', '그룹 이름': 'Group name', '그룹 이름 입력': 'Enter a group name',

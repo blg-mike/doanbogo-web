@@ -6,7 +6,7 @@ import { focusBandHeightRatio, focusDimOpacity, guideGeometryForRotation, guideP
 import type { CounterSnapshot, PageRotation, PageWorkRecord, ProgressGuide, ProgressGuideScreenPosition } from './types'
 import { ColorPresetButtons } from './ColorPresetButtons'
 import { DESIGN_SYSTEM_COLORS, PROGRESS_LINE_COLOR_PRESETS } from './designTokens'
-import { snapFocusBandHeight, stepFocusBandHeight } from './progressLineBand'
+import { focusBandHeightFromSlider, focusBandSliderValue, MAX_BAND_HEIGHT, MIN_BAND_HEIGHT, snapFocusBandHeight, stepFocusBandHeight } from './progressLineBand'
 import { useDismissiblePopover } from './useDismissiblePopover'
 import { keepProgressLinePopoverOpenDuringZoom, progressGuideMoveExceededThreshold, progressLinePopoverPageAnchor, progressLinePopoverPlacement, progressLinePopoverScreenPoint, progressLineStrokeWidth, progressMarkerGeometry, progressMarkerOpacity, progressMarkerProgressFromPointer } from './progressLines'
 const minimumLength = 0.2
@@ -80,7 +80,7 @@ function styleValue(field: StyleField, guide: ProgressGuide, defaultOpacity: num
 }
 
 function styleInputValue(field: StyleField, value: number) {
-  return field === 'thickness' ? Math.round(value) : field === 'bandHeightRatio' ? value * 100 : Math.round(value * 100)
+  return field === 'thickness' ? Math.round(value) : field === 'bandHeightRatio' ? focusBandSliderValue(value) : Math.round(value * 100)
 }
 
 function styleStoredValue(field: StyleField, value: number) {
@@ -377,7 +377,7 @@ export function ProgressLineOverlay({ width, height, cssWidth, cssHeight, render
     setMenuGuideId(null)
     setStyleMenuAnchor(null)
     setPopoverPortalTarget(null)
-  }, true, ignoreProgressLineZoomDismiss)
+  }, ignoreProgressLineZoomDismiss)
 
   useEffect(() => {
     if (!calibration) return
@@ -727,7 +727,10 @@ export function ProgressLineOverlay({ width, height, cssWidth, cssHeight, render
     event.stopPropagation()
     const before = styleBeforeRef.current
     if (!before || before.guideId !== guide.id || before.field !== field) return
-    const value = styleStoredValue(field, Number(event.currentTarget.value))
+    const inputValue = Number(event.currentTarget.value)
+    const value = field === 'bandHeightRatio'
+      ? snapFocusBandHeight(focusBandHeightFromSlider(inputValue), before.value)
+      : styleStoredValue(field, inputValue)
     const changed = styleRangeChangedRef.current
     styleBeforeRef.current = null
     styleRangeChangedRef.current = false
@@ -764,7 +767,7 @@ export function ProgressLineOverlay({ width, height, cssWidth, cssHeight, render
       onChange={(event) => {
         const nextValue = Number(event.currentTarget.value)
         const storedValue = field === 'bandHeightRatio'
-          ? snapFocusBandHeight(nextValue / 100, styleBeforeRef.current?.value ?? value)
+          ? snapFocusBandHeight(focusBandHeightFromSlider(nextValue), styleBeforeRef.current?.value ?? value)
           : styleStoredValue(field, nextValue)
         changeStyleRange(guide, field, storedValue)
       }}
@@ -790,7 +793,7 @@ export function ProgressLineOverlay({ width, height, cssWidth, cssHeight, render
       onKeyDown={(event) => {
         if (field === 'bandHeightRatio') {
           const steps = event.key === 'ArrowRight' || event.key === 'ArrowUp' ? 1 : event.key === 'ArrowLeft' || event.key === 'ArrowDown' ? -1 : 0
-          const endpoint = event.key === 'Home' ? 0.01 : event.key === 'End' ? 0.3 : undefined
+          const endpoint = event.key === 'Home' ? MIN_BAND_HEIGHT : event.key === 'End' ? MAX_BAND_HEIGHT : undefined
           if (steps || endpoint !== undefined) {
             event.preventDefault()
             const current = styleDraft?.id === guide.id && styleDraft.field === field ? styleDraft.value : styleValue(field, guide, defaultOpacity, defaultThickness)

@@ -94,10 +94,10 @@ export default function WorkTimeRecordPanel({ documentId, hidden = false, initia
   useEffect(() => {
     if (!resetMenuOpen) return
     const closeOnOutside = (event: PointerEvent) => {
-      if (event.target instanceof Node && !resetMenuRef.current?.contains(event.target)) setResetMenuOpen(false)
+      if (event.target instanceof Node && !resetMenuRef.current?.contains(event.target) && !resetButtonRef.current?.contains(event.target)) setResetMenuOpen(false)
     }
-    document.addEventListener('pointerdown', closeOnOutside)
-    return () => document.removeEventListener('pointerdown', closeOnOutside)
+    document.addEventListener('pointerdown', closeOnOutside, true)
+    return () => document.removeEventListener('pointerdown', closeOnOutside, true)
   }, [resetMenuOpen])
 
   useEffect(() => {

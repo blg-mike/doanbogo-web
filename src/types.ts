@@ -1,7 +1,7 @@
 export type SortMode = 'recent' | 'name' | 'upload'
 export type ViewMode = 'cover' | 'list'
 export type PaneId = 'primary' | 'secondary'
-export type AnnotationTool = 'pan' | 'pen' | 'line' | 'highlight' | 'region-highlight' | 'eraser' | 'text'
+export type AnnotationTool = 'pan' | 'pen' | 'line' | 'highlight' | 'region-highlight' | 'eraser' | 'text' | 'selection'
 
 export interface ProgressLineStyle {
   visible: boolean

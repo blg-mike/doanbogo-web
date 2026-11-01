@@ -112,9 +112,14 @@ describe('focus overlay settings', () => {
   })
 
   it('uses the saved slider values after a user adjusts the focus overlay', () => {
-    const adjusted = { ...legacyFocus, dimOpacity: 0.58, bandHeightRatio: 0.17 }
+    const adjusted = { ...legacyFocus, dimOpacity: 0.58, bandHeightRatio: 0.14 }
     expect(focusDimOpacity(adjusted)).toBe(0.58)
-    expect(focusBandHeightRatio(adjusted, legacyFocus.rowSpacing)).toBe(0.17)
-    expect(focusBandHeightRatio({ ...adjusted, bandHeightRatio: undefined }, 0.9)).toBe(1)
+    expect(focusBandHeightRatio(adjusted, legacyFocus.rowSpacing)).toBe(0.14)
+    expect(focusBandHeightRatio({ ...adjusted, bandHeightRatio: undefined }, 0.9)).toBe(0.15)
+  })
+
+  it('caps older saved and row-derived focus bands at the 15% maximum', () => {
+    expect(focusBandHeightRatio({ ...legacyFocus, bandHeightRatio: 0.4 }, 0.04)).toBe(0.15)
+    expect(focusBandHeightRatio({ ...legacyFocus, bandHeightRatio: undefined }, 0.4)).toBe(0.15)
   })
 })

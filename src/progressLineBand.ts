@@ -1,6 +1,18 @@
-const MIN_BAND_HEIGHT = 0.01
-const MAX_BAND_HEIGHT = 0.3
+export const MIN_BAND_HEIGHT = 0.01
+export const MAX_BAND_HEIGHT = 0.15
 const BAND_HEIGHT_STEP = 0.0075
+const SLIDER_MIN = 1
+const SLIDER_MAX = 30
+
+export function focusBandSliderValue(value: number) {
+  const clamped = Math.min(MAX_BAND_HEIGHT, Math.max(MIN_BAND_HEIGHT, value))
+  return SLIDER_MIN + (clamped - MIN_BAND_HEIGHT) / (MAX_BAND_HEIGHT - MIN_BAND_HEIGHT) * (SLIDER_MAX - SLIDER_MIN)
+}
+
+export function focusBandHeightFromSlider(value: number) {
+  const sliderValue = Math.min(SLIDER_MAX, Math.max(SLIDER_MIN, value))
+  return MIN_BAND_HEIGHT + (sliderValue - SLIDER_MIN) / (SLIDER_MAX - SLIDER_MIN) * (MAX_BAND_HEIGHT - MIN_BAND_HEIGHT)
+}
 
 export function stepFocusBandHeight(value: number, steps: number) {
   const next = Math.min(MAX_BAND_HEIGHT, Math.max(MIN_BAND_HEIGHT, value + steps * BAND_HEIGHT_STEP))

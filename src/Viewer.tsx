@@ -2,7 +2,7 @@ import { formatNumber, t, translateMessage } from './locales/index'
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type DragEvent as ReactDragEvent, type FormEvent as ReactFormEvent, type MouseEvent as ReactMouseEvent, type PointerEvent as ReactPointerEvent, type ReactNode, type UIEvent as ReactUIEvent } from 'react'
 import type { PDFDocumentProxy } from 'pdfjs-dist'
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
-import { ArrowLeft, ArrowLeftToLine, ArrowRightToLine, Bell, Bookmark, Check, ChevronDown, ChevronLeft, ChevronRight, ChevronUp, Columns2, Eraser, Eye, EyeClosed, EyeOff, Files, Grid3X3, Highlighter, Maximize2, Minus, Minimize2, MoreHorizontal, MousePointer2, Pencil, Plus, Redo2, RefreshCw, ScanLine, Settings2, Square, Type, Undo2, X } from 'lucide-react'
+import { ArrowLeft, ArrowLeftToLine, ArrowRightToLine, Bell, Bookmark, Check, ChevronDown, ChevronLeft, ChevronRight, ChevronUp, Columns2, Eraser, Eye, EyeClosed, EyeOff, Files, Grid3X3, Highlighter, LassoSelect, Maximize2, Minus, Minimize2, MoreHorizontal, MousePointer2, Pencil, Plus, Redo2, RefreshCw, ScanLine, Settings2, Square, Type, Undo2, X } from 'lucide-react'
 import { createPortal } from 'react-dom'
 import BrandLoading from './BrandLoading'
 import yyLogo from './assets/yy-logo.png'
@@ -1201,10 +1201,10 @@ export default function Viewer() {
       setThumbnailGroupPopover(null)
       document.querySelector<HTMLButtonElement>('[data-thumbnail-group-settings="' + CSS.escape(thumbnailGroupPopover.groupId) + '"]')?.focus()
     }
-    document.addEventListener('pointerdown', dismissOutside)
+    document.addEventListener('pointerdown', dismissOutside, true)
     document.addEventListener('keydown', dismissEscape)
     return () => {
-      document.removeEventListener('pointerdown', dismissOutside)
+      document.removeEventListener('pointerdown', dismissOutside, true)
       document.removeEventListener('keydown', dismissEscape)
     }
   }, [id, thumbnailGroupPopover])
@@ -1532,6 +1532,18 @@ export default function Viewer() {
     setSavedCounterSession({ documentId: id, visible: true })
   }
 
+  function revealFooterCounter(counterId: string) {
+    requestAnimationFrame(() => {
+      const list = document.querySelector<HTMLElement>('.viewer-footer-work-aux-list')
+      const item = list?.querySelector<HTMLElement>('[data-counter-id="' + CSS.escape(counterId) + '"]')
+      if (!list || !item) return
+      const listRect = list.getBoundingClientRect()
+      const itemRect = item.getBoundingClientRect()
+      if (itemRect.left < listRect.left) list.scrollLeft -= listRect.left - itemRect.left
+      else if (itemRect.right > listRect.right) list.scrollLeft += itemRect.right - listRect.right
+    })
+  }
+
   function counterGuideCorrection(current: ViewerSnapshot, nextCounters: CounterSnapshot[]): CounterGuideAction | undefined {
     const rowOf = (counter: CounterSnapshot) => counter.kind === 'simple' ? counter.value : counter.currentRow ?? 1
     const previous = new Map(normalizeCounterSnapshots(current.counters).map((counter) => [counter.id, counter]))
@@ -1840,6 +1852,25 @@ export default function Viewer() {
       return true
     } catch (error) {
       console.warn('[PDF] Chart row guide could not be saved.', error)
+      setPageWork(before, false, false)
+      const restored = workRef.current[before.pageNumber]
+      if (restored) await pageWorkPersistence.flush(restored).catch(() => {})
+      setSuspendError(pageWorkSaveErrorMessage)
+      return false
+    }
+  }
+
+  async function applyAnnotationSelectionMove(work: PageWorkRecord, before: PageWorkRecord) {
+    if (!setPageWork(work, false, false)) return false
+    const latest = workRef.current[work.pageNumber]
+    if (!latest) return false
+    try {
+      await pageWorkPersistence.flush(latest)
+      recordPageWorkHistory(work.pageNumber, before, latest)
+      setSuspendError((error) => error === pageWorkSaveErrorMessage ? '' : error)
+      return true
+    } catch (error) {
+      console.warn('[PDF] Annotation selection could not be saved.', error)
       setPageWork(before, false, false)
       const restored = workRef.current[before.pageNumber]
       if (restored) await pageWorkPersistence.flush(restored).catch(() => {})
@@ -2505,6 +2536,7 @@ export default function Viewer() {
         if (!active) mutateSnapshot((current) => ({ ...current, activePane: paneId }))
       }}
       onWorkChange={setPageWork}
+      onAnnotationSelectionMove={applyAnnotationSelectionMove}
       onChartRowsApply={applyChartRowsWork}
       onCenter={(x, y) => saveCenter(paneId, x, y)}
       onZoom={(zoom) => changePane(paneId, (current) => ({ ...current, zoom }), true)}
@@ -2981,7 +3013,7 @@ export default function Viewer() {
           <div className="split-section split-section-secondary" style={orientation === 'wide' ? { flex: '0 0 ' + splitBasis(1 - displayedRatio) } : { width: '100%', flex: '0 0 ' + splitBasis(1 - displayedRatio) }}>{renderPane('secondary', snapshot.secondary, snapshot.activePane === 'secondary')}</div>
         </> : renderPane(snapshot.activePane, snapshot[snapshot.activePane], true)}
         </div>
-        {!reportMode && counterPanelVisible && <CounterPanel snapshot={snapshot} counters={counters} timerLinkMode={counterTimerMode} counterPanelRequest={counterPanelRequest} onChange={updateCounterPanel} onUndo={undoCounterAction} onRepeatStep={stepRepeatCounterAction} onCounterStep={stepAuxiliaryCounterAction} counterActionSaving={counterActionSaving} onSettingsSave={saveCounterSettings} onTimerLinkModeChange={changeCounterTimerLinkMode} onSnapshotUpdate={updateCounterSnapshot} triggerRef={counterPanelFocusRef} onSavingChange={setCounterSettingsSaving} onClose={() => { setSavedCounterSession({ documentId: id, visible: false }); setCounterSettingsSaving(false) }} />}
+        {!reportMode && counterPanelVisible && <CounterPanel snapshot={snapshot} counters={counters} timerLinkMode={counterTimerMode} counterPanelRequest={counterPanelRequest} onChange={updateCounterPanel} onUndo={undoCounterAction} onRepeatStep={stepRepeatCounterAction} onCounterStep={stepAuxiliaryCounterAction} counterActionSaving={counterActionSaving} onSettingsSave={saveCounterSettings} onTimerLinkModeChange={changeCounterTimerLinkMode} onSnapshotUpdate={updateCounterSnapshot} triggerRef={counterPanelFocusRef} onCounterAdded={revealFooterCounter} onSavingChange={setCounterSettingsSaving} onClose={() => { setSavedCounterSession({ documentId: id, visible: false }); setCounterSettingsSaving(false) }} />}
       </section>
       <section className={'viewer-footer' + (thumbnailCollapsed ? ' thumbnail-collapsed' : '')}>
         <div id={thumbnailContentId} className="thumbnail-content" hidden={thumbnailCollapsed || focusView}>
@@ -3084,7 +3116,7 @@ export default function Viewer() {
                       ? `${formatNumber(repeatProgress?.completedRows ?? 0)}/${formatNumber(repeatProgress?.totalRows ?? 0)}`
                       : `${formatNumber(counter.value)}${unitLabel}`
                 const step = (direction: -1 | 1) => counter.kind === 'repeat' ? stepRepeatCounterAction(counter.id, direction) : stepAuxiliaryCounterAction(counter.id, direction)
-                return <div className="viewer-footer-work-aux-counter" style={{ '--counter-color': counter.color } as CSSProperties} key={counter.id}>
+                return <div className="viewer-footer-work-aux-counter" data-counter-id={counter.id} style={{ '--counter-color': counter.color } as CSSProperties} key={counter.id}>
                   <span className="viewer-footer-work-aux-color" style={{ background: counter.color }} aria-hidden="true" />
                   <button type="button" className="viewer-footer-work-counter-name" aria-label={`${counter.name} · ${t('설정 수정')}`} title={counter.name} disabled={counterSettingsSaving} onClick={(event) => { counterPanelFocusRef.current = event.currentTarget; requestCounterPanelAction('edit', counter.id) }}>{counterFooterName(counter.name)}</button>
                   <div className="viewer-footer-work-stepper" role="group" aria-label={counter.name}>
@@ -3180,6 +3212,7 @@ export default function Viewer() {
               <button type="button" className={'viewer-tool tool-toggle ' + (tool === 'highlight' ? 'active' : '')} aria-label={t('형광펜')} title={t('형광펜')} aria-pressed={tool === 'highlight'} onClick={() => { closeMiniBarOnPdfActionRef.current = false; selectViewerTool('highlight'); setMiniBarSettingsOpen(true) }}><Highlighter size={17} /><span>{t('형광펜')}</span></button>
               <button type="button" className={'viewer-tool tool-toggle ' + (tool === 'eraser' ? 'active' : '')} aria-label={t('지우개')} title={t('지우개')} aria-pressed={tool === 'eraser'} onClick={() => { closeMiniBarOnPdfActionRef.current = false; selectViewerTool('eraser') }}><Eraser size={17} /><span>{t('지우개')}</span></button>
               <button type="button" className={'viewer-tool tool-toggle ' + (tool === 'text' ? 'active' : '')} aria-label={t('텍스트')} title={t('텍스트')} aria-pressed={tool === 'text'} onClick={() => { closeMiniBarOnPdfActionRef.current = false; selectViewerTool('text') }}><Type size={17} /><span>{t('텍스트')}</span></button>
+              <button type="button" className={'viewer-tool tool-toggle ' + (tool === 'selection' ? 'active' : '')} aria-label={t('구간 선택')} title={t('구간 선택 설명')} aria-pressed={tool === 'selection'} onClick={() => { closeMiniBarOnPdfActionRef.current = false; setMiniBarSettingsOpen(false); selectViewerTool('selection') }}><LassoSelect size={17} /><span>{t('구간 선택')}</span></button>
               <button type="button" className={'viewer-tool tool-toggle region-highlight-tool ' + (tool === 'region-highlight' ? 'active' : '')} aria-label={t('구간 강조')} title={t('구간 강조')} aria-pressed={tool === 'region-highlight'} onClick={() => { closeMiniBarOnPdfActionRef.current = false; setMiniBarSettingsOpen(false); selectViewerTool('region-highlight') }}><Square size={17} /><span>{t('구간 강조')}</span></button>
               {colorworkEnabled && <button type="button" className="viewer-tool chart-tool" aria-label={t('컬러워크 설정')} title={t('차트 크기와 뜨개 게이지 설정')} disabled={!pageWorks[activePage] || Boolean(colorworkRequest)} onClick={() => setColorworkDialog(true)}><Grid3X3 size={17} /><span>{t('컬러워크')}</span>{activeColorworkGrid && <small>{activeColorworkGrid.columns}×{activeColorworkGrid.rows}</small>}</button>}
               {activeColorworkGrid && <>

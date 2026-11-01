@@ -7,6 +7,7 @@ import { crochetSymbols, exportChart } from './charts'
 import { getChart, markProjectWorked, saveChart } from './storage'
 import { DESIGN_SYSTEM_COLORS } from './designTokens'
 import type { ChartDocument, ChartLayer, CrochetSymbolId, CrochetSymbolObject } from './types'
+import { useDismissiblePopover } from './useDismissiblePopover'
 import './Chart.css'
 
 type GridTool = 'paint' | 'erase' | 'fill' | 'select' | 'pan'
@@ -46,6 +47,10 @@ export default function ChartEditor() {
   const [saveStatus, setSaveStatus] = useState<'saving' | 'saved' | 'error'>('saved')
   const [selectedColor, setSelectedColor] = useState('#e34b4b')
   const [tool, setTool] = useState<GridTool>('paint')
+  const [exportMenuOpen, setExportMenuOpen] = useState(false)
+  const exportMenuRef = useRef<HTMLDetailsElement>(null)
+  const exportMenuTriggerRef = useRef<HTMLElement>(null)
+  useDismissiblePopover(exportMenuOpen, exportMenuRef, exportMenuTriggerRef, () => setExportMenuOpen(false))
   const [selectedSymbol, setSelectedSymbol] = useState<CrochetSymbolId>('single')
   const [selectedObjects, setSelectedObjects] = useState<string[]>([])
   const selectedObjectsRef = useRef<string[]>([])
@@ -142,6 +147,7 @@ export default function ChartEditor() {
 
   useEffect(() => {
     function onKeyDown(event: KeyboardEvent) {
+      if (event.key === 'Escape' && exportMenuOpen) return
       if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'z') {
         event.preventDefault()
         if (event.shiftKey) redo()
@@ -159,7 +165,7 @@ export default function ChartEditor() {
     return () => window.removeEventListener('keydown', onKeyDown)
   // The handlers read current refs, and these actions do not depend on the render's chart closure.
   // oxlint-disable-next-line react/exhaustive-deps
-  }, [undo, redo])
+  }, [exportMenuOpen, undo, redo])
 
   const gridMetrics = chart?.craft === 'knitting' ? (() => {
     const maxDimension = Math.max(chart.width, chart.height)
@@ -541,7 +547,7 @@ export default function ChartEditor() {
         <button className="chart-icon-button" disabled={!past.length} onClick={undo} title={t("실행 취소")}><Undo2 size={17} /></button>
         <button className="chart-icon-button" disabled={!future.length} onClick={redo} title={t("다시 실행")}><Redo2 size={17} /></button>
         <span className={'chart-save-state ' + saveStatus}>{saveStatus === 'saved' ? <><Check size={14} />{t(" 저장됨")}</> : saveStatus === 'saving' ? <><Save size={14} />{t(" 저장 중")}</> : t('저장 오류')}</span>
-        <details className="chart-export-menu"><summary aria-label={t("내보내기")}><Download size={17} /><ChevronDown size={13} /></summary><div><button disabled={exporting} onClick={() => void doExport('png')}>{t("PNG 이미지 저장")}</button><button disabled={exporting} onClick={() => void doExport('pdf')}>{t("PDF 저장")}</button></div></details>
+        <details ref={exportMenuRef} open={exportMenuOpen} className="chart-export-menu"><summary ref={exportMenuTriggerRef} aria-label={t("내보내기")} onClick={(event) => { event.preventDefault(); setExportMenuOpen((open) => !open) }}><Download size={17} /><ChevronDown size={13} /></summary><div><button disabled={exporting} onClick={() => { setExportMenuOpen(false); void doExport('png') }}>{t("PNG 이미지 저장")}</button><button disabled={exporting} onClick={() => { setExportMenuOpen(false); void doExport('pdf') }}>{t("PDF 저장")}</button></div></details>
       </header>
       {chart.craft === 'knitting' ? <div className="chart-editor-main knitting-editor">
         <aside className="chart-tool-panel">
