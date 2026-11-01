@@ -378,6 +378,10 @@ export function taskSchedule(counter: CounterSnapshot, count = 4) {
 export function advanceLinkedCounters(counters: CounterSnapshot[], baseCounterId: string, row: number): CounterSnapshot[] {
   return counters.map((counter) => {
     if (counter.id === baseCounterId && counter.kind === 'simple' && counter.unit === 'row') return { ...counter, value: Math.min(MAX_COUNTER_ROW, counter.value + 1) }
+    if (counter.kind === 'repeat' && counter.repeatLinkedToId === baseCounterId) {
+      const progress = repeatCounterProgress(counter)
+      return progress ? { ...counter, value: Math.min(progress.totalRows, counter.value + 1) } : counter
+    }
     if (counter.linkedToId !== baseCounterId) return counter
     if (counter.kind === 'pattern') {
       const patternRow = patternRowAfterCompletion(counter, row)
@@ -400,6 +404,10 @@ export function setCounterGroupRow(counters: CounterSnapshot[], baseCounterId: s
   const delta = boundedRow - base.value
   return counters.map((counter) => {
     if (counter.id === baseCounterId) return { ...counter, value: boundedRow }
+    if (counter.kind === 'repeat' && counter.repeatLinkedToId === baseCounterId) {
+      const progress = repeatCounterProgress(counter)
+      return progress ? { ...counter, value: Math.max(0, Math.min(progress.totalRows, counter.value + delta)) } : counter
+    }
     if (counter.linkedToId !== baseCounterId) return counter
     if (counter.kind === 'pattern') {
       const start = counter.startRow ?? 1
@@ -499,7 +507,7 @@ export function findCounterRewindCheckpoint(history: CounterHistoryEntry[], coun
 }
 
 export function restoreCounterGroup(current: CounterSnapshot[], saved: CounterSnapshot[], baseId: string) {
-  const groupIds = new Set([...current, ...saved].filter((counter) => counter.id === baseId || counter.linkedToId === baseId).map((counter) => counter.id))
+  const groupIds = new Set([...current, ...saved].filter((counter) => counter.id === baseId || counter.linkedToId === baseId || counter.repeatLinkedToId === baseId).map((counter) => counter.id))
   const savedGroup = saved.filter((counter) => groupIds.has(counter.id))
   const savedById = new Map(savedGroup.map((counter) => [counter.id, counter]))
   const result = current.flatMap((counter) => {

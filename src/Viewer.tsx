@@ -2,7 +2,7 @@ import { formatNumber, t, translateMessage } from './locales/index'
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type DragEvent as ReactDragEvent, type FormEvent as ReactFormEvent, type MouseEvent as ReactMouseEvent, type PointerEvent as ReactPointerEvent, type ReactNode, type UIEvent as ReactUIEvent } from 'react'
 import type { PDFDocumentProxy } from 'pdfjs-dist'
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
-import { ArrowLeft, ArrowLeftToLine, ArrowRightToLine, Bookmark, Check, ChevronDown, ChevronLeft, ChevronRight, ChevronUp, Columns2, Eraser, Eye, EyeClosed, EyeOff, Files, Grid3X3, Highlighter, Maximize2, Minus, Minimize2, MoreHorizontal, MousePointer2, Pencil, Plus, Redo2, RefreshCw, ScanLine, Settings2, Square, Type, Undo2, X } from 'lucide-react'
+import { ArrowLeft, ArrowLeftToLine, ArrowRightToLine, Bell, Bookmark, Check, ChevronDown, ChevronLeft, ChevronRight, ChevronUp, Columns2, Eraser, Eye, EyeClosed, EyeOff, Files, Grid3X3, Highlighter, Maximize2, Minus, Minimize2, MoreHorizontal, MousePointer2, Pencil, Plus, Redo2, RefreshCw, ScanLine, Settings2, Square, Type, Undo2, X } from 'lucide-react'
 import { createPortal } from 'react-dom'
 import BrandLoading from './BrandLoading'
 import yyLogo from './assets/yy-logo.png'
@@ -19,7 +19,7 @@ import { MAX_COUNTER_HISTORY, MAX_COUNTER_ROW, advanceLinkedCounters, counterAle
 import { CounterStepButton } from './CounterStepButton'
 import { counterFooterName } from './counterFooterDisplay'
 import CounterPanel from './CounterPanel'
-import { repeatCounterBlockLabel } from './counterAlertText'
+import { repeatCounterBlockLabel, translateCounterAlert } from './counterAlertText'
 import DocumentWorkTimer, { type DocumentTimerClock, type DocumentWorkTimeTotals } from './DocumentWorkTimer'
 import { isCounterTimerLinkMode, resolveCounterTimerAction, type CounterTimerChoice } from './timerCounterLink'
 import type { PdfQrLink } from './qr'
@@ -224,6 +224,25 @@ function ColorworkSettingsDialog({ initial, onClose, onApply }: {
       </form>
     </div>
   )
+}
+
+function CounterAlertToast({ alerts, counters }: {
+  alerts: { counterId: string; message: string }[]
+  counters: CounterSnapshot[]
+}) {
+  const [visible, setVisible] = useState(true)
+  useEffect(() => {
+    const timeout = window.setTimeout(() => setVisible(false), 5000)
+    return () => window.clearTimeout(timeout)
+  }, [])
+  if (!visible) return null
+  return <div className="viewer-counter-alert-toast" role="status" aria-live="polite" aria-atomic="true">
+    <div className="viewer-counter-alert-toast-messages">{alerts.map((alert) => {
+      const counterColor = counters.find((counter) => counter.id === alert.counterId)?.color ?? 'var(--color-primary)'
+      return <div className="viewer-counter-alert-toast-message" key={`${alert.counterId}:${alert.message}`} style={{ '--counter-color': counterColor } as CSSProperties}><Bell size={16} aria-hidden="true" /><span>{translateCounterAlert(alert.message)}</span></div>
+    })}</div>
+    <button type="button" className="viewer-counter-alert-toast-close" aria-label={t('알림 닫기')} onClick={() => setVisible(false)}><X size={16} /></button>
+  </div>
 }
 
 export default function Viewer() {
@@ -1645,7 +1664,7 @@ export default function Viewer() {
       .find((counter) => counter.id === current.counterMainId) ?? currentCounters.find((counter) => counter.kind === 'simple' && counter.unit === 'row' && !counter.linkedToId)
     const isMainRow = Boolean(selected && selected.id === mainBase?.id)
     const next = selected?.kind === 'simple' && selected.unit === 'row' && !selected.linkedToId && isMainRow
-      ? currentCounters.map((counter) => counter.id === counterId ? { ...counter, value: Math.max(1, bounded) } : counter)
+      ? setCounterGroupRow(currentCounters, counterId, Math.max(1, bounded))
       : selected?.kind === 'simple' && selected.unit === 'row' && !selected.linkedToId
         ? setCounterGroupRow(currentCounters, counterId, Math.max(1, bounded))
       : currentCounters.map((counter) => counter.id !== counterId ? counter : counter.kind === 'simple'
@@ -1711,7 +1730,7 @@ export default function Viewer() {
     const checkpoint = findCounterRewindCheckpoint(current.counterHistory ?? [], counters, baseId, targetRow)
     if (!checkpoint) return
     const next = normalizeCounterSnapshots(restoreCounterGroup(counters, checkpoint.counters, baseId))
-    const groupIds = new Set(checkpoint.counters.filter((counter) => counter.id === baseId || counter.linkedToId === baseId).map((counter) => counter.id))
+    const groupIds = new Set(checkpoint.counters.filter((counter) => counter.id === baseId || counter.linkedToId === baseId || counter.repeatLinkedToId === baseId).map((counter) => counter.id))
     const restoreGuides = checkpoint.guides.map((item) => ({
       ...item,
       horizontalGuides: item.horizontalGuides.filter((guide) => guide.linkedCounterId && groupIds.has(guide.linkedCounterId)),
@@ -2927,6 +2946,7 @@ export default function Viewer() {
       {suspendError && <div className="viewer-save-warning" role="alert"><span>{translateMessage(suspendError)}</span><button type="button" aria-label={t("저장 알림 닫기")} onClick={() => setSuspendError('')}><X size={14} /></button></div>}
       {annotationLimitNotice && <div className="viewer-limit-notice" role="status" aria-live="polite">{annotationLimitNotice}</div>}
       {showZoomHint && !reportMode && <aside className="viewer-zoom-hint" role="status"><span>{t("마우스 휠로 확대 · 이동 도구에서 드래그로 이동")}</span><button type="button" aria-label={t("확대·이동 안내 닫기")} onClick={() => setShowZoomHint(false)}><X size={15} /></button></aside>}
+      {!reportMode && counterAlertPending && <CounterAlertToast key={`${id}:${currentCounterAlerts.key}`} alerts={currentCounterAlerts.alerts} counters={counters} />}
       {focusView && !reportMode && <button ref={focusRestoreButtonRef} type="button" className="viewer-focus-restore" aria-label={t('집중 보기 끄기')} title={t('집중 보기 끄기')} onClick={toggleFocusView}><Maximize2 size={20} /><span>{t('집중 보기 끄기')}</span></button>}
       <header className="viewer-header">
         <div className="viewer-brand"><img src={yyLogo} alt={t("도안보고 로고")} /><small>{t("YY공동제작")}</small></div>

@@ -252,12 +252,6 @@ function CounterEditor({ counter, counters, isNew = false, portal = true, inline
           <label className="counter-settings-field">{t("몇 번 하나요?")}<input type="number" min="1" max={MAX_COUNTER_ROW} value={draft.total ?? 8} onChange={(event) => set('total', Number(event.currentTarget.value))} /></label>
           {isNew && <button type="button" className="counter-preview-generate" onClick={() => setPreviewGenerated(true)}><Check size={16} />{t('미리보기 생성')}</button>}
           {(!isNew || previewGenerated) && <div className="counter-schedule-preview"><strong>{t(draft.taskKind === 'increase' ? '늘림 미리보기' : '줄임 미리보기')}</strong><span>{formatNumber(draft.completedCount ?? 0)} / {formatNumber(draft.total ?? 8)}{t('회')}</span><small>{taskSchedule(draft, 8).join(' · ') || t('일정 완료')}</small></div>}
-          <button type="button" className="secondary-button counter-advanced-toggle" aria-expanded={advanced} onClick={() => setAdvanced((open) => !open)}>{advanced ? t('추가 설정 접기') : t('추가 설정 펼치기')}{advanced ? <ChevronUp size={15} /> : <ChevronDown size={15} />}</button>
-          {advanced && <div className="counter-settings-grid">
-            <label className="counter-settings-field">{t("현재 단")}<input type="number" min="1" max={MAX_COUNTER_ROW} value={draft.currentRow ?? 1} onChange={(event) => set('currentRow', Number(event.currentTarget.value))} /></label>
-            <label className="counter-settings-field">{t("완료한 횟수")}<input type="number" min="0" max={draft.total ?? MAX_COUNTER_ROW} value={draft.completedCount ?? 0} onChange={(event) => { const completedCount = Number(event.currentTarget.value); set('completedCount', completedCount); set('value', completedCount) }} /></label>
-            <label className="counter-settings-field">{t("다음 작업 단")}<input type="number" min="1" max={MAX_COUNTER_ROW} value={draft.nextTaskRow ?? draft.firstTaskRow ?? 1} onChange={(event) => set('nextTaskRow', Number(event.currentTarget.value))} /></label>
-          </div>}
         </>}
         {draft.kind === 'repeat' && <>
           <div className="counter-settings-grid">
@@ -894,7 +888,10 @@ export default function CounterPanel({
       const viewportBottom = viewportTop + (viewport?.height ?? window.innerHeight)
       const isInViewport = triggerRect.right > viewportLeft && triggerRect.left < viewportRight && triggerRect.bottom > viewportTop && triggerRect.top < viewportBottom
       const isInRail = !railRect || triggerRect.right > railRect.left && triggerRect.left < railRect.right && triggerRect.bottom > railRect.top && triggerRect.top < railRect.bottom
-      if (!trigger.isConnected || !isInViewport || !isInRail) {
+      const inlineEditorOpen = Boolean(editingId || newCounterDraft)
+      // Focusing the editor can open the tablet keyboard and shrink visualViewport,
+      // temporarily hiding the footer trigger while the counter panel is still in use.
+      if (!trigger.isConnected || !isInRail || (!isInViewport && !inlineEditorOpen)) {
         onClose()
         return
       }

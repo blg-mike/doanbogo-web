@@ -148,12 +148,14 @@ describe('counter model', () => {
     const base = { ...createCounter('simple'), id: 'base', value: 4, unit: 'row' as const }
     const pattern = { ...createCounter('pattern'), id: 'pattern', linkedToId: 'base', currentRow: 4, patternRow: 3, repeatLength: 4 }
     const task = { ...createCounter('task'), id: 'task', linkedToId: 'base', currentRow: 4, firstTaskRow: 4, nextTaskRow: 4, interval: 6, total: 3 }
+    const repeat = { ...createCounter('repeat'), id: 'repeat', repeatLinkedToId: 'base', value: 2, repeatStartRow: 1, repeatEndRow: 2, repeatTarget: 5 }
     const otherBase = { ...createCounter('simple'), id: 'other', value: 9, unit: 'row' as const }
-    const next = advanceLinkedCounters([base, pattern, task, otherBase], 'base', 4)
+    const next = advanceLinkedCounters([base, pattern, task, repeat, otherBase], 'base', 4)
     expect(next).toMatchObject([
       { id: 'base', value: 5 },
       { id: 'pattern', currentRow: 5, patternRow: 4 },
       { id: 'task', currentRow: 5, completedCount: 1, nextTaskRow: 10, taskRecords: [{ row: 4, status: 'done' }] },
+      { id: 'repeat', value: 3 },
       { id: 'other', value: 9 },
     ])
   })
@@ -290,12 +292,25 @@ describe('counter model', () => {
     const pattern = { ...createCounter('pattern'), id: 'pattern', linkedToId: 'base', currentRow: 25, patternRow: 1, repeatLength: 8, startRow: 1 }
     const task = { ...createCounter('task'), id: 'task', linkedToId: 'base', currentRow: 25, completedCount: 3, value: 3, firstTaskRow: 4, interval: 6, total: 8, nextTaskRow: 28, taskRecords: [{ row: 4, status: 'done' as const }, { row: 10, status: 'done' as const }, { row: 16, status: 'missed' as const }, { row: 22, status: 'done' as const }] }
     const secondGroup = { ...createCounter('simple'), id: 'other-base', value: 9, unit: 'row' as const }
-    const changed = setCounterGroupRow([base, pattern, task, secondGroup], 'base', 19)
+    const repeat = { ...createCounter('repeat'), id: 'repeat', repeatLinkedToId: 'base', value: 8, repeatStartRow: 1, repeatEndRow: 2, repeatTarget: 5 }
+    const changed = setCounterGroupRow([base, pattern, task, repeat, secondGroup], 'base', 19)
     expect(changed).toMatchObject([
       { id: 'base', value: 19 },
       { id: 'pattern', currentRow: 19, patternRow: 3 },
       { id: 'task', currentRow: 19, completedCount: 2, nextTaskRow: 22, taskRecords: [{ row: 4, status: 'done' }, { row: 10, status: 'done' }, { row: 16, status: 'missed' }] },
+      { id: 'repeat', value: 2 },
       { id: 'other-base', value: 9 },
+    ])
+  })
+
+  it('restores repeat counters as members of the linked general-row group', () => {
+    const base = { ...createCounter('simple'), id: 'base', value: 5, unit: 'row' as const }
+    const repeat = { ...createCounter('repeat'), id: 'repeat', repeatLinkedToId: 'base', value: 5 }
+    const savedBase = { ...base, value: 4 }
+    const savedRepeat = { ...repeat, value: 4 }
+    expect(restoreCounterGroup([base, repeat], [savedBase, savedRepeat], 'base')).toMatchObject([
+      { id: 'base', value: 4 },
+      { id: 'repeat', value: 4 },
     ])
   })
 
