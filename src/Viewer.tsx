@@ -3013,6 +3013,63 @@ export default function Viewer() {
         {!reportMode && counterPanelVisible && <CounterPanel snapshot={snapshot} counters={counters} timerLinkMode={counterTimerMode} counterPanelRequest={counterPanelRequest} onChange={updateCounterPanel} onUndo={undoCounterAction} onRepeatStep={stepRepeatCounterAction} onCounterStep={stepAuxiliaryCounterAction} counterActionSaving={counterActionSaving} onSettingsSave={saveCounterSettings} onTimerLinkModeChange={changeCounterTimerLinkMode} onSnapshotUpdate={updateCounterSnapshot} triggerRef={counterPanelFocusRef} onCounterAdded={revealFooterCounter} onSavingChange={setCounterSettingsSaving} onClose={() => { setSavedCounterSession({ documentId: id, visible: false }); setCounterSettingsSaving(false) }} />}
       </section>
       <section className={'viewer-footer' + (thumbnailCollapsed ? ' thumbnail-collapsed' : '')}>
+        <div className="viewer-footer-control-row">
+        {!reportMode && <div className="viewer-footer-work-tools" role="group" aria-label={t('카운터')}>
+          <div className="viewer-footer-work-main">
+            {mainCounter && <div className="viewer-footer-work-counter" style={{ '--counter-color': mainCounter.color } as CSSProperties}>
+              <span className="viewer-footer-work-aux-color" style={{ background: mainCounter.color }} aria-hidden="true" />
+              <button type="button" className="viewer-footer-work-counter-name" aria-label={`${mainCounter.name} · ${t('설정 수정')}`} title={mainCounter.name} disabled={counterSettingsSaving} onClick={(event) => { counterPanelFocusRef.current = event.currentTarget; requestCounterPanelAction('edit', mainCounter.id) }}>{counterFooterName(mainCounter.name)}</button>
+              <div className="viewer-footer-work-stepper" role="group" aria-label={mainCounter.name}>
+                <button type="button" className="viewer-mini-counter-step" aria-label={t('이전 단으로 되돌리기')} title={t('이전 단으로 되돌리기')} disabled={mainCounter.value <= 1 || counterActionSaving} onClick={() => {
+                  if (mainCounter.value <= 1) return
+                  const targetRow = mainCounter.value - 1
+                  if (mainCounterCanStepBack) rewindCounter(mainCounter.id, targetRow)
+                  else setCounterValue(mainCounter.id, targetRow)
+                }}><Minus size={18} /></button>
+                {counterRowEditing
+                  ? <input ref={counterRowInputRef} className="viewer-mini-counter-row-input" aria-label={t('단 번호 입력')} type="number" inputMode="numeric" min="1" max={MAX_COUNTER_ROW} step="1" autoFocus disabled={counterActionSaving} value={counterRowDraft} onChange={(event) => setCounterRowDraft(event.currentTarget.value)} onBlur={() => { if (skipCounterRowBlurRef.current) { skipCounterRowBlurRef.current = false; return } finishCounterRowEdit() }} onKeyDown={(event) => {
+                    if (event.key === 'Enter') { event.preventDefault(); event.currentTarget.blur() }
+                    if (event.key === 'Escape') { event.preventDefault(); skipCounterRowBlurRef.current = true; setCounterRowDraft(String(mainCounter.value)); setCounterRowEditing(false); event.currentTarget.blur() }
+                  }} />
+                  : <button type="button" className="viewer-mini-counter-row" aria-label={t('현재 단 입력')} title={t('현재 단 입력')} disabled={counterActionSaving} onClick={beginCounterRowEdit}><strong>{formatNumber(mainCounter.value)}</strong><small>{counterSideForRow(mainCounter, mainCounter.value).toUpperCase()}</small></button>}
+                <button type="button" className="viewer-mini-counter-step" aria-label={t('현재 단 완료 후 다음 단으로 이동')} title={t('현재 단 완료 후 다음 단으로 이동')} disabled={counterActionSaving || mainCounter.goalCompleted === true || mainCounter.value >= MAX_COUNTER_ROW && mainCounter.goalRow !== mainCounter.value} onClick={() => advanceCounterGroup(mainCounter.id)}><Plus size={18} /></button>
+              </div>
+            </div>}
+            <div className="viewer-footer-work-aux-list" role="group" aria-label={t('보조 카운터')}>
+              {auxiliaryCounters.map((counter) => {
+                const repeatProgress = counter.kind === 'repeat' ? repeatCounterProgress(counter) : null
+                const repeatBlock = counter.kind === 'repeat' ? repeatCounterStepBlock(counters, counter.id, 1) : null
+                const decreaseDisabled = counter.kind === 'simple' ? counter.value <= 0 : counter.kind === 'task' ? (counter.completedCount ?? 0) <= 0 : counter.kind === 'repeat' ? counter.value <= 0 : false
+                const increaseDisabled = counter.kind === 'task' ? (counter.completedCount ?? 0) >= (counter.total ?? 0) : counter.kind === 'repeat' ? repeatProgress?.complete === true || Boolean(repeatBlock) : false
+                const unitLabel = counter.unit === 'stitch' ? t('코') : counter.unit === 'round' ? t('바퀴') : ''
+                const value = counter.kind === 'task'
+                  ? `${formatNumber(counter.completedCount ?? 0)}/${formatNumber(counter.total ?? 0)}${t('회')}`
+                  : counter.kind === 'pattern'
+                  ? `${formatNumber(counter.patternRow ?? 1)}/${formatNumber(counter.repeatLength ?? 1)}`
+                    : counter.kind === 'repeat'
+                      ? `${formatNumber(repeatProgress?.completedRows ?? 0)}/${formatNumber(repeatProgress?.totalRows ?? 0)}`
+                      : `${formatNumber(counter.value)}${unitLabel}`
+                const step = (direction: -1 | 1) => counter.kind === 'repeat' ? stepRepeatCounterAction(counter.id, direction) : stepAuxiliaryCounterAction(counter.id, direction)
+                return <div className="viewer-footer-work-aux-counter" data-counter-id={counter.id} style={{ '--counter-color': counter.color } as CSSProperties} key={counter.id}>
+                  <span className="viewer-footer-work-aux-color" style={{ background: counter.color }} aria-hidden="true" />
+                  <button type="button" className="viewer-footer-work-counter-name" aria-label={`${counter.name} · ${t('설정 수정')}`} title={counter.name} disabled={counterSettingsSaving} onClick={(event) => { counterPanelFocusRef.current = event.currentTarget; requestCounterPanelAction('edit', counter.id) }}>{counterFooterName(counter.name)}</button>
+                  <div className="viewer-footer-work-stepper" role="group" aria-label={counter.name}>
+                    <CounterStepButton className="viewer-mini-counter-step" label={`${counter.name} · ${t('보조 카운터 줄이기')}`} disabled={counterActionSaving || decreaseDisabled} onStep={() => step(-1)}><Minus size={18} /></CounterStepButton>
+                    <span className="viewer-footer-work-value" aria-label={value}>{value}</span>
+                    <CounterStepButton className="viewer-mini-counter-step" label={`${counter.name} · ${t('보조 카운터 늘리기')}`} title={repeatBlock ? repeatCounterBlockLabel(repeatBlock) ?? undefined : undefined} disabled={counterActionSaving || increaseDisabled} onStep={() => step(1)}><Plus size={18} /></CounterStepButton>
+                  </div>
+                </div>
+              })}
+            </div>
+          </div>
+          <div className="viewer-footer-work-secondary">
+            <button ref={counterPanelFocusRef} type="button" className="viewer-footer-work-manage" aria-label={t('카운터 관리')} title={t('카운터 관리')} aria-pressed={counterPanelVisible} disabled={counterSettingsSaving} onClick={(event) => { counterPanelFocusRef.current = event.currentTarget; setSavedCounterSession({ documentId: id, visible: !counterPanelVisible }) }}><Settings2 size={18} />{counterAlertPending && <i className="counter-notification-dot" aria-hidden="true" />}</button>
+            <div className="viewer-footer-work-timer" role="group" aria-label={t('작업 타이머')}><div className="viewer-timer-portal-host" ref={setTimerPortalHost} /></div>
+          </div>
+        </div>}
+        </div>
+
+
         <div id={thumbnailContentId} className="thumbnail-content" hidden={focusView}>
         {!focusView && <>
         <div className="thumbnail-group-section">
@@ -3125,63 +3182,6 @@ export default function Viewer() {
         </>}
         </>}
         </div>
-        <div className="viewer-footer-control-row">
-        {!reportMode && <div className="viewer-footer-work-tools" role="group" aria-label={t('카운터')}>
-          <div className="viewer-footer-work-main">
-            {mainCounter && <div className="viewer-footer-work-counter" style={{ '--counter-color': mainCounter.color } as CSSProperties}>
-              <span className="viewer-footer-work-aux-color" style={{ background: mainCounter.color }} aria-hidden="true" />
-              <button type="button" className="viewer-footer-work-counter-name" aria-label={`${mainCounter.name} · ${t('설정 수정')}`} title={mainCounter.name} disabled={counterSettingsSaving} onClick={(event) => { counterPanelFocusRef.current = event.currentTarget; requestCounterPanelAction('edit', mainCounter.id) }}>{counterFooterName(mainCounter.name)}</button>
-              <div className="viewer-footer-work-stepper" role="group" aria-label={mainCounter.name}>
-                <button type="button" className="viewer-mini-counter-step" aria-label={t('이전 단으로 되돌리기')} title={t('이전 단으로 되돌리기')} disabled={mainCounter.value <= 1 || counterActionSaving} onClick={() => {
-                  if (mainCounter.value <= 1) return
-                  const targetRow = mainCounter.value - 1
-                  if (mainCounterCanStepBack) rewindCounter(mainCounter.id, targetRow)
-                  else setCounterValue(mainCounter.id, targetRow)
-                }}><Minus size={18} /></button>
-                {counterRowEditing
-                  ? <input ref={counterRowInputRef} className="viewer-mini-counter-row-input" aria-label={t('단 번호 입력')} type="number" inputMode="numeric" min="1" max={MAX_COUNTER_ROW} step="1" autoFocus disabled={counterActionSaving} value={counterRowDraft} onChange={(event) => setCounterRowDraft(event.currentTarget.value)} onBlur={() => { if (skipCounterRowBlurRef.current) { skipCounterRowBlurRef.current = false; return } finishCounterRowEdit() }} onKeyDown={(event) => {
-                    if (event.key === 'Enter') { event.preventDefault(); event.currentTarget.blur() }
-                    if (event.key === 'Escape') { event.preventDefault(); skipCounterRowBlurRef.current = true; setCounterRowDraft(String(mainCounter.value)); setCounterRowEditing(false); event.currentTarget.blur() }
-                  }} />
-                  : <button type="button" className="viewer-mini-counter-row" aria-label={t('현재 단 입력')} title={t('현재 단 입력')} disabled={counterActionSaving} onClick={beginCounterRowEdit}><strong>{formatNumber(mainCounter.value)}</strong><small>{counterSideForRow(mainCounter, mainCounter.value).toUpperCase()}</small></button>}
-                <button type="button" className="viewer-mini-counter-step" aria-label={t('현재 단 완료 후 다음 단으로 이동')} title={t('현재 단 완료 후 다음 단으로 이동')} disabled={counterActionSaving || mainCounter.goalCompleted === true || mainCounter.value >= MAX_COUNTER_ROW && mainCounter.goalRow !== mainCounter.value} onClick={() => advanceCounterGroup(mainCounter.id)}><Plus size={18} /></button>
-              </div>
-            </div>}
-            <div className="viewer-footer-work-aux-list" role="group" aria-label={t('보조 카운터')}>
-              {auxiliaryCounters.map((counter) => {
-                const repeatProgress = counter.kind === 'repeat' ? repeatCounterProgress(counter) : null
-                const repeatBlock = counter.kind === 'repeat' ? repeatCounterStepBlock(counters, counter.id, 1) : null
-                const decreaseDisabled = counter.kind === 'simple' ? counter.value <= 0 : counter.kind === 'task' ? (counter.completedCount ?? 0) <= 0 : counter.kind === 'repeat' ? counter.value <= 0 : false
-                const increaseDisabled = counter.kind === 'task' ? (counter.completedCount ?? 0) >= (counter.total ?? 0) : counter.kind === 'repeat' ? repeatProgress?.complete === true || Boolean(repeatBlock) : false
-                const unitLabel = counter.unit === 'stitch' ? t('코') : counter.unit === 'round' ? t('바퀴') : ''
-                const value = counter.kind === 'task'
-                  ? `${formatNumber(counter.completedCount ?? 0)}/${formatNumber(counter.total ?? 0)}${t('회')}`
-                  : counter.kind === 'pattern'
-                  ? `${formatNumber(counter.patternRow ?? 1)}/${formatNumber(counter.repeatLength ?? 1)}`
-                    : counter.kind === 'repeat'
-                      ? `${formatNumber(repeatProgress?.completedRows ?? 0)}/${formatNumber(repeatProgress?.totalRows ?? 0)}`
-                      : `${formatNumber(counter.value)}${unitLabel}`
-                const step = (direction: -1 | 1) => counter.kind === 'repeat' ? stepRepeatCounterAction(counter.id, direction) : stepAuxiliaryCounterAction(counter.id, direction)
-                return <div className="viewer-footer-work-aux-counter" data-counter-id={counter.id} style={{ '--counter-color': counter.color } as CSSProperties} key={counter.id}>
-                  <span className="viewer-footer-work-aux-color" style={{ background: counter.color }} aria-hidden="true" />
-                  <button type="button" className="viewer-footer-work-counter-name" aria-label={`${counter.name} · ${t('설정 수정')}`} title={counter.name} disabled={counterSettingsSaving} onClick={(event) => { counterPanelFocusRef.current = event.currentTarget; requestCounterPanelAction('edit', counter.id) }}>{counterFooterName(counter.name)}</button>
-                  <div className="viewer-footer-work-stepper" role="group" aria-label={counter.name}>
-                    <CounterStepButton className="viewer-mini-counter-step" label={`${counter.name} · ${t('보조 카운터 줄이기')}`} disabled={counterActionSaving || decreaseDisabled} onStep={() => step(-1)}><Minus size={18} /></CounterStepButton>
-                    <span className="viewer-footer-work-value" aria-label={value}>{value}</span>
-                    <CounterStepButton className="viewer-mini-counter-step" label={`${counter.name} · ${t('보조 카운터 늘리기')}`} title={repeatBlock ? repeatCounterBlockLabel(repeatBlock) ?? undefined : undefined} disabled={counterActionSaving || increaseDisabled} onStep={() => step(1)}><Plus size={18} /></CounterStepButton>
-                  </div>
-                </div>
-              })}
-            </div>
-          </div>
-          <div className="viewer-footer-work-secondary">
-            <button ref={counterPanelFocusRef} type="button" className="viewer-footer-work-manage" aria-label={t('카운터 관리')} title={t('카운터 관리')} aria-pressed={counterPanelVisible} disabled={counterSettingsSaving} onClick={(event) => { counterPanelFocusRef.current = event.currentTarget; setSavedCounterSession({ documentId: id, visible: !counterPanelVisible }) }}><Settings2 size={18} />{counterAlertPending && <i className="counter-notification-dot" aria-hidden="true" />}</button>
-            <div className="viewer-footer-work-timer" role="group" aria-label={t('작업 타이머')}><div className="viewer-timer-portal-host" ref={setTimerPortalHost} /></div>
-          </div>
-        </div>}
-        </div>
-
-
       </section>
       <div className="viewer-floating-layer">
         {reportMode && <div className="viewer-floating-bar viewer-timer-bar" role="group" aria-label={t('작업 타이머')}><div className="viewer-timer-portal-host" ref={setTimerPortalHost} /></div>}
