@@ -292,13 +292,6 @@ export default function WorkTimeRecordPanel({ documentId, hidden = false, initia
   function handleBackdropPointerDown(event: ReactPointerEvent<HTMLDivElement>) {
     event.stopPropagation()
     if (event.target !== event.currentTarget) return
-    // shortcut: only one Viewer is mounted; pass a scoped ref if multiple Viewers can coexist.
-    const toggle = document.querySelector<HTMLButtonElement>('.viewer-footer-tools-toggle')
-    const bounds = toggle?.getBoundingClientRect()
-    if (toggle && bounds && event.clientX >= bounds.left && event.clientX <= bounds.right && event.clientY >= bounds.top && event.clientY <= bounds.bottom) {
-      if (!closeLocked && !toggle.disabled) toggle.click()
-      return
-    }
     if (!closeLocked) onClose()
   }
 

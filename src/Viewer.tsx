@@ -2,7 +2,7 @@ import { formatNumber, t, translateMessage } from './locales/index'
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type DragEvent as ReactDragEvent, type FormEvent as ReactFormEvent, type MouseEvent as ReactMouseEvent, type PointerEvent as ReactPointerEvent, type ReactNode, type UIEvent as ReactUIEvent } from 'react'
 import type { PDFDocumentProxy } from 'pdfjs-dist'
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
-import { ArrowLeft, ArrowLeftToLine, ArrowRightToLine, Bell, Bookmark, Check, ChevronDown, ChevronLeft, ChevronRight, ChevronUp, Columns2, Eraser, Eye, EyeClosed, EyeOff, Files, Grid3X3, Highlighter, LassoSelect, Maximize2, Minus, Minimize2, MoreHorizontal, MousePointer2, Pencil, Plus, Redo2, RefreshCw, ScanLine, Settings2, Square, Type, Undo2, X } from 'lucide-react'
+import { ArrowLeft, Bell, Bookmark, Check, ChevronDown, ChevronLeft, ChevronRight, ChevronUp, Columns2, Eraser, Eye, EyeClosed, EyeOff, Files, Grid3X3, Highlighter, LassoSelect, Maximize2, Minus, Minimize2, MoreHorizontal, MousePointer2, Pencil, Plus, Redo2, RefreshCw, ScanLine, Settings2, Square, Type, Undo2, X } from 'lucide-react'
 import { createPortal } from 'react-dom'
 import BrandLoading from './BrandLoading'
 import yyLogo from './assets/yy-logo.png'
@@ -378,9 +378,6 @@ export default function Viewer() {
   const [headerMoreOpen, setHeaderMoreOpen] = useState(false)
   const [footerMoreOpen, setFooterMoreOpen] = useState(false)
   const [zoomMenuOpen, setZoomMenuOpen] = useState(false)
-  const [footerToolsUi, setFooterToolsUi] = useState(() => ({ documentId: id, collapsed: false }))
-  if (footerToolsUi.documentId !== id) setFooterToolsUi({ documentId: id, collapsed: false })
-  const footerToolsCollapsed = footerToolsUi.documentId === id && footerToolsUi.collapsed
   const requestViewerExit = useCallback(async () => {
     if (viewerExitInFlightRef.current) return
     viewerExitInFlightRef.current = true
@@ -2974,7 +2971,7 @@ export default function Viewer() {
   return (
     <>
     {timerElement}
-    <main ref={viewerShellRef} className={'viewer-shell' + (reportMode ? ' report-mode' : '') + (focusView && !reportMode ? ' focus-view' : '') + (footerToolsCollapsed && !reportMode ? ' footer-tools-collapsed' : '') + (thumbnailCollapsed ? ' thumbnail-collapsed' : '') + (selectedThumbnailPages.length > 0 || thumbnailGroupError ? ' thumbnail-feedback-visible' : '') + (counterPanelVisible && !reportMode ? ' counter-panel-visible' : '')} onContextMenu={reportMode ? undefined : preventViewerContextMenu}>
+    <main ref={viewerShellRef} className={'viewer-shell' + (reportMode ? ' report-mode' : '') + (focusView && !reportMode ? ' focus-view' : '') + (thumbnailCollapsed ? ' thumbnail-collapsed' : '') + (selectedThumbnailPages.length > 0 || thumbnailGroupError ? ' thumbnail-feedback-visible' : '') + (counterPanelVisible && !reportMode ? ' counter-panel-visible' : '')} onContextMenu={reportMode ? undefined : preventViewerContextMenu}>
       {suspendError && <div className="viewer-save-warning" role="alert"><span>{translateMessage(suspendError)}</span><button type="button" aria-label={t("저장 알림 닫기")} onClick={() => setSuspendError('')}><X size={14} /></button></div>}
       {annotationLimitNotice && <div className="viewer-limit-notice" role="status" aria-live="polite">{annotationLimitNotice}</div>}
       {showZoomHint && !reportMode && <aside className="viewer-zoom-hint" role="status"><span>{t("마우스 휠로 확대 · 이동 도구에서 드래그로 이동")}</span><button type="button" aria-label={t("확대·이동 안내 닫기")} onClick={() => setShowZoomHint(false)}><X size={15} /></button></aside>}
@@ -3019,8 +3016,9 @@ export default function Viewer() {
         <div id={thumbnailContentId} className="thumbnail-content" hidden={focusView}>
         {!focusView && <>
         <div className="thumbnail-group-section">
-          <button type="button" className="thumbnail-group-add" disabled={thumbnailGroupSaving} onClick={() => openThumbnailGroupDialog()}><Plus size={15} /><span>{t('그룹 추가')}</span></button>
-          <div className="thumbnail-group-list" ref={thumbnailGroupListRef} aria-label={t('썸네일 그룹')}>
+          <div className="thumbnail-group-picker">
+            <button type="button" className="thumbnail-group-add" disabled={thumbnailGroupSaving} onClick={() => openThumbnailGroupDialog()}><Plus size={15} /><span>{t('그룹 추가')}</span></button>
+            <div className="thumbnail-group-list" ref={thumbnailGroupListRef} aria-label={t('썸네일 그룹')}>
             {thumbnailGroups.map((group) => <button
               type="button"
               key={group.id}
@@ -3044,7 +3042,50 @@ export default function Viewer() {
               onPointerCancel={(event) => finishThumbnailReorder(event, true)}
               onLostPointerCapture={(event) => finishThumbnailReorder(event, true)}
             ><span>{thumbnailGroupLabel(group.name)}</span><small>{group.pageNumbers.length}</small></button>)}
+            </div>
           </div>
+          {!reportMode && <div className="thumbnail-group-controls">
+            <div className="viewer-footer-controls">
+              <div className="viewer-footer-primary-controls">
+                <div className="viewer-footer-zoom-controls" role="group" aria-label={t('축소') + ' / ' + t('확대')}>
+                  <button type="button" className="viewer-page-control-button" aria-label={t("축소")} title={t("축소")} disabled={activeZoom <= ZOOM_LEVELS[0]} onClick={() => changePane(snapshot.activePane, (pane) => ({ ...pane, zoom: stepZoomLevel(pane.zoom, -1) }), true)}><Minus size={17} /></button>
+                  <span className="viewer-footer-zoom" aria-label={Math.round(activeZoom * 100) + '%'}>{Math.round(activeZoom * 100)}%</span>
+                  <button type="button" className="viewer-page-control-button" aria-label={t("확대")} title={t("확대")} disabled={activeZoom >= ZOOM_LEVELS[ZOOM_LEVELS.length - 1]} onClick={() => changePane(snapshot.activePane, (pane) => ({ ...pane, zoom: stepZoomLevel(pane.zoom, 1) }), true)}><Plus size={17} /></button>
+                  <button type="button" className="viewer-page-control-button" aria-label={t("화면 맞춤")} title={t("100% 확대와 페이지 중앙으로 맞춤")} onClick={() => changePane(snapshot.activePane, (pane) => ({ ...pane, zoom: 1, centerX: 0.5, centerY: 0.5 }), true)}><Maximize2 size={16} /></button>
+                </div>
+                <button type="button" className="viewer-page-control-button" aria-label={t('시계 방향 90도 회전')} title={t('90도 회전 · 현재 {angle}도', { angle: activeRotation })} disabled={!pageWorks[activePage]} onClick={() => rotatePage(snapshot.activePane, activePage)}><svg width="24" height="24" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M5 16a8 8 0 1 1 14-6" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"/><path d="m16 8 3.2 2.3L20 6.5" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/><text x="11" y="20" fill="currentColor" fontSize="8" fontWeight="700" fontFamily="sans-serif">90°</text></svg></button>
+                <button type="button" className={'viewer-page-control-button viewer-footer-bookmark' + (isBookmarked ? ' selected' : '')} aria-label={isBookmarked ? t('북마크 해제') : t('북마크')} title={isBookmarked ? t('북마크 해제') : t('북마크')} aria-pressed={isBookmarked} onClick={() => void toggleBookmark()}><Bookmark size={17} fill={isBookmarked ? 'currentColor' : 'none'} /></button>
+              </div>
+              <div className="viewer-footer-page-navigation" role="group" aria-label={t('페이지')}>
+                <button type="button" className="viewer-page-control-button" aria-label={t('이전')} title={t('이전')} disabled={activeVisiblePageIndex <= 0} onClick={() => navigateVisiblePage(-1)}><ChevronLeft size={18} /></button>
+                <span className="viewer-footer-page-count" aria-label={t('페이지') + ' ' + activePage + ' / ' + pdf.numPages} title={t('페이지') + ' ' + activePage + ' / ' + pdf.numPages}>{formatNumber(activePage)} / {formatNumber(pdf.numPages)}</span>
+                <button type="button" className="viewer-page-control-button" aria-label={t('다음')} title={t('다음')} disabled={activeVisiblePageIndex < 0 || activeVisiblePageIndex >= visiblePageNumbers.length - 1} onClick={() => navigateVisiblePage(1)}><ChevronRight size={18} /></button>
+              </div>
+            </div>
+            <div className="viewer-footer-mobile-controls">
+              <button type="button" className="viewer-page-control-button" aria-label={t('이전')} title={t('이전')} disabled={activeVisiblePageIndex <= 0} onClick={() => navigateVisiblePage(-1)}><ChevronLeft size={20} /></button>
+              <span className="viewer-footer-page-count" aria-label={t('페이지') + ' ' + activePage + ' / ' + pdf.numPages} title={t('페이지') + ' ' + activePage + ' / ' + pdf.numPages}>{formatNumber(activePage)} / {formatNumber(pdf.numPages)}</span>
+              <button type="button" className="viewer-page-control-button" aria-label={t('다음')} title={t('다음')} disabled={activeVisiblePageIndex < 0 || activeVisiblePageIndex >= visiblePageNumbers.length - 1} onClick={() => navigateVisiblePage(1)}><ChevronRight size={20} /></button>
+              <div className="viewer-mobile-menu-anchor">
+                <button ref={zoomMenuTriggerRef} type="button" className="viewer-mobile-zoom-trigger" aria-haspopup="menu" aria-expanded={zoomMenuOpen} aria-label={t('확대 배율 {zoom}%', { zoom: Math.round(activeZoom * 100) })} title={t('확대 배율 {zoom}%', { zoom: Math.round(activeZoom * 100) })} onClick={() => setZoomMenuOpen((open) => !open)}>{Math.round(activeZoom * 100)}%</button>
+                {zoomMenuOpen && <div ref={zoomMenuPanelRef} className="viewer-compact-menu viewer-zoom-menu" role="menu" aria-label={t('확대 배율 {zoom}%', { zoom: Math.round(activeZoom * 100) })}>
+                  <div className="viewer-zoom-presets" role="group" aria-label={t('확대 배율 {zoom}%', { zoom: Math.round(activeZoom * 100) })}>
+                    {ZOOM_LEVELS.map((zoom) => <button key={zoom} type="button" role="menuitemradio" aria-checked={Math.abs(activeZoom - zoom) < 0.0001} aria-label={t('확대 배율 {zoom}%', { zoom: zoom * 100 })} className={Math.abs(activeZoom - zoom) < 0.0001 ? 'selected' : ''} onClick={() => { changePane(snapshot.activePane, (pane) => ({ ...pane, zoom }), true); setZoomMenuOpen(false) }}>{zoom * 100}%</button>)}
+                  </div>
+                  <button type="button" role="menuitem" aria-label={t('화면 맞춤')} title={t('100% 확대와 페이지 중앙으로 맞춤')} onClick={() => { changePane(snapshot.activePane, (pane) => ({ ...pane, zoom: 1, centerX: 0.5, centerY: 0.5 }), true); setZoomMenuOpen(false) }}><Maximize2 size={18} /><span>{t('화면 맞춤')}</span></button>
+                </div>}
+              </div>
+              <div className="viewer-mobile-menu-anchor">
+                <button ref={footerMoreTriggerRef} type="button" className="viewer-page-control-button" aria-label={t('더보기')} title={t('더보기')} aria-haspopup="menu" aria-expanded={footerMoreOpen} onClick={() => setFooterMoreOpen((open) => !open)}><MoreHorizontal size={20} /></button>
+                {footerMoreOpen && <div ref={footerMorePanelRef} className="viewer-compact-menu viewer-footer-more-menu" role="menu" aria-label={t('더보기')}>
+                  <button type="button" role="menuitem" disabled={!pageWorks[activePage]} onClick={() => { setFooterMoreOpen(false); rotatePage(snapshot.activePane, activePage) }}><RefreshCw size={18} /><span>{t('시계 방향 90도 회전')}</span></button>
+                  <button type="button" role="menuitem" className={isBookmarked ? 'selected' : ''} aria-pressed={isBookmarked} onClick={() => { setFooterMoreOpen(false); void toggleBookmark() }}><Bookmark size={18} fill={isBookmarked ? 'currentColor' : 'none'} /><span>{isBookmarked ? t('북마크 해제') : t('북마크')}</span></button>
+                  <button type="button" role="menuitem" className={!thumbnailCollapsed ? 'selected' : ''} aria-pressed={!thumbnailCollapsed} onClick={() => { setFooterMoreOpen(false); toggleThumbnailAccordion() }}>{thumbnailCollapsed ? <ChevronDown size={18} /> : <ChevronUp size={18} />}<span>{thumbnailCollapsed ? t('썸네일 펼치기') : t('썸네일 접기')}</span></button>
+                  <button type="button" role="menuitem" disabled={!pdf || Boolean(recognitionRescanPages[activePage])} onClick={() => { setFooterMoreOpen(false); retryPageRecognition(activePage) }}><ScanLine size={18} /><span>{t('QR·링크 다시 검사')}</span></button>
+                </div>}
+              </div>
+            </div>
+          </div>}
           <button type="button" className="thumbnail-accordion-button" aria-expanded={!thumbnailCollapsed} aria-controls={thumbnailContentId} aria-label={thumbnailCollapsed ? t('썸네일 펼치기') : t('썸네일 접기')} title={thumbnailCollapsed ? t('썸네일 펼치기') : t('썸네일 접기')} onClick={toggleThumbnailAccordion}>
             {thumbnailCollapsed ? <ChevronDown size={17} /> : <ChevronUp size={17} />}
           </button>
@@ -3084,7 +3125,7 @@ export default function Viewer() {
         </>}
         </>}
         </div>
-        <div className={'viewer-footer-control-row' + (footerToolsCollapsed && !reportMode ? ' footer-tools-collapsed' : '')}>
+        <div className="viewer-footer-control-row">
         {!reportMode && <div className="viewer-footer-work-tools" role="group" aria-label={t('카운터')}>
           <div className="viewer-footer-work-main">
             {mainCounter && <div className="viewer-footer-work-counter" style={{ '--counter-color': mainCounter.color } as CSSProperties}>
@@ -3136,55 +3177,6 @@ export default function Viewer() {
           <div className="viewer-footer-work-secondary">
             <button ref={counterPanelFocusRef} type="button" className="viewer-footer-work-manage" aria-label={t('카운터 관리')} title={t('카운터 관리')} aria-pressed={counterPanelVisible} disabled={counterSettingsSaving} onClick={(event) => { counterPanelFocusRef.current = event.currentTarget; setSavedCounterSession({ documentId: id, visible: !counterPanelVisible }) }}><Settings2 size={18} />{counterAlertPending && <i className="counter-notification-dot" aria-hidden="true" />}</button>
             <div className="viewer-footer-work-timer" role="group" aria-label={t('작업 타이머')}><div className="viewer-timer-portal-host" ref={setTimerPortalHost} /></div>
-            <button type="button" className="viewer-footer-tools-toggle" aria-label={t(footerToolsCollapsed ? '푸터 도구 펼치기' : '푸터 도구 접기')} title={t(footerToolsCollapsed ? '푸터 도구 펼치기' : '푸터 도구 접기')} aria-expanded={!footerToolsCollapsed} disabled={counterSettingsSaving || !footerToolsCollapsed && workTimePanelBlocking} onClick={() => {
-              if (counterSettingsSaving || !footerToolsCollapsed && workTimePanelBlocking) return
-              const collapsed = !footerToolsCollapsed
-              if (collapsed) {
-                setZoomMenuOpen(false)
-                setFooterMoreOpen(false)
-              }
-              setFooterToolsUi({ documentId: id, collapsed })
-            }}>{footerToolsCollapsed ? <ArrowLeftToLine size={18} /> : <ArrowRightToLine size={18} />}</button>
-            {!reportMode && <div className="viewer-footer-mobile-controls">
-          <button type="button" className="viewer-page-control-button" aria-label={t('이전')} title={t('이전')} disabled={activeVisiblePageIndex <= 0} onClick={() => navigateVisiblePage(-1)}><ChevronLeft size={20} /></button>
-          <span className="viewer-footer-page-count" aria-label={t('페이지') + ' ' + activePage + ' / ' + pdf.numPages} title={t('페이지') + ' ' + activePage + ' / ' + pdf.numPages}>{formatNumber(activePage)} / {formatNumber(pdf.numPages)}</span>
-          <button type="button" className="viewer-page-control-button" aria-label={t('다음')} title={t('다음')} disabled={activeVisiblePageIndex < 0 || activeVisiblePageIndex >= visiblePageNumbers.length - 1} onClick={() => navigateVisiblePage(1)}><ChevronRight size={20} /></button>
-          <div className="viewer-mobile-menu-anchor">
-            <button ref={zoomMenuTriggerRef} type="button" className="viewer-mobile-zoom-trigger" aria-haspopup="menu" aria-expanded={zoomMenuOpen} aria-label={t('확대 배율 {zoom}%', { zoom: Math.round(activeZoom * 100) })} title={t('확대 배율 {zoom}%', { zoom: Math.round(activeZoom * 100) })} onClick={() => setZoomMenuOpen((open) => !open)}>{Math.round(activeZoom * 100)}%</button>
-            {zoomMenuOpen && <div ref={zoomMenuPanelRef} className="viewer-compact-menu viewer-zoom-menu" role="menu" aria-label={t('확대 배율 {zoom}%', { zoom: Math.round(activeZoom * 100) })}>
-              <div className="viewer-zoom-presets" role="group" aria-label={t('확대 배율 {zoom}%', { zoom: Math.round(activeZoom * 100) })}>
-                {ZOOM_LEVELS.map((zoom) => <button key={zoom} type="button" role="menuitemradio" aria-checked={Math.abs(activeZoom - zoom) < 0.0001} aria-label={t('확대 배율 {zoom}%', { zoom: zoom * 100 })} className={Math.abs(activeZoom - zoom) < 0.0001 ? 'selected' : ''} onClick={() => { changePane(snapshot.activePane, (pane) => ({ ...pane, zoom }), true); setZoomMenuOpen(false) }}>{zoom * 100}%</button>)}
-              </div>
-              <button type="button" role="menuitem" aria-label={t('화면 맞춤')} title={t('100% 확대와 페이지 중앙으로 맞춤')} onClick={() => { changePane(snapshot.activePane, (pane) => ({ ...pane, zoom: 1, centerX: 0.5, centerY: 0.5 }), true); setZoomMenuOpen(false) }}><Maximize2 size={18} /><span>{t('화면 맞춤')}</span></button>
-            </div>}
-          </div>
-          <div className="viewer-mobile-menu-anchor">
-            <button ref={footerMoreTriggerRef} type="button" className="viewer-page-control-button" aria-label={t('더보기')} title={t('더보기')} aria-haspopup="menu" aria-expanded={footerMoreOpen} onClick={() => setFooterMoreOpen((open) => !open)}><MoreHorizontal size={20} /></button>
-            {footerMoreOpen && <div ref={footerMorePanelRef} className="viewer-compact-menu viewer-footer-more-menu" role="menu" aria-label={t('더보기')}>
-              <button type="button" role="menuitem" disabled={!pageWorks[activePage]} onClick={() => { setFooterMoreOpen(false); rotatePage(snapshot.activePane, activePage) }}><RefreshCw size={18} /><span>{t('시계 방향 90도 회전')}</span></button>
-              <button type="button" role="menuitem" className={isBookmarked ? 'selected' : ''} aria-pressed={isBookmarked} onClick={() => { setFooterMoreOpen(false); void toggleBookmark() }}><Bookmark size={18} fill={isBookmarked ? 'currentColor' : 'none'} /><span>{isBookmarked ? t('북마크 해제') : t('북마크')}</span></button>
-              <button type="button" role="menuitem" className={!thumbnailCollapsed ? 'selected' : ''} aria-pressed={!thumbnailCollapsed} onClick={() => { setFooterMoreOpen(false); toggleThumbnailAccordion() }}>{thumbnailCollapsed ? <ChevronDown size={18} /> : <ChevronUp size={18} />}<span>{thumbnailCollapsed ? t('썸네일 펼치기') : t('썸네일 접기')}</span></button>
-              <button type="button" role="menuitem" disabled={!pdf || Boolean(recognitionRescanPages[activePage])} onClick={() => { setFooterMoreOpen(false); retryPageRecognition(activePage) }}><ScanLine size={18} /><span>{t('QR·링크 다시 검사')}</span></button>
-            </div>}
-          </div>
-        </div>}
-          </div>
-        </div>}
-        {!reportMode && <div className="viewer-footer-controls">
-          <div className="viewer-footer-primary-controls">
-          <div className="viewer-footer-zoom-controls" role="group" aria-label={t('축소') + ' / ' + t('확대')}>
-            <button type="button" className="viewer-page-control-button" aria-label={t("축소")} title={t("축소")} disabled={activeZoom <= ZOOM_LEVELS[0]} onClick={() => changePane(snapshot.activePane, (pane) => ({ ...pane, zoom: stepZoomLevel(pane.zoom, -1) }), true)}><Minus size={17} /></button>
-            <span className="viewer-footer-zoom" aria-label={Math.round(activeZoom * 100) + '%'}>{Math.round(activeZoom * 100)}%</span>
-            <button type="button" className="viewer-page-control-button" aria-label={t("확대")} title={t("확대")} disabled={activeZoom >= ZOOM_LEVELS[ZOOM_LEVELS.length - 1]} onClick={() => changePane(snapshot.activePane, (pane) => ({ ...pane, zoom: stepZoomLevel(pane.zoom, 1) }), true)}><Plus size={17} /></button>
-            <button type="button" className="viewer-page-control-button" aria-label={t("화면 맞춤")} title={t("100% 확대와 페이지 중앙으로 맞춤")} onClick={() => changePane(snapshot.activePane, (pane) => ({ ...pane, zoom: 1, centerX: 0.5, centerY: 0.5 }), true)}><Maximize2 size={16} /></button>
-          </div>
-          <button type="button" className="viewer-page-control-button" aria-label={t('시계 방향 90도 회전')} title={t('90도 회전 · 현재 {angle}도', { angle: activeRotation })} disabled={!pageWorks[activePage]} onClick={() => rotatePage(snapshot.activePane, activePage)}><svg width="24" height="24" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M5 16a8 8 0 1 1 14-6" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"/><path d="m16 8 3.2 2.3L20 6.5" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/><text x="11" y="20" fill="currentColor" fontSize="8" fontWeight="700" fontFamily="sans-serif">90°</text></svg></button>
-          <button type="button" className={'viewer-page-control-button viewer-footer-bookmark' + (isBookmarked ? ' selected' : '')} aria-label={isBookmarked ? t('북마크 해제') : t('북마크')} title={isBookmarked ? t('북마크 해제') : t('북마크')} aria-pressed={isBookmarked} onClick={() => void toggleBookmark()}><Bookmark size={17} fill={isBookmarked ? 'currentColor' : 'none'} /></button>
-          </div>
-          <div className="viewer-footer-page-navigation" role="group" aria-label={t('페이지')}>
-            <button type="button" className="viewer-page-control-button" aria-label={t('이전')} title={t('이전')} disabled={activeVisiblePageIndex <= 0} onClick={() => navigateVisiblePage(-1)}><ChevronLeft size={18} /></button>
-            <span className="viewer-footer-page-count" aria-label={t('페이지') + ' ' + activePage + ' / ' + pdf.numPages} title={t('페이지') + ' ' + activePage + ' / ' + pdf.numPages}>{formatNumber(activePage)} / {formatNumber(pdf.numPages)}</span>
-            <button type="button" className="viewer-page-control-button" aria-label={t('다음')} title={t('다음')} disabled={activeVisiblePageIndex < 0 || activeVisiblePageIndex >= visiblePageNumbers.length - 1} onClick={() => navigateVisiblePage(1)}><ChevronRight size={18} /></button>
           </div>
         </div>}
         </div>
