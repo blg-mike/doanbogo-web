@@ -3016,8 +3016,8 @@ export default function Viewer() {
         {!reportMode && counterPanelVisible && <CounterPanel snapshot={snapshot} counters={counters} timerLinkMode={counterTimerMode} counterPanelRequest={counterPanelRequest} onChange={updateCounterPanel} onUndo={undoCounterAction} onRepeatStep={stepRepeatCounterAction} onCounterStep={stepAuxiliaryCounterAction} counterActionSaving={counterActionSaving} onSettingsSave={saveCounterSettings} onTimerLinkModeChange={changeCounterTimerLinkMode} onSnapshotUpdate={updateCounterSnapshot} triggerRef={counterPanelFocusRef} onCounterAdded={revealFooterCounter} onSavingChange={setCounterSettingsSaving} onClose={() => { setSavedCounterSession({ documentId: id, visible: false }); setCounterSettingsSaving(false) }} />}
       </section>
       <section className={'viewer-footer' + (thumbnailCollapsed ? ' thumbnail-collapsed' : '')}>
-        <div id={thumbnailContentId} className="thumbnail-content" hidden={thumbnailCollapsed || focusView}>
-        {!thumbnailCollapsed && !focusView && <>
+        <div id={thumbnailContentId} className="thumbnail-content" hidden={focusView}>
+        {!focusView && <>
         <div className="thumbnail-group-section">
           <button type="button" className="thumbnail-group-add" disabled={thumbnailGroupSaving} onClick={() => openThumbnailGroupDialog()}><Plus size={15} /><span>{t('그룹 추가')}</span></button>
           <div className="thumbnail-group-list" ref={thumbnailGroupListRef} aria-label={t('썸네일 그룹')}>
@@ -3045,7 +3045,11 @@ export default function Viewer() {
               onLostPointerCapture={(event) => finishThumbnailReorder(event, true)}
             ><span>{thumbnailGroupLabel(group.name)}</span><small>{group.pageNumbers.length}</small></button>)}
           </div>
+          <button type="button" className="thumbnail-accordion-button" aria-expanded={!thumbnailCollapsed} aria-controls={thumbnailContentId} aria-label={thumbnailCollapsed ? t('썸네일 펼치기') : t('썸네일 접기')} title={thumbnailCollapsed ? t('썸네일 펼치기') : t('썸네일 접기')} onClick={toggleThumbnailAccordion}>
+            {thumbnailCollapsed ? <ChevronDown size={17} /> : <ChevronUp size={17} />}
+          </button>
         </div>
+        {!thumbnailCollapsed && <>
         <div className={'page-thumbnail-strip' + (thumbnailDropTarget === 'outside-rail' ? ' drop-target-outside' : '')} aria-label={t("모든 페이지 썸네일")} ref={thumbnailRailRef} onScroll={handleThumbnailScroll} onDragOver={thumbnailDragOverRail} onDrop={dropThumbnailOutsideLabelGroup} onDragLeave={(event) => { const nextTarget = event.relatedTarget; if (nextTarget instanceof Node && event.currentTarget.contains(nextTarget)) return; updateThumbnailDropTarget(null) }}
           onClick={(event) => {
             if (!expandedThumbnailGroupId) return
@@ -3077,6 +3081,7 @@ export default function Viewer() {
           {selectedThumbnailPages.length > 0 && <span>{selectedThumbnailPages.length}{t("개 페이지 선택")}</span>}
           {thumbnailGroupError && <span role="alert">{thumbnailGroupError}</span>}
         </div>}
+        </>}
         </>}
         </div>
         <div className={'viewer-footer-control-row' + (footerToolsCollapsed && !reportMode ? ' footer-tools-collapsed' : '')}>
@@ -3174,17 +3179,6 @@ export default function Viewer() {
             <button type="button" className="viewer-page-control-button" aria-label={t("화면 맞춤")} title={t("100% 확대와 페이지 중앙으로 맞춤")} onClick={() => changePane(snapshot.activePane, (pane) => ({ ...pane, zoom: 1, centerX: 0.5, centerY: 0.5 }), true)}><Maximize2 size={16} /></button>
           </div>
           <button type="button" className="viewer-page-control-button" aria-label={t('시계 방향 90도 회전')} title={t('90도 회전 · 현재 {angle}도', { angle: activeRotation })} disabled={!pageWorks[activePage]} onClick={() => rotatePage(snapshot.activePane, activePage)}><svg width="24" height="24" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M5 16a8 8 0 1 1 14-6" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"/><path d="m16 8 3.2 2.3L20 6.5" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/><text x="11" y="20" fill="currentColor" fontSize="8" fontWeight="700" fontFamily="sans-serif">90°</text></svg></button>
-          <button
-            type="button"
-            className="thumbnail-accordion-button"
-            aria-expanded={!thumbnailCollapsed}
-            aria-controls={thumbnailContentId}
-            aria-label={thumbnailCollapsed ? t('썸네일 펼치기') : t('썸네일 접기')}
-            title={thumbnailCollapsed ? t('썸네일 펼치기') : t('썸네일 접기')}
-            onClick={toggleThumbnailAccordion}
-          >
-            {thumbnailCollapsed ? <ChevronDown size={17} /> : <ChevronUp size={17} />}
-          </button>
           <button type="button" className={'viewer-page-control-button viewer-footer-bookmark' + (isBookmarked ? ' selected' : '')} aria-label={isBookmarked ? t('북마크 해제') : t('북마크')} title={isBookmarked ? t('북마크 해제') : t('북마크')} aria-pressed={isBookmarked} onClick={() => void toggleBookmark()}><Bookmark size={17} fill={isBookmarked ? 'currentColor' : 'none'} /></button>
           </div>
           <div className="viewer-footer-page-navigation" role="group" aria-label={t('페이지')}>
