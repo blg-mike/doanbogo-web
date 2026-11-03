@@ -1,0 +1,27 @@
+.kp-animated-number {
+  display: inline-flex;
+  align-items: baseline;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
+.kp-animated-number__accessible {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  clip-path: inset(50%);
+}
+
+.kp-animated-number__visual { display: inline-flex; align-items: baseline; white-space: pre; }
+.kp-animated-number__text { display: inline-block; white-space: pre; }
+.kp-animated-number__digit { display: inline-block; height: 1em; overflow: hidden; line-height: 1; vertical-align: baseline; }
+.kp-animated-number__strip { display: flex; flex-direction: column; transform: translate3d(0, 0, 0); }
+.kp-animated-number__strip[data-rolling] { will-change: transform; }
+.kp-animated-number__strip > span { display: block; height: 1em; line-height: 1; }
+
+@media (prefers-reduced-motion: reduce) {
+  .kp-animated-number__strip { transition: none !important; }
+}

@@ -6,6 +6,7 @@ import AppNavigation from './AppNavigation'
 import { deleteChart, deleteDocument, getHomeProject, listHomeReports, renameChart, renameDocument, saveHomeProject, updateTags, type KnittingReportSummary } from './storage'
 import type { HomeProject, HomeProjectStatus } from './types'
 import { formatWorkTime } from './workTime'
+import { useListLayoutMotion } from './useListLayoutMotion'
 import './Home.css'
 
 function DetailCover({ project }: { project: HomeProject }) {
@@ -29,13 +30,22 @@ export default function ProjectDetail() {
   const [title, setTitle] = useState('')
   const [tags, setTags] = useState('')
   const [saving, setSaving] = useState(false)
+  const [savedProjectContext, setSavedProjectContext] = useState('')
   const [loading, setLoading] = useState(true)
+  const [loadedProjectContext, setLoadedProjectContext] = useState('')
   const [error, setError] = useState('')
   const [notice, setNotice] = useState('')
   const [undoProject, setUndoProject] = useState<HomeProject | null>(null)
+  const projectContext = `${projectKind}:${id}`
+  const detailsSaved = savedProjectContext === projectContext
+  const reportListMotionRef = useListLayoutMotion<HTMLDivElement>(reports.map((report) => report.id), projectContext, !loading && loadedProjectContext === projectContext)
 
   useEffect(() => {
     let active = true
+    // oxlint-disable-next-line react/set-state-in-effect -- Reflect the new route's IndexedDB load state before showing its details.
+    setLoading(true)
+    setError('')
+    setSavedProjectContext('')
     void Promise.all([getHomeProject(projectKind, id), listHomeReports()]).then(([saved, allReports]) => {
       if (!active) return
       setProject(saved ?? null)
@@ -43,14 +53,15 @@ export default function ProjectDetail() {
         setTitle(saved.title)
         setTags(saved.tags.join(', '))
         setReports(allReports.filter((report) => report.documentId === id).sort((a, b) => b.updatedAt - a.updatedAt))
-      }
+      } else setReports([])
+      setLoadedProjectContext(projectContext)
     }).catch((cause) => { if (active) setError(cause instanceof Error ? translateMessage(cause.message) : t('프로젝트를 불러오지 못했습니다.')) }).finally(() => { if (active) setLoading(false) })
     return () => { active = false }
-  }, [projectKind, id])
+  }, [projectKind, id, projectContext])
 
   async function saveDetails() {
     if (!project || saving) return
-    setSaving(true); setError('')
+    setSaving(true); setError(''); setSavedProjectContext('')
     try {
       if (project.kind === 'document') {
         const [renamed] = await Promise.all([renameDocument(project.entityId, title), updateTags(project.entityId, tags.split(','))])
@@ -62,6 +73,7 @@ export default function ProjectDetail() {
         await saveHomeProject(next)
         setProject(next); setTitle(next.title)
       }
+      setSavedProjectContext(projectContext)
     } catch (cause) { setError(cause instanceof Error ? translateMessage(cause.message) : t('프로젝트를 저장하지 못했습니다.')) }
     finally { setSaving(false) }
   }
@@ -103,9 +115,9 @@ export default function ProjectDetail() {
     {notice && <div className="notice" role="status"><span>{notice}</span>{undoProject && <button className="notice-undo" onClick={() => void saveHomeProject(undoProject).then(() => { setProject(undoProject); setUndoProject(null); setNotice(t('변경을 되돌렸습니다.')) })}>{t("실행 취소")}</button>}<button aria-label={t("알림 닫기")} onClick={() => { setNotice(''); setUndoProject(null) }}>×</button></div>}
     <section className="detail-card"><div className="detail-title"><div className="detail-title-cover"><DetailCover project={project} /></div><div><h2>{project.title}</h2><small>{project.pageCount ? `${formatNumber(project.pageCount)}${t('페이지')} · ` : ''}{t("최근 작업 ")}{project.lastWorkedAt ? formatDateTime(project.lastWorkedAt) : t('없음')}</small></div></div>
       <div className="detail-state-row"><label htmlFor="project-status">{t("작업 상태")}</label><select id="project-status" value={project.status} onChange={(event) => void setStatus(event.currentTarget.value as HomeProjectStatus)}><option value="active">{t("작업 중")}</option><option value="paused">{t("보류")}</option><option value="completed">{t("완료")}</option></select></div>
-      <div className="project-detail-edit"><label>{t("프로젝트 이름")}<input value={title} maxLength={120} onChange={(event) => setTitle(event.currentTarget.value)} /></label>{project.kind === 'document' && <label>{t("태그")}<input value={tags} onChange={(event) => setTags(event.currentTarget.value)} placeholder={t("뜨개, 가디건")} /></label>}<button className="detail-save-button" disabled={saving} onClick={() => void saveDetails()}><Check size={16} />{saving ? t('저장 중') + '…' : t('정보 저장')}</button>{error && <p role="alert">{error}</p>}</div>
+      <div className="project-detail-edit"><label>{t("프로젝트 이름")}<input value={title} maxLength={120} onChange={(event) => { setTitle(event.currentTarget.value); setError(''); setSavedProjectContext('') }} /></label>{project.kind === 'document' && <label>{t("태그")}<input value={tags} onChange={(event) => { setTags(event.currentTarget.value); setError(''); setSavedProjectContext('') }} placeholder={t("뜨개, 가디건")} /></label>}<button type="button" className="detail-save-button" disabled={saving} aria-busy={saving} aria-live="polite" aria-atomic="true" onClick={() => void saveDetails()}><Check size={16} />{saving ? t('저장 중') + '…' : detailsSaved ? t('저장됨') : t('정보 저장')}</button>{error && <p role="alert">{error}</p>}</div>
       <div className="project-actions">{project.deletedAt === null && <button className="primary" onClick={openProject}>{project.kind === 'chart' ? t('차트 편집') : t('이어서 뜨기 ')}</button>}{project.kind === 'document' && <button onClick={() => navigate('/reports')}>{t("보고서 목록")}</button>}{project.deletedAt === null ? <><button onClick={() => void archiveProject()}><Archive size={15} />{project.archivedAt ? t('보관 해제') : t('보관')}</button><button onClick={() => void moveToTrash()}><Trash2 size={15} />{t("휴지통으로")}</button></> : <><button onClick={() => void saveHomeProject({ ...project, deletedAt: null }).then(() => setProject((current) => current ? { ...current, deletedAt: null } : current))}><RotateCcw size={15} />{t("복구")}</button><button onClick={() => void permanentlyDelete()}><Trash2 size={15} />{t("영구 삭제")}</button></>}</div>
     </section>
-    {project.kind === 'document' && reports.length > 0 && <section className="project-report-section"><div className="home-section-heading"><h2>{t("이 프로젝트의 보고서")}</h2></div><div className="report-list">{reports.map((report) => <button className="home-report-card" key={report.id} onClick={() => navigate('/report/' + id + '/' + report.id)}><span className="home-report-cover"><DetailCover project={project} /></span><span className="home-report-info"><strong>{report.title || project.title}</strong><small>{report.status === 'complete' ? t('완료') + ' · ' + formatDate(report.completedAt ?? report.updatedAt) : t('작성 중')}</small><b>{report.status === 'complete' ? t('보고서 보기') : t('계속 작성')}</b></span></button>)}</div></section>}
+    {project.kind === 'document' && reports.length > 0 && <section className="project-report-section"><div className="home-section-heading"><h2>{t("이 프로젝트의 보고서")}</h2></div><div ref={reportListMotionRef} className="report-list">{reports.map((report) => <button className="home-report-card" key={report.id} data-layout-motion-key={report.id} onClick={() => navigate('/report/' + id + '/' + report.id)}><span className="home-report-cover"><DetailCover project={project} /></span><span className="home-report-info"><strong>{report.title || project.title}</strong><small>{report.status === 'complete' ? t('완료') + ' · ' + formatDate(report.completedAt ?? report.updatedAt) : t('작성 중')}</small><b>{report.status === 'complete' ? t('보고서 보기') : t('계속 작성')}</b></span></button>)}</div></section>}
   </main></div>
 }

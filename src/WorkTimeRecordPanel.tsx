@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, type CSSProperties, type FormEvent, type K
 import { ArrowLeft, BarChart3, ChevronDown, Plus, RotateCcw, X } from 'lucide-react'
 import { createPortal } from 'react-dom'
 import { formatDate, formatDateTime, formatNumber, t } from './locales'
+import { AnimatedNumber } from './AnimatedNumber'
 import type { DocumentWorkTimeDay, DocumentWorkTimeSession } from './types'
 import { getDocument, saveDocumentWorkTimeNote } from './storage'
 import { REPORT_DATE_MAX, REPORT_DATE_MIN } from './reportDates'
@@ -335,7 +336,7 @@ export default function WorkTimeRecordPanel({ documentId, hidden = false, initia
               })}
             </div>
           </div>
-          <div className="report-worktime-chart-selection" aria-live="polite">{selectedBucket ? <><span>{chartBucketLabel(mode, selectedBucket.key)}</span><strong>{durationText(selectedBucket.elapsedMs)}</strong></> : <span>{t('선택 기간의 작업시간 기록이 없습니다.')}</span>}</div>
+          <div className="report-worktime-chart-selection" aria-live="polite">{selectedBucket ? <><span>{chartBucketLabel(mode, selectedBucket.key)}</span><strong><AnimatedNumber value={Math.floor(selectedBucket.elapsedMs / 60_000)} format={(minutes) => durationText(minutes * 60_000)} resetKey={`${documentId}-${mode}`} /></strong></> : <span>{t('선택 기간의 작업시간 기록이 없습니다.')}</span>}</div>
         </section>
       </div> : <div className="worktime-record-content">
         <section className="worktime-record-total"><span>{t('총 작업시간')}</span><strong>{durationText(record.totalWorkTimeMs)}</strong></section>

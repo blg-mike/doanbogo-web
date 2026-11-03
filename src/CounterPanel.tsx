@@ -14,6 +14,9 @@ import { useViewerPopupResize } from './useViewerPopupResize'
 import { useTouchTablet } from './useTouchTablet'
 import { useViewerPopupDrag } from './useViewerPopupDrag'
 import { CounterStepButton } from './CounterStepButton'
+import { AnimatedNumber } from './AnimatedNumber'
+import { useListLayoutMotion } from './useListLayoutMotion'
+import { moveFocusFromClosingMenu, useMenuExit } from './useMenuExit'
 
 const kinds: CounterKind[] = ['simple', 'pattern', 'task', 'repeat']
 const kindLabels: Record<CounterKind, LocaleKey> = { simple: '자유 카운터', pattern: '무늬 카운터', task: '줄임·늘림 카운터', repeat: '반복 카운터' }
@@ -22,6 +25,28 @@ function counterSummary(counter: CounterSnapshot) {
   if (counter.kind === 'task') return formatNumber(counter.completedCount ?? 0) + '/' + formatNumber(counter.total ?? 0) + t('회')
   if (counter.kind === 'repeat') return formatNumber(repeatCounterProgress(counter)?.completedRepeats ?? 0) + '/' + formatNumber(counter.repeatTarget ?? 1) + t('회')
   return formatNumber(counter.patternRow ?? 1) + '/' + formatNumber(counter.repeatLength ?? 1) + t('단')
+}
+
+function AnimatedCounterSummary({ counter }: { counter: CounterSnapshot }) {
+  const number = (value: number) => <AnimatedNumber value={value} format={formatNumber} resetKey={counter.id} aria-hidden="true" />
+  if (counter.kind === 'simple') return <>{number(counter.value)}{t('단')}</>
+  if (counter.kind === 'task') return <>{number(counter.completedCount ?? 0)}/{formatNumber(counter.total ?? 0)}{t('회')}</>
+  if (counter.kind === 'repeat') return <>{number(repeatCounterProgress(counter)?.completedRepeats ?? 0)}/{formatNumber(counter.repeatTarget ?? 1)}{t('회')}</>
+  return <>{number(counter.patternRow ?? 1)}/{formatNumber(counter.repeatLength ?? 1)}{t('단')}</>
+}
+
+function AnimatedCounterMessage({ counterId, message, animatedKey, animatedValue, values = {} }: {
+  counterId: string
+  message: LocaleKey
+  animatedKey: string
+  animatedValue: number
+  values?: Record<string, string | number>
+}) {
+  const marker = '\uE000'
+  const translated = t(message, { ...values, [animatedKey]: marker })
+  const markerIndex = translated.indexOf(marker)
+  if (markerIndex < 0) return translated
+  return <>{translated.slice(0, markerIndex)}<AnimatedNumber value={animatedValue} format={formatNumber} resetKey={counterId} aria-hidden="true" />{translated.slice(markerIndex + marker.length)}</>
 }
 
 function CounterEditor({ counter, counters, isNew = false, portal = true, inline = false, defaultLinkToId, onClose, onSave, onDelete, canDelete = true, onSavingChange }: {
@@ -337,21 +362,35 @@ function CounterSettings({ view, snapshot, counters, timerLinkMode, onSave, onTi
   const [menuCounterId, setMenuCounterId] = useState<string | null>(null)
   const [draggedCounterId, setDraggedCounterId] = useState<string | null>(null)
   const [managementError, setManagementError] = useState('')
+  const { exitingKey: exitingMenuCounterId, beginExit: beginMenuExit, finishExit: finishMenuExit, cancelExit: cancelMenuExit } = useMenuExit()
   const swipeStartRef = useRef<{ id: string; x: number; y: number } | null>(null)
   const swipeClickSuppressUntilRef = useRef(0)
+  const skipNextCounterMotionRef = useRef(new Set<string>())
   const reorderGestureRef = useRef<{ pointerId: number; id: string; x: number; y: number; active: boolean; cancelled: boolean; lastTargetId: string; timer: number; cleanup: () => void } | null>(null)
   useEffect(() => () => reorderGestureRef.current?.cleanup(), [])
+  const closeCounterMenu = useCallback((restoreTrigger = false, outsideTarget?: EventTarget | null) => {
+    if (!menuCounterId) return
+    const menu = document.querySelector<HTMLElement>('.counter-item-menu:not(.is-exiting)')
+    const trigger = menu?.parentElement?.querySelector<HTMLButtonElement>('.counter-item-menu-trigger')
+    moveFocusFromClosingMenu(menu, trigger ?? null, outsideTarget, restoreTrigger)
+    setMenuCounterId(null)
+    beginMenuExit(menuCounterId)
+  }, [beginMenuExit, menuCounterId])
+  const openCounterMenu = useCallback((counterId: string) => {
+    cancelMenuExit()
+    setMenuCounterId(counterId)
+  }, [cancelMenuExit])
   useEffect(() => {
     if (!menuCounterId) return
     const closeOnOutside = (event: PointerEvent) => {
       const target = event.target
       const menu = document.querySelector('.counter-item-menu')
       if (!(target instanceof Node) || menu?.parentElement?.contains(target)) return
-      setMenuCounterId(null)
+      closeCounterMenu(false, target)
     }
     document.addEventListener('pointerdown', closeOnOutside, true)
     return () => document.removeEventListener('pointerdown', closeOnOutside, true)
-  }, [menuCounterId])
+  }, [closeCounterMenu, menuCounterId])
 
   async function runSave(action: () => Promise<boolean>) {
     if (savingRef.current) return false
@@ -450,14 +489,24 @@ function CounterSettings({ view, snapshot, counters, timerLinkMode, onSave, onTi
 
   const selectedMain = baseCounters.find((counter) => counter.id === draft.mainId) ?? baseCounters[0]
   const auxiliaryCounters = counters.filter((counter) => counter.id !== selectedMain?.id)
-  function reorderCounter(fromId: string, toId: string) {
+  const auxiliaryListMotionRef = useListLayoutMotion<HTMLDivElement>(
+    auxiliaryCounters.map((counter) => counter.id),
+    `${view}:${selectedMain?.id ?? ''}`,
+    view === 'main',
+    skipNextCounterMotionRef,
+  )
+  function reorderCounter(fromId: string, toId: string, dragged = false) {
     if (fromId === toId || !auxiliaryCounters.some((counter) => counter.id === fromId) || !auxiliaryCounters.some((counter) => counter.id === toId)) return
+    if (dragged) skipNextCounterMotionRef.current.add(fromId)
     const next = [...counters]
     const from = next.findIndex((counter) => counter.id === fromId)
     const to = next.findIndex((counter) => counter.id === toId)
     const [counter] = next.splice(from, 1)
     next.splice(to, 0, counter)
-    void Promise.resolve(onCounterChange(next, '카운터 순서 변경')).then((saved) => setManagementError(saved === false ? t('카운터 순서를 저장하지 못했습니다.') : ''))
+    void Promise.resolve(onCounterChange(next, '카운터 순서 변경')).then((saved) => {
+      if (saved === false) skipNextCounterMotionRef.current.delete(fromId)
+      setManagementError(saved === false ? t('카운터 순서를 저장하지 못했습니다.') : '')
+    })
   }
   function beginTouchReorder(event: ReactPointerEvent<HTMLButtonElement>, counterId: string) {
     if (event.pointerType === 'mouse' || event.button !== 0) return
@@ -484,7 +533,7 @@ function CounterSettings({ view, snapshot, counters, timerLinkMode, onSave, onTi
     }
     const finish = (pointer: PointerEvent) => {
       if (pointer.pointerId !== gesture.pointerId) return
-      if (pointer.type === 'pointerup' && gesture.active) reorderCounter(gesture.id, gesture.lastTargetId)
+      if (pointer.type === 'pointerup' && gesture.active) reorderCounter(gesture.id, gesture.lastTargetId, true)
       setDraggedCounterId(null)
       cleanup()
     }
@@ -525,6 +574,7 @@ function CounterSettings({ view, snapshot, counters, timerLinkMode, onSave, onTi
       setSelectedCounterIds([])
       setSwipedCounterId(null)
       setMenuCounterId(null)
+      cancelMenuExit()
     }
   }
 
@@ -536,9 +586,7 @@ function CounterSettings({ view, snapshot, counters, timerLinkMode, onSave, onTi
     if (event.key !== 'Escape') return
     event.preventDefault()
     event.stopPropagation()
-    const trigger = event.currentTarget.closest('.counter-item-menu-anchor')?.querySelector<HTMLButtonElement>('.counter-item-menu-trigger')
-    setMenuCounterId(null)
-    trigger?.focus()
+    closeCounterMenu(true)
   }
 
   function renderAuxiliaryCounter(counter: CounterSnapshot) {
@@ -546,25 +594,25 @@ function CounterSettings({ view, snapshot, counters, timerLinkMode, onSave, onTi
     const blocked = counter.kind === 'repeat' ? repeatCounterStepBlock(counters, counter.id, 1) : null
     const blockedLabel = repeatCounterBlockLabel(blocked)
     const base = counter.kind === 'repeat' ? counters.find((item) => item.id === counter.repeatLinkedToId) : undefined
-    return <article className={'counter-main-aux-card' + (counter.kind === 'repeat' ? ' counter-main-repeat-card' : '') + (selectedCounterIds.includes(counter.id) ? ' selected' : '') + (draggedCounterId === counter.id ? ' is-reordering' : '') + (swipedCounterId === counter.id ? ' is-swiped' : '')} style={{ '--counter-color': counter.color } as CSSProperties} data-counter-order-id={counter.id} key={counter.id}
+    return <article className={'counter-main-aux-card' + (counter.kind === 'repeat' ? ' counter-main-repeat-card' : '') + (selectedCounterIds.includes(counter.id) ? ' selected' : '') + (draggedCounterId === counter.id ? ' is-reordering' : '') + (swipedCounterId === counter.id ? ' is-swiped' : '')} style={{ '--counter-color': counter.color } as CSSProperties} data-layout-motion-key={counter.id} data-counter-order-id={counter.id} key={counter.id}
       onPointerDown={(event) => handleCounterSwipeStart(event, counter.id)} onPointerUp={handleCounterSwipeEnd} onPointerCancel={() => { swipeStartRef.current = null }}>
-      {managementMode === 'edit' && <button type="button" className="counter-order-handle" aria-label={t('카운터 순서 변경: {name}', { name: counter.name })} draggable onPointerDown={(event) => beginTouchReorder(event, counter.id)} onDragStart={(event) => { setDraggedCounterId(counter.id); event.dataTransfer.setData('text/plain', counter.id) }} onDragEnd={() => setDraggedCounterId(null)} onDragOver={(event) => event.preventDefault()} onDrop={(event) => { event.preventDefault(); reorderCounter(event.dataTransfer.getData('text/plain') || draggedCounterId || '', counter.id); setDraggedCounterId(null) }} onKeyDown={(event) => { if (event.key === 'ArrowUp' || event.key === 'ArrowDown') { event.preventDefault(); const index = auxiliaryCounters.findIndex((item) => item.id === counter.id); const target = auxiliaryCounters[index + (event.key === 'ArrowUp' ? -1 : 1)]; if (target) reorderCounter(counter.id, target.id) } }}><GripVertical size={17} /></button>}
+      {managementMode === 'edit' && <button type="button" className="counter-order-handle" aria-label={t('카운터 순서 변경: {name}', { name: counter.name })} draggable onPointerDown={(event) => beginTouchReorder(event, counter.id)} onDragStart={(event) => { setDraggedCounterId(counter.id); event.dataTransfer.setData('text/plain', counter.id) }} onDragEnd={() => setDraggedCounterId(null)} onDragOver={(event) => event.preventDefault()} onDrop={(event) => { event.preventDefault(); reorderCounter(event.dataTransfer.getData('text/plain') || draggedCounterId || '', counter.id, true); setDraggedCounterId(null) }} onKeyDown={(event) => { if (event.key === 'ArrowUp' || event.key === 'ArrowDown') { event.preventDefault(); const index = auxiliaryCounters.findIndex((item) => item.id === counter.id); const target = auxiliaryCounters[index + (event.key === 'ArrowUp' ? -1 : 1)]; if (target) reorderCounter(counter.id, target.id) } }}><GripVertical size={17} /></button>}
       {managementMode === 'select' && <span className={'counter-select-indicator' + (selectedCounterIds.includes(counter.id) ? ' selected' : '')} aria-hidden="true">{selectedCounterIds.includes(counter.id) ? '✓' : ''}</span>}
       <span className="counter-main-aux-color" style={{ background: counter.color }} />
       <button type="button" className="counter-main-aux-copy" disabled={saving || managementMode === 'edit'} aria-label={`${counter.name}: ${t(kindLabels[counter.kind])}, ${counterSummary(counter)}, ${t('설정')}`} onClick={(event) => { if (Date.now() < swipeClickSuppressUntilRef.current) { swipeClickSuppressUntilRef.current = 0; event.preventDefault(); return }; if (swipedCounterId === counter.id) { setSwipedCounterId(null); event.preventDefault(); return }; handleAuxiliaryCard(counter, event.currentTarget) }}>
         <strong>{counter.name}</strong>
         {repeat ? <>
           <small>{t('반복 {start}~{end}단 × {target}회', { start: formatNumber(repeat.startRow), end: formatNumber(repeat.endRow), target: formatNumber(repeat.target) })}</small>
-          <small>{t('완료 반복 {completed} / {target}회', { completed: formatNumber(repeat.completedRepeats), target: formatNumber(repeat.target) })} · {repeat.complete ? t('목표 반복 완료') : t('현재 {row}단 진행 예정', { row: formatNumber(repeat.nextRow ?? repeat.startRow) })}</small>
-          <small>{t('총 {completed} / {total}단 완료', { completed: formatNumber(repeat.completedRows), total: formatNumber(repeat.totalRows) })}</small>
+          <small><AnimatedCounterMessage counterId={counter.id} message="완료 반복 {completed} / {target}회" animatedKey="completed" animatedValue={repeat.completedRepeats} values={{ target: formatNumber(repeat.target) }} /> · {repeat.complete ? t('목표 반복 완료') : <AnimatedCounterMessage counterId={counter.id} message="현재 {row}단 진행 예정" animatedKey="row" animatedValue={repeat.nextRow ?? repeat.startRow} />}</small>
+          <small><AnimatedCounterMessage counterId={counter.id} message="총 {completed} / {total}단 완료" animatedKey="completed" animatedValue={repeat.completedRows} values={{ total: formatNumber(repeat.totalRows) }} /></small>
           <small>{base?.kind === 'simple' ? base.name : t('연동 안 함')}</small>
           {blockedLabel && <small role="status">{blockedLabel}</small>}
-        </> : <small>{t(kindLabels[counter.kind])} · {counterSummary(counter)}</small>}
+        </> : <small>{t(kindLabels[counter.kind])} · <AnimatedCounterSummary counter={counter} /></small>}
       </button>
       {counter.kind === 'repeat' && managementMode === 'normal' && <div className="counter-main-repeat-actions"><CounterStepButton className="counter-repeat-step" label={t('반복 단 줄이기')} disabled={saving || counterActionSaving || counter.value <= 0} onStep={() => onRepeatStep(counter.id, -1)}><Minus size={20} /></CounterStepButton><CounterStepButton className="counter-repeat-step" label={t('반복 단 늘리기')} title={blockedLabel} disabled={saving || counterActionSaving || repeat?.complete === true} onStep={() => onRepeatStep(counter.id, 1)}><Plus size={20} /></CounterStepButton></div>}
       {counter.kind !== 'repeat' && managementMode === 'normal' && <div className="counter-main-repeat-actions"><CounterStepButton className="counter-repeat-step" label={t('보조 카운터 줄이기')} disabled={saving || counterActionSaving || (counter.kind === 'simple' ? counter.value <= 0 : counter.kind === 'task' ? (counter.completedCount ?? 0) <= 0 : false)} onStep={() => onCounterStep(counter.id, -1)}><Minus size={20} /></CounterStepButton><CounterStepButton className="counter-repeat-step" label={t('보조 카운터 늘리기')} disabled={saving || counterActionSaving || counter.kind === 'task' && (counter.completedCount ?? 0) >= (counter.total ?? 0)} onStep={() => onCounterStep(counter.id, 1)}><Plus size={20} /></CounterStepButton></div>}
       {managementMode === 'edit' && <button type="button" className="counter-item-delete" aria-label={t('카운터 삭제: {name}', { name: counter.name })} onClick={() => void deleteSelectedCounters([counter.id])}><Trash2 size={17} /></button>}
-      {managementMode === 'normal' && <div className="counter-item-menu-anchor"><button type="button" className="counter-item-menu-trigger" aria-label={`${counter.name} · ${t('더보기')}`} aria-expanded={menuCounterId === counter.id} onClick={() => setMenuCounterId((id) => id === counter.id ? null : counter.id)} onKeyDown={closeCounterMenuOnEscape}><MoreHorizontal size={19} /></button>{menuCounterId === counter.id && <div className="counter-item-menu" role="menu" onKeyDown={closeCounterMenuOnEscape}><button type="button" role="menuitem" onClick={(event) => { setMenuCounterId(null); const trigger = event.currentTarget.closest('.counter-item-menu-anchor')?.querySelector<HTMLButtonElement>('.counter-item-menu-trigger'); onEdit(counter, trigger ?? event.currentTarget) }}><Settings size={15} />{t('설정 수정')}</button><button type="button" role="menuitem" disabled={maxCountersForType(counters, counter.kind) >= MAX_COUNTERS_PER_TYPE} onClick={() => { setMenuCounterId(null); void onDuplicate(counter).then((saved) => setManagementError(saved ? '' : t('카운터 복제에 실패했습니다.'))) }}><Copy size={15} />{t('복제')}</button><button type="button" role="menuitem" onClick={() => void deleteSelectedCounters([counter.id])}><Trash2 size={15} />{t('삭제')}</button></div>}</div>}
+      {managementMode === 'normal' && <div className="counter-item-menu-anchor"><button type="button" className="counter-item-menu-trigger" aria-label={`${counter.name} · ${t('더보기')}`} aria-expanded={menuCounterId === counter.id} onClick={() => menuCounterId === counter.id ? closeCounterMenu(true) : openCounterMenu(counter.id)} onKeyDown={closeCounterMenuOnEscape}><MoreHorizontal size={19} /></button>{(menuCounterId === counter.id || exitingMenuCounterId === counter.id) && <div className={'counter-item-menu' + (exitingMenuCounterId === counter.id && menuCounterId !== counter.id ? ' is-exiting' : '')} aria-hidden={exitingMenuCounterId === counter.id && menuCounterId !== counter.id ? true : undefined} inert={exitingMenuCounterId === counter.id && menuCounterId !== counter.id ? true : undefined} role="menu" onKeyDown={closeCounterMenuOnEscape} onAnimationEnd={(event) => { if (event.target === event.currentTarget && event.animationName === 'ui-surface-exit') finishMenuExit(counter.id) }}><button type="button" role="menuitem" onClick={(event) => { closeCounterMenu(true); const trigger = event.currentTarget.closest('.counter-item-menu-anchor')?.querySelector<HTMLButtonElement>('.counter-item-menu-trigger'); onEdit(counter, trigger ?? event.currentTarget) }}><Settings size={15} />{t('설정 수정')}</button><button type="button" role="menuitem" disabled={maxCountersForType(counters, counter.kind) >= MAX_COUNTERS_PER_TYPE} onClick={() => { closeCounterMenu(true); void onDuplicate(counter).then((saved) => setManagementError(saved ? '' : t('카운터 복제에 실패했습니다.'))) }}><Copy size={15} />{t('복제')}</button><button type="button" role="menuitem" onClick={() => { closeCounterMenu(true); void deleteSelectedCounters([counter.id]) }}><Trash2 size={15} />{t('삭제')}</button></div>}</div>}
       {swipedCounterId === counter.id && managementMode === 'normal' && <button type="button" className="counter-swipe-delete" onClick={() => void deleteSelectedCounters([counter.id])}>{t('삭제')}</button>}
     </article>
   }
@@ -585,9 +633,9 @@ function CounterSettings({ view, snapshot, counters, timerLinkMode, onSave, onTi
             </>}
             {draft.goalRow && <label className="counter-settings-toggle"><input disabled={saving} type="checkbox" checked={draft.goalAlert} onChange={(event) => changeDraft({ goalAlert: event.currentTarget.checked })} /><Bell size={16} />{t('목표 단 완료 시 알려주기')}</label>}
           </section>
-          <section className="counter-main-aux-section"><header><h3>{t('보조 카운터')} · {formatNumber(auxiliaryCounters.length)}</h3><div className="counter-management-actions"><button ref={addButtonRef} type="button" className="counter-main-add-button" disabled={saving || kinds.every((kind) => maxCountersForType(counters, kind) >= MAX_COUNTERS_PER_TYPE)} onClick={onAdd}><Plus size={16} />{t('추가')}</button><button type="button" className="counter-management-mode-button" aria-pressed={managementMode === 'select'} onClick={() => { setManagementMode((mode) => mode === 'select' ? 'normal' : 'select'); setSelectedCounterIds([]); setSwipedCounterId(null); setMenuCounterId(null) }}>{managementMode === 'select' ? t('취소') : t('선택')}</button><button type="button" className="counter-management-mode-button" aria-pressed={managementMode === 'edit'} onClick={() => { setManagementMode((mode) => mode === 'edit' ? 'normal' : 'edit'); setSelectedCounterIds([]); setSwipedCounterId(null); setMenuCounterId(null); setDraggedCounterId(null) }}>{managementMode === 'edit' ? t('완료') : t('편집')}</button></div></header>
+          <section className="counter-main-aux-section"><header><h3>{t('보조 카운터')} · {formatNumber(auxiliaryCounters.length)}</h3><div className="counter-management-actions"><button ref={addButtonRef} type="button" className="counter-main-add-button" disabled={saving || kinds.every((kind) => maxCountersForType(counters, kind) >= MAX_COUNTERS_PER_TYPE)} onClick={onAdd}><Plus size={16} />{t('추가')}</button><button type="button" className="counter-management-mode-button" aria-pressed={managementMode === 'select'} onClick={() => { setManagementMode((mode) => mode === 'select' ? 'normal' : 'select'); setSelectedCounterIds([]); setSwipedCounterId(null); setMenuCounterId(null); cancelMenuExit() }}>{managementMode === 'select' ? t('취소') : t('선택')}</button><button type="button" className="counter-management-mode-button" aria-pressed={managementMode === 'edit'} onClick={() => { setManagementMode((mode) => mode === 'edit' ? 'normal' : 'edit'); setSelectedCounterIds([]); setSwipedCounterId(null); setMenuCounterId(null); cancelMenuExit(); setDraggedCounterId(null) }}>{managementMode === 'edit' ? t('완료') : t('편집')}</button></div></header>
             {managementMode === 'select' && <div className="counter-selection-toolbar"><span>{t('선택한 카운터 {count}개', { count: formatNumber(selectedCounterIds.length) })}</span><button type="button" disabled={!selectedCounterIds.length} onClick={() => void deleteSelectedCounters(selectedCounterIds)}><Trash2 size={15} />{t('삭제')}</button></div>}
-            <div className="counter-main-aux-list">{auxiliaryCounters.map(renderAuxiliaryCounter)}{!auxiliaryCounters.length && <p className="counter-settings-note">{t('아직 추가한 카운터가 없습니다.')}</p>}</div>
+            <div ref={auxiliaryListMotionRef} className="counter-main-aux-list">{auxiliaryCounters.map(renderAuxiliaryCounter)}{!auxiliaryCounters.length && <p className="counter-settings-note">{t('아직 추가한 카운터가 없습니다.')}</p>}</div>
             {managementError && <p className="counter-management-error" role="alert">{managementError}</p>}
           </section>
         </> : <>

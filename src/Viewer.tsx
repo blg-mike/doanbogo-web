@@ -5,6 +5,7 @@ import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { ArrowLeft, Bell, Bookmark, Check, ChevronDown, ChevronLeft, ChevronRight, ChevronUp, Columns2, Eraser, Eye, EyeClosed, EyeOff, Files, Grid3X3, Highlighter, LassoSelect, Maximize2, Minus, Minimize2, MoreHorizontal, MousePointer2, Pencil, Plus, Redo2, RefreshCw, ScanLine, Settings2, Square, Type, Undo2, X } from 'lucide-react'
 import { createPortal } from 'react-dom'
 import BrandLoading from './BrandLoading'
+import { AnimatedNumber } from './AnimatedNumber'
 import yyLogo from './assets/yy-logo.png'
 import viewerToolsIcon from './assets/viewer-tools-icon.png'
 import { cancelThumbnailRenders, PdfPage, PdfThumbnail, setThumbnailRenderingPaused, waitForThumbnailQueueIdle } from './PdfPage'
@@ -3031,7 +3032,7 @@ export default function Viewer() {
                     if (event.key === 'Enter') { event.preventDefault(); event.currentTarget.blur() }
                     if (event.key === 'Escape') { event.preventDefault(); skipCounterRowBlurRef.current = true; setCounterRowDraft(String(mainCounter.value)); setCounterRowEditing(false); event.currentTarget.blur() }
                   }} />
-                  : <button type="button" className="viewer-mini-counter-row" aria-label={t('현재 단 입력')} title={t('현재 단 입력')} disabled={counterActionSaving} onClick={beginCounterRowEdit}><strong>{formatNumber(mainCounter.value)}</strong><small>{counterSideForRow(mainCounter, mainCounter.value).toUpperCase()}</small></button>}
+                  : <button type="button" className="viewer-mini-counter-row" aria-label={`${t('현재 단 입력')} ${formatNumber(mainCounter.value)} ${counterSideForRow(mainCounter, mainCounter.value).toUpperCase()}`} title={t('현재 단 입력')} disabled={counterActionSaving} onClick={beginCounterRowEdit}><strong><AnimatedNumber value={mainCounter.value} format={formatNumber} resetKey={`${id}-${snapshot.activePane}`} aria-hidden="true" /></strong><small>{counterSideForRow(mainCounter, mainCounter.value).toUpperCase()}</small></button>}
                 <button type="button" className="viewer-mini-counter-step" aria-label={t('현재 단 완료 후 다음 단으로 이동')} title={t('현재 단 완료 후 다음 단으로 이동')} disabled={counterActionSaving || mainCounter.goalCompleted === true || mainCounter.value >= MAX_COUNTER_ROW && mainCounter.goalRow !== mainCounter.value} onClick={() => advanceCounterGroup(mainCounter.id)}><Plus size={18} /></button>
               </div>
             </div>}
@@ -3042,20 +3043,21 @@ export default function Viewer() {
                 const decreaseDisabled = counter.kind === 'simple' ? counter.value <= 0 : counter.kind === 'task' ? (counter.completedCount ?? 0) <= 0 : counter.kind === 'repeat' ? counter.value <= 0 : false
                 const increaseDisabled = counter.kind === 'task' ? (counter.completedCount ?? 0) >= (counter.total ?? 0) : counter.kind === 'repeat' ? repeatProgress?.complete === true || Boolean(repeatBlock) : false
                 const unitLabel = counter.unit === 'stitch' ? t('코') : counter.unit === 'round' ? t('바퀴') : ''
-                const value = counter.kind === 'task'
-                  ? `${formatNumber(counter.completedCount ?? 0)}/${formatNumber(counter.total ?? 0)}${t('회')}`
-                  : counter.kind === 'pattern'
-                  ? `${formatNumber(counter.patternRow ?? 1)}/${formatNumber(counter.repeatLength ?? 1)}`
-                    : counter.kind === 'repeat'
-                      ? `${formatNumber(repeatProgress?.completedRows ?? 0)}/${formatNumber(repeatProgress?.totalRows ?? 0)}`
-                      : `${formatNumber(counter.value)}${unitLabel}`
                 const step = (direction: -1 | 1) => counter.kind === 'repeat' ? stepRepeatCounterAction(counter.id, direction) : stepAuxiliaryCounterAction(counter.id, direction)
                 return <div className="viewer-footer-work-aux-counter" data-counter-id={counter.id} style={{ '--counter-color': counter.color } as CSSProperties} key={counter.id}>
                   <span className="viewer-footer-work-aux-color" style={{ background: counter.color }} aria-hidden="true" />
                   <button type="button" className="viewer-footer-work-counter-name" aria-label={`${counter.name} · ${t('설정 수정')}`} title={counter.name} disabled={counterSettingsSaving} onClick={(event) => { counterPanelFocusRef.current = event.currentTarget; requestCounterPanelAction('edit', counter.id) }}>{counterFooterName(counter.name)}</button>
                   <div className="viewer-footer-work-stepper" role="group" aria-label={counter.name}>
                     <CounterStepButton className="viewer-mini-counter-step" label={`${counter.name} · ${t('보조 카운터 줄이기')}`} disabled={counterActionSaving || decreaseDisabled} onStep={() => step(-1)}><Minus size={18} /></CounterStepButton>
-                    <span className="viewer-footer-work-value" aria-label={value}>{value}</span>
+                    <span className="viewer-footer-work-value"><span className="viewer-footer-work-value-content">
+                      {counter.kind === 'task'
+                        ? <><AnimatedNumber value={counter.completedCount ?? 0} format={formatNumber} resetKey={`${id}-${snapshot.activePane}-${activePage}`} />/{formatNumber(counter.total ?? 0)}{t('회')}</>
+                        : counter.kind === 'pattern'
+                          ? <><AnimatedNumber value={counter.patternRow ?? 1} format={formatNumber} resetKey={`${id}-${snapshot.activePane}-${activePage}`} />/{formatNumber(counter.repeatLength ?? 1)}</>
+                          : counter.kind === 'repeat'
+                            ? <><AnimatedNumber value={repeatProgress?.completedRows ?? 0} format={formatNumber} resetKey={`${id}-${snapshot.activePane}-${activePage}`} />/{formatNumber(repeatProgress?.totalRows ?? 0)}</>
+                            : <><AnimatedNumber value={counter.value} format={formatNumber} resetKey={`${id}-${snapshot.activePane}-${activePage}`} />{unitLabel}</>}
+                    </span></span>
                     <CounterStepButton className="viewer-mini-counter-step" label={`${counter.name} · ${t('보조 카운터 늘리기')}`} title={repeatBlock ? repeatCounterBlockLabel(repeatBlock) ?? undefined : undefined} disabled={counterActionSaving || increaseDisabled} onStep={() => step(1)}><Plus size={18} /></CounterStepButton>
                   </div>
                 </div>
@@ -3106,7 +3108,7 @@ export default function Viewer() {
               <div className="viewer-footer-primary-controls">
                 <div className="viewer-footer-zoom-controls" role="group" aria-label={t('축소') + ' / ' + t('확대')}>
                   <button type="button" className="viewer-page-control-button" aria-label={t("축소")} title={t("축소")} disabled={activeZoom <= ZOOM_LEVELS[0]} onClick={() => changePane(snapshot.activePane, (pane) => ({ ...pane, zoom: stepZoomLevel(pane.zoom, -1) }), true)}><Minus size={17} /></button>
-                  <span className="viewer-footer-zoom" aria-label={Math.round(activeZoom * 100) + '%'}>{Math.round(activeZoom * 100)}%</span>
+                  <span className="viewer-footer-zoom" title={Math.round(activeZoom * 100) + '%'}><AnimatedNumber value={Math.round(activeZoom * 100)} format={(value) => `${formatNumber(value)}%`} resetKey={`${id}-${snapshot.activePane}`} /></span>
                   <button type="button" className="viewer-page-control-button" aria-label={t("확대")} title={t("확대")} disabled={activeZoom >= ZOOM_LEVELS[ZOOM_LEVELS.length - 1]} onClick={() => changePane(snapshot.activePane, (pane) => ({ ...pane, zoom: stepZoomLevel(pane.zoom, 1) }), true)}><Plus size={17} /></button>
                   <button type="button" className="viewer-page-control-button" aria-label={t("화면 맞춤")} title={t("100% 확대와 페이지 중앙으로 맞춤")} onClick={() => changePane(snapshot.activePane, (pane) => ({ ...pane, zoom: 1, centerX: 0.5, centerY: 0.5 }), true)}><Maximize2 size={16} /></button>
                 </div>
@@ -3115,16 +3117,16 @@ export default function Viewer() {
               </div>
               <div className="viewer-footer-page-navigation" role="group" aria-label={t('페이지')}>
                 <button type="button" className="viewer-page-control-button" aria-label={t('이전')} title={t('이전')} disabled={activeVisiblePageIndex <= 0} onClick={() => navigateVisiblePage(-1)}><ChevronLeft size={18} /></button>
-                <span className="viewer-footer-page-count" aria-label={t('페이지') + ' ' + activePage + ' / ' + pdf.numPages} title={t('페이지') + ' ' + activePage + ' / ' + pdf.numPages}>{formatNumber(activePage)} / {formatNumber(pdf.numPages)}</span>
+                <span className="viewer-footer-page-count" title={t('페이지') + ' ' + activePage + ' / ' + pdf.numPages}><AnimatedNumber value={activePage} format={formatNumber} resetKey={id} /> / {formatNumber(pdf.numPages)}</span>
                 <button type="button" className="viewer-page-control-button" aria-label={t('다음')} title={t('다음')} disabled={activeVisiblePageIndex < 0 || activeVisiblePageIndex >= visiblePageNumbers.length - 1} onClick={() => navigateVisiblePage(1)}><ChevronRight size={18} /></button>
               </div>
             </div>
             <div className="viewer-footer-mobile-controls">
               <button type="button" className="viewer-page-control-button" aria-label={t('이전')} title={t('이전')} disabled={activeVisiblePageIndex <= 0} onClick={() => navigateVisiblePage(-1)}><ChevronLeft size={20} /></button>
-              <span className="viewer-footer-page-count" aria-label={t('페이지') + ' ' + activePage + ' / ' + pdf.numPages} title={t('페이지') + ' ' + activePage + ' / ' + pdf.numPages}>{formatNumber(activePage)} / {formatNumber(pdf.numPages)}</span>
+              <span className="viewer-footer-page-count" title={t('페이지') + ' ' + activePage + ' / ' + pdf.numPages}><AnimatedNumber value={activePage} format={formatNumber} resetKey={id} /> / {formatNumber(pdf.numPages)}</span>
               <button type="button" className="viewer-page-control-button" aria-label={t('다음')} title={t('다음')} disabled={activeVisiblePageIndex < 0 || activeVisiblePageIndex >= visiblePageNumbers.length - 1} onClick={() => navigateVisiblePage(1)}><ChevronRight size={20} /></button>
               <div className="viewer-mobile-menu-anchor">
-                <button ref={zoomMenuTriggerRef} type="button" className="viewer-mobile-zoom-trigger" aria-haspopup="menu" aria-expanded={zoomMenuOpen} aria-label={t('확대 배율 {zoom}%', { zoom: Math.round(activeZoom * 100) })} title={t('확대 배율 {zoom}%', { zoom: Math.round(activeZoom * 100) })} onClick={() => setZoomMenuOpen((open) => !open)}>{Math.round(activeZoom * 100)}%</button>
+                <button ref={zoomMenuTriggerRef} type="button" className="viewer-mobile-zoom-trigger" aria-haspopup="menu" aria-expanded={zoomMenuOpen} aria-label={t('확대 배율 {zoom}%', { zoom: Math.round(activeZoom * 100) })} title={t('확대 배율 {zoom}%', { zoom: Math.round(activeZoom * 100) })} onClick={() => setZoomMenuOpen((open) => !open)}><AnimatedNumber value={Math.round(activeZoom * 100)} format={(value) => `${formatNumber(value)}%`} resetKey={`${id}-${snapshot.activePane}`} aria-hidden="true" /></button>
                 {zoomMenuOpen && <div ref={zoomMenuPanelRef} className="viewer-compact-menu viewer-zoom-menu" role="menu" aria-label={t('확대 배율 {zoom}%', { zoom: Math.round(activeZoom * 100) })}>
                   <div className="viewer-zoom-presets" role="group" aria-label={t('확대 배율 {zoom}%', { zoom: Math.round(activeZoom * 100) })}>
                     {ZOOM_LEVELS.map((zoom) => <button key={zoom} type="button" role="menuitemradio" aria-checked={Math.abs(activeZoom - zoom) < 0.0001} aria-label={t('확대 배율 {zoom}%', { zoom: zoom * 100 })} className={Math.abs(activeZoom - zoom) < 0.0001 ? 'selected' : ''} onClick={() => { changePane(snapshot.activePane, (pane) => ({ ...pane, zoom }), true); setZoomMenuOpen(false) }}>{zoom * 100}%</button>)}

@@ -69,6 +69,7 @@
 .viewer-counter-action-menu > summary, .counter-item-menu-trigger, .counter-item-delete, .counter-order-handle { border: 0; border-radius: var(--control-radius); background: transparent; }
 .viewer-counter-action-menu > div, .counter-item-menu { border-radius: var(--control-radius); box-shadow: 0 4px 16px rgba(17,24,39,.08); }
 .viewer-counter-action-menu button, .counter-item-menu button { gap: 8px; font-size: 16px; }
+.number-counter-panel .counter-item-menu-trigger[aria-expanded="true"] { color: var(--color-primary); background: var(--color-primary-soft); }
 .number-counter-panel { border-radius: var(--panel-radius); box-shadow: 0 4px 16px rgba(17,24,39,.08); }
 .number-counter-panel .number-counter-header { gap: 8px; padding: 16px; }
 .number-counter-panel .counter-panel-title { flex: 1 1 120px; overflow: visible; overflow-wrap: anywhere; font-size: 18px; text-overflow: clip; white-space: normal; }

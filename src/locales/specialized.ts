@@ -659,3 +659,18 @@ Object.assign(specializedTranslations.de, { '작업 타이머 최소화': 'Arbei
 Object.assign(specializedTranslations.da, { '작업 타이머 최소화': 'Minimer arbejdstimer', '작업 타이머 복원': 'Gendan arbejdstimer' })
 Object.assign(specializedTranslations.nb, { '작업 타이머 최소화': 'Minimer arbeidstimer', '작업 타이머 복원': 'Gjenopprett arbeidstimer' })
 Object.assign(specializedTranslations.fi, { '작업 타이머 최소화': 'Pienennä työajastin', '작업 타이머 복원': 'Palauta työajastin' })
+
+const chartToolTranslations = {
+  en: { '선택한 기호 크게': 'Enlarge selected symbols', '선택한 기호 작게': 'Shrink selected symbols', '선택한 기호를 시계 방향으로 회전': 'Rotate selected symbols clockwise', '선택한 기호를 시계 반대 방향으로 회전': 'Rotate selected symbols counterclockwise', '선택한 기호 복제': 'Duplicate selected symbols', '선택한 기호 삭제': 'Delete selected symbols' },
+  ja: { '선택한 기호 크게': '選択した記号を拡大', '선택한 기호 작게': '選択した記号を縮小', '선택한 기호를 시계 방향으로 회전': '選択した記号を時計回りに回転', '선택한 기호를 시계 반대 방향으로 회전': '選択した記号を反時計回りに回転', '선택한 기호 복제': '選択した記号を複製', '선택한 기호 삭제': '選択した記号を削除' },
+  de: { '선택한 기호 크게': 'Ausgewählte Symbole vergrößern', '선택한 기호 작게': 'Ausgewählte Symbole verkleinern', '선택한 기호를 시계 방향으로 회전': 'Ausgewählte Symbole im Uhrzeigersinn drehen', '선택한 기호를 시계 반대 방향으로 회전': 'Ausgewählte Symbole gegen den Uhrzeigersinn drehen', '선택한 기호 복제': 'Ausgewählte Symbole duplizieren', '선택한 기호 삭제': 'Ausgewählte Symbole löschen' },
+  da: { '선택한 기호 크게': 'Forstør valgte symboler', '선택한 기호 작게': 'Formindsk valgte symboler', '선택한 기호를 시계 방향으로 회전': 'Rotér valgte symboler med uret', '선택한 기호를 시계 반대 방향으로 회전': 'Rotér valgte symboler mod uret', '선택한 기호 복제': 'Duplikér valgte symboler', '선택한 기호 삭제': 'Slet valgte symboler' },
+  nb: { '선택한 기호 크게': 'Forstørr valgte symboler', '선택한 기호 작게': 'Forminsk valgte symboler', '선택한 기호를 시계 방향으로 회전': 'Roter valgte symboler med klokken', '선택한 기호를 시계 반대 방향으로 회전': 'Roter valgte symboler mot klokken', '선택한 기호 복제': 'Dupliser valgte symboler', '선택한 기호 삭제': 'Slett valgte symboler' },
+  fi: { '선택한 기호 크게': 'Suurenna valittuja symboleja', '선택한 기호 작게': 'Pienennä valittuja symboleja', '선택한 기호를 시계 방향으로 회전': 'Kierrä valittuja symboleja myötäpäivään', '선택한 기호를 시계 반대 방향으로 회전': 'Kierrä valittuja symboleja vastapäivään', '선택한 기호 복제': 'Monista valitut symbolit', '선택한 기호 삭제': 'Poista valitut symbolit' },
+}
+Object.assign(specializedTranslations.en, chartToolTranslations.en)
+Object.assign(specializedTranslations.ja, chartToolTranslations.ja)
+Object.assign(specializedTranslations.de, chartToolTranslations.de)
+Object.assign(specializedTranslations.da, chartToolTranslations.da)
+Object.assign(specializedTranslations.nb, chartToolTranslations.nb)
+Object.assign(specializedTranslations.fi, chartToolTranslations.fi)

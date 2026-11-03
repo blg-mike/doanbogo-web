@@ -2,6 +2,7 @@ import { useRef, useState, type PointerEvent as ReactPointerEvent } from 'react'
 import { createPortal } from 'react-dom'
 import { ChevronLeft, ChevronRight, Plus, Trash2, X } from 'lucide-react'
 import { formatNumber, t } from './locales/index'
+import './ChartRowRecognitionDialog.css'
 import type { CounterSnapshot } from './types'
 import type { DetectedChartRow } from './chartRowDetection'
 
@@ -155,7 +156,7 @@ export function ChartRowRecognitionDialog({ imageUrl, initialRows, counters, ini
         <div className="chart-row-controls">
           <div className="chart-row-navigation">
             <button type="button" className="secondary-button" aria-label={t('이전 행')} disabled={saving || selectedIndex <= 0} onClick={() => selectAdjacent(-1)}><ChevronLeft size={18} />{t('이전 행')}</button>
-            <span>{orderedRows.length ? t('행 {number}', { number: formatNumber(Math.max(0, selectedIndex) + 1) }) + ' / ' + formatNumber(orderedRows.length) : t('인식된 행이 없습니다.')}</span>
+            <span role="status" aria-live="polite">{orderedRows.length ? t('행 {number}', { number: formatNumber(Math.max(0, selectedIndex) + 1) }) + ' / ' + formatNumber(orderedRows.length) : t('인식된 행이 없습니다.')}</span>
             <button type="button" className="secondary-button" aria-label={t('다음 행')} disabled={saving || selectedIndex < 0 || selectedIndex >= orderedRows.length - 1} onClick={() => selectAdjacent(1)}>{t('다음 행')}<ChevronRight size={18} /></button>
           </div>
           <div className="chart-row-actions">

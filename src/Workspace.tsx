@@ -9,6 +9,7 @@ import { chartSvg } from './charts'
 import type { ChartDocument, DocumentRecord, HomeProject, SortMode, ViewMode } from './types'
 import { formatWorkTime } from './workTime'
 import AppNavigation from './AppNavigation'
+import { useListLayoutMotion } from './useListLayoutMotion'
 import './Chart.css'
 
 const sortLabels: Record<SortMode, LocaleKey> = { recent: '최근 실행순', name: '이름순', upload: '업로드순' }
@@ -86,6 +87,8 @@ export default function Workspace() {
   const photoFolderInput = useRef<HTMLInputElement>(null)
   const importingRef = useRef(false)
   const [documents, setDocuments] = useState<LibraryItem[]>([])
+  const [initialDocumentsLoaded, setInitialDocumentsLoaded] = useState(false)
+  const [loadedListContext, setLoadedListContext] = useState('')
   const [query, setQuery] = useState('')
   const [sort, setSort] = useState<SortMode>('recent')
   const [view, setView] = useState<ViewMode>('cover')
@@ -113,6 +116,13 @@ export default function Workspace() {
       : '/projects/document/' + record.id,
   )
   const documentAction = (record: DocumentRecord) => collectionMode === 'active' && record.kind !== 'photos' ? '뷰어 열기' : '상세'
+  const documentListMotionRef = useListLayoutMotion<HTMLElement>(
+    documents.map((item) => (item.type === 'document' ? 'document-' : 'chart-') + item.record.id),
+    JSON.stringify({ query, view, collectionMode, loadedListContext }),
+    initialDocumentsLoaded,
+    undefined,
+    view === 'cover',
+  )
 
   const refresh = useCallback(async () => {
     const [pdfs, charts, projects] = await Promise.all([listDocuments(sort, query), listCharts(sort, query), listHomeProjects()])
@@ -129,6 +139,8 @@ export default function Workspace() {
       return itemOpened(b) - itemOpened(a)
     })
     setDocuments(items)
+    setLoadedListContext(JSON.stringify({ query, collectionMode }))
+    setInitialDocumentsLoaded(true)
   }, [sort, query, collectionMode])
 
   // oxlint-disable-next-line react/set-state-in-effect -- Reflect the IndexedDB result when the search or sort changes.
@@ -374,10 +386,10 @@ export default function Workspace() {
 
   return (
     <div className="workspace-app-frame"><AppNavigation active="projects" /><main className="workspace-shell">
-      <section className="workspace-content">
+      <section ref={documentListMotionRef} className="workspace-content">
         <div className="welcome-row"><div><p className="eyebrow">{t('프로젝트')}</p><h1>{collectionMode === 'trash' ? t('휴지통') : collectionMode === 'archived' ? t('보관한 프로젝트') : t('내 프로젝트')}</h1><p className="welcome-copy">{t("도안과 차트, 작업 상태를 한곳에서 관리해요.")}</p></div><div className="document-count">{formatNumber(documents.length)}<span>{t("개 프로젝트")}</span></div></div>
         <div className="collection-search-row"><label className="search-box"><Search size={18} /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder={t("이름 또는 태그 검색")} aria-label={t("이름 또는 태그 검색")} />{query && <button type="button" className="search-clear" aria-label={t("검색어 지우기")} onClick={() => setQuery('')}><X size={15} /></button>}</label></div>
-        <nav className="project-filter-tabs" aria-label={t("프로젝트 보기")}><button className={collectionMode === 'active' ? 'active' : ''} onClick={() => setSearchParams({})}>{t("전체")}</button><button className={collectionMode === 'archived' ? 'active' : ''} onClick={() => setSearchParams({ view: 'archived' })}>{t("보관")}</button><button className={collectionMode === 'trash' ? 'active' : ''} onClick={() => setSearchParams({ view: 'trash' })}>{t("휴지통")}</button></nav>
+        <nav className="project-filter-tabs" aria-label={t("프로젝트 보기")}><button type="button" aria-pressed={collectionMode === 'active'} className={collectionMode === 'active' ? 'active' : ''} onClick={() => setSearchParams({})}>{t("전체")}</button><button type="button" aria-pressed={collectionMode === 'archived'} className={collectionMode === 'archived' ? 'active' : ''} onClick={() => setSearchParams({ view: 'archived' })}>{t("보관")}</button><button type="button" aria-pressed={collectionMode === 'trash'} className={collectionMode === 'trash' ? 'active' : ''} onClick={() => setSearchParams({ view: 'trash' })}>{t("휴지통")}</button></nav>
         <div className="toolbar">
           <input ref={fileInput} type="file" accept="application/pdf,.pdf" multiple hidden onChange={(event) => void importFiles(event.currentTarget.files)} />
           <input ref={photoCameraInput} type="file" accept="image/*" capture="environment" hidden onChange={(event) => { addPhotoFiles(event.currentTarget.files); event.currentTarget.value = '' }} />
@@ -386,15 +398,15 @@ export default function Workspace() {
           <button className="primary-button workspace-pdf-add-button" onClick={() => fileInput.current?.click()} disabled={loading}><FilePlus2 size={18} />{loading ? t('추가 중…') : t('PDF 추가')}</button>
           <button className="secondary-button" onClick={startPhotoFolder} disabled={loading}><Images size={18} />{t("사진 추가")}</button>
           <label className="sort-select"><SlidersHorizontal size={16} /><span className="sr-only">{t("정렬")}</span><select value={sort} onChange={(event) => void changeSort(event.target.value as SortMode)}>{Object.entries(sortLabels).map(([value, label]) => <option key={value} value={value}>{t(label)}</option>)}</select></label>
-          <div className="view-toggle" aria-label={t("보기 방식")}><button className={view === 'cover' ? 'active' : ''} aria-label={t("표지 보기")} onClick={() => void changeView('cover')}><Grid2X2 size={17} /></button><button className={view === 'list' ? 'active' : ''} aria-label={t("목록 보기")} onClick={() => void changeView('list')}><List size={18} /></button></div>
+          <div className="view-toggle" aria-label={t("보기 방식")}><button type="button" className={view === 'cover' ? 'active' : ''} aria-pressed={view === 'cover'} aria-label={t("표지 보기")} onClick={() => void changeView('cover')}><Grid2X2 size={17} /></button><button type="button" className={view === 'list' ? 'active' : ''} aria-pressed={view === 'list'} aria-label={t("목록 보기")} onClick={() => void changeView('list')}><List size={18} /></button></div>
         </div>
         {notice && <div className="notice" role="status"><span>{notice}</span>{undoProject && <button className="notice-undo" onClick={() => void saveHomeProject({ ...undoProject, deletedAt: null }).then(() => { setUndoProject(null); setNotice(t('프로젝트를 복구했습니다.')); void refresh() })}>{t("실행 취소")}</button>}<button aria-label={t("알림 닫기")} onClick={() => { setNotice(''); setUndoProject(null) }}><X size={16} /></button></div>}
         {documents.length === 0 ? (
           <section className="empty-state"><div className="empty-icon"><FilePlus2 size={27} /></div><h2>{query ? t('검색 결과가 없습니다') : t('아직 도안이 없습니다')}</h2><p>{query ? t('이름이나 태그를 바꿔서 다시 검색해 보세요.') : t('PDF 또는 사진을 추가해 이곳에 모아 둘 수 있어요.')}</p>{!query && <div className="empty-actions"><button className="primary-button" onClick={() => fileInput.current?.click()}><FilePlus2 size={18} />{t("PDF 추가")}</button><button className="secondary-button" onClick={startPhotoFolder}><Images size={18} />{t("사진 추가")}</button></div>}</section>
         ) : (
-          <section className={view === 'cover' ? 'document-grid' : 'document-list'} aria-label={t("도안 목록")}>
+          <section data-layout-motion-container className={view === 'cover' ? 'document-grid' : 'document-list'} aria-label={t("도안 목록")}>
             {documents.map((item) => item.type === 'document' ? (
-              <article key={'document-' + item.record.id} className={'document-card ' + (view === 'list' ? 'list-card' : '')}>
+              <article key={'document-' + item.record.id} data-layout-motion-key={'document-' + item.record.id} className={'document-card ' + (view === 'list' ? 'list-card' : '')}>
                 <button className="cover-button" onClick={() => openDocument(item.record)} aria-label={item.record.fileName + ' ' + documentAction(item.record)}>
                   {item.record.kind === 'photos' ? item.record.cover ? <CoverImage blob={item.record.cover} /> : <PhotoCover documentId={item.record.id} /> : item.record.cover ? <CoverImage blob={item.record.cover} /> : <span className="cover-placeholder"><BookOpen size={32} /></span>}
                   <span className="pdf-label">{item.record.kind === 'photos' ? t('사진') : 'PDF'}</span>
@@ -406,7 +418,7 @@ export default function Workspace() {
                 </div>
               </article>
             ) : (
-              <article key={'chart-' + item.record.id} className={'document-card chart-document-card ' + (view === 'list' ? 'list-card' : '')}>
+              <article key={'chart-' + item.record.id} data-layout-motion-key={'chart-' + item.record.id} className={'document-card chart-document-card ' + (view === 'list' ? 'list-card' : '')}>
                 <button className="cover-button chart-cover-button" onClick={() => navigate('/projects/chart/' + item.record.id)} aria-label={t('{name} 상세', { name: item.record.title })}>
                   <ChartPreview chart={item.record} /><span className="chart-kind-label">{item.record.craft === 'knitting' ? t('대바늘 · 색상') : t('코바늘 · 자유 형식')}</span>
                 </button>

@@ -2,6 +2,7 @@ import { Minimize2, Pause, Play } from 'lucide-react'
 import { useCallback, useEffect, useRef, useState, type RefObject } from 'react'
 import { createPortal } from 'react-dom'
 import { t } from './locales'
+import { AnimatedNumber } from './AnimatedNumber'
 import { addDocumentWorkSessions, addDocumentWorkTime, resetDocumentWorkTime } from './storage'
 import type { DocumentWorkTimeDay, DocumentWorkTimeSession } from './types'
 import { formatWorkTime, localWorkDateKey, persistedWorkTimeBase, splitWorkTimeSession } from './workTime'
@@ -342,7 +343,8 @@ export default function DocumentWorkTimer({ documentId, initialTotalWorkTimeMs, 
   const toggleButton = <button type="button" className="viewer-work-timer-toggle" aria-label={error ? t('저장 재시도') : running ? t('일시정지') : t('재생')} title={error ? t('저장 재시도') : running ? t('일시정지') : t('재생')} disabled={saving} onClick={() => void toggle()}>
       {running ? <Pause size={17} /> : <Play size={17} />}
     </button>
-  const elapsedButton = <button type="button" className="viewer-work-timer-elapsed" aria-haspopup="dialog" aria-expanded={recordPanelOpen} aria-label={`${t('오늘 누적 작업시간')} ${formatWorkTime(elapsedMs)} · ${t('작업 기록')}`} title={t('작업 기록')} aria-live="off" onClick={() => onRecordPanelOpenChange(true)}>{formatWorkTime(elapsedMs)}</button>
+  const elapsedSeconds = Math.floor(elapsedMs / 1000)
+  const elapsedButton = <button type="button" className="viewer-work-timer-elapsed" aria-haspopup="dialog" aria-expanded={recordPanelOpen} aria-label={`${t('오늘 누적 작업시간')} ${formatWorkTime(elapsedMs)} · ${t('작업 기록')}`} title={t('작업 기록')} aria-live="off" onClick={() => onRecordPanelOpenChange(true)}><AnimatedNumber value={elapsedSeconds} format={(seconds) => formatWorkTime(seconds * 1000)} duration={140} stagger={0} aria-hidden="true" /></button>
   const minimizeButton = counterMiniBarLayout && onMinimize && <button ref={minimizeButtonRef} type="button" className="viewer-work-timer-minimize" aria-label={t('작업 타이머 최소화')} title={t('작업 타이머 최소화')} onClick={onMinimize}><Minimize2 size={18} /></button>
   return createPortal(<div className="viewer-work-timer" aria-label={t('작업 타이머')}>
     {counterMiniBarLayout ? <>{elapsedButton}{toggleButton}{minimizeButton}</> : <>{toggleButton}{elapsedButton}</>}

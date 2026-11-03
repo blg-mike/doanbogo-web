@@ -19,6 +19,15 @@ React·TypeScript·Vite·PDF.js·IndexedDB 기반이다. `App.tsx`는 시작·�
 | PDF·사진·URL·QR 인식 | `photoImages.ts`, `photoDocument.ts`, `pdfPageRenderQueue.ts`, `pdfRenderResources.ts`, `pdfRecognition.ts`, `pdfRecognitionVersion.ts`, `qr.ts`, `qrDecode.ts`·Worker, `qrTileGrid.ts` |
 | 타입·영속화·호환성 | `types.ts`, `storage.ts`, `backup.ts`, `viewerCounterState.ts` |
 | UI·다국어 | `designTokens.ts`, `index.css`, `App.css`, `AppDesignSystem.css`, `locales/` |
+| 숫자 표시 모션 | `AnimatedNumber.tsx`, `AnimatedNumber.css` |
+| 상태·목록 피드백·레이아웃 검사 | `useListLayoutMotion.ts`, `useMenuExit.ts`, `scripts/stageshow-layout/` |
+
+## UI 피드백 계약
+- 저장·검증 상태는 기존 처리 결과 가까이에 표시한다. 보고서 자동 저장은 고정 폭 live status 슬롯, 프로젝트 상세 저장은 버튼 상태, 사진 가져오기는 진행·실패 항목을 사용한다. 데이터 저장·오류 복구 경로는 변경하지 않는다.
+- `useListLayoutMotion`은 안정 ID가 있는 실제 목록의 구성·순서가 변할 때만 140ms `transform`·`opacity` 피드백을 제공한다. 초기 로딩·검색·필터·보기·언어 전환과 드래그 중 항목은 제외한다. 한 열 목록은 정렬·추가·삭제 후 기존 항목을 이동시키고, 표지 그리드는 새 항목만 나타내며 기존 카드 재배치는 즉시 반영한다. ResizeObserver는 구조 크기 변경 때 위치 기준만 갱신하고 값·시간 변경에는 레이아웃 측정을 하지 않는다.
+- `useMenuExit`은 닫기 이벤트·바깥 클릭·Escape·포커스를 즉시 처리한다. 메뉴의 시각적 퇴장 동안 해당 DOM은 `inert`·`aria-hidden`·pointer-events 비활성 상태이며, reduced-motion에서는 즉시 제거한다.
+- `AnimatedNumber`는 카운터·타이머·페이지·배율·작업시간 선택값의 바뀐 숫자 자리만 굴린다. 상태·저장·실행 취소는 즉시 반영하고 타이머 초 단위는 화면 낭독기 live 알림에서 제외한다. 무대·필기·드래그 입력에는 숫자나 위치 모션을 추가하지 않으며 reduced-motion은 숫자를 즉시 표시한다.
+- `scripts/stageshow-layout/`은 라이선스·출처를 기록한 개발 전용 레이아웃 스냅샷 도구다. 앱·portable 런타임에는 포함되지 않는다. 검출 요소가 없거나 브라우저 검사가 실패하면 결과는 `inconclusive`이며, 스냅샷은 별도 시각 검토를 대체하지 않는다.
 
 ## 저장 계약
 - IndexedDB `doanbogo-web` v12: documents·pages·viewers·pageWorks·charts·knittingReportEntries·photoPages·pageRecognition·homeProjects·homeReports·preferences. v12 업그레이드는 Viewer의 과거 타임랩 필드와 이력 참조만 제거한다.

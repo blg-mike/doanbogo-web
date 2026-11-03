@@ -1,6 +1,6 @@
 import { t } from './locales/index'
 import { useState } from 'react'
-import { ArrowLeft, CircleDot, Grid3X3, Rows3, Ruler, Scissors, Sparkles } from 'lucide-react'
+import { ArrowLeft, CircleDot, Grid3X3, MousePointer2, Rows3, Ruler, Scissors, Sparkles } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import { createCrochetChart, createKnittingChart } from './charts'
 import { saveChart } from './storage'
@@ -61,9 +61,9 @@ export default function ChartCreate() {
           </div>
         </> : craft === 'crochet' ? <>
           <p className="chart-eyebrow">{t("코바늘")}</p><h1>{t("Free Form 차트")}</h1>
-          <div className="chart-choice selected"><span className="choice-symbol">⌘</span><span><strong>{t("기호를 자유롭게 배치")}</strong><small>{t("캔버스 위에 코바늘 기호를 놓고 도안을 구성합니다.")}</small></span><CircleDot size={18} /></div>
+          <div className="chart-choice selected"><span className="choice-symbol"><MousePointer2 size={20} aria-hidden="true" /></span><span><strong>{t("기호를 자유롭게 배치")}</strong><small>{t("캔버스 위에 코바늘 기호를 놓고 도안을 구성합니다.")}</small></span><CircleDot size={18} /></div>
           <p className="chart-hint"><Sparkles size={17} />{t(" 빈 캔버스에서 시작해요. 필요한 기호를 직접 배치할 수 있습니다.")}</p>
-          {error && <p className="chart-error">{error}</p>}
+          {error && <p className="chart-error" role="alert">{error}</p>}
           <button className="primary-button chart-next" disabled={busy} onClick={() => void makeChart()}>{busy ? t('만드는 중…') : t('차트 만들기')}</button>
         </> : <>
           <p className="chart-eyebrow">{t("대바늘 · Colors")}</p><h1>{t("차트 설정")}</h1>
@@ -83,7 +83,7 @@ export default function ChartCreate() {
             <div className="chart-size-result"><span>{t("예상 완성 크기")}</span><strong>{physicalWidth.toFixed(1)} × {physicalHeight.toFixed(1)} {unitLabel}</strong></div>
             <small className="chart-size-note">{t("입력한 게이지와 코·단 수를 기준으로 계산합니다.")}</small>
           </div>
-          {error && <p className="chart-error">{error}</p>}
+          {error && <p className="chart-error" role="alert">{error}</p>}
           <button className="primary-button chart-next" disabled={busy} onClick={() => void makeChart()}>{busy ? t('만드는 중…') : t('차트 만들기')}</button>
         </>}
       </section>

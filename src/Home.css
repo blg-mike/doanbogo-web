@@ -61,6 +61,22 @@
 .workspace-app-frame .workspace-content { max-width: 1500px; padding-top: 38px; }
 .workspace-app-frame .workspace-footer { margin-top: 9px; }
 .workspace-app-frame .notice-undo { padding: 5px 8px; border: 0; border-radius: 10px; color: var(--color-secondary); background: var(--color-primary-soft); font-size: 14px; font-weight: 600; cursor: pointer; }
+.workspace-app-frame .modal-heading h2 { font-size: 16px; line-height: 1.35; }
+.workspace-app-frame .modal-heading { padding: 16px 20px; }
+.workspace-app-frame .modal-form { gap: 12px; padding: 20px; }
+.workspace-app-frame .modal-form label { margin-bottom: 0; font-size: 14px; font-weight: 600; }
+.workspace-app-frame .modal-form input { min-height: 44px; font-size: 13px; }
+.workspace-app-frame .modal-copy { font-size: 13px; line-height: 1.5; }
+.workspace-app-frame .modal-actions { flex-wrap: wrap; gap: 8px; margin-top: 8px; }
+.workspace-app-frame .modal-actions > button { min-height: 44px; font-size: 13px; white-space: normal; }
+.workspace-app-frame .action-list { padding: 4px 8px 8px; }
+.workspace-app-frame .action-list button { min-height: 44px; padding: 10px 12px; border-bottom: 1px solid var(--color-divider); border-radius: 0; font-size: 14px; }
+.workspace-app-frame .action-list button:last-child { border-bottom: 0; }
+.workspace-app-frame .action-list button span { color: var(--color-text-secondary); font-size: 12px; line-height: 1.4; }
+.workspace-app-frame .photo-import-actions .secondary-button { min-height: 44px; font-size: 13px; }
+.workspace-app-frame .photo-draft-list li { font-size: 12px; }
+.workspace-app-frame .photo-draft-name small { font-size: 12px; }
+.workspace-app-frame .rename-error, .workspace-app-frame .photo-import-progress { font-size: 13px; line-height: 1.45; }
 
 @media (max-width: 1199px) {
   .app-sidebar { width: 174px; }
@@ -162,19 +178,55 @@
 .home-report-info strong { font-size: 14px; font-weight: 600; }
 .home-report-info b, .home-view-all, .collection-toolbar button, .project-actions button, .project-filter-tabs button { font-size: 13px; }
 .home-cover-placeholder { background: #fff; }
-.home-report-card, .detail-card, .new-project-options button { border: 0; border-radius: 0; color: var(--color-text); background: transparent; box-shadow: none; }
+.home-report-card, .detail-card, .new-project-options button { border: 0; border-radius: 0; color: var(--color-text); background: var(--color-surface); box-shadow: none; }
 .home-report-card { padding: 12px 0; border-bottom: 1px solid var(--color-divider); }
 .home-report-card:hover { border-color: var(--color-divider); color: var(--color-primary); background: transparent; box-shadow: none; }
 .detail-card { padding: 16px 0; }
 .new-project-options button { min-height: 82px; border-bottom: 1px solid var(--color-divider); }
-.workspace-app-frame .document-card { border: 0; border-bottom: 1px solid var(--color-divider); border-radius: 0; background: transparent; box-shadow: none; }
+.workspace-app-frame .document-card { border: 0; border-bottom: 1px solid var(--color-divider); border-radius: 0; background: var(--color-surface); box-shadow: none; }
 .workspace-app-frame .document-card:hover { border-color: var(--color-divider); background: transparent; box-shadow: none; }
 .workspace-app-frame .collection-toolbar button, .workspace-app-frame .project-actions button:not(.primary), .workspace-app-frame .project-filter-tabs button { min-height: 44px; border: 0; border-bottom: 2px solid transparent; border-radius: 0; color: var(--color-text-secondary); background: transparent; }
 .workspace-app-frame .collection-toolbar button.active, .workspace-app-frame .project-filter-tabs button.active { border-bottom-color: var(--color-primary); color: var(--color-primary); background: transparent; }
 .workspace-app-frame .collection-toolbar button:hover:not(:disabled), .workspace-app-frame .project-actions button:not(.primary):hover:not(:disabled), .workspace-app-frame .project-filter-tabs button:hover:not(:disabled) { color: var(--color-primary); background: transparent; }
 .detail-state-row select, .project-detail-edit input { height: 36px; min-height: 36px; padding: 0 2px; border: 0; border-bottom: 1px solid var(--color-divider); border-radius: 0; color: var(--color-text); background: transparent; font-size: 13px; }
-.project-detail-edit .detail-save-button { min-height: 44px; border: 0; border-radius: 4px; font-size: 13px; }
+.project-detail-edit .detail-save-button { width: clamp(136px, 14vw, 168px); min-width: 136px; min-height: 44px; border: 0; border-radius: 4px; font-size: 13px; white-space: nowrap; }
 .workspace-app-frame .project-actions .primary { border-radius: 4px; font-size: 13px; }
+.workspace-app-frame .toolbar .workspace-pdf-add-button:hover:not(:disabled),
+.workspace-app-frame .toolbar .secondary-button:hover:not(:disabled),
+.workspace-app-frame .toolbar .workspace-pdf-add-button:focus-visible:not(:disabled),
+.workspace-app-frame .toolbar .secondary-button:focus-visible:not(:disabled) { color: var(--color-primary); background: var(--color-primary-soft); }
 @media (any-pointer: coarse) {
   .detail-state-row select, .project-detail-edit input { height: 44px; min-height: 44px; font-size: 16px; }
+}
+
+/* Keep workspace and project details legible and operable across input modes. */
+.workspace-app-frame .search-box input { min-height: 40px; font-size: 13px; }
+.workspace-app-frame .document-meta { color: var(--color-text-secondary); font-size: 12px; line-height: 1.4; overflow-wrap: anywhere; }
+.workspace-app-frame .card-title-line { align-items: flex-start; }
+.workspace-app-frame .card-title { overflow: visible; overflow-wrap: anywhere; line-height: 1.35; text-overflow: clip; white-space: normal; }
+.workspace-app-frame .card-more { width: 44px; height: 44px; margin: -8px -8px -8px 0; border-radius: 0; }
+.workspace-app-frame .notice-undo { min-height: 44px; padding-inline: 12px; }
+.workspace-app-frame .notice button[aria-label] { width: 44px; min-width: 44px; height: 44px; }
+.workspace-app-frame .workspace-footer { color: var(--color-text-secondary); font-size: 12px; line-height: 1.5; }
+.project-detail-page .detail-state-row { min-height: 44px; justify-content: space-between; gap: 12px; font-size: 13px; }
+.project-detail-page .detail-state-row select { width: min(220px, 65%); min-width: 0; font-size: 13px; }
+.project-detail-page .project-detail-edit { column-gap: 16px; row-gap: 12px; }
+.project-detail-page .project-detail-edit label { min-width: 0; gap: 4px; font-size: 13px; }
+.project-detail-page .project-detail-edit input { width: 100%; }
+.project-detail-page .project-detail-edit > p { line-height: 1.45; }
+.project-detail-page .home-report-info strong { overflow: visible; overflow-wrap: anywhere; text-overflow: clip; white-space: normal; line-height: 1.35; }
+.project-detail-page .home-report-info small { line-height: 1.4; }
+.workspace-app-frame :is(button, a, select, input):focus-visible,
+.project-detail-page :is(button, a, select, input):focus-visible {
+  outline: 2px solid var(--color-focus-ring);
+  outline-offset: 2px;
+}
+.workspace-app-frame .search-box input:focus-visible { outline: 0; }
+.workspace-app-frame :is(button, select):disabled,
+.project-detail-page :is(button, select):disabled { cursor: not-allowed; opacity: .58; }
+
+@media (any-pointer: coarse) {
+  .workspace-app-frame .search-box input { min-height: 44px; font-size: 16px; }
+  .workspace-app-frame .modal-form input { font-size: 16px; }
+  .project-detail-page .detail-state-row select { min-height: 44px; font-size: 16px; }
 }
