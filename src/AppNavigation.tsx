@@ -1,7 +1,7 @@
 import { t } from './locales/index'
 import type { LocaleKey } from './locales/index'
 import { NavLink } from 'react-router-dom'
-import { Coffee, FileText, FolderOpen } from 'lucide-react'
+import { FileText, FolderOpen } from 'lucide-react'
 import WorkspaceLanguageSelect from './WorkspaceLanguageSelect'
 import yyLogo from './assets/yy-logo.png'
 
@@ -17,10 +17,10 @@ const homepageHref = import.meta.env.MODE === 'portable'
   : import.meta.env.DEV ? '/homepage/' : '/'
 
 function CoffeeSupportLink({ className }: { className: string }) {
-  const label = t('커피 한 잔 후원하기')
+  const label = t('실 한 볼 선물하기')
   return <a className={className} href="https://buymeacoffee.com/knitpeek" target="_blank" rel="noopener noreferrer" aria-label={label} title={label}>
-    <Coffee size={17} aria-hidden="true" />
-    <span>{label}</span>
+    <span className="app-support-icon" aria-hidden="true">🧶</span>
+    <span className="app-support-label">{label}</span>
   </a>
 }
 

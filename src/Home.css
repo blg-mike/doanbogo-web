@@ -9,6 +9,7 @@
 .app-sidebar-footer { display: grid; gap: 12px; margin-top: auto; }
 .app-sidebar-footer small { padding: 2px 12px; color: var(--color-text-muted); font-size: 14px; line-height: 1.7; }
 .app-sidebar-coffee, .app-mobile-coffee { min-height: 44px; display: inline-flex; align-items: center; gap: 8px; padding: 0 12px; border-radius: 10px; color: var(--color-primary-text); background: var(--color-primary); font-size: 12px; font-weight: 600; line-height: 1.25; text-align: center; text-decoration: none; }
+.app-support-icon { flex: none; font-size: 17px; line-height: 1; }
 .app-sidebar-coffee { width: 100%; box-sizing: border-box; justify-content: flex-start; }
 .app-sidebar-coffee:hover, .app-mobile-coffee:hover { background: var(--color-primary-hover); }
 .app-sidebar-coffee:focus-visible, .app-mobile-coffee:focus-visible { outline: 2px solid var(--color-primary); outline-offset: 2px; }
@@ -95,7 +96,7 @@
   .app-sidebar nav a { justify-content: center; padding: 0; }
   .app-sidebar-footer { width: 100%; justify-items: center; }
   .app-sidebar-coffee { width: 44px; padding: 0; justify-content: center; }
-  .app-sidebar-coffee span { display: none; }
+  .app-sidebar-coffee .app-support-label { display: none; }
   .app-sidebar-language { position: relative; width: 44px; height: 44px; justify-content: center; padding: 0; border-color: transparent; background: transparent; }
   .app-sidebar-language select { position: absolute; inset: 0; width: 44px; height: 44px; opacity: 0; cursor: pointer; }
   .app-page-main { margin-left: 68px; }

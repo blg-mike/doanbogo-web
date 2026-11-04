@@ -3000,6 +3000,7 @@ export default function Viewer() {
                 <button type="button" role="menuitem" className={snapshot.split ? 'selected' : ''} aria-pressed={snapshot.split} onClick={() => { setHeaderMoreOpen(false); toggleSplit() }}><Columns2 size={18} /><span>{snapshot.split ? t('한 영역 보기') : t('두 영역 보기')}</span></button>
                 <button type="button" role="menuitem" data-focus-view-trigger disabled={focusViewBlocked} onClick={toggleFocusView}><Minimize2 size={18} /><span>{t('집중 보기 켜기')}</span></button>
                 <button type="button" role="menuitem" disabled={!pdf || Boolean(recognitionRescanPages[activePage])} onClick={() => { setHeaderMoreOpen(false); retryPageRecognition(activePage) }}><ScanLine size={18} /><span>{t('QR·링크 다시 검사')}</span></button>
+                <a className="viewer-support-link" role="menuitem" href="https://buymeacoffee.com/knitpeek" target="_blank" rel="noopener noreferrer" onClick={() => setHeaderMoreOpen(false)}><span className="viewer-support-icon" aria-hidden="true">🧶</span><span>{t('실 한 볼 선물하기')}</span></a>
               </div>}
             </div>
           </>}
