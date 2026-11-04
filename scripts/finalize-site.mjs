@@ -1,10 +1,13 @@
-import { access, readFile, writeFile } from 'node:fs/promises'
+import { access, copyFile, readFile, writeFile } from 'node:fs/promises'
 import { resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 const root = resolve(fileURLToPath(new URL('..', import.meta.url)))
 const site = resolve(root, 'site')
 const app = resolve(site, 'app')
+for (const filename of ['google33404f39a80451a4.html', 'robots.txt', 'sitemap.xml']) {
+  await copyFile(resolve(root, 'public', filename), resolve(site, filename))
+}
 const [homepage, appHtml, manifest] = await Promise.all([
   readFile(resolve(site, 'index.html'), 'utf8'),
   readFile(resolve(app, 'index.html'), 'utf8'),
