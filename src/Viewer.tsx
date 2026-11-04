@@ -280,6 +280,7 @@ export default function Viewer() {
   const counterActionLockRef = useRef(false)
   const snapshotRef = useRef<ViewerSnapshot | null>(null)
   const paneGestureOwnerRef = useRef<PaneId | null>(null)
+  const pageSwipeDoubleClickSuppressionRef = useRef(0)
   const saveTimer = useRef<number | undefined>(undefined)
   const pdfSessionRef = useRef<ViewerPdfSession | null>(null)
   const viewerLifecycleRef = useRef<'active' | 'suspending' | 'suspended' | 'resuming'>('active')
@@ -2505,6 +2506,7 @@ export default function Viewer() {
       paneId={paneId}
       pane={pane}
       paneGestureOwnerRef={paneGestureOwnerRef}
+      pageSwipeDoubleClickSuppressionRef={pageSwipeDoubleClickSuppressionRef}
       splitView={Boolean(snapshot?.split)}
       rotation={rotation}
       active={active}
@@ -2545,6 +2547,7 @@ export default function Viewer() {
       qrLinks={qrLinksByPage[pane.page]}
       textStylePortalTarget={textStylePortalTarget}
       onPageRendered={onPageRendered}
+      onNavigatePage={active ? navigateVisiblePage : undefined}
     />
   }
 
@@ -3032,7 +3035,7 @@ export default function Viewer() {
                     if (event.key === 'Enter') { event.preventDefault(); event.currentTarget.blur() }
                     if (event.key === 'Escape') { event.preventDefault(); skipCounterRowBlurRef.current = true; setCounterRowDraft(String(mainCounter.value)); setCounterRowEditing(false); event.currentTarget.blur() }
                   }} />
-                  : <button type="button" className="viewer-mini-counter-row" aria-label={`${t('현재 단 입력')} ${formatNumber(mainCounter.value)} ${counterSideForRow(mainCounter, mainCounter.value).toUpperCase()}`} title={t('현재 단 입력')} disabled={counterActionSaving} onClick={beginCounterRowEdit}><strong><AnimatedNumber value={mainCounter.value} format={formatNumber} resetKey={`${id}-${snapshot.activePane}`} aria-hidden="true" /></strong><small>{counterSideForRow(mainCounter, mainCounter.value).toUpperCase()}</small></button>}
+                  : <button type="button" className="viewer-mini-counter-row" aria-label={`${t('현재 단 입력')} ${formatNumber(mainCounter.value)} ${counterSideForRow(mainCounter, mainCounter.value).toUpperCase()}`} title={t('현재 단 입력')} disabled={counterActionSaving} onClick={beginCounterRowEdit}><strong><AnimatedNumber value={mainCounter.value} format={formatNumber} resetKey={id} aria-hidden="true" /></strong><small>{counterSideForRow(mainCounter, mainCounter.value).toUpperCase()}</small></button>}
                 <button type="button" className="viewer-mini-counter-step" aria-label={t('현재 단 완료 후 다음 단으로 이동')} title={t('현재 단 완료 후 다음 단으로 이동')} disabled={counterActionSaving || mainCounter.goalCompleted === true || mainCounter.value >= MAX_COUNTER_ROW && mainCounter.goalRow !== mainCounter.value} onClick={() => advanceCounterGroup(mainCounter.id)}><Plus size={18} /></button>
               </div>
             </div>}
@@ -3051,12 +3054,12 @@ export default function Viewer() {
                     <CounterStepButton className="viewer-mini-counter-step" label={`${counter.name} · ${t('보조 카운터 줄이기')}`} disabled={counterActionSaving || decreaseDisabled} onStep={() => step(-1)}><Minus size={18} /></CounterStepButton>
                     <span className="viewer-footer-work-value"><span className="viewer-footer-work-value-content">
                       {counter.kind === 'task'
-                        ? <><AnimatedNumber value={counter.completedCount ?? 0} format={formatNumber} resetKey={`${id}-${snapshot.activePane}-${activePage}`} />/{formatNumber(counter.total ?? 0)}{t('회')}</>
+                        ? <><AnimatedNumber value={counter.completedCount ?? 0} format={formatNumber} resetKey={`${id}-${counter.id}`} />/{formatNumber(counter.total ?? 0)}{t('회')}</>
                         : counter.kind === 'pattern'
-                          ? <><AnimatedNumber value={counter.patternRow ?? 1} format={formatNumber} resetKey={`${id}-${snapshot.activePane}-${activePage}`} />/{formatNumber(counter.repeatLength ?? 1)}</>
+                          ? <><AnimatedNumber value={counter.patternRow ?? 1} format={formatNumber} resetKey={`${id}-${counter.id}`} />/{formatNumber(counter.repeatLength ?? 1)}</>
                           : counter.kind === 'repeat'
-                            ? <><AnimatedNumber value={repeatProgress?.completedRows ?? 0} format={formatNumber} resetKey={`${id}-${snapshot.activePane}-${activePage}`} />/{formatNumber(repeatProgress?.totalRows ?? 0)}</>
-                            : <><AnimatedNumber value={counter.value} format={formatNumber} resetKey={`${id}-${snapshot.activePane}-${activePage}`} />{unitLabel}</>}
+                            ? <><AnimatedNumber value={repeatProgress?.completedRows ?? 0} format={formatNumber} resetKey={`${id}-${counter.id}`} />/{formatNumber(repeatProgress?.totalRows ?? 0)}</>
+                            : <><AnimatedNumber value={counter.value} format={formatNumber} resetKey={`${id}-${counter.id}`} />{unitLabel}</>}
                     </span></span>
                     <CounterStepButton className="viewer-mini-counter-step" label={`${counter.name} · ${t('보조 카운터 늘리기')}`} title={repeatBlock ? repeatCounterBlockLabel(repeatBlock) ?? undefined : undefined} disabled={counterActionSaving || increaseDisabled} onStep={() => step(1)}><Plus size={18} /></CounterStepButton>
                   </div>

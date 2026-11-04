@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { anchoredScrollOffset, canStartPaneGesture, classifyWheelInput, clientPointForPagePosition, isEditableTarget, isZoomFocusCurrent, MAX_ZOOM, MIN_ZOOM, nearestZoomLevel, pagePositionAtClientPoint, pinchPreviewTranslation, regionHighlightPointerAction, scrollOffsetForZoomFocus, stepZoomLevel, visiblePageCrop, visiblePageFocus, wheelActionForBurst, wheelZoom, ZOOM_LEVELS, ZOOM_STEP } from './viewerInteraction'
+import { anchoredScrollOffset, canStartPaneGesture, classifyPageSwipe, classifyWheelInput, clientPointForPagePosition, isEditableTarget, isZoomFocusCurrent, MAX_ZOOM, MIN_ZOOM, nearestZoomLevel, pagePositionAtClientPoint, pinchPreviewTranslation, regionHighlightPointerAction, scrollOffsetForZoomFocus, stepZoomLevel, visiblePageCrop, visiblePageFocus, wheelActionForBurst, wheelZoom, ZOOM_LEVELS, ZOOM_STEP } from './viewerInteraction'
 
 describe('PDF viewer input helpers', () => {
   it('selects a region on first contact and allows a later drag to move it with either selection tool', () => {
@@ -15,6 +15,17 @@ describe('PDF viewer input helpers', () => {
     expect(canStartPaneGesture(null, 'primary')).toBe(true)
     expect(canStartPaneGesture('primary', 'primary')).toBe(true)
     expect(canStartPaneGesture('primary', 'secondary')).toBe(false)
+  })
+
+  it('classifies horizontal page swipes with the configured distance, angle and duration thresholds', () => {
+    expect(classifyPageSwipe(64, 0, 0)).toBe(1)
+    expect(classifyPageSwipe(-64, 0, 1000)).toBe(-1)
+    expect(classifyPageSwipe(96, 64, 400)).toBe(1)
+    expect(classifyPageSwipe(95, 64, 400)).toBeNull()
+    expect(classifyPageSwipe(63, 0, 400)).toBeNull()
+    expect(classifyPageSwipe(100, 0, 1001)).toBeNull()
+    expect(classifyPageSwipe(100, 0, -1)).toBeNull()
+    expect(classifyPageSwipe(0, 100, 400)).toBeNull()
   })
 
   it('recognizes stepped mouse wheels while preserving trackpad scrolling', () => {

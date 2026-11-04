@@ -336,6 +336,7 @@ function initializeMotionDemos(motionDemoRoot) {
   let autoStarted = false
   let pausedForVisibility = false
   motionDemoRoot.dataset.motionVisible = 'false'
+  motionDemoRoot.dataset.activeDemo = selectedDemo
 
   function demoText(key) {
     const locale = document.documentElement.lang || 'ko'
@@ -428,6 +429,7 @@ function initializeMotionDemos(motionDemoRoot) {
   function selectDemo(name, focus = false) {
     pauseDemo()
     selectedDemo = name
+    motionDemoRoot.dataset.activeDemo = name
     currentStep = 0
     for (const tab of motionTabs) {
       const active = tab.dataset.motionTab === name

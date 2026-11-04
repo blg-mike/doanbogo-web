@@ -1,7 +1,7 @@
 # KnitPeek Käyttöehdot
 
 - Palvelu: **KnitPeek** (koreaksi **니트피크**)
-- Verkkosivusto: **https://knitpeek.com**
+- Verkkosivusto: **https://knitpeek.pages.dev**
 - Voimaantulopäivä: **[YYYY-MM-DD — vahvista ennen julkaisua]**
 - Ylläpitäjä: **[knitpeekiä ylläpitävän henkilön tai yrityksen virallinen nimi]**
 - Yhteys: **[asiakastuen sähköpostiosoite]**
@@ -10,7 +10,7 @@
 
 ## 1. Soveltamisala ja hyväksyminen
 
-Nämä ehdot koskevat knitpeekiä verkkosivustona ja verkkosovelluksena (”Palvelu”), jota **[ylläpitäjän virallinen nimi]** (”Ylläpitäjä”) tarjoaa osoitteessa `https://knitpeek.com`. Käyttämällä Palvelua hyväksyt nämä ehdot sovellettavan lain sallimissa rajoissa.
+Nämä ehdot koskevat knitpeekiä verkkosivustona ja verkkosovelluksena (”Palvelu”), jota **[ylläpitäjän virallinen nimi]** (”Ylläpitäjä”) tarjoaa osoitteessa `https://knitpeek.pages.dev`. Käyttämällä Palvelua hyväksyt nämä ehdot sovellettavan lain sallimissa rajoissa.
 
 ## 2. Palvelun kuvaus
 
@@ -51,7 +51,7 @@ Et saa:
 
 1. Tuodut tiedostot, projektit, merkinnät, laskurit, ajastimet ja niihin liittyvät tiedot tallennetaan yleensä selaintallennukseen, joka on sidottu **tiettyyn laitteeseen, selaimeen ja verkkosivuston alkuperään**.
 2. Tiedot voivat muuttua saavuttamattomiksi tai poistua, jos selaimen tai sivuston tiedot tyhjennetään, käytetään yksityistä selausta, tallennustila täyttyy, laite rikkoutuu, selain rajoittaa tallennusta tai sivuston alkuperä muuttuu.
-3. **Tärkeä siirtoilmoitus:** Sivuston osoitteen vaihtaminen `github.io`-verkkotunnuksesta `knitpeek.com`-osoitteeseen **ei** siirrä nykyisiä IndexedDB-tietoja automaattisesti. Varmista ennen osoitteen vaihtamista tai vanhan sivuston tietojen poistamista, että tarvittavat alkuperäistiedostot ja viedyt raportit on säilytetty erikseen.
+3. **Tärkeä siirtoilmoitus:** Sivuston osoitteen vaihtaminen `github.io`-verkkotunnuksesta `knitpeek.pages.dev`-osoitteeseen **ei** siirrä nykyisiä IndexedDB-tietoja automaattisesti. Varmista ennen osoitteen vaihtamista tai vanhan sivuston tietojen poistamista, että tarvittavat alkuperäistiedostot ja viedyt raportit on säilytetty erikseen.
 4. Säilytä tärkeät alkuperäistiedostot ja viedyt raportit erillisessä turvallisessa paikassa. Ylläpitäjä ei voi etänä tarkastella tai palauttaa tietoja, jotka ovat vain laitteellasi.
 5. Ellei sovellettava laki toisin edellytä, Ylläpitäjä ei voi taata kaikkien laite- tai selainongelmien vuoksi kadonneiden tietojen palauttamista.
 
@@ -99,7 +99,7 @@ Erikseen julkaistavassa **tietosuojakäytännössämme** kerrotaan Palveluun lii
 
 - Ylläpitäjä: **[Ylläpitäjän virallinen nimi]**
 - Asiakastuen sähköposti: **[Sähköpostiosoite]**
-- Verkkosivusto: **https://knitpeek.com**
+- Verkkosivusto: **https://knitpeek.pages.dev**
 
 ---
 

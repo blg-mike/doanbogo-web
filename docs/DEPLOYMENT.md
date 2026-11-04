@@ -26,7 +26,7 @@ The public routes are `/` for the homepage, `/app/` for the app, and `/app/#/pro
 
 HTML and service-worker responses use `Cache-Control: no-cache`. Vite's hashed files under `/app/assets/` are cached as immutable. The PWA manifest and service worker are scoped to `/app/`, so they do not control the homepage.
 
-The app stores work in IndexedDB for its current browser origin. Moving from GitHub Pages to `knitpeek.com` changes the origin and does not move that data; export a `.doanbogo` backup before the move, then import it on the new origin. Deploying a new version on the same `knitpeek.com` origin keeps the existing browser data.
+The app stores work in IndexedDB for its current browser origin. Moving from GitHub Pages to `knitpeek.pages.dev` changes the origin and does not move that data; export a `.doanbogo` backup before the move, then import it on the new origin. Deploying a new version on the same `knitpeek.pages.dev` origin keeps the existing browser data.
 
 To preview a branch, use its Cloudflare preview URL and verify `/`, `/app/`, and a hash route. If a production release needs to be reverted, select the previous successful production deployment in the Cloudflare Pages Deployments list and roll it back. A rollback changes deployed files, not browser IndexedDB data.
 

@@ -1,7 +1,7 @@
 # KnitPeek Personvernerklæring
 
 - Tjeneste: **KnitPeek** (kjent som **니트피크** på koreansk)
-- Nettsted: **https://knitpeek.com**
+- Nettsted: **https://knitpeek.pages.dev**
 - Ikrafttredelsesdato: **[YYYY-MM-DD — bekreft før publisering]**
 - Behandlingsansvarlig / operatør: **[Operatørens juridiske navn]**
 - Personvernkontakt: **[E-postadresse]**
@@ -48,7 +48,7 @@ Hvis GDPR eller tilsvarende lov gjelder, bygger Operatøren behandling, for ekse
 1. KnitPeek bruker **nettleserlager som IndexedDB** for å huske prosjekter og innstillinger på enheten. Nettleserlager er ikke i seg selv en mekanisme for å laste opp innhold til en server.
 2. Arkitekturdokumentene som er levert, nevner ikke annonsering eller besøksanalyse. **Hvis det publiserte nettstedet bruker annonsetagger, analyse, feilrapportering eller andre tredjepartsskript**, må erklæringen før aktivering, der det kreves, oppgi leverandører, datakategorier, formål, lagring, informasjonskapsler og måter å samtykke eller reservere seg på.
 3. Du kan slette eller begrense informasjonskapsler og nettstedsdata i nettleseren. Dette kan også fjerne lagrede oppskrifter og arbeidsdata. Kontroller først at nødvendige originalfiler og eksporterte rapporter er oppbevart separat.
-4. En overgang fra en `github.io`-adresse til `knitpeek.com` flytter **ikke** eksisterende IndexedDB-data automatisk til den nye opprinnelsen. Kontroller før adressebyttet at nødvendige materialer er oppbevart separat.
+4. En overgang fra en `github.io`-adresse til `knitpeek.pages.dev` flytter **ikke** eksisterende IndexedDB-data automatisk til den nye opprinnelsen. Kontroller før adressebyttet at nødvendige materialer er oppbevart separat.
 
 ## 6. Eksport, deling og eksterne nettsteder
 
@@ -85,7 +85,7 @@ KnitPeek er ikke laget bare for en bestemt aldersgruppe. Den dokumenterte grunnl
 - Operatør / behandlingsansvarlig: **[Juridisk navn]**
 - Personvernkontakt / ansvarlig person: **[Navn eller avdeling ut fra den faktiske organisasjonen]**
 - E-post: **[E-postadresse]**
-- Nettsted: **https://knitpeek.com**
+- Nettsted: **https://knitpeek.pages.dev**
 
 ## 12. Endringer i erklæringen
 

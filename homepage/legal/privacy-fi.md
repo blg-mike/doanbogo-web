@@ -1,7 +1,7 @@
 # KnitPeek Tietosuojakäytäntö
 
 - Palvelu: **KnitPeek** (koreaksi **니트피크**)
-- Verkkosivusto: **https://knitpeek.com**
+- Verkkosivusto: **https://knitpeek.pages.dev**
 - Voimaantulopäivä: **[YYYY-MM-DD — vahvista ennen julkaisua]**
 - Rekisterinpitäjä / ylläpitäjä: **[Ylläpitäjän virallinen nimi]**
 - Tietosuoja-asioiden yhteyshenkilö: **[Sähköpostiosoite]**
@@ -48,7 +48,7 @@ Jos GDPR:ää tai vastaavaa lakia sovelletaan, Ylläpitäjä käsittelee tietoja
 1. KnitPeek käyttää **selaintallennusta, kuten IndexedDB:tä**, projektien ja asetusten muistamiseen laitteellasi. Selaintallennus ei itsessään siirrä sisältöjä palvelimelle.
 2. Toimitetuissa arkkitehtuuriasiakirjoissa ei mainita mainontaa tai kävijäanalytiikkaa. **Jos julkaistu sivusto käyttää mainostunnisteita, analytiikkaa, virheraportointia tai muita kolmannen osapuolen skriptejä**, käytäntöön tulee ennen niiden käyttöönottoa lisätä tarvittaessa palveluntarjoajat, tietoryhmät, tarkoitukset, säilytysajat, evästeet ja suostumus- tai kieltäytymisvalinnat.
 3. Voit poistaa tai rajoittaa evästeitä ja sivustotietoja selaimen asetuksissa. Tämä voi myös poistaa tallennetut ohjeet ja työtiedot. Varmista ensin, että tarvittavat alkuperäistiedostot ja viedyt raportit on säilytetty erikseen.
-4. Siirtyminen `github.io`-osoitteesta `knitpeek.com`-osoitteeseen **ei** siirrä nykyisiä IndexedDB-tietoja automaattisesti uuteen alkuperään. Varmista ennen osoitteen vaihtamista, että tarvittavat aineistot on säilytetty erikseen.
+4. Siirtyminen `github.io`-osoitteesta `knitpeek.pages.dev`-osoitteeseen **ei** siirrä nykyisiä IndexedDB-tietoja automaattisesti uuteen alkuperään. Varmista ennen osoitteen vaihtamista, että tarvittavat aineistot on säilytetty erikseen.
 
 ## 6. Vienti, jakaminen ja ulkoiset sivustot
 
@@ -85,7 +85,7 @@ KnitPeek ei ole tarkoitettu yksinomaan tietylle ikäryhmälle. Dokumentoitu peru
 - Ylläpitäjä / rekisterinpitäjä: **[Virallinen nimi]**
 - Tietosuojayhteyshenkilö / vastuuhenkilö: **[Nimi tai osasto todellisen organisaation mukaan]**
 - Sähköposti: **[Sähköpostiosoite]**
-- Verkkosivusto: **https://knitpeek.com**
+- Verkkosivusto: **https://knitpeek.pages.dev**
 
 ## 12. Käytännön muutokset
 

@@ -1,7 +1,7 @@
 # KnitPeek Vilkår for bruk
 
 - Tjeneste: **KnitPeek** (kjent som **니트피크** på koreansk)
-- Nettsted: **https://knitpeek.com**
+- Nettsted: **https://knitpeek.pages.dev**
 - Ikrafttredelsesdato: **[YYYY-MM-DD — bekreft før publisering]**
 - Operatør: **[Juridisk navn på personen eller virksomheten som driver KnitPeek]**
 - Kontakt: **[E-postadresse for brukerstøtte]**
@@ -10,7 +10,7 @@
 
 ## 1. Omfang og godkjenning
 
-Disse vilkårene regulerer bruken av knitpeeks nettsted og nettapplikasjon («Tjenesten»), som drives av **[Operatørens juridiske navn]** («Operatøren») på `https://knitpeek.com`. Når du bruker Tjenesten, godtar du vilkårene i den grad gjeldende lov tillater det.
+Disse vilkårene regulerer bruken av knitpeeks nettsted og nettapplikasjon («Tjenesten»), som drives av **[Operatørens juridiske navn]** («Operatøren») på `https://knitpeek.pages.dev`. Når du bruker Tjenesten, godtar du vilkårene i den grad gjeldende lov tillater det.
 
 ## 2. Beskrivelse av Tjenesten
 
@@ -51,7 +51,7 @@ Du må ikke:
 
 1. Importerte dokumenter, prosjekter, merknader, tellere, tidtakere og relaterte oppføringer lagres vanligvis i nettleserlager som er knyttet til den **aktuelle enheten, nettleseren og nettstedets opprinnelse**.
 2. Data kan bli utilgjengelige eller slettet hvis nettleser- eller nettstedsdata ryddes, ved privat nettlesing, lagringsgrenser, enhetsfeil, nettleserbegrensninger eller endring av nettstedets opprinnelse.
-3. **Viktig ved flytting:** Hvis nettadressen endres fra et `github.io`-domene til `knitpeek.com`, overføres eksisterende IndexedDB-data **ikke** automatisk. Kontroller før adressebytte eller sletting av det gamle nettstedets data at nødvendige originalfiler og eksporterte rapporter er oppbevart separat.
+3. **Viktig ved flytting:** Hvis nettadressen endres fra et `github.io`-domene til `knitpeek.pages.dev`, overføres eksisterende IndexedDB-data **ikke** automatisk. Kontroller før adressebytte eller sletting av det gamle nettstedets data at nødvendige originalfiler og eksporterte rapporter er oppbevart separat.
 4. Oppbevar viktige originalfiler og eksporterte rapporter på et separat og sikkert sted. Operatøren kan ikke se eller gjenopprette oppføringer som bare finnes på enheten din.
 5. Med mindre gjeldende lov bestemmer noe annet, kan Operatøren ikke garantere at alle data som går tapt på grunn av enhets- eller nettleserforhold, kan gjenopprettes.
 
@@ -99,7 +99,7 @@ Vår separat publiserte **personvernerklæring** forklarer lokal lagring og beha
 
 - Operatør: **[Operatørens juridiske navn]**
 - E-post til brukerstøtte: **[E-postadresse]**
-- Nettsted: **https://knitpeek.com**
+- Nettsted: **https://knitpeek.pages.dev**
 
 ---
 

@@ -1,7 +1,7 @@
 # KnitPeek Privatlivspolitik
 
 - Tjeneste: **KnitPeek** (kendt som **니트피크** på koreansk)
-- Websted: **https://knitpeek.com**
+- Websted: **https://knitpeek.pages.dev**
 - Ikrafttrædelsesdato: **[YYYY-MM-DD — bekræft før offentliggørelse]**
 - Dataansvarlig / operatør: **[Operatørens juridiske navn]**
 - Kontakt om privatliv: **[E-mailadresse]**
@@ -48,7 +48,7 @@ Hvis GDPR eller tilsvarende lovgivning gælder, baserer Operatøren behandling, 
 1. KnitPeek bruger **browserlager som IndexedDB** til at huske projekter og indstillinger på din enhed. Browserlager uploader ikke i sig selv indhold til en server.
 2. De leverede arkitekturdokumenter nævner ikke annoncering eller besøgsanalyse. **Hvis det offentliggjorte websted bruger annoncetags, analyse, fejlrapportering eller andre tredjepartsscripts**, skal politikken før aktivering, hvor det kræves, oplyse relevante udbydere, datakategorier, formål, opbevaring, cookies og muligheder for samtykke eller fravalg.
 3. Du kan slette eller begrænse cookies og webstedsdata i browserens indstillinger. Det kan også fjerne gemte opskrifter og arbejdsdata. Kontrollér først, at nødvendige originalfiler og eksporterede rapporter er opbevaret separat.
-4. Et skift fra en `github.io`-adresse til `knitpeek.com` flytter **ikke** automatisk eksisterende IndexedDB-data til den nye oprindelse. Kontrollér før adresseskiftet, at nødvendige materialer er opbevaret separat.
+4. Et skift fra en `github.io`-adresse til `knitpeek.pages.dev` flytter **ikke** automatisk eksisterende IndexedDB-data til den nye oprindelse. Kontrollér før adresseskiftet, at nødvendige materialer er opbevaret separat.
 
 ## 6. Eksport, deling og eksterne websteder
 
@@ -85,7 +85,7 @@ KnitPeek er ikke udelukkende rettet mod en bestemt aldersgruppe. Den dokumentere
 - Operatør / dataansvarlig: **[Juridisk navn]**
 - Kontaktperson for privatliv / ansvarlig: **[Navn eller afdeling efter den faktiske organisation]**
 - E-mail: **[E-mailadresse]**
-- Websted: **https://knitpeek.com**
+- Websted: **https://knitpeek.pages.dev**
 
 ## 12. Ændringer af politikken
 

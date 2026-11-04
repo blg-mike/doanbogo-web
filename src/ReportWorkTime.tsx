@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { BarChart3 } from 'lucide-react'
 import { formatDate, formatNumber, t } from './locales'
+import { AnimatedNumber } from './AnimatedNumber'
 import type { DocumentWorkTimeDay } from './types'
 import { resetDocumentWorkTime } from './storage'
 import { formatWorkTimeHoursMinutes } from './workTime'
@@ -28,7 +29,7 @@ export default function ReportWorkTime({ documentId, totalWorkTimeMs, workTimeDa
   return <>
     <button type="button" className="report-worktime-card" aria-haspopup="dialog" aria-expanded={open} onClick={() => setOpen(true)}>
       <span className="report-worktime-title">{t('작업 시간')}</span>
-      <strong className="report-worktime-total">{durationText(totalWorkTimeMs)}</strong>
+      <strong className="report-worktime-total"><AnimatedNumber value={Math.floor(totalWorkTimeMs / 60_000)} format={(minutes) => durationText(minutes * 60_000)} resetKey={documentId} /></strong>
       <span className="report-worktime-hint">{t('타이머에서 자동 기록')}</span>
       {workTimeDays.length > 0 && <span className="report-worktime-recent">{[...workTimeDays].sort((left, right) => right.date.localeCompare(left.date)).slice(0, 2).map((day) => <span key={day.date}><time dateTime={day.date}>{formatDate(dayDate(day.date), { month: 'numeric', day: 'numeric' })}</time><b>{durationText(day.elapsedMs)}</b></span>)}</span>}
       <span className="report-worktime-open">{t('작업시간 기록 보기')} <BarChart3 size={17} aria-hidden="true" /></span>

@@ -1,7 +1,7 @@
 # KnitPeek Terms of Service
 
 - Service: **KnitPeek** (known as **니트피크** in Korean)
-- Website: **https://knitpeek.com**
+- Website: **https://knitpeek.pages.dev**
 - Effective date: **[YYYY-MM-DD — confirm before publication]**
 - Operator: **[Legal name of the individual or business operating KnitPeek]**
 - Contact: **[Support email address]**
@@ -10,7 +10,7 @@
 
 ## 1. Scope and acceptance
 
-These Terms govern use of the KnitPeek website and web application (the “Service”), operated by **[Operator legal name]** (the “Operator”) at `https://knitpeek.com`. By using the Service, you agree to these Terms to the extent permitted by applicable law.
+These Terms govern use of the KnitPeek website and web application (the “Service”), operated by **[Operator legal name]** (the “Operator”) at `https://knitpeek.pages.dev`. By using the Service, you agree to these Terms to the extent permitted by applicable law.
 
 ## 2. Description of the Service
 
@@ -51,7 +51,7 @@ You must not:
 
 1. Imported documents, projects, annotations, counters, timers, and related records are generally stored in browser storage associated with the **particular device, browser, and website origin**.
 2. Data may become inaccessible or be deleted because of clearing browser/site data, private browsing, storage limits, device failure, browser restrictions, or a change of website origin.
-3. **Important migration notice:** Changing the site address from a `github.io` domain to `knitpeek.com` does **not** automatically transfer existing IndexedDB data. Before changing addresses or clearing the old site's data, check that you have separately kept the original files and report outputs you need.
+3. **Important migration notice:** Changing the site address from a `github.io` domain to `knitpeek.pages.dev` does **not** automatically transfer existing IndexedDB data. Before changing addresses or clearing the old site's data, check that you have separately kept the original files and report outputs you need.
 4. Keep important original files and report outputs in a separate safe location. The Operator cannot remotely inspect or recover records that exist solely on your device.
 5. Except where applicable law provides otherwise, the Operator cannot guarantee recovery of all data lost due to device or browser conditions.
 
@@ -99,7 +99,7 @@ Our separately published **Privacy Policy** explains local storage and personal-
 
 - Operator: **[Operator legal name]**
 - Support email: **[Email address]**
-- Website: **https://knitpeek.com**
+- Website: **https://knitpeek.pages.dev**
 
 ---
 

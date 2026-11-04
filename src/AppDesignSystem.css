@@ -272,7 +272,7 @@
 .number-counter-panel .counter-management-mode-button { min-width: var(--tool-control-size); min-height: var(--tool-control-size); }
 .number-counter-panel .counter-main-repeat-actions .counter-repeat-step { width: var(--tool-control-size); min-width: var(--tool-control-size); height: var(--tool-control-size); flex-basis: var(--tool-control-size); }
 .number-counter-panel :is(.counter-item-menu-trigger, .counter-order-handle, .counter-item-delete) { width: var(--tool-control-size); min-width: var(--tool-control-size); height: var(--tool-control-size); }
-.number-counter-panel .counter-color-presets button { width: var(--tool-control-size); height: var(--tool-control-size); flex-basis: var(--tool-control-size); }
+.number-counter-panel .counter-color-presets button { width: var(--tool-control-size); height: var(--tool-control-size); flex-basis: var(--tool-control-size); padding: 10px; }
 
 /* Keep counter choices flat; inputs and the floating popup retain their surfaces. */
 .number-counter-panel :is(.counter-main-design-section, .counter-main-aux-section, .counter-panel-settings .counter-global-section) {
@@ -809,6 +809,7 @@
   .number-counter-panel[data-popup-size] .counter-popover-body { font-size: 13px; }
   .number-counter-panel[data-popup-size] .counter-popover-body :is(button, summary, input:not([type="checkbox"]):not([type="radio"]):not([type="color"]), select, textarea) { font-size: 13px; }
   .number-counter-panel[data-popup-size] .counter-popover-footer { font-size: var(--tool-font-12); }
+  .number-counter-panel .counter-color-presets button { padding: 7px; }
 }
 
 .text-style-toolbar .text-style-color,
@@ -840,3 +841,38 @@
 .viewer-shell:not(.report-mode) .viewer-footer-work-timer .viewer-work-timer { gap: 2px; }
 .viewer-shell:not(.report-mode) .viewer-footer-work-timer .viewer-work-timer-elapsed { width: 80px; min-width: 80px; height: 44px; flex: 0 0 80px; padding: 0 2px; color: var(--color-text-secondary); font-size: 13px; font-weight: 500; font-variant-numeric: tabular-nums; }
 .viewer-shell:not(.report-mode) .viewer-footer-work-timer .viewer-work-timer-toggle { width: 44px; min-width: 44px; height: 44px; flex: 0 0 44px; border: 0; border-radius: 50%; }
+
+/* Stageshow control and disclosure motion */
+.number-counter-panel .counter-kind-choice > i { transition: border-color var(--motion-ui) ease; }
+.number-counter-panel .counter-kind-choice > i::after { transform: scale(0); transition: transform 160ms cubic-bezier(0.22, 1, 0.36, 1), background-color var(--motion-ui) ease; }
+.number-counter-panel .counter-kind-choice.selected > i::after { transform: scale(1); }
+.number-counter-panel :is(.counter-settings-choice, .counter-knitting-mode, .counter-task-kind-field) button { transition: color var(--motion-ui) ease; }
+.number-counter-panel :is(.counter-settings-choice, .counter-knitting-mode, .counter-task-kind-field) button::before { transition: border-color var(--motion-ui) ease, transform 160ms cubic-bezier(0.22, 1, 0.36, 1); }
+.number-counter-panel :is(.counter-settings-choice, .counter-knitting-mode, .counter-task-kind-field) button.selected::before { animation: ui-check-pop 160ms cubic-bezier(0.22, 1, 0.36, 1); }
+.counter-settings-modal:not(.counter-panel-editor) .counter-task-kind-field > div { position: relative; isolation: isolate; }
+.counter-settings-modal:not(.counter-panel-editor) .counter-task-kind-field > div::before { content: ''; position: absolute; z-index: 0; top: 3px; bottom: 3px; left: 3px; width: calc((100% - 10px) / 2); border-radius: 8px; background: var(--color-primary); transform: translate3d(calc(var(--active-task-index, 0) * (100% + 4px)), 0, 0); transition: transform 180ms cubic-bezier(0.22, 1, 0.36, 1); pointer-events: none; }
+.counter-settings-modal:not(.counter-panel-editor) .counter-task-kind-field button { position: relative; z-index: 1; transition: color var(--motion-ui) ease; }
+.counter-settings-modal:not(.counter-panel-editor) .counter-task-kind-field button.selected { background: transparent; }
+.counter-select-indicator { transition: border-color var(--motion-ui) ease, background-color var(--motion-ui) ease, color var(--motion-ui) ease, transform 160ms cubic-bezier(0.22, 1, 0.36, 1); }
+.counter-select-indicator.selected { animation: ui-check-pop 160ms cubic-bezier(0.22, 1, 0.36, 1); }
+.counter-selection-toolbar,
+.counter-repeat-preview,
+.counter-schedule-preview,
+.thumbnail-group-children,
+.guide-focus-settings[open] > :not(summary) { animation: ui-collapse-enter 180ms cubic-bezier(0.22, 1, 0.36, 1) both; }
+@media (prefers-reduced-motion: reduce) {
+  .number-counter-panel .counter-kind-choice > i,
+  .number-counter-panel .counter-kind-choice > i::after,
+  .number-counter-panel :is(.counter-settings-choice, .counter-knitting-mode, .counter-task-kind-field) button,
+  .number-counter-panel :is(.counter-settings-choice, .counter-knitting-mode, .counter-task-kind-field) button::before,
+  .counter-settings-modal:not(.counter-panel-editor) .counter-task-kind-field > div::before,
+  .counter-settings-modal:not(.counter-panel-editor) .counter-task-kind-field button,
+  .counter-select-indicator { transition: none; }
+  .number-counter-panel :is(.counter-settings-choice, .counter-knitting-mode, .counter-task-kind-field) button.selected::before,
+  .counter-select-indicator.selected,
+  .counter-selection-toolbar,
+  .counter-repeat-preview,
+  .counter-schedule-preview,
+  .thumbnail-group-children,
+  .guide-focus-settings[open] > :not(summary) { animation: none; }
+}

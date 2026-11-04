@@ -1,7 +1,7 @@
 # KnitPeek Privacy Policy
 
 - Service: **KnitPeek** (known as **니트피크** in Korean)
-- Website: **https://knitpeek.com**
+- Website: **https://knitpeek.pages.dev**
 - Effective date: **[YYYY-MM-DD — confirm before publication]**
 - Data controller / Operator: **[Legal name of the operator]**
 - Privacy contact: **[Email address]**
@@ -48,7 +48,7 @@ Where the GDPR or comparable law applies, processing carried out by the Operator
 1. KnitPeek uses **browser storage such as IndexedDB** to remember projects and settings on your device. Browser storage is not, by itself, a mechanism for uploading those contents to a server.
 2. The supplied architecture documents do not identify an advertising or visitor analytics integration. **If the deployed site uses advertising tags, analytics, error-reporting tools, or other third-party scripts**, this Policy must be updated to identify relevant providers, data categories, purposes, retention, cookies, and consent or opt-out controls before those features are enabled where required.
 3. You may clear or restrict cookies and site data through your browser. Clearing site data can also remove stored patterns and work records. First check that the original files and report outputs you need are stored separately.
-4. Moving from a `github.io` website origin to `knitpeek.com` does **not** automatically move existing IndexedDB data to the new origin. Check that you have separately kept the materials you need before changing addresses.
+4. Moving from a `github.io` website origin to `knitpeek.pages.dev` does **not** automatically move existing IndexedDB data to the new origin. Check that you have separately kept the materials you need before changing addresses.
 
 ## 6. Exports, sharing, and external websites
 
@@ -85,7 +85,7 @@ KnitPeek is not designed exclusively for any specific age group. The documented 
 - Operator / Data controller: **[Legal name]**
 - Privacy contact / responsible person: **[Name or department, as applicable]**
 - Email: **[Email address]**
-- Website: **https://knitpeek.com**
+- Website: **https://knitpeek.pages.dev**
 
 ## 12. Changes to this Policy
 

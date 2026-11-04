@@ -418,6 +418,12 @@
   .chart-swatch-edit input { inset: 0; width: 44px; height: 44px; }
   .chart-palette, .chart-crochet-palette { width: 100%; display: flex; flex-wrap: nowrap; gap: 8px; overflow-x: auto; overflow-y: hidden; grid-template-columns: none; }
 }
+
+.chart-export-menu[open] > div { animation: ui-surface-enter 150ms cubic-bezier(0.22, 1, 0.36, 1) both; }
+.chart-selection-tools { animation: ui-collapse-enter 160ms cubic-bezier(0.22, 1, 0.36, 1) both; }
+.chart-save-state.saved svg,
+.chart-choice > svg:last-child { animation: ui-check-pop 180ms cubic-bezier(0.22, 1, 0.36, 1) both; }
+
 @media (prefers-reduced-motion: reduce) {
-  .chart-create-shell *, .chart-editor-shell * { scroll-behavior: auto !important; transition-duration: .01ms !important; }
+  .chart-create-shell *, .chart-editor-shell * { scroll-behavior: auto !important; animation-duration: .01ms !important; transition-duration: .01ms !important; }
 }

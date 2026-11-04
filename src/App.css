@@ -20,7 +20,7 @@
 .welcome-row h1 { margin: 0; font-size: clamp(28px, 4vw, 36px); line-height: 1.15; letter-spacing: -.065em; }
 .welcome-copy { margin: 10px 0 0; color: var(--color-text-muted); font-size: 13px; }
 .document-count { display: flex; align-items: baseline; gap: 7px; padding-bottom: 4px; font-size: 26px; font-weight: 700; letter-spacing: -.05em; }
-.document-count span { color: var(--color-text-muted); font-size: 12px; font-weight: 500; letter-spacing: 0; }
+.document-count > span:not(.kp-animated-number) { color: var(--color-text-muted); font-size: 12px; font-weight: 500; letter-spacing: 0; }
 .toolbar { min-height: 63px; display: flex; align-items: center; gap: 11px; padding: 10px 0; border-top: 1px solid var(--color-divider); border-bottom: 1px solid var(--color-divider); }
 .primary-button, .secondary-button, .danger-button { min-height: var(--control-height); display: inline-flex; align-items: center; justify-content: center; gap: 9px; border: 0; border-radius: var(--control-radius); padding: 0 16px; font-size: 13px; font-weight: 600; cursor: pointer; transition: background-color var(--motion-ui) ease; }
 .primary-button { color: #fff; background: var(--color-primary); box-shadow: 0 3px 8px rgba(75,99,52,.14); }
@@ -402,7 +402,7 @@ html.viewer-viewport-locked .viewer-shell { height: 100dvh; min-height: 0; flex:
   .welcome-row h1 { font-size: 29px; }
   .welcome-copy { max-width: 220px; }
   .document-count { flex-direction: column; align-items: end; gap: 0; font-size: 18px; }
-  .document-count span { font-size: 10px; }
+  .document-count > span:not(.kp-animated-number) { font-size: 10px; }
   .toolbar .primary-button { gap: 6px; padding: 0 10px; }
   .sort-select select { max-width: 89px; }
   .viewer-tool span { display: none; }
@@ -1807,13 +1807,19 @@ html.viewer-viewport-locked .viewer-shell { height: 100dvh; min-height: 0; flex:
 
 @keyframes ui-surface-enter { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: translateY(0); } }
 @keyframes ui-surface-exit { to { opacity: 0; transform: translateY(4px); } }
+@keyframes ui-centered-toast-enter { from { opacity: 0; transform: translate3d(-50%, 4px, 0); } to { opacity: 1; transform: translate3d(-50%, 0, 0); } }
+@keyframes ui-collapse-enter { from { opacity: 0; transform: translate3d(0, -4px, 0); } to { opacity: 1; transform: translate3d(0, 0, 0); } }
+@keyframes ui-check-pop { 0% { opacity: 0; transform: scale(0.75); } 100% { opacity: 1; transform: scale(1); } }
 .modal-backdrop > .modal-card, .number-counter-panel, .counter-settings-modal, .counter-add-options, .counter-item-menu, .report-more-menu,
-.viewer-compact-menu, .viewer-mini-settings-panel, .worktime-record-reset-menu, .report-worktime-dialog { animation: ui-surface-enter 150ms ease-out both; }
+.viewer-compact-menu, .viewer-mini-settings-panel, .worktime-record-reset-menu, .report-worktime-dialog, .notice, .pwa-notice, .thumbnail-group-settings-popover, .thumbnail-selection-feedback, .viewer-counter-action-menu[open] > div { animation: ui-surface-enter 150ms cubic-bezier(0.22, 1, 0.36, 1) both; }
+.viewer-zoom-hint, .viewer-counter-alert-toast, .report-undo-snackbar { animation: ui-centered-toast-enter 160ms cubic-bezier(0.22, 1, 0.36, 1) both; }
+.viewer-counter-detail-progress i { transition: width 220ms cubic-bezier(0.22, 1, 0.36, 1); }
 .counter-item-menu.is-exiting, .report-more-menu.is-exiting { animation: ui-surface-exit 150ms ease-in both; pointer-events: none; }
 .modal-backdrop > .modal-card { transform-origin: center; }
 @media (prefers-reduced-motion: reduce) {
   .modal-backdrop > .modal-card, .number-counter-panel, .counter-settings-modal, .counter-add-options, .counter-item-menu, .report-more-menu,
-  .viewer-compact-menu, .viewer-mini-settings-panel, .worktime-record-reset-menu, .report-worktime-dialog { animation: none; }
+  .viewer-compact-menu, .viewer-mini-settings-panel, .worktime-record-reset-menu, .report-worktime-dialog, .notice, .pwa-notice, .thumbnail-group-settings-popover, .thumbnail-selection-feedback, .viewer-counter-action-menu[open] > div, .viewer-zoom-hint, .viewer-counter-alert-toast, .report-undo-snackbar { animation: none; }
+  .viewer-counter-detail-progress i { transition: none; }
   .counter-item-menu.is-exiting, .report-more-menu.is-exiting { animation: none; }
 }
 

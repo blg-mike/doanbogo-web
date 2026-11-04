@@ -1,7 +1,7 @@
 # KnitPeek Servicevilkår
 
 - Tjeneste: **KnitPeek** (kendt som **니트피크** på koreansk)
-- Websted: **https://knitpeek.com**
+- Websted: **https://knitpeek.pages.dev**
 - Ikrafttrædelsesdato: **[YYYY-MM-DD — bekræft før offentliggørelse]**
 - Operatør: **[Juridisk navn på personen eller virksomheden, der driver KnitPeek]**
 - Kontakt: **[E-mailadresse til support]**
@@ -10,7 +10,7 @@
 
 ## 1. Omfang og accept
 
-Disse vilkår gælder for brugen af knitpeeks websted og webapplikation (”Tjenesten”), som drives af **[Operatørens juridiske navn]** (”Operatøren”) på `https://knitpeek.com`. Ved at bruge Tjenesten accepterer du disse vilkår i det omfang, gældende lovgivning tillader det.
+Disse vilkår gælder for brugen af knitpeeks websted og webapplikation (”Tjenesten”), som drives af **[Operatørens juridiske navn]** (”Operatøren”) på `https://knitpeek.pages.dev`. Ved at bruge Tjenesten accepterer du disse vilkår i det omfang, gældende lovgivning tillader det.
 
 ## 2. Beskrivelse af Tjenesten
 
@@ -51,7 +51,7 @@ Du må ikke:
 
 1. Importerede dokumenter, projekter, noter, tællere, timere og relaterede poster gemmes normalt i browserlager, der er knyttet til den **bestemte enhed, browser og webstedsoprindelse**.
 2. Data kan blive utilgængelige eller slettet, hvis browser- eller webstedsdata ryddes, ved privat browsing, lagerbegrænsninger, enhedsfejl, browserbegrænsninger eller ændring af webstedets oprindelse.
-3. **Vigtigt ved flytning:** En ændring af webadressen fra et `github.io`-domæne til `knitpeek.com` overfører **ikke** automatisk eksisterende IndexedDB-data. Kontrollér før adresseskift eller sletning af det gamle websteds data, at nødvendige originalfiler og eksporterede rapporter er opbevaret separat.
+3. **Vigtigt ved flytning:** En ændring af webadressen fra et `github.io`-domæne til `knitpeek.pages.dev` overfører **ikke** automatisk eksisterende IndexedDB-data. Kontrollér før adresseskift eller sletning af det gamle websteds data, at nødvendige originalfiler og eksporterede rapporter er opbevaret separat.
 4. Opbevar vigtige originalfiler og eksporterede rapporter et separat og sikkert sted. Operatøren kan ikke se eller gendanne poster, der kun findes på din enhed.
 5. Medmindre gældende lov siger andet, kan Operatøren ikke garantere gendannelse af alle data, der går tabt på grund af enheds- eller browserforhold.
 
@@ -99,7 +99,7 @@ Vores særskilt offentliggjorte **Privatlivspolitik** forklarer lokal lagring og
 
 - Operatør: **[Operatørens juridiske navn]**
 - Support-e-mail: **[E-mailadresse]**
-- Websted: **https://knitpeek.com**
+- Websted: **https://knitpeek.pages.dev**
 
 ---
 

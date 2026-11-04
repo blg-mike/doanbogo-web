@@ -2,6 +2,7 @@ import { t, translateMessage, useLocale, type LocaleKey } from './locales/index'
 import { useMemo, useState } from 'react'
 import { ArrowLeft, Check, Clipboard, X } from 'lucide-react'
 import type { KnittingReport } from './types'
+import { AnimatedNumber } from './AnimatedNumber'
 import { buildInstagramCaption, optionalCaptionFields, recommendedCaptionFields, type InstagramCaptionField } from './instagramCaption'
 
 type Props = { report: KnittingReport; onClose: () => void; onCopied: () => void }
@@ -63,7 +64,7 @@ export default function InstagramCaptionDialog({ report, onClose, onCopied }: Pr
       {step === 'select' ? <div className="instagram-caption-choices">
         <fieldset><legend>{t("공유 추천")}</legend>{recommendedCaptionFields.map((field) => <label key={field}><input type="checkbox" checked={selected.includes(field)} onChange={() => toggle(field)} /><span>{t(labels[field])}</span></label>)}</fieldset>
         <fieldset><legend>{t("추가 정보 ")}<small>{t("선택")}</small></legend>{optionalCaptionFields.map((field) => <label key={field}><input type="checkbox" checked={selected.includes(field)} onChange={() => toggle(field)} /><span>{t(labels[field])}</span></label>)}</fieldset>
-      </div> : <><textarea aria-label={t("Instagram 문구")} value={caption} onChange={(event) => { setCaption(event.currentTarget.value); setError('') }} /><div className={'instagram-caption-count' + (caption.length > 2200 ? ' over' : '')}>{caption.length} / 2200</div></>}
+      </div> : <><textarea aria-label={t("Instagram 문구")} value={caption} onChange={(event) => { setCaption(event.currentTarget.value); setError('') }} /><div className={'instagram-caption-count' + (caption.length > 2200 ? ' over' : '')}><AnimatedNumber value={caption.length} format={(value) => String(value)} resetKey={report.id} /> / 2200</div></>}
       {caption.length > 2200 && step === 'preview' && <p className="instagram-caption-warning" role="status">{t("Instagram 권장 글자 수를 넘었습니다. 복사 전 문구를 줄여 주세요.")}</p>}
       {error && <p className="instagram-report-error" role="alert">{error}</p>}
       <div className="instagram-report-actions">{step === 'select' ? <><button type="button" className="secondary-button" onClick={onClose}>{t("취소")}</button><button type="button" className="primary-button" onClick={continueToPreview}>{t("문구 미리보기 ")}<ArrowLeft className="instagram-caption-next" size={15} /></button></> : <><button type="button" className="secondary-button" onClick={goBack}><ArrowLeft size={15} />{t("항목 변경")}</button><button type="button" className="primary-button" onClick={() => void copy()}><Clipboard size={15} />{t("문구 복사 ")}<Check size={14} /></button></>}</div>

@@ -230,3 +230,16 @@
   .workspace-app-frame .modal-form input { font-size: 16px; }
   .project-detail-page .detail-state-row select { min-height: 44px; font-size: 16px; }
 }
+
+.project-detail-edit .detail-save-button,
+.workspace-app-frame .collection-toolbar button,
+.workspace-app-frame .project-filter-tabs button,
+.view-toggle button { transition: color var(--motion-ui) ease, background-color var(--motion-ui) ease, border-color var(--motion-ui) ease, opacity var(--motion-ui) ease; }
+.project-detail-edit .detail-save-button[data-state="saved"] svg { animation: ui-check-pop 180ms cubic-bezier(0.22, 1, 0.36, 1) both; }
+@media (prefers-reduced-motion: reduce) {
+  .project-detail-edit .detail-save-button,
+  .workspace-app-frame .collection-toolbar button,
+  .workspace-app-frame .project-filter-tabs button,
+  .view-toggle button { transition: none; }
+  .project-detail-edit .detail-save-button[data-state="saved"] svg { animation: none; }
+}

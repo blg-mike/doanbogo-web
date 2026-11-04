@@ -1,7 +1,7 @@
 # KnitPeek Nutzungsbedingungen
 
 - Dienst: **KnitPeek** (auf Koreanisch **니트피크**)
-- Website: **https://knitpeek.com**
+- Website: **https://knitpeek.pages.dev**
 - Inkrafttreten: **[YYYY-MM-DD — vor Veröffentlichung bestätigen]**
 - Betreiber: **[Rechtlicher Name der Person oder des Unternehmens, das KnitPeek betreibt]**
 - Kontakt: **[E-Mail-Adresse des Supports]**
@@ -10,7 +10,7 @@
 
 ## 1. Geltungsbereich und Zustimmung
 
-Diese Bedingungen regeln die Nutzung der knitpeek-Website und Webanwendung (der „Dienst“), die von **[Rechtlicher Name des Betreibers]** (dem „Betreiber“) unter `https://knitpeek.com` angeboten wird. Mit der Nutzung des Dienstes stimmen Sie diesen Bedingungen zu, soweit dies nach geltendem Recht zulässig ist.
+Diese Bedingungen regeln die Nutzung der knitpeek-Website und Webanwendung (der „Dienst“), die von **[Rechtlicher Name des Betreibers]** (dem „Betreiber“) unter `https://knitpeek.pages.dev` angeboten wird. Mit der Nutzung des Dienstes stimmen Sie diesen Bedingungen zu, soweit dies nach geltendem Recht zulässig ist.
 
 ## 2. Beschreibung des Dienstes
 
@@ -51,7 +51,7 @@ Sie dürfen nicht:
 
 1. Importierte Dokumente, Projekte, Anmerkungen, Zähler, Timer und zugehörige Einträge werden in der Regel im Browserspeicher gespeichert, der dem **jeweiligen Gerät, Browser und Website-Ursprung** zugeordnet ist.
 2. Daten können durch das Löschen von Browser- oder Websitedaten, privates Surfen, Speichergrenzen, Geräteausfälle, Browserbeschränkungen oder einen Wechsel des Website-Ursprungs unzugänglich werden oder gelöscht werden.
-3. **Wichtiger Hinweis zum Umzug:** Ein Wechsel der Website-Adresse von einer `github.io`-Domain zu `knitpeek.com` überträgt vorhandene IndexedDB-Daten **nicht** automatisch. Prüfen Sie vor dem Adresswechsel oder dem Löschen der alten Websitedaten, ob benötigte Originaldateien und ausgegebene Berichte separat aufbewahrt sind.
+3. **Wichtiger Hinweis zum Umzug:** Ein Wechsel der Website-Adresse von einer `github.io`-Domain zu `knitpeek.pages.dev` überträgt vorhandene IndexedDB-Daten **nicht** automatisch. Prüfen Sie vor dem Adresswechsel oder dem Löschen der alten Websitedaten, ob benötigte Originaldateien und ausgegebene Berichte separat aufbewahrt sind.
 4. Bewahren Sie wichtige Originaldateien und ausgegebene Berichte an einem separaten sicheren Ort auf. Der Betreiber kann Einträge, die nur auf Ihrem Gerät vorhanden sind, weder aus der Ferne einsehen noch wiederherstellen.
 5. Soweit geltendes Recht nichts anderes bestimmt, kann der Betreiber nicht garantieren, dass alle durch Geräte- oder Browserbedingungen verlorenen Daten wiederhergestellt werden.
 
@@ -99,7 +99,7 @@ Unsere gesondert veröffentlichte **Datenschutzerklärung** erläutert lokale Sp
 
 - Betreiber: **[Rechtlicher Name des Betreibers]**
 - Support-E-Mail: **[E-Mail-Adresse]**
-- Website: **https://knitpeek.com**
+- Website: **https://knitpeek.pages.dev**
 
 ---
 

@@ -2,6 +2,7 @@ import { formatDateTime, t, translateMessage } from './locales/index'
 import { useEffect, useMemo, useState } from 'react'
 import { Download, X } from 'lucide-react'
 import type { KnittingReport } from './types'
+import { AnimatedNumber } from './AnimatedNumber'
 import { createInstagramReportImage, type InstagramReportImageItem } from './instagramReportImage'
 
 type Props = { report: KnittingReport; onClose: () => void }
@@ -65,7 +66,7 @@ export default function InstagramReportDialog({ report, onClose }: Props) {
       <div className="modal-heading"><div><p className="eyebrow">{t('인스타 이미지 만들기')}</p><h2>{t("인스타 이미지 만들기")}</h2><small>{t("작업 사진을 날짜순으로 배치하고 완성 사진을 마지막에 붙입니다.")}</small></div><button className="icon-button" aria-label={t("닫기")} disabled={busy} onClick={onClose}><X size={20} /></button></div>
       <div className="instagram-report-content">
         <div className="instagram-report-photo-list">
-          <div className="report-subheading"><h3>{t("작업 과정 사진 ")}<small>{selected.length}/8</small></h3></div>
+          <div className="report-subheading"><h3>{t("작업 과정 사진 ")}<small><AnimatedNumber value={selected.length} format={(value) => String(value)} resetKey={report.id} />/8</small></h3></div>
           {photos.length ? photos.map((photo) => <label className="instagram-report-photo-choice" key={photo.id}>
             <input type="checkbox" checked={selected.includes(photo.id)} disabled={!selected.includes(photo.id) && selected.length >= 8} onChange={() => togglePhoto(photo.id)} />
             <img src={photo.dataUrl} alt="" />

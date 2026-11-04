@@ -13,6 +13,16 @@ export const MIN_ZOOM = 0.5
 export const MAX_ZOOM = 5
 export const ZOOM_STEP = 0.25
 export const ZOOM_LEVELS = [0.5, 0.75, 1, 1.25, 1.5, 1.75, 2, 2.25, 2.5, 2.75, 3, 3.25, 3.5, 3.75, 4, 4.25, 4.5, 4.75, 5] as const
+export const PAGE_SWIPE_MIN_DISTANCE = 64
+export const PAGE_SWIPE_AXIS_RATIO = 1.5
+export const PAGE_SWIPE_MAX_DURATION = 1000
+
+export function classifyPageSwipe(deltaX: number, deltaY: number, durationMs: number): -1 | 1 | null {
+  if (!Number.isFinite(deltaX) || !Number.isFinite(deltaY) || !Number.isFinite(durationMs)) return null
+  if (durationMs < 0 || durationMs > PAGE_SWIPE_MAX_DURATION || Math.abs(deltaX) < PAGE_SWIPE_MIN_DISTANCE) return null
+  if (Math.abs(deltaX) < PAGE_SWIPE_AXIS_RATIO * Math.abs(deltaY)) return null
+  return deltaX > 0 ? 1 : -1
+}
 
 export function stepZoomLevel(zoom: number, direction: -1 | 1) {
   if (direction > 0) return ZOOM_LEVELS.find((level) => level > zoom + 0.0001) ?? ZOOM_LEVELS[ZOOM_LEVELS.length - 1]

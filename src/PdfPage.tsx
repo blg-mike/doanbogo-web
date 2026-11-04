@@ -18,7 +18,7 @@ import { safeQrHref, shouldOpenLinkAfterGesture, type PdfQrLink } from './qr'
 import { rotatedPageSize } from './pageGeometry'
 import { annotationSelectionBounds, clampAnnotationDelta, selectAnnotationsInRect, translateAnnotations, type AnnotationDelta, type AnnotationRect } from './annotationSelection'
 import { displayRectToPageRect, focusBandHeightRatio, focusDimOpacity, focusRowSpacing, guideGeometryForRotation, pageRectToDisplayRect } from './focusGeometry'
-import { canStartPaneGesture, clientPointForPagePosition, classifyWheelInput, isEditableTarget, isZoomFocusCurrent, MAX_ZOOM, MIN_ZOOM, nearestZoomLevel, pagePositionAtClientPoint, pinchPreviewTranslation, regionHighlightPointerAction, scrollOffsetForZoomFocus, visiblePageCrop, visiblePageFocus, wheelActionForBurst, wheelZoom, type WheelInput, type ZoomFocus } from './viewerInteraction'
+import { canStartPaneGesture, clientPointForPagePosition, classifyPageSwipe, classifyWheelInput, isEditableTarget, isZoomFocusCurrent, MAX_ZOOM, MIN_ZOOM, nearestZoomLevel, PAGE_SWIPE_MAX_DURATION, pagePositionAtClientPoint, pinchPreviewTranslation, regionHighlightPointerAction, scrollOffsetForZoomFocus, visiblePageCrop, visiblePageFocus, wheelActionForBurst, wheelZoom, type WheelInput, type ZoomFocus } from './viewerInteraction'
 import { useDismissiblePopover } from './useDismissiblePopover'
 import { acquireThumbnailCache, getViewerResourcePolicy, MAX_PDF_CANVAS_PIXELS, pdfRasterScale, releaseCanvasWhenSettled, viewerCanvasMemory } from './pdfRenderResources'
 import { pdfPageRenderQueue } from './pdfPageRenderQueue'
@@ -26,6 +26,7 @@ import type { LimitedAnnotationKind } from './annotationLimits'
 
 type Point = { x: number; y: number }
 type Size = { width: number; height: number }
+type PageSwipeGesture = { pointerId: number; startX: number; startY: number; startedAt: number; scrollLeft: number; scrollTop: number }
 type AnnotationSelectionGesture = { kind: 'area' | 'move'; pointerId: number; start: Point; before: PageWorkRecord; ids: string[] }
 type ColorworkTransform = {
   pointerId: number
@@ -429,12 +430,18 @@ function withTextBox(annotation: AnnotationRecord, pageHeight: number): Annotati
   return { ...annotation, points: [{ x: box.x, y: box.y }], boxWidth: box.width, boxHeight: box.height }
 }
 
-export function PdfPage({ pdf, page, paneId, pane, paneGestureOwnerRef, splitView, rotation, active, tool, lineSettings, counters, mainCounterId, annotationStyle, work, colorworkEnabled, workReady, canCreateLimitedAnnotation, pageWorkLoadError, onRetryPageWork, recognitionError, onRetryRecognition, colorworkBrushColor, colorworkBrushOpacity, colorworkEraser, createColorworkRequest, pageLinks, qrLinks, textStylePortalTarget, onPageRendered, onActivate, onWorkChange, onAnnotationSelectionMove, onChartRowsApply, onZoom, onCenter, onColorworkRequestHandled, onTextToolConsumed, onRegionHighlightToolConsumed }: {
+function isPageSwipeExcludedTarget(target: EventTarget | null) {
+  if (!(target instanceof Element)) return true
+  return Boolean(target.closest('a, button, input, textarea, select, [contenteditable="true"], [role="dialog"], [role="toolbar"], .page-note, [data-region-highlight-id], [data-region-highlight-handle], .page-colorwork-panel, .progress-line-overlay, .progress-line-menu, .region-highlight-popover, .chart-row-selection-preview, .split-divider'))
+}
+
+export function PdfPage({ pdf, page, paneId, pane, paneGestureOwnerRef, pageSwipeDoubleClickSuppressionRef, splitView, rotation, active, tool, lineSettings, counters, mainCounterId, annotationStyle, work, colorworkEnabled, workReady, canCreateLimitedAnnotation, pageWorkLoadError, onRetryPageWork, recognitionError, onRetryRecognition, colorworkBrushColor, colorworkBrushOpacity, colorworkEraser, createColorworkRequest, pageLinks, qrLinks, textStylePortalTarget, onPageRendered, onActivate, onNavigatePage, onWorkChange, onAnnotationSelectionMove, onChartRowsApply, onZoom, onCenter, onColorworkRequestHandled, onTextToolConsumed, onRegionHighlightToolConsumed }: {
   pdf: PDFDocumentProxy
   page: number
   paneId: PaneId
   pane: PaneSnapshot
   paneGestureOwnerRef: { current: PaneId | null }
+  pageSwipeDoubleClickSuppressionRef: { current: number }
   splitView: boolean
   rotation: PageRotation
   active: boolean
@@ -460,6 +467,7 @@ export function PdfPage({ pdf, page, paneId, pane, paneGestureOwnerRef, splitVie
   textStylePortalTarget: HTMLElement | null
   onPageRendered: (pageNumber: number, canvas: HTMLCanvasElement) => void
   onActivate: () => void
+  onNavigatePage?: (direction: -1 | 1) => void
   onWorkChange: (work: PageWorkRecord, immediate: boolean, recordHistory?: boolean, historyBefore?: PageWorkRecord, cellChanges?: { index: number; before: ColorworkCell | null; after: ColorworkCell | null }[]) => boolean
   onAnnotationSelectionMove: (work: PageWorkRecord, before: PageWorkRecord) => Promise<boolean>
   onChartRowsApply: (work: PageWorkRecord, before: PageWorkRecord) => Promise<boolean>
@@ -517,6 +525,9 @@ export function PdfPage({ pdf, page, paneId, pane, paneGestureOwnerRef, splitVie
   const [pendingStrokePreviews, setPendingStrokePreviews] = useState<Array<{ documentId: string; pageNumber: number; annotation: AnnotationRecord }>>([])
   const [strokeError, setStrokeError] = useState(false)
   const pointers = useRef(new Map<number, { x: number; y: number }>())
+  const pageSwipeGestureRef = useRef<PageSwipeGesture | null>(null)
+  const pageSwipeActivationOnlyPointerRef = useRef<number | null>(null)
+  const pageSwipeActivationOnlyGesturePointerRef = useRef<number | null>(null)
   const gesture = useRef<
     | { kind: 'pan'; pointerId: number; x: number; y: number; scrollLeft: number; scrollTop: number }
     | { kind: 'pinch'; firstId: number; secondId: number; distance: number; zoom: number; pagePoint: Point; pageWidth: number; pageHeight: number; layerCenterX: number; layerCenterY: number }
@@ -1694,15 +1705,32 @@ export function PdfPage({ pdf, page, paneId, pane, paneGestureOwnerRef, splitVie
   }
 
   function handlePanePointerDownCapture(event: ReactPointerEvent<HTMLDivElement>) {
+    pageSwipeActivationOnlyPointerRef.current = null
     if ((tool === 'pan' || tool === 'selection') && !canStartPaneGesture(paneGestureOwnerRef.current, paneId)) {
       event.preventDefault()
       event.stopPropagation()
       return
     }
+    if (tool === 'pan' && !active) pageSwipeActivationOnlyPointerRef.current = event.pointerId
     onActivate()
   }
 
   function pointerDown(event: ReactPointerEvent<HTMLDivElement>) {
+    if (pageSwipeActivationOnlyPointerRef.current === event.pointerId) {
+      pageSwipeActivationOnlyPointerRef.current = null
+      if (tool === 'pan' && event.pointerType === 'touch' && event.isPrimary) {
+        const area = scrollRef.current
+        if (area && pointers.current.size === 0 && canStartPaneGesture(paneGestureOwnerRef.current, paneId)) {
+          paneGestureOwnerRef.current = paneId
+          try { event.currentTarget.setPointerCapture(event.pointerId) } catch { /* Keep activation-only touch state when capture is unavailable. */ }
+          pointers.current.set(event.pointerId, { x: event.clientX, y: event.clientY })
+          gesture.current = { kind: 'pan', pointerId: event.pointerId, x: event.clientX, y: event.clientY, scrollLeft: area.scrollLeft, scrollTop: area.scrollTop }
+          pageSwipeActivationOnlyGesturePointerRef.current = event.pointerId
+        }
+      }
+      return
+    }
+    if (tool === 'pan' && !active) return
     const target = event.target
     if (!(target instanceof Element) || !target.closest('.page-note')) {
       setSelectedNoteId(null)
@@ -1752,18 +1780,26 @@ export function PdfPage({ pdf, page, paneId, pane, paneGestureOwnerRef, splitVie
     const area = scrollRef.current
     if (!area) return
     if (!canStartPaneGesture(paneGestureOwnerRef.current, paneId)) return
+    const firstPointer = pointers.current.size === 0
     paneGestureOwnerRef.current = paneId
     const link = target instanceof Element ? target.closest<HTMLAnchorElement>('.page-pdf-link, .page-qr-link') : null
     const href = link ? safeQrHref(link.href) : null
     if (href) linkGesturesRef.current.set(event.pointerId, { href, startX: event.clientX, startY: event.clientY, moved: false, pinched: false })
     event.currentTarget.setPointerCapture(event.pointerId)
     pointers.current.set(event.pointerId, { x: event.clientX, y: event.clientY })
+    if (firstPointer && event.isPrimary && active && pane.zoom <= 1 && onNavigatePage && (event.pointerType === 'touch' || event.pointerType === 'mouse') && !isPageSwipeExcludedTarget(target)) {
+      pageSwipeGestureRef.current = { pointerId: event.pointerId, startX: event.clientX, startY: event.clientY, startedAt: performance.now(), scrollLeft: area.scrollLeft, scrollTop: area.scrollTop }
+    } else {
+      pageSwipeGestureRef.current = null
+    }
     const current = gesture.current
     if (!current) {
       gesture.current = { kind: 'pan', pointerId: event.pointerId, x: event.clientX, y: event.clientY, scrollLeft: area.scrollLeft, scrollTop: area.scrollTop }
     } else if (current.kind === 'pan') {
+      pageSwipeGestureRef.current = null
       const first = pointers.current.get(current.pointerId)
       if (!first) return
+      pageSwipeActivationOnlyGesturePointerRef.current = null
       linkGesturesRef.current.forEach((gesture) => { gesture.pinched = true })
       const midpointX = (first.x + event.clientX) / 2
       const midpointY = (first.y + event.clientY) / 2
@@ -1806,7 +1842,15 @@ export function PdfPage({ pdf, page, paneId, pane, paneGestureOwnerRef, splitVie
     }
     if (tool !== 'pan' && !(tool === 'selection' && current?.kind === 'pinch')) return
     if (!current) return
+    if (current.kind === 'pan' && current.pointerId === event.pointerId && pageSwipeActivationOnlyGesturePointerRef.current === event.pointerId) return
     if (tool === 'pan' && current.kind === 'pan' && current.pointerId === event.pointerId) {
+      const pageSwipe = pageSwipeGestureRef.current
+      if (pageSwipe?.pointerId === event.pointerId) {
+        const deltaX = event.clientX - pageSwipe.startX
+        const deltaY = event.clientY - pageSwipe.startY
+        if (performance.now() - pageSwipe.startedAt <= PAGE_SWIPE_MAX_DURATION && Math.abs(deltaY) <= Math.abs(deltaX)) return
+        pageSwipeGestureRef.current = null
+      }
       area.scrollLeft = current.scrollLeft - (event.clientX - current.x)
       area.scrollTop = current.scrollTop - (event.clientY - current.y)
       return
@@ -1832,6 +1876,8 @@ export function PdfPage({ pdf, page, paneId, pane, paneGestureOwnerRef, splitVie
     if (!pointers.current.has(event.pointerId)) return
     if (event.type === 'pointercancel') {
       cancelAnnotationSelectionGesture(false)
+      pageSwipeGestureRef.current = null
+      pageSwipeActivationOnlyGesturePointerRef.current = null
       pointers.current.clear()
       linkGesturesRef.current.clear()
       gesture.current = null
@@ -1843,6 +1889,23 @@ export function PdfPage({ pdf, page, paneId, pane, paneGestureOwnerRef, splitVie
       return
     }
     pointers.current.set(event.pointerId, { x: event.clientX, y: event.clientY })
+    const pageSwipe = pageSwipeGestureRef.current
+    pageSwipeGestureRef.current = null
+    if (tool === 'pan' && active && pane.zoom <= 1 && onNavigatePage && current?.kind === 'pan' && current.pointerId === event.pointerId && pointers.current.size === 1 && pageSwipe?.pointerId === event.pointerId) {
+      const direction = classifyPageSwipe(event.clientX - pageSwipe.startX, event.clientY - pageSwipe.startY, performance.now() - pageSwipe.startedAt)
+      if (direction !== null) {
+        if (area) {
+          area.scrollLeft = pageSwipe.scrollLeft
+          area.scrollTop = pageSwipe.scrollTop
+        }
+        pageSwipeDoubleClickSuppressionRef.current = performance.now() + 600
+        event.preventDefault()
+        onNavigatePage(direction)
+      } else if (area) {
+        area.scrollLeft = pageSwipe.scrollLeft - (event.clientX - pageSwipe.startX)
+        area.scrollTop = pageSwipe.scrollTop - (event.clientY - pageSwipe.startY)
+      }
+    }
     if (tool === 'selection' && gesture.current?.kind !== 'pinch' && annotationSelectionGesture.current?.pointerId === event.pointerId) {
       finishAnnotationSelectionGesture(event, false)
     }
@@ -1871,6 +1934,7 @@ export function PdfPage({ pdf, page, paneId, pane, paneGestureOwnerRef, splitVie
       }
     }
     pointers.current.delete(event.pointerId)
+    if (pageSwipeActivationOnlyGesturePointerRef.current === event.pointerId) pageSwipeActivationOnlyGesturePointerRef.current = null
     pinchZoom.current = null
     const remaining = [...pointers.current.entries()][0]
     if (area && remaining) {
@@ -1884,6 +1948,8 @@ export function PdfPage({ pdf, page, paneId, pane, paneGestureOwnerRef, splitVie
   function pointerCaptureLost(event: ReactPointerEvent<HTMLDivElement>) {
     if (!pointers.current.has(event.pointerId)) return
     cancelAnnotationSelectionGesture(false)
+    pageSwipeGestureRef.current = null
+    pageSwipeActivationOnlyGesturePointerRef.current = null
     pointers.current.clear()
     linkGesturesRef.current.clear()
     gesture.current = null
@@ -2036,12 +2102,23 @@ export function PdfPage({ pdf, page, paneId, pane, paneGestureOwnerRef, splitVie
     const stroke = strokeRef.current
     if (stroke) finishInkStrokeRef.current(stroke.pointerId)
     pointers.current.clear()
+    pageSwipeGestureRef.current = null
+    pageSwipeActivationOnlyGesturePointerRef.current = null
     gesture.current = null
     pinchZoom.current = null
     zoomFocusRef.current = null
   }, [pdf, page, paneId, rotation, work.documentId])
 
+  useLayoutEffect(() => {
+    pageSwipeGestureRef.current = null
+  }, [active, tool, paneId, page, pane.zoom])
+
   function doubleTap(event: React.MouseEvent<HTMLDivElement>) {
+    if (performance.now() <= pageSwipeDoubleClickSuppressionRef.current) {
+      event.preventDefault()
+      event.stopPropagation()
+      return
+    }
     if (tool !== 'pan') return
     const layer = rotationLayerRef.current
     if (!layer) return

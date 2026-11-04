@@ -5,6 +5,7 @@ import { useNavigate } from 'react-router-dom'
 import { createCrochetChart, createKnittingChart } from './charts'
 import { saveChart } from './storage'
 import type { ChartCraft, ChartUnit } from './types'
+import { AnimatedNumber } from './AnimatedNumber'
 import './Chart.css'
 
 export default function ChartCreate() {
@@ -80,7 +81,7 @@ export default function ChartCreate() {
               <label>{t("게이지 ")}<span>{t("단 / ")}{unit === 'in' ? '4 in' : '10 cm'}</span><input type="number" min={1} max={200} value={gaugeRows} onChange={(event) => setGaugeRows(Math.min(200, Math.max(1, Number(event.target.value) || 1)))} /></label>
             </div>
             <label className="chart-unit-field">{t("완성 크기 단위")}<select value={unit} onChange={(event) => changeUnit(event.target.value as ChartUnit)}><option value="in">inch (in)</option><option value="cm">{t("센티미터 (cm)")}</option></select></label>
-            <div className="chart-size-result"><span>{t("예상 완성 크기")}</span><strong>{physicalWidth.toFixed(1)} × {physicalHeight.toFixed(1)} {unitLabel}</strong></div>
+            <div className="chart-size-result"><span>{t("예상 완성 크기")}</span><strong><AnimatedNumber value={Math.round(physicalWidth * 10)} format={(value) => (value / 10).toFixed(1)} resetKey={unit} /> × <AnimatedNumber value={Math.round(physicalHeight * 10)} format={(value) => (value / 10).toFixed(1)} resetKey={unit} /> {unitLabel}</strong></div>
             <small className="chart-size-note">{t("입력한 게이지와 코·단 수를 기준으로 계산합니다.")}</small>
           </div>
           {error && <p className="chart-error" role="alert">{error}</p>}

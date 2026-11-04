@@ -1,7 +1,7 @@
 # KnitPeek Datenschutzerklärung
 
 - Dienst: **KnitPeek** (auf Koreanisch **니트피크**)
-- Website: **https://knitpeek.com**
+- Website: **https://knitpeek.pages.dev**
 - Inkrafttreten: **[YYYY-MM-DD — vor Veröffentlichung bestätigen]**
 - Verantwortlicher / Betreiber: **[Rechtlicher Name des Betreibers]**
 - Datenschutzkontakt: **[E-Mail-Adresse]**
@@ -48,7 +48,7 @@ Wenn die DSGVO oder vergleichbares Recht gilt, stützt der Betreiber seine Verar
 1. KnitPeek verwendet **Browserspeicher wie IndexedDB**, um Projekte und Einstellungen auf Ihrem Gerät zu speichern. Browserspeicher lädt diese Inhalte nicht von sich aus auf einen Server hoch.
 2. Die bereitgestellten Architekturunterlagen nennen keine Werbe- oder Besucheranalyseintegration. **Wenn die veröffentlichte Website Werbetags, Analysen, Fehlerberichte oder andere Skripte Dritter verwendet**, muss diese Erklärung vor einer gegebenenfalls zustimmungspflichtigen Aktivierung Anbieter, Datenkategorien, Zwecke, Aufbewahrung, Cookies sowie Einwilligungs- und Widerspruchsmöglichkeiten benennen.
 3. Sie können Cookies und Websitedaten in den Browsereinstellungen löschen oder einschränken. Dabei können gespeicherte Muster und Arbeitsdaten verloren gehen. Prüfen Sie vorher, ob benötigte Originaldateien und ausgegebene Berichte separat aufbewahrt sind.
-4. Ein Wechsel von einer `github.io`-Adresse zu `knitpeek.com` überträgt vorhandene IndexedDB-Daten **nicht** automatisch zum neuen Website-Ursprung. Prüfen Sie vor dem Wechsel, ob benötigte Unterlagen separat aufbewahrt sind.
+4. Ein Wechsel von einer `github.io`-Adresse zu `knitpeek.pages.dev` überträgt vorhandene IndexedDB-Daten **nicht** automatisch zum neuen Website-Ursprung. Prüfen Sie vor dem Wechsel, ob benötigte Unterlagen separat aufbewahrt sind.
 
 ## 6. Export, Teilen und externe Websites
 
@@ -85,7 +85,7 @@ KnitPeek richtet sich nicht ausschließlich an eine bestimmte Altersgruppe. Der 
 - Betreiber / Verantwortlicher: **[Rechtlicher Name]**
 - Datenschutzkontakt / zuständige Person: **[Name oder Abteilung entsprechend der tatsächlichen Organisation]**
 - E-Mail: **[E-Mail-Adresse]**
-- Website: **https://knitpeek.com**
+- Website: **https://knitpeek.pages.dev**
 
 ## 12. Änderungen dieser Erklärung
 

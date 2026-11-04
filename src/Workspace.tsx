@@ -9,6 +9,7 @@ import { chartSvg } from './charts'
 import type { ChartDocument, DocumentRecord, HomeProject, SortMode, ViewMode } from './types'
 import { formatWorkTime } from './workTime'
 import AppNavigation from './AppNavigation'
+import { AnimatedNumber } from './AnimatedNumber'
 import { useListLayoutMotion } from './useListLayoutMotion'
 import './Chart.css'
 
@@ -387,7 +388,7 @@ export default function Workspace() {
   return (
     <div className="workspace-app-frame"><AppNavigation active="projects" /><main className="workspace-shell">
       <section ref={documentListMotionRef} className="workspace-content">
-        <div className="welcome-row"><div><p className="eyebrow">{t('프로젝트')}</p><h1>{collectionMode === 'trash' ? t('휴지통') : collectionMode === 'archived' ? t('보관한 프로젝트') : t('내 프로젝트')}</h1><p className="welcome-copy">{t("도안과 차트, 작업 상태를 한곳에서 관리해요.")}</p></div><div className="document-count">{formatNumber(documents.length)}<span>{t("개 프로젝트")}</span></div></div>
+        <div className="welcome-row"><div><p className="eyebrow">{t('프로젝트')}</p><h1>{collectionMode === 'trash' ? t('휴지통') : collectionMode === 'archived' ? t('보관한 프로젝트') : t('내 프로젝트')}</h1><p className="welcome-copy">{t("도안과 차트, 작업 상태를 한곳에서 관리해요.")}</p></div><div className="document-count"><AnimatedNumber value={documents.length} format={formatNumber} resetKey={collectionMode ?? 'projects'} /><span>{t("개 프로젝트")}</span></div></div>
         <div className="collection-search-row"><label className="search-box"><Search size={18} /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder={t("이름 또는 태그 검색")} aria-label={t("이름 또는 태그 검색")} />{query && <button type="button" className="search-clear" aria-label={t("검색어 지우기")} onClick={() => setQuery('')}><X size={15} /></button>}</label></div>
         <nav className="project-filter-tabs" aria-label={t("프로젝트 보기")}><button type="button" aria-pressed={collectionMode === 'active'} className={collectionMode === 'active' ? 'active' : ''} onClick={() => setSearchParams({})}>{t("전체")}</button><button type="button" aria-pressed={collectionMode === 'archived'} className={collectionMode === 'archived' ? 'active' : ''} onClick={() => setSearchParams({ view: 'archived' })}>{t("보관")}</button><button type="button" aria-pressed={collectionMode === 'trash'} className={collectionMode === 'trash' ? 'active' : ''} onClick={() => setSearchParams({ view: 'trash' })}>{t("휴지통")}</button></nav>
         <div className="toolbar">

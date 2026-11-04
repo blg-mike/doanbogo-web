@@ -315,13 +315,13 @@ export default function WorkTimeRecordPanel({ documentId, hidden = false, initia
       </header>
       {loadError && <div className="worktime-record-load-error" role="alert"><span>{t('작업 기록을 불러오지 못했습니다.')}</span><button type="button" disabled={loading} onClick={retryLoad}>{t('다시 시도')}</button></div>}
       {loading ? <div className="report-worktime-loading" role="status">{t('불러오는 중')}</div> : view === 'stats' ? <div className="report-worktime-overview">
-        <section className="report-worktime-total-card"><span>{t('누적 작업시간')}</span><strong>{durationText(record.totalWorkTimeMs)}</strong><div className="report-worktime-summary-stats">
-          <span><small>{t('작업일 수')}</small><b>{t('{count}일', { count: formatNumber(summary.recordedDays.length) })}</b></span>
-          <span><small>{t('작업일 평균')}</small><b>{durationText(summary.averageMs)}</b></span>
-          <span><small>{t('최장 작업일')}</small><b>{durationText(summary.longestDayMs)}</b></span>
+        <section className="report-worktime-total-card"><span>{t('누적 작업시간')}</span><strong><AnimatedNumber value={Math.floor(record.totalWorkTimeMs / 60_000)} format={(minutes) => durationText(minutes * 60_000)} resetKey={documentId} /></strong><div className="report-worktime-summary-stats">
+          <span><small>{t('작업일 수')}</small><b><AnimatedNumber value={summary.recordedDays.length} format={(count) => t('{count}일', { count: formatNumber(count) })} resetKey={documentId} /></b></span>
+          <span><small>{t('작업일 평균')}</small><b><AnimatedNumber value={Math.floor(summary.averageMs / 60_000)} format={(minutes) => durationText(minutes * 60_000)} resetKey={documentId} /></b></span>
+          <span><small>{t('최장 작업일')}</small><b><AnimatedNumber value={Math.floor(summary.longestDayMs / 60_000)} format={(minutes) => durationText(minutes * 60_000)} resetKey={documentId} /></b></span>
         </div>{summary.unknownMs > 0 && <p>{t('날짜 미상 기록')}: {durationText(summary.unknownMs)}</p>}</section>
         <section className="report-worktime-chart-card"><header><h3>{t(mode === 'day' ? '일별' : mode === 'week' ? '주간' : '월간')}</h3><span className="report-worktime-axis-title">{t('작업 시간')} · HH:MM</span>{mode === 'day' ? <select aria-label={t('최근 7일')} value={dailyRange} onChange={(event) => setDailyRange(Number(event.currentTarget.value))}><option value={7}>{t('최근 7일')}</option><option value={30}>{t('최근 30일')}</option></select> : <span>{t(mode === 'week' ? '최근 8주' : '최근 12개월')}</span>}</header>
-          <nav className="report-worktime-tabs" aria-label={t('통계')}>
+          <nav className="report-worktime-tabs" aria-label={t('통계')} style={{ '--active-tab-index': ['day', 'week', 'month'].indexOf(mode) } as CSSProperties}>
             {(['day', 'week', 'month'] as const).map((item) => <button key={item} type="button" aria-pressed={mode === item} className={mode === item ? 'selected' : ''} onClick={() => setMode(item)}>{t(item === 'day' ? '일별' : item === 'week' ? '주간' : '월간')}</button>)}
           </nav>
           <div className="report-worktime-chart-layout">
@@ -332,14 +332,14 @@ export default function WorkTimeRecordPanel({ documentId, hidden = false, initia
                 const labelVisible = buckets.length !== 30 || index % 6 === 0 || index === buckets.length - 1
                 const selected = selectedBucket?.key === bucket.key
                 const label = chartBucketLabel(mode, bucket.key, true)
-                return <button ref={(element) => { chartButtons.current[index] = element }} type="button" className={'report-worktime-bar-column' + (selected ? ' selected' : '')} key={bucket.key} title={`${chartBucketLabel(mode, bucket.key)}: ${durationText(bucket.elapsedMs)}`} aria-label={`${t(mode === 'day' ? '일별' : mode === 'week' ? '주간' : '월간')} ${chartBucketLabel(mode, bucket.key)}, ${durationText(bucket.elapsedMs)}`} aria-pressed={selected} tabIndex={index === selectedBucketIndex ? 0 : -1} onClick={() => setSelectedBucketKey({ documentId, key: bucket.key })} onKeyDown={(event) => handleChartKeyDown(event, index)}><span className="report-worktime-bar-track"><i style={{ height: `${chartScaleMax ? bucket.elapsedMs / chartScaleMax * 100 : 0}%` }} /></span><small aria-hidden={!labelVisible}>{labelVisible ? label : ''}</small></button>
+                return <button ref={(element) => { chartButtons.current[index] = element }} type="button" className={'report-worktime-bar-column' + (selected ? ' selected' : '')} style={{ '--bar-index': index } as CSSProperties} key={bucket.key} title={`${chartBucketLabel(mode, bucket.key)}: ${durationText(bucket.elapsedMs)}`} aria-label={`${t(mode === 'day' ? '일별' : mode === 'week' ? '주간' : '월간')} ${chartBucketLabel(mode, bucket.key)}, ${durationText(bucket.elapsedMs)}`} aria-pressed={selected} tabIndex={index === selectedBucketIndex ? 0 : -1} onClick={() => setSelectedBucketKey({ documentId, key: bucket.key })} onKeyDown={(event) => handleChartKeyDown(event, index)}><span className="report-worktime-bar-track"><i style={{ height: `${chartScaleMax ? bucket.elapsedMs / chartScaleMax * 100 : 0}%` }} /></span><small aria-hidden={!labelVisible}>{labelVisible ? label : ''}</small></button>
               })}
             </div>
           </div>
           <div className="report-worktime-chart-selection" aria-live="polite">{selectedBucket ? <><span>{chartBucketLabel(mode, selectedBucket.key)}</span><strong><AnimatedNumber value={Math.floor(selectedBucket.elapsedMs / 60_000)} format={(minutes) => durationText(minutes * 60_000)} resetKey={`${documentId}-${mode}`} /></strong></> : <span>{t('선택 기간의 작업시간 기록이 없습니다.')}</span>}</div>
         </section>
       </div> : <div className="worktime-record-content">
-        <section className="worktime-record-total"><span>{t('총 작업시간')}</span><strong>{durationText(record.totalWorkTimeMs)}</strong></section>
+        <section className="worktime-record-total"><span>{t('총 작업시간')}</span><strong><AnimatedNumber value={Math.floor(record.totalWorkTimeMs / 60_000)} format={(minutes) => durationText(minutes * 60_000)} resetKey={documentId} /></strong></section>
         {resetMode && <section className="worktime-record-reset-confirm" aria-labelledby="worktime-reset-title">
           <h3 id="worktime-reset-title">{t(resetMode === 'date' ? '날짜별 작업시간 초기화' : '전체 작업시간 초기화')}</h3>
           <p>{t(resetMode === 'date' ? '선택한 날짜의 작업시간과 세션 기록을 초기화합니다.' : '누적 작업시간과 모든 세션 기록을 초기화합니다.')}</p>

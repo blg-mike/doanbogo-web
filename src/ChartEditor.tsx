@@ -7,6 +7,7 @@ import { crochetSymbols, exportChart } from './charts'
 import { getChart, markProjectWorked, saveChart } from './storage'
 import { DESIGN_SYSTEM_COLORS } from './designTokens'
 import type { ChartDocument, ChartLayer, CrochetSymbolId, CrochetSymbolObject } from './types'
+import { AnimatedNumber } from './AnimatedNumber'
 import { useDismissiblePopover } from './useDismissiblePopover'
 import './Chart.css'
 
@@ -613,5 +614,6 @@ function ToolButton({ active, title, onClick, children }: { active: boolean; tit
 }
 
 function ZoomControls({ zoom, setZoom, maxZoom = 2.6 }: { zoom: number; setZoom: (value: number) => void; maxZoom?: number }) {
-  return <div className="chart-zoom-controls"><button aria-label={t("축소")} onClick={() => setZoom(Math.max(.4, +(zoom - .2).toFixed(1)))}><Minus size={15} /></button><span>{Math.round(Math.min(zoom, maxZoom) * 100)}%</span><button aria-label={t("확대")} onClick={() => setZoom(Math.min(maxZoom, +(zoom + .2).toFixed(1)))}><Plus size={15} /></button></div>
+  const percent = Math.round(Math.min(zoom, maxZoom) * 100)
+  return <div className="chart-zoom-controls"><button aria-label={t("축소")} onClick={() => setZoom(Math.max(.4, +(zoom - .2).toFixed(1)))}><Minus size={15} /></button><span><AnimatedNumber value={percent} format={(value) => `${value}%`} /></span><button aria-label={t("확대")} onClick={() => setZoom(Math.min(maxZoom, +(zoom + .2).toFixed(1)))}><Plus size={15} /></button></div>
 }
