@@ -1,9 +1,19 @@
+import { useEffect } from 'react'
 import { t } from './locales/index'
 import { Check, RefreshCw, X } from 'lucide-react'
 import { useRegisterSW } from 'virtual:pwa-register/react'
+import { useLocation } from 'react-router-dom'
 
 export default function PwaUpdatePrompt() {
   const { needRefresh: [needRefresh, setNeedRefresh], offlineReady: [offlineReady, setOfflineReady], updateServiceWorker } = useRegisterSW({ immediate: true })
+  const { pathname } = useLocation()
+
+  useEffect(() => {
+    if (!offlineReady || !pathname.startsWith('/viewer/')) return
+    const timeout = window.setTimeout(() => setOfflineReady(false), 3000)
+    return () => window.clearTimeout(timeout)
+  }, [offlineReady, pathname, setOfflineReady])
+
   if (!needRefresh && !offlineReady) return null
 
   return (
