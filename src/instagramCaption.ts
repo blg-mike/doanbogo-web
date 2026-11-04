@@ -70,6 +70,7 @@ export function buildInstagramCaption(report: KnittingReport, selected: Instagra
       return value ? `${t('게이지')} ${formatNumber(index + 2)} · ${t(side === 'before' ? '세탁 전' : '세탁 후')}: ${value}` : ''
     }))
     sections.push(line(t('Gauge'), [
+      fields['gauge.pattern']?.trim() && `${t('무늬')}: ${fields['gauge.pattern'].trim()}`,
       `${t('세탁 전')} · 10 × 10 cm: ${summaryText('before')}`,
       `${t('세탁 후')} · 10 × 10 cm: ${summaryText('after')}`,
       sideText('before') && `${t('세탁 전')}: ${sideText('before')}`,

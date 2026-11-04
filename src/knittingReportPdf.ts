@@ -287,6 +287,7 @@ export async function exportKnittingReportPdf(report: KnittingReport, totalWorkT
     return [counts, size].filter(Boolean).join(' / ')
   }
   const gaugePairs: [string, string][] = [
+    ['측정 기준', values['gauge.unit']], ['무늬', values['gauge.pattern']], ['도안 게이지', [values['gauge.patternStitches'] && formatNumericText(values['gauge.patternStitches']) + t('코'), values['gauge.patternRows'] && formatNumericText(values['gauge.patternRows']) + t('단')].filter(Boolean).join(' × ')],
     [`${t('세탁 전')} · 10 × 10 cm`, formatGaugeSummary('before')], [`${t('세탁 후')} · 10 × 10 cm`, formatGaugeSummary('after')],
     [`${t('세탁 전')} ${t('게이지')}`, formatGaugeSide('before')],
     [`${t('세탁 후')} ${t('게이지')}`, formatGaugeSide('after')],
