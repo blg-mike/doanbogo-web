@@ -80,7 +80,7 @@ p { overflow-wrap: anywhere; text-wrap: pretty; }
 .desktop-nav a, .footer-nav a { display: inline-flex; min-height: 44px; align-items: center; color: var(--color-text-secondary); font-size: 14px; }
 .header-actions { display: flex; min-width: 0; align-items: center; gap: 16px; }
 .coffee-link { display: inline-flex; min-height: 44px; flex: none; align-items: center; gap: 6px; color: var(--color-primary-hover); font-size: 13px; font-weight: 600; white-space: nowrap; }
-.coffee-link-icon { font-size: 18px; line-height: 1; }
+.coffee-link-icon { width: 20px; height: 20px; object-fit: contain; }
 .language-picker { position: relative; display: inline-flex; min-width: 0; min-height: 44px; align-items: center; color: var(--color-text-secondary); }
 .language-picker select { width: 184px; max-width: 100%; height: 44px; padding: 0 28px 0 10px; appearance: none; border: 1px solid var(--color-border); border-radius: 999px; color: inherit; background: transparent; font-size: 14px; cursor: pointer; }
 .language-picker .icon-sprite { position: absolute; right: 10px; width: 20px; height: 16px; pointer-events: none; }

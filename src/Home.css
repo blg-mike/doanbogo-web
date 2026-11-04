@@ -9,7 +9,7 @@
 .app-sidebar-footer { display: grid; gap: 12px; margin-top: auto; }
 .app-sidebar-footer small { padding: 2px 12px; color: var(--color-text-muted); font-size: 14px; line-height: 1.7; }
 .app-sidebar-coffee, .app-mobile-coffee { min-height: 44px; display: inline-flex; align-items: center; gap: 8px; padding: 0 12px; border: 1px solid var(--color-primary); border-radius: 10px; color: var(--color-primary); background: var(--color-surface); font-size: 12px; font-weight: 600; line-height: 1.25; text-align: center; text-decoration: none; }
-.app-support-icon { flex: none; font-size: 17px; line-height: 1; }
+.app-support-icon { width: 18px; height: 18px; flex: none; object-fit: contain; }
 .app-sidebar-coffee { width: 100%; box-sizing: border-box; justify-content: flex-start; }
 .app-sidebar-coffee:hover, .app-mobile-coffee:hover { background: var(--color-primary-soft); }
 .app-sidebar-coffee:focus-visible, .app-mobile-coffee:focus-visible { outline: 2px solid var(--color-primary); outline-offset: 2px; }

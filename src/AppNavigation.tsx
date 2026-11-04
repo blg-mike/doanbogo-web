@@ -4,6 +4,7 @@ import { NavLink } from 'react-router-dom'
 import { FileText, FolderOpen } from 'lucide-react'
 import WorkspaceLanguageSelect from './WorkspaceLanguageSelect'
 import yyLogo from './assets/yy-logo.png'
+import yarnGiftIcon from './assets/yarn-gift-icon.png'
 
 export type AppSection = 'projects' | 'reports'
 
@@ -19,7 +20,7 @@ const homepageHref = import.meta.env.MODE === 'portable'
 function CoffeeSupportLink({ className }: { className: string }) {
   const label = t('실 한 볼 선물하기')
   return <a className={className} href="https://buymeacoffee.com/knitpeek" target="_blank" rel="noopener noreferrer" aria-label={label} title={label}>
-    <span className="app-support-icon" aria-hidden="true">🧶</span>
+    <img className="app-support-icon" src={yarnGiftIcon} alt="" aria-hidden="true" />
     <span className="app-support-label">{label}</span>
   </a>
 }

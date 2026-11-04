@@ -14,7 +14,7 @@ for (let index = 2; index < process.argv.length; index += 2) {
 }
 const outputPath = resolve(root, options.get('--output') || 'portable/homepage.html')
 const appUrl = options.get('--app-url') || './index.html'
-const [template, stylesheet, pages, behavior, logo, viewer, favicon, generatedIcons, pretendard] = await Promise.all([
+const [template, stylesheet, pages, behavior, logo, viewer, favicon, yarnGiftIcon, generatedIcons, pretendard] = await Promise.all([
   readFile(templatePath, 'utf8'),
   readFile(resolve(root, 'homepage/homepage.css'), 'utf8'),
   readFile(resolve(root, 'homepage/pages.js'), 'utf8'),
@@ -22,6 +22,7 @@ const [template, stylesheet, pages, behavior, logo, viewer, favicon, generatedIc
   readFile(resolve(root, 'src/assets/yy-logo.png')),
   readFile(resolve(root, 'homepage/assets/viewer.png')),
   readFile(resolve(root, 'src/assets/yy-favicon.png')),
+  readFile(resolve(root, 'src/assets/yarn-gift-icon.png')),
   readFile(resolve(root, 'homepage/assets/generated-icons.png')),
   readFile(resolve(root, 'src/assets/fonts/PretendardVariable.woff2')),
 ])
@@ -50,6 +51,7 @@ const replacements = [
   ['@@LOGO@@', `data:image/png;base64,${logo.toString('base64')}`],
   ['@@VIEWER_IMAGE@@', `data:image/png;base64,${viewer.toString('base64')}`],
   ['@@FAVICON@@', `data:image/png;base64,${favicon.toString('base64')}`],
+  ['@@YARN_GIFT_ICON@@', `data:image/png;base64,${yarnGiftIcon.toString('base64')}`],
 ]
 
 let html = template

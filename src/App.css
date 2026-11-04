@@ -1881,7 +1881,7 @@ html.viewer-viewport-locked .viewer-shell { height: 100dvh; min-height: 0; flex:
 .viewer-compact-menu > button:disabled { opacity: .45; cursor: not-allowed; }
 .viewer-compact-menu > .viewer-support-link { min-height: 44px; display: flex; align-items: center; gap: 10px; padding: 0 10px; border-radius: 8px; color: var(--color-text-secondary); font: inherit; font-size: 12px; text-align: left; text-decoration: none; }
 .viewer-compact-menu > .viewer-support-link:hover, .viewer-compact-menu > .viewer-support-link:focus-visible { color: var(--color-primary); background: var(--color-primary-soft); }
-.viewer-support-icon { font-size: 18px; line-height: 1; }
+.viewer-support-icon { width: 18px; height: 18px; flex: none; object-fit: contain; }
 .viewer-zoom-menu { right: 0; bottom: calc(100% + 8px); width: 184px; max-height: min(420px, calc(100dvh - 96px)); overflow-y: auto; overscroll-behavior: contain; }
 .viewer-zoom-presets { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 2px; }
 .viewer-zoom-presets > button { min-width: 0; min-height: 44px; padding: 0 4px; border: 0; border-radius: 8px; color: var(--color-text-secondary); background: transparent; font: inherit; font-size: 12px; font-variant-numeric: tabular-nums; cursor: pointer; }
@@ -1936,7 +1936,7 @@ html.viewer-viewport-locked .viewer-shell { height: 100dvh; min-height: 0; flex:
   .viewer-shell:not(.report-mode) .viewer-mini-counter-step { width: 44px; min-width: 44px; height: 44px; flex: 0 0 44px; font-size: 18px; }
   .viewer-shell:not(.report-mode) .viewer-mini-counter-row { width: auto; min-width: 84px; height: 44px; flex: 1 1 84px; flex-direction: row; gap: 3px; padding: 0 4px; }
   .viewer-shell:not(.report-mode) .viewer-mini-counter-row strong { font-size: 20px; }
-  .viewer-shell:not(.report-mode) .viewer-mini-counter-row span { display: inline; }
+  .viewer-shell:not(.report-mode) .viewer-mini-counter-row > span { display: inline; }
   .viewer-shell:not(.report-mode) .viewer-mini-counter-row small { font-size: 9px; }
   .viewer-shell:not(.report-mode) .viewer-mini-counter-row-input { width: 48px; min-width: 44px; height: 44px; flex: 0 0 48px; font-size: 14px; }
   .viewer-shell:not(.report-mode) .viewer-counter-details-toggle, .viewer-shell:not(.report-mode) .viewer-timer-divider { display: none; }
