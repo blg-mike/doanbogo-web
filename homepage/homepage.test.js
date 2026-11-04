@@ -7,7 +7,7 @@ const pages = readFileSync(new URL('./pages.js', import.meta.url), 'utf8')
 const behavior = readFileSync(new URL('./homepage.js', import.meta.url), 'utf8')
 
 // Minimal DOM boundary: these tests verify behavior, not browser layout or rendering.
-function loadHomepage({ language = 'ko-KR', saved = null, storageUnavailable = false, reduced = false, hash = '', appUrl = '/app/', includeMotionDemo = false } = {}) {
+function loadHomepage({ language = 'ko-KR', saved = null, storageUnavailable = false, reduced = false, hash = '', appUrl = '/app/' } = {}) {
   const documentEvents = {}
   const mediaEvents = {}
   const windowEvents = {}
@@ -40,33 +40,6 @@ function loadHomepage({ language = 'ko-KR', saved = null, storageUnavailable = f
   menu.hidden = menu.inert = true
   const button = element({}, { 'aria-expanded': 'false' })
   const brand = element()
-  const motionDemoRoot = element()
-  const motion = { tabs: [], panels: [], play: element(), pause: element(), replay: element(), stepLabel: element(), announcement: element(), counterValue: element(), counterClock: element(), reportNote: element(), reportStatusText: element() }
-  const motionRootQueries = new Map([
-    ['[data-motion-action="play"]', motion.play], ['[data-motion-action="pause"]', motion.pause], ['[data-motion-action="replay"]', motion.replay],
-    ['[data-motion-step-label]', motion.stepLabel], ['[data-motion-announcement]', motion.announcement],
-  ])
-  if (includeMotionDemo) {
-    motion.tabs = ['counter', 'select', 'report'].map((name) => element({ motionTab: name }))
-    motion.panels = ['counter', 'select', 'report'].map((name) => {
-      const nodes = new Map([['[data-scene]', element()]])
-      const panel = element({ motionPanel: name })
-      panel.querySelector = (selector) => nodes.get(selector) ?? null
-      if (name === 'counter') {
-        nodes.set('[data-motion-value]', motion.counterValue)
-        nodes.set('.motion-scene-clock', motion.counterClock)
-      }
-      if (name === 'report') {
-        nodes.set('[data-motion-note]', motion.reportNote)
-        const status = element()
-        status.querySelector = (selector) => selector === '[data-i18n]' ? motion.reportStatusText : null
-        nodes.set('[data-motion-status]', status)
-      }
-      return panel
-    })
-  }
-  motionDemoRoot.querySelectorAll = (selector) => selector === '[data-motion-tab]' ? motion.tabs : selector === '[data-motion-panel]' ? motion.panels : []
-  motionDemoRoot.querySelector = (selector) => motionRootQueries.get(selector) ?? null
   const selects = [element(), element()]
   const metas = new Map()
   metas.set('meta[name="knitpeek-app-url"]', Object.assign(element(), { content: appUrl }))
@@ -84,7 +57,6 @@ function loadHomepage({ language = 'ko-KR', saved = null, storageUnavailable = f
   document.querySelector = (selector) => {
     if (selector === '.menu-toggle') return button
     if (selector === '.brand') return brand
-    if (selector === '[data-motion-demos]') return motionDemoRoot
     const legalMatch = /^\[data-legal-document="(terms|privacy)"\]$/.exec(selector)
     if (legalMatch) return legalTargets.get(legalMatch[1])
     if (!metas.has(selector)) metas.set(selector, element())
@@ -106,29 +78,12 @@ function loadHomepage({ language = 'ko-KR', saved = null, storageUnavailable = f
   })
   vm.runInContext(pages, context)
   vm.runInContext(behavior, context)
-  return { document, button, menu, brand, link, selects, appLinks, translated, alternate, aria, messages: vm.runInContext('messages', context), pageMessages: context.window.pageMessages, metas, mobile, mediaEvents, documentEvents, windowEvents, location, history, homeContent, infoPages, headings, sectionTargets, legalTargets, storage, motion }
+  return { document, button, menu, brand, link, selects, appLinks, translated, alternate, aria, messages: vm.runInContext('messages', context), pageMessages: context.window.pageMessages, metas, mobile, mediaEvents, documentEvents, windowEvents, location, history, homeContent, infoPages, headings, sectionTargets, legalTargets, storage }
 }
 
 afterEach(() => vi.useRealTimers())
 
 describe('portable homepage behavior', () => {
-  it('skips motion demo setup when the optional demo root has no iterable controls', () => {
-    expect(() => loadHomepage()).not.toThrow()
-  })
-
-  it('connects demo playback and pause controls to the displayed counter state', () => {
-    vi.useFakeTimers()
-    const page = loadHomepage({ includeMotionDemo: true })
-    expect(page.motion.counterValue.textContent).toBe('24')
-    page.motion.play.fire('click')
-    expect(page.motion.counterValue.textContent).toBe('25')
-    expect(page.motion.pause.disabled).toBe(false)
-    page.motion.pause.fire('click')
-    vi.advanceTimersByTime(3000)
-    expect(page.motion.pause.disabled).toBe(true)
-    expect(page.motion.counterValue.textContent).toBe('25')
-  })
-
   it('provides complete translated copy for every informational route', () => {
     const page = loadHomepage()
     const keys = Object.keys(page.pageMessages.ko)

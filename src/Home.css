@@ -8,6 +8,10 @@
 .app-sidebar nav a.active, .app-sidebar nav a:hover { color: var(--color-primary); background: var(--color-primary-soft); }
 .app-sidebar-footer { display: grid; gap: 12px; margin-top: auto; }
 .app-sidebar-footer small { padding: 2px 12px; color: var(--color-text-muted); font-size: 14px; line-height: 1.7; }
+.app-sidebar-coffee, .app-mobile-coffee { min-height: 44px; display: inline-flex; align-items: center; gap: 8px; padding: 0 12px; border-radius: 10px; color: var(--color-primary-text); background: var(--color-primary); font-size: 12px; font-weight: 600; line-height: 1.25; text-align: center; text-decoration: none; }
+.app-sidebar-coffee { width: 100%; box-sizing: border-box; justify-content: flex-start; }
+.app-sidebar-coffee:hover, .app-mobile-coffee:hover { background: var(--color-primary-hover); }
+.app-sidebar-coffee:focus-visible, .app-mobile-coffee:focus-visible { outline: 2px solid var(--color-primary); outline-offset: 2px; }
 .app-mobile-nav { display: none; }
 .home-eyebrow { margin: 0 0 5px; color: var(--color-text-muted); font-size: 14px; font-weight: 700; letter-spacing: .16em; }
 .home-section-heading { min-height: 42px; display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 11px; }
@@ -90,6 +94,8 @@
   .app-sidebar nav { width: 100%; }
   .app-sidebar nav a { justify-content: center; padding: 0; }
   .app-sidebar-footer { width: 100%; justify-items: center; }
+  .app-sidebar-coffee { width: 44px; padding: 0; justify-content: center; }
+  .app-sidebar-coffee span { display: none; }
   .app-sidebar-language { position: relative; width: 44px; height: 44px; justify-content: center; padding: 0; border-color: transparent; background: transparent; }
   .app-sidebar-language select { position: absolute; inset: 0; width: 44px; height: 44px; opacity: 0; cursor: pointer; }
   .app-page-main { margin-left: 68px; }
@@ -97,10 +103,11 @@
 }
 @media (max-width: 767px) {
   .app-sidebar { display: none; }
-  .app-page-main { min-height: 100dvh; margin: 0; padding: 24px 16px calc(96px + env(safe-area-inset-bottom)); }
-  .app-mobile-nav { position: fixed; z-index: 50; inset: auto 0 0; display: grid; grid-template-columns: repeat(2,1fr); grid-template-rows: 52px 44px; padding: 5px 8px calc(5px + env(safe-area-inset-bottom)); border-top: 1px solid var(--color-divider); background: var(--color-surface); }
+  .app-page-main { min-height: 100dvh; margin: 0; padding: 24px 16px calc(140px + env(safe-area-inset-bottom)); }
+  .app-mobile-nav { position: fixed; z-index: 50; inset: auto 0 0; display: grid; grid-template-columns: repeat(2,1fr); grid-template-rows: 52px 44px 44px; padding: 5px 8px calc(5px + env(safe-area-inset-bottom)); border-top: 1px solid var(--color-divider); background: var(--color-surface); }
   .app-mobile-nav a { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; color: var(--color-text-secondary); text-decoration: none; font-size: 14px; }
   .app-mobile-nav a.active { color: var(--color-primary); font-weight: 600; }
+  .app-mobile-nav .app-mobile-coffee { grid-column: 1 / -1; justify-self: center; flex-direction: row; max-width: calc(100vw - 32px); color: var(--color-primary-text); font-size: 12px; }
   .home-report-card { min-height: 68px; grid-template-columns: 54px minmax(0,1fr); gap: 8px; padding: 5px; }
   .home-report-info strong { font-size: 16px; }
   .home-report-info b { font-size: 14px; }
@@ -110,7 +117,7 @@
   .new-project-options { grid-template-columns: 1fr; }
   .new-project-options button { min-height: 82px; grid-template-columns: 28px 1fr; justify-items: start; padding: 0 18px; }
   .new-project-options button small { grid-column: 2; margin-top: -8px; }
-  .workspace-app-frame .workspace-shell { margin-left: 0; padding-bottom: calc(112px + env(safe-area-inset-bottom)); }
+  .workspace-app-frame .workspace-shell { margin-left: 0; padding-bottom: calc(156px + env(safe-area-inset-bottom)); }
   .workspace-app-frame .workspace-content { padding-top: 22px; }
   .workspace-app-frame .project-filter-tabs { margin-top: -8px; }
   .project-detail-edit { grid-template-columns: 1fr; }
