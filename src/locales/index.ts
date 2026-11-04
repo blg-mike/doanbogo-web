@@ -68,9 +68,20 @@ export function isLanguagePreference(value: unknown): value is LanguagePreferenc
 
 export function initializeLocale() {
   if (!initializePromise) {
+    const launchPreference = typeof window === 'undefined' ? null : new URLSearchParams(window.location.search).get('lang')
     initializePromise = getPreference('language')
-      .then((saved) => publish(isLanguagePreference(saved) ? saved : 'auto'))
-      .catch(() => publish('auto'))
+      .catch(() => undefined)
+      .then(async (saved) => {
+        const preference = isLanguagePreference(launchPreference) ? launchPreference : isLanguagePreference(saved) ? saved : 'auto'
+        publish(preference)
+        if (isLanguagePreference(launchPreference) && launchPreference !== saved) {
+          try {
+            await savePreference('language', launchPreference)
+          } catch (error) {
+            console.error('Could not save the language selected on the homepage.', error)
+          }
+        }
+      })
       .then(() => { initialized = true })
   }
   return initializePromise

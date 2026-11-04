@@ -11,7 +11,7 @@ function loadHomepage({ language = 'ko-KR', saved = null, storageUnavailable = f
   const documentEvents = {}
   const mediaEvents = {}
   const windowEvents = {}
-  const location = { hash, pathname: '/homepage.html', search: '' }
+  const location = { hash, pathname: '/homepage.html', search: '', href: 'https://knitpeek.dev/homepage.html' }
   location.replace = vi.fn((url) => { location.replaced = url })
   const history = { replaceState: (_state, _title, url) => { if (url.startsWith('#')) location.hash = url } }
   const storage = new Map(saved ? [['doanbogo.homepage.language.v1', saved]] : [])
@@ -72,14 +72,15 @@ function loadHomepage({ language = 'ko-KR', saved = null, storageUnavailable = f
   metas.set('meta[name="knitpeek-app-url"]', Object.assign(element(), { content: appUrl }))
   const infoPages = ['about', 'guide', 'features', 'faq', 'terms', 'privacy'].map((infoPage) => element({ infoPage }))
   const homeContent = element()
-  const headings = new Map(['hero-title', 'feature-title', 'how-title', 'faq-title', 'about-title', 'guide-title', 'features-page-title', 'faq-page-title', 'terms-title', 'privacy-title'].map((id) => [id, element()]))
-  const sectionTargets = new Map(['features', 'how', 'faq'].map((id) => [id, element()]))
+  const headings = new Map(['hero-title', 'feature-title', 'faq-title', 'about-title', 'guide-title', 'features-page-title', 'faq-page-title', 'terms-title', 'privacy-title'].map((id) => [id, element()]))
+  const sectionTargets = new Map(['features', 'faq'].map((id) => [id, element()]))
   const legalTargets = new Map(['terms', 'privacy'].map((type) => [type, element()]))
+  const appLinks = [...markup.matchAll(/data-app-route="([^"]*)"/g)].map((match) => Object.assign(element({ appRoute: match[1] }), { href: '' }))
   const legalSources = new Map(['ko', 'en', 'ja', 'de', 'da', 'nb', 'fi'].flatMap((locale) => ['terms', 'privacy'].map((type) => [`legal-${type}-${locale}`, Object.assign(element(), { innerHTML: `${type}-${locale}` })])))
   const translated = [...markup.matchAll(/data-i18n="([^"]+)"/g)].map((match) => element({ i18n: match[1] }))
   const alternate = [...markup.matchAll(/data-i18n-alt="([^"]+)"/g)].map((match) => element({ i18nAlt: match[1] }))
   const aria = [...markup.matchAll(/data-i18n-aria-label="([^"]+)"/g)].map((match) => element({ i18nAriaLabel: match[1] }))
-  document.querySelectorAll = (selector) => ({ '[data-i18n]': translated, '[data-i18n-alt]': alternate, '[data-i18n-aria-label]': aria, '.language-picker select': selects, '[data-info-page]': infoPages })[selector]
+  document.querySelectorAll = (selector) => ({ '[data-i18n]': translated, '[data-i18n-alt]': alternate, '[data-i18n-aria-label]': aria, '.language-picker select': selects, '[data-info-page]': infoPages, '[data-app-route]': appLinks })[selector]
   document.querySelector = (selector) => {
     if (selector === '.menu-toggle') return button
     if (selector === '.brand') return brand
@@ -96,6 +97,7 @@ function loadHomepage({ language = 'ko-KR', saved = null, storageUnavailable = f
   const context = vm.createContext({
     document, navigator: { language, languages: [language] },
     window,
+    URL,
     localStorage: {
       getItem: (key) => { if (storageUnavailable) throw new Error('Unavailable'); return storage.get(key) ?? null },
       setItem: (key, value) => { if (storageUnavailable) throw new Error('Unavailable'); storage.set(key, value) },
@@ -104,7 +106,7 @@ function loadHomepage({ language = 'ko-KR', saved = null, storageUnavailable = f
   })
   vm.runInContext(pages, context)
   vm.runInContext(behavior, context)
-  return { document, button, menu, brand, link, selects, translated, alternate, aria, messages: vm.runInContext('messages', context), pageMessages: context.window.pageMessages, metas, mobile, mediaEvents, documentEvents, windowEvents, location, history, homeContent, infoPages, headings, sectionTargets, legalTargets, storage, motion }
+  return { document, button, menu, brand, link, selects, appLinks, translated, alternate, aria, messages: vm.runInContext('messages', context), pageMessages: context.window.pageMessages, metas, mobile, mediaEvents, documentEvents, windowEvents, location, history, homeContent, infoPages, headings, sectionTargets, legalTargets, storage, motion }
 }
 
 afterEach(() => vi.useRealTimers())
@@ -135,6 +137,40 @@ describe('portable homepage behavior', () => {
     }
   })
 
+  it('removes the homepage how-to section and chart-drawing claim in all languages', () => {
+    expect(markup).not.toContain('class="how-section')
+    const expectedAnswers = {
+      ko: 'PDF 도안을 열 수 있고, 종이 도안은 사진 도안 폴더로 만들 수 있어요.',
+      en: 'Open a pattern PDF, or turn paper patterns into a photo folder.',
+      ja: 'PDF編み図を開けます。紙の編み図は写真フォルダーにまとめられます。',
+      de: 'Öffne ein PDF oder sammle Papiermuster in einem Fotoordner.',
+      da: 'Åbn en PDF-opskrift, eller saml papirark i en fotomappe.',
+      nb: 'Åpne en PDF-oppskrift, eller samle papirark i en fotomappe.',
+      fi: 'Avaa PDF-neuleohje tai kokoa paperiset sivut kuvakansioon.',
+    }
+    const page = loadHomepage()
+    for (const [locale, answer] of Object.entries(expectedAnswers)) {
+      expect(page.messages[locale].faqOneA).toBe(answer)
+      expect(page.messages[locale]).not.toHaveProperty('howTitle')
+    }
+  })
+
+  it('adds the selected language and requested route to every app link', () => {
+    const page = loadHomepage()
+    page.selects[0].value = 'fi'
+    page.selects[0].fire('change')
+    expect(page.appLinks.length).toBeGreaterThan(0)
+    for (const link of page.appLinks) expect(new URL(link.href).searchParams.get('lang')).toBe('fi')
+    const projectLink = page.appLinks.find((link) => link.dataset.appRoute === '/projects')
+    expect(new URL(projectLink.href).hash).toBe('#/projects')
+    expect(new URL(page.appLinks.find((link) => link.dataset.appRoute === '').href).hash).toBe('')
+  })
+
+  it('links to Buy Me a Coffee and the contact email', () => {
+    expect(markup).toContain('href="https://buymeacoffee.com/knitpeek"')
+    expect(markup).toContain('href="mailto:knitpeek.cs@gmail.com"')
+  })
+
   it.each(['ko', 'en', 'ja', 'de', 'da', 'nb', 'fi'])('translates every visible field and synchronizes both selectors: %s', (locale) => {
     const page = loadHomepage()
     page.selects[0].value = locale
@@ -147,6 +183,9 @@ describe('portable homepage behavior', () => {
     expect(page.aria.every((field) => field.getAttribute('aria-label')?.length > 0)).toBe(true)
     expect(page.translated.find((field) => field.dataset.i18n === 'faqTwoA').textContent).toBe(page.pageMessages[locale].faqTwoA)
     expect(page.translated.find((field) => field.dataset.i18n === 'faqFourA').textContent).toBe(page.pageMessages[locale].faqFourA)
+    expect(page.translated.find((field) => field.dataset.i18n === 'coffeeLink').textContent).toBe(page.messages[locale].coffeeLink)
+    expect(page.translated.find((field) => field.dataset.i18n === 'contactEmailLabel').textContent).toBe(page.messages[locale].contactEmailLabel)
+    expect(page.aria.find((field) => field.dataset.i18nAriaLabel === 'coffeeLink').getAttribute('aria-label')).toBe(page.messages[locale].coffeeLink)
     expect(page.document.title.startsWith(locale === 'ko' ? '니트피크' : 'KnitPeek')).toBe(true)
     expect(page.translated.find((field) => field.dataset.i18n === 'brandName').textContent).toBe(locale === 'ko' ? '니트피크' : 'KnitPeek')
     expect(page.document.title).toBe(page.metas.get('meta[property="og:title"]').content)
@@ -168,7 +207,7 @@ describe('portable homepage behavior', () => {
 
   it.each(['ko', 'en', 'ja', 'de', 'da', 'nb', 'fi'])('keeps every composed homepage title on its authored lines for %s', (locale) => {
     const page = loadHomepage({ language: locale })
-    const fixedTitleKeys = ['featureTitle', 'howTitle', 'recordTitle', 'closingTitle']
+    const fixedTitleKeys = ['featureTitle', 'recordTitle', 'closingTitle']
     expect(Object.entries(page.messages[locale]).filter(([, value]) => typeof value === 'string' && value.includes('\n')).map(([key]) => key)).toEqual(fixedTitleKeys)
     for (const key of fixedTitleKeys) {
       const title = page.translated.find((field) => field.dataset.i18n === key)

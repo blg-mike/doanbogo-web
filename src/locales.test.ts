@@ -1,6 +1,6 @@
 import 'fake-indexeddb/auto'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { getLocale, getLocaleMessageVariants, hasCompleteLocale, hasMatchingLocalePlaceholders, interpolateMessage, isDefaultMeasurementLabel, isLanguagePreference, missingLocaleKeys, reloadLanguagePreference, resolveBrowserLocale, setLanguagePreference } from './locales'
+import { getLocale, getLocaleMessageVariants, hasCompleteLocale, hasMatchingLocalePlaceholders, initializeLocale, interpolateMessage, isDefaultMeasurementLabel, isLanguagePreference, missingLocaleKeys, reloadLanguagePreference, resolveBrowserLocale, setLanguagePreference } from './locales'
 import { getPreference } from './storage'
 
 afterEach(() => vi.unstubAllGlobals())
@@ -71,5 +71,15 @@ describe('locale selection', () => {
     expect(documentStub.documentElement.lang).toBe('en')
     expect(documentStub.title).toBe('KnitPeek')
     expect(await getPreference('language')).toBe('auto')
+  })
+
+  it('uses and persists a valid homepage language when the app starts', async () => {
+    await setLanguagePreference('fi')
+    vi.stubGlobal('window', { location: { search: '?lang=ja' } })
+
+    await initializeLocale()
+
+    expect(getLocale()).toBe('ja')
+    expect(await getPreference('language')).toBe('ja')
   })
 })
