@@ -362,13 +362,27 @@ body:has(.knitting-report-editor) .pwa-dismiss-button:focus-visible { outline: 3
 .knitting-report-editor .report-form-card .report-field.wide { grid-column: 1 / -1; }
 .knitting-report-editor .report-form-empty { margin: 0; color: var(--color-text-secondary); font-size: 14px; line-height: 1.55; }
 .knitting-report-editor .report-gauge-editor { min-width: 0; display: grid; gap: 12px; }
-.knitting-report-editor .report-gauge-editor > .report-field { max-width: 360px; }
+.knitting-report-editor .report-gauge-summary { display: grid; gap: 8px; }
+.knitting-report-editor .report-gauge-summary-row { min-width: 0; display: grid; grid-template-columns: minmax(88px, .7fr) minmax(0, 1fr) auto; align-items: center; gap: 12px; padding: 10px 12px; border: 1px solid var(--color-border); border-radius: 10px; background: var(--color-surface-subtle); }
+.knitting-report-editor .report-gauge-summary-row > strong { color: var(--color-text-secondary); font-size: 14px; font-weight: 500; }
+.knitting-report-editor .report-gauge-summary-row > span { color: var(--color-text); font-size: 16px; font-weight: 700; font-variant-numeric: tabular-nums; }
+.knitting-report-editor .report-gauge-summary-row > small { color: var(--color-text-muted); font-size: 13px; white-space: nowrap; }
+.knitting-report-editor .report-gauge-add { justify-self: start; margin-left: -9px; }
 .knitting-report-editor .report-gauge-columns { display: grid; grid-template-columns: minmax(0, 1fr); gap: 8px; }
 .knitting-report-editor .report-gauge-columns > section { min-width: 0; display: grid; gap: 8px; padding: 16px 0; border: 0; border-bottom: 1px solid var(--color-divider); border-radius: 0; background: var(--color-surface); }
 .knitting-report-editor .report-gauge-columns h3,
+.knitting-report-editor .report-gauge-sample-columns h3,
 .knitting-report-editor .report-measurements-heading h3 { margin: 0; color: var(--color-text); font-size: 14px; }
 .knitting-report-editor .report-gauge-columns > section > div { min-width: 0; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
 .knitting-report-editor .report-gauge-columns .report-gauge-size { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) 82px; }
+.knitting-report-editor .report-gauge-extra { min-width: 0; display: grid; gap: 8px; padding: 12px 0 16px; border-bottom: 1px solid var(--color-divider); }
+.knitting-report-editor .report-gauge-extra > header { min-height: 44px; display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.knitting-report-editor .report-gauge-extra > header strong { color: var(--color-text); font-size: 14px; font-weight: 600; }
+.knitting-report-editor .report-gauge-sample-columns { display: grid; gap: 12px; }
+.knitting-report-editor .report-gauge-sample-columns > section { min-width: 0; display: grid; gap: 8px; }
+.knitting-report-editor .report-gauge-sample-fields { min-width: 0; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; }
+.knitting-report-editor .report-gauge-sample-input { min-width: 0; display: grid; grid-template-columns: minmax(0, 1fr) 20px; align-items: center; gap: 4px; }
+.knitting-report-editor .report-gauge-sample-input small { color: var(--color-text-muted); text-align: center; }
 .knitting-report-editor .report-measurements-heading { display: flex; align-items: baseline; gap: 8px; margin: 17px 0 10px; }
 .knitting-report-editor .report-measurements-heading small { color: var(--color-text-muted); font-size: 14px; }
 .knitting-report-editor .report-measurement-editor { min-width: 0; }
@@ -645,7 +659,8 @@ body:has(.knitting-report-editor) .pwa-dismiss-button:focus-visible { outline: 3
   .knitting-report-editor .report-measurement-dialog-actions { min-height: 60px; padding: 12px 24px; }
   .knitting-report-editor .report-gauge-columns { gap: 8px; }
   .knitting-report-editor .report-gauge-columns > section { gap: 8px; padding: 16px 0; }
-  .knitting-report-editor .report-gauge-columns h3 { font-size: 14px; }
+  .knitting-report-editor .report-gauge-columns h3,
+  .knitting-report-editor .report-gauge-sample-columns h3 { font-size: 14px; }
   .knitting-report-editor .report-gauge-columns > section > div { grid-template-columns: minmax(0, 1fr); gap: 8px; }
   .knitting-report-editor .report-gauge-columns .report-gauge-counts { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .knitting-report-editor .report-gauge-columns .report-gauge-size { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) 74px; }
@@ -1002,6 +1017,17 @@ body:has(.knitting-report-editor) .pwa-dismiss-button:focus-visible { outline: 3
 @container report-section (min-width: 380px) {
   .knitting-report-editor .report-form-main .report-fields:not(.report-fields-compact),
   .knitting-report-editor .report-inline-detail .report-fields:not(.report-fields-compact) { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
+@container report-section (min-width: 640px) {
+  .knitting-report-editor .report-gauge-columns { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
+}
+
+@container report-section (max-width: 639px) {
+  .knitting-report-editor .report-gauge-summary-row { grid-template-columns: minmax(72px, .75fr) minmax(0, 1.25fr); gap: 4px 8px; padding: 10px; }
+  .knitting-report-editor .report-gauge-summary-row > span { font-size: 15px; }
+  .knitting-report-editor .report-gauge-summary-row > small { grid-column: 2; }
+  .knitting-report-editor .report-gauge-sample-fields { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
 
 @container report-section (min-width: 570px) {

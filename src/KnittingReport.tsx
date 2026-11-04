@@ -10,7 +10,7 @@ import InstagramCaptionDialog from './InstagramCaptionDialog'
 import { analyzeKnittingReportCandidates, collectReportPageTexts } from './knittingReportAnalysis'
 import ReportWorkTime from './ReportWorkTime'
 import type { DocumentWorkTimeTotals } from './DocumentWorkTimer'
-import { getGaugeMeasurement } from './reportFormatting'
+import { createGaugeSample, getGaugeMeasurement, getGaugePer10Cm, getGaugeSamples, withGaugeSamples, type GaugeSampleMeasurement, type GaugeSide } from './reportFormatting'
 import GaugeCalculatorDialog from './GaugeCalculatorDialog'
 import { applyGaugeResultToFields, type GaugeCalculatorResult, type GaugeCalculatorTarget } from './reportGaugeCalculator'
 import { applyMeasurementSelection, createDefaultMeasurements, findMeasurementPresetRow, isMeasurementPresetAdded, measurementPresetKeys, type MeasurementEntryDraft, type MeasurementPresetKey } from './reportMeasurementSelection'
@@ -915,8 +915,45 @@ export default function KnittingReport({ documentId, fileName, pageCount, totalW
     setGaugeCalculatorOpen(false)
   }
 
+  function changeGaugeSamples(change: (samples: ReturnType<typeof getGaugeSamples>) => ReturnType<typeof getGaugeSamples>) {
+    update((current) => ({ ...current, fields: withGaugeSamples(current.fields, change(getGaugeSamples(current.fields))) }))
+  }
+
+  function updateGaugeSample(index: number, side: GaugeSide, fieldName: keyof GaugeSampleMeasurement, value: string) {
+    changeGaugeSamples((samples) => samples.map((sample, sampleIndex) => sampleIndex === index ? { ...sample, [side]: { ...sample[side], [fieldName]: value } } : sample))
+  }
+
+  function gaugeSampleInput(sample: ReturnType<typeof getGaugeSamples>[number], index: number, side: GaugeSide, fieldName: keyof GaugeSampleMeasurement, label: string) {
+    const value = sample[side][fieldName]
+    const isSize = fieldName === 'width' || fieldName === 'height'
+    const ariaLabel = `${t('게이지')} ${formatNumber(index + 2)} ${t(side === 'before' ? '세탁 전' : '세탁 후')} ${t(label as LocaleKey)}`
+    return <label className="report-field" key={fieldName}>{t(label as LocaleKey)}<span className="report-gauge-sample-input"><input aria-label={ariaLabel} type="number" min="0" step={isSize ? 'any' : '1'} value={value} onChange={(event) => updateGaugeSample(index, side, fieldName, event.currentTarget.value)} />{isSize && <small>cm</small>}</span></label>
+  }
+
+  function addGaugeSample() {
+    changeGaugeSamples((samples) => [...samples, createGaugeSample()])
+  }
+
+  function removeGaugeSample(index: number) {
+    const current = reportRef.current
+    const samples = current ? getGaugeSamples(current.fields) : []
+    if (!current || !samples[index]) return
+    const removed = samples[index]
+    scheduleUndo('항목을 삭제했습니다.', (latest) => {
+      const nextSamples = getGaugeSamples(latest.fields)
+      const insertAt = Math.min(index, nextSamples.length)
+      return { ...latest, fields: withGaugeSamples(latest.fields, [...nextSamples.slice(0, insertAt), removed, ...nextSamples.slice(insertAt)]) }
+    })
+    changeGaugeSamples((latest) => latest.filter((_, sampleIndex) => sampleIndex !== index))
+  }
+
+  const gaugeSamples = getGaugeSamples(values)
   const gaugeEditor = <div className="report-gauge-editor">
-    {gaugeField('gauge.pattern', '무늬')}
+    <div className="report-gauge-summary">{([['before', '세탁 전'], ['after', '세탁 후']] as const).map(([side, label]) => {
+      const summary = getGaugePer10Cm(values, side)
+      return <div className="report-gauge-summary-row" key={side}><strong>{t(label)}</strong><span>{formatNumber(summary.stitches)}{t('코')} {formatNumber(summary.rows)}{t('단')}</span><small>10 × 10 cm</small></div>
+    })}</div>
+    <button type="button" className="report-add-action report-gauge-add" disabled={switching || exporting || gaugeSamples.length >= 50} onClick={addGaugeSample}><Plus size={16} />{t('게이지 추가')}</button>
     <div className="report-gauge-columns">{([['before', '세탁 전'], ['after', '세탁 후']] as const).map(([side, label]) => {
       const gauge = getGaugeMeasurement(values, side)
       return <section key={side}><h3>{t(label)}</h3><div className="report-gauge-counts">
@@ -925,6 +962,12 @@ export default function KnittingReport({ documentId, fileName, pageCount, totalW
         {gaugeField(`gauge.${side}Width`, '가로', 'positiveDecimal', undefined, gauge.width)}{gaugeField(`gauge.${side}Height`, '세로', 'positiveDecimal', undefined, gauge.height)}{gaugeField(`gauge.${side}Unit`, '표기', 'select', ['cm', 'inch'], gauge.unit)}
       </div></section>
     })}</div>
+    {gaugeSamples.map((sample, index) => <article className="report-gauge-extra" key={index}>
+      <header><strong>{t('게이지')} {formatNumber(index + 2)}</strong><button type="button" className="report-icon-button" aria-label={`${t('게이지')} ${formatNumber(index + 2)} ${t('삭제')}`} onClick={() => removeGaugeSample(index)}><Trash2 size={15} /></button></header>
+      <div className="report-gauge-sample-columns">{([['before', '세탁 전'], ['after', '세탁 후']] as const).map(([side, label]) => <section key={side}><h3>{t(label)}</h3><div className="report-gauge-sample-fields">
+        {gaugeSampleInput(sample, index, side, 'stitches', '코')}{gaugeSampleInput(sample, index, side, 'rows', '단')}{gaugeSampleInput(sample, index, side, 'width', '가로')}{gaugeSampleInput(sample, index, side, 'height', '세로')}
+      </div></section>)}</div>
+    </article>)}
   </div>
 
   function detailContent(id: DetailId) {
