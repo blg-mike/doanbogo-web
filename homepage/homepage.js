@@ -107,8 +107,8 @@ const routeKeys = {
   guide: ['navGuide', 'guideLead', 'guide-title'],
   features: ['navFeatureGuide', 'featuresLead', 'features-page-title'],
   faq: ['navFaqPage', 'faqPageLead', 'faq-page-title'],
-  terms: ['navTerms', 'legalDraftNote', 'terms-title'],
-  privacy: ['navPrivacy', 'legalDraftNote', 'privacy-title'],
+  terms: ['navTerms', 'legalKicker', 'terms-title'],
+  privacy: ['navPrivacy', 'legalKicker', 'privacy-title'],
 }
 let activeRoute = null
 

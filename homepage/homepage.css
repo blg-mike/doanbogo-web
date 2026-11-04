@@ -236,7 +236,6 @@ html[lang="fi"] .hero h1 { font-size: clamp(34px, 8.4cqi, 58px); }
 .info-faq-list .faq-item summary { padding-left: 4px; }
 .info-faq-list .faq-item p { padding-left: 4px; }
 .legal-page { max-width: 900px; }
-.legal-draft-note { padding: 12px 16px; margin: 0; border-left: 3px solid var(--color-progress); color: var(--color-text-secondary); background: var(--color-surface-subtle); font-size: 15px; }
 .legal-content { max-width: 760px; color: var(--color-text); font-size: 16px; line-height: 1.85; overflow-wrap: anywhere; }
 .legal-content h1 { margin: 0 0 24px; font-size: 30px; line-height: 1.35; }
 .legal-content h2 { margin: 40px 0 12px; font-size: 22px; line-height: 1.45; }

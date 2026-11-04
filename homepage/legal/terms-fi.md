@@ -2,15 +2,13 @@
 
 - Palvelu: **KnitPeek** (koreaksi **니트피크**)
 - Verkkosivusto: **https://knitpeek.pages.dev**
-- Voimaantulopäivä: **[YYYY-MM-DD — vahvista ennen julkaisua]**
-- Ylläpitäjä: **[knitpeekiä ylläpitävän henkilön tai yrityksen virallinen nimi]**
-- Yhteys: **[asiakastuen sähköpostiosoite]**
-
-> **Ennen julkaisua:** Täydennä ylläpitäjän tiedot, yhteystiedot ja voimaantulopäivä. Tarkista, että ehdot vastaavat julkaistua tuotetta, mukaan lukien mainokset ja maksulliset ominaisuudet, ja poista tämä toimituksellinen huomautus.
+- Voimaantulopäivä: **4. marraskuuta 2026**
+- Ylläpitäjä: **KnitPeek**
+- Yhteys: **knitpeek.cs@gmail.com**
 
 ## 1. Soveltamisala ja hyväksyminen
 
-Nämä ehdot koskevat knitpeekiä verkkosivustona ja verkkosovelluksena (”Palvelu”), jota **[ylläpitäjän virallinen nimi]** (”Ylläpitäjä”) tarjoaa osoitteessa `https://knitpeek.pages.dev`. Käyttämällä Palvelua hyväksyt nämä ehdot sovellettavan lain sallimissa rajoissa.
+Nämä ehdot koskevat knitpeekiä verkkosivustona ja verkkosovelluksena (”Palvelu”), jota **KnitPeek** (”Ylläpitäjä”) tarjoaa osoitteessa `https://knitpeek.pages.dev`. Käyttämällä Palvelua hyväksyt nämä ehdot sovellettavan lain sallimissa rajoissa.
 
 ## 2. Palvelun kuvaus
 
@@ -51,7 +49,7 @@ Et saa:
 
 1. Tuodut tiedostot, projektit, merkinnät, laskurit, ajastimet ja niihin liittyvät tiedot tallennetaan yleensä selaintallennukseen, joka on sidottu **tiettyyn laitteeseen, selaimeen ja verkkosivuston alkuperään**.
 2. Tiedot voivat muuttua saavuttamattomiksi tai poistua, jos selaimen tai sivuston tiedot tyhjennetään, käytetään yksityistä selausta, tallennustila täyttyy, laite rikkoutuu, selain rajoittaa tallennusta tai sivuston alkuperä muuttuu.
-3. **Tärkeä siirtoilmoitus:** Sivuston osoitteen vaihtaminen `github.io`-verkkotunnuksesta `knitpeek.pages.dev`-osoitteeseen **ei** siirrä nykyisiä IndexedDB-tietoja automaattisesti. Varmista ennen osoitteen vaihtamista tai vanhan sivuston tietojen poistamista, että tarvittavat alkuperäistiedostot ja viedyt raportit on säilytetty erikseen.
+3. Paikalliset tiedot liittyvät verkkosivuston osoitteeseen ja selainprofiiliin, johon ne tallennettiin. Ne eivät välttämättä siirry automaattisesti toiseen osoitteeseen, selaimeen tai profiiliin. Säilytä tarvittavat alkuperäiset tiedostot ja viedyt raportit erikseen ennen osoitteen vaihtamista tai sivustotietojen poistamista.
 4. Säilytä tärkeät alkuperäistiedostot ja viedyt raportit erillisessä turvallisessa paikassa. Ylläpitäjä ei voi etänä tarkastella tai palauttaa tietoja, jotka ovat vain laitteellasi.
 5. Ellei sovellettava laki toisin edellytä, Ylläpitäjä ei voi taata kaikkien laite- tai selainongelmien vuoksi kadonneiden tietojen palauttamista.
 
@@ -63,7 +61,7 @@ Et saa:
 
 ## 9. Ulkoiset linkit ja kolmannet osapuolet
 
-1. Tuodun ohjeen URL-osoite tai QR-koodi voi avata ulkoisen verkkosivuston.
+1. Ohjeessa olevan URL-osoitteen tai QR-koodin tai sivuston Buy Me a Coffee -linkin valitseminen voi avata kolmannen osapuolen verkkosivuston.
 2. Kolmannen osapuolen sivustoihin sovelletaan niiden omia käyttö- ja tietosuojakäytäntöjä, ei näitä ehtoja.
 3. Tarkista ulkoisen linkin kohde ja luotettavuus ennen sen avaamista.
 
@@ -97,10 +95,10 @@ Erikseen julkaistavassa **tietosuojakäytännössämme** kerrotaan Palveluun lii
 
 ## 15. Yhteystiedot
 
-- Ylläpitäjä: **[Ylläpitäjän virallinen nimi]**
-- Asiakastuen sähköposti: **[Sähköpostiosoite]**
+- Ylläpitäjä: **KnitPeek**
+- Asiakastuen sähköposti: **knitpeek.cs@gmail.com**
 - Verkkosivusto: **https://knitpeek.pages.dev**
 
 ---
 
-**Voimassa alkaen:** **[YYYY-MM-DD]**.
+**Voimassa alkaen:** **4. marraskuuta 2026**.

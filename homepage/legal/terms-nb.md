@@ -1,16 +1,14 @@
 # KnitPeek Vilkår for bruk
 
-- Tjeneste: **KnitPeek** (kjent som **니트피크** på koreansk)
+- Tjeneste: **KnitPeek** (koreansk navn: **니트피크**)
 - Nettsted: **https://knitpeek.pages.dev**
-- Ikrafttredelsesdato: **[YYYY-MM-DD — bekreft før publisering]**
-- Operatør: **[Juridisk navn på personen eller virksomheten som driver KnitPeek]**
-- Kontakt: **[E-postadresse for brukerstøtte]**
-
-> **Før publisering:** Fyll inn operatørinformasjon, kontaktopplysninger og ikrafttredelsesdato. Kontroller at vilkårene nedenfor stemmer med produktet som er publisert, også eventuell annonsering eller betalte funksjoner, og fjern denne redaksjonelle merknaden.
+- Ikrafttredelsesdato: **4. november 2026**
+- Operatør: **KnitPeek**
+- Kontakt: **knitpeek.cs@gmail.com**
 
 ## 1. Omfang og godkjenning
 
-Disse vilkårene regulerer bruken av knitpeeks nettsted og nettapplikasjon («Tjenesten»), som drives av **[Operatørens juridiske navn]** («Operatøren») på `https://knitpeek.pages.dev`. Når du bruker Tjenesten, godtar du vilkårene i den grad gjeldende lov tillater det.
+Disse vilkårene regulerer bruken av knitpeeks nettsted og nettapplikasjon («Tjenesten»), som drives av **KnitPeek** («Operatøren») på `https://knitpeek.pages.dev`. Når du bruker Tjenesten, godtar du vilkårene i den grad gjeldende lov tillater det.
 
 ## 2. Beskrivelse av Tjenesten
 
@@ -51,7 +49,7 @@ Du må ikke:
 
 1. Importerte dokumenter, prosjekter, merknader, tellere, tidtakere og relaterte oppføringer lagres vanligvis i nettleserlager som er knyttet til den **aktuelle enheten, nettleseren og nettstedets opprinnelse**.
 2. Data kan bli utilgjengelige eller slettet hvis nettleser- eller nettstedsdata ryddes, ved privat nettlesing, lagringsgrenser, enhetsfeil, nettleserbegrensninger eller endring av nettstedets opprinnelse.
-3. **Viktig ved flytting:** Hvis nettadressen endres fra et `github.io`-domene til `knitpeek.pages.dev`, overføres eksisterende IndexedDB-data **ikke** automatisk. Kontroller før adressebytte eller sletting av det gamle nettstedets data at nødvendige originalfiler og eksporterte rapporter er oppbevart separat.
+3. Lokale data er knyttet til nettadressen og nettleserprofilen der de ble lagret. De overføres kanskje ikke automatisk til en annen adresse, nettleser eller profil. Ta vare på nødvendige originalfiler og eksporterte rapporter et annet sted før du endrer adresse eller sletter nettstedsdata.
 4. Oppbevar viktige originalfiler og eksporterte rapporter på et separat og sikkert sted. Operatøren kan ikke se eller gjenopprette oppføringer som bare finnes på enheten din.
 5. Med mindre gjeldende lov bestemmer noe annet, kan Operatøren ikke garantere at alle data som går tapt på grunn av enhets- eller nettleserforhold, kan gjenopprettes.
 
@@ -63,7 +61,7 @@ Du må ikke:
 
 ## 9. Eksterne lenker og tredjeparter
 
-1. En URL eller QR-kode i en importert oppskrift kan føre til et eksternt nettsted.
+1. Hvis du velger en URL eller QR-kode i en oppskrift eller nettstedets Buy Me a Coffee-lenke, kan et tredjepartsnettsted åpnes.
 2. Tredjepartsnettsteder følger egne vilkår og personvernerklæringer, ikke disse vilkårene.
 3. Kontroller målet og om det er til å stole på før du åpner en ekstern lenke.
 
@@ -97,10 +95,10 @@ Vår separat publiserte **personvernerklæring** forklarer lokal lagring og beha
 
 ## 15. Kontakt
 
-- Operatør: **[Operatørens juridiske navn]**
-- E-post til brukerstøtte: **[E-postadresse]**
+- Operatør: **KnitPeek**
+- E-post til brukerstøtte: **knitpeek.cs@gmail.com**
 - Nettsted: **https://knitpeek.pages.dev**
 
 ---
 
-**Gjelder fra:** **[YYYY-MM-DD]**.
+**Gjelder fra:** **4. november 2026**.

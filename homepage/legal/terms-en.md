@@ -1,16 +1,14 @@
 # KnitPeek Terms of Service
 
-- Service: **KnitPeek** (known as **니트피크** in Korean)
+- Service: **KnitPeek** (Korean name: **니트피크**)
 - Website: **https://knitpeek.pages.dev**
-- Effective date: **[YYYY-MM-DD — confirm before publication]**
-- Operator: **[Legal name of the individual or business operating KnitPeek]**
-- Contact: **[Support email address]**
-
-> **Before publishing:** Complete the operator details, contact information, and effective date. Check that the provisions below match the live product, including any advertising or paid features, and remove this editorial notice.
+- Effective date: **November 4, 2026**
+- Operator: **KnitPeek**
+- Contact: **knitpeek.cs@gmail.com**
 
 ## 1. Scope and acceptance
 
-These Terms govern use of the KnitPeek website and web application (the “Service”), operated by **[Operator legal name]** (the “Operator”) at `https://knitpeek.pages.dev`. By using the Service, you agree to these Terms to the extent permitted by applicable law.
+These Terms govern use of the KnitPeek website and web application (the “Service”), operated by **KnitPeek** (the “Operator”) at `https://knitpeek.pages.dev`. By using the Service, you agree to these Terms to the extent permitted by applicable law.
 
 ## 2. Description of the Service
 
@@ -51,7 +49,7 @@ You must not:
 
 1. Imported documents, projects, annotations, counters, timers, and related records are generally stored in browser storage associated with the **particular device, browser, and website origin**.
 2. Data may become inaccessible or be deleted because of clearing browser/site data, private browsing, storage limits, device failure, browser restrictions, or a change of website origin.
-3. **Important migration notice:** Changing the site address from a `github.io` domain to `knitpeek.pages.dev` does **not** automatically transfer existing IndexedDB data. Before changing addresses or clearing the old site's data, check that you have separately kept the original files and report outputs you need.
+3. Local data is tied to the website address and browser profile where it was saved. It may not transfer automatically to another address, browser, or profile. Before changing addresses or clearing site data, keep separate copies of any original files and exported reports you need.
 4. Keep important original files and report outputs in a separate safe location. The Operator cannot remotely inspect or recover records that exist solely on your device.
 5. Except where applicable law provides otherwise, the Operator cannot guarantee recovery of all data lost due to device or browser conditions.
 
@@ -63,7 +61,7 @@ You must not:
 
 ## 9. External links and third parties
 
-1. Opening a URL or QR code included in an imported pattern may direct you to an external website.
+1. Selecting a URL or QR code in a pattern, or the Buy Me a Coffee link on this website, may open a third-party website.
 2. Third-party websites are governed by their own terms and privacy policies, not these Terms.
 3. Review the destination and its trustworthiness before opening an external link.
 
@@ -97,10 +95,10 @@ Our separately published **Privacy Policy** explains local storage and personal-
 
 ## 15. Contact
 
-- Operator: **[Operator legal name]**
-- Support email: **[Email address]**
+- Operator: **KnitPeek**
+- Support email: **knitpeek.cs@gmail.com**
 - Website: **https://knitpeek.pages.dev**
 
 ---
 
-**Effective as of:** **[YYYY-MM-DD]**.
+**Effective as of:** **November 4, 2026**.

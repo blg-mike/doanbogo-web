@@ -1,16 +1,14 @@
 # KnitPeek Nutzungsbedingungen
 
-- Dienst: **KnitPeek** (auf Koreanisch **니트피크**)
+- Dienst: **KnitPeek** (koreanischer Name: **니트피크**)
 - Website: **https://knitpeek.pages.dev**
-- Inkrafttreten: **[YYYY-MM-DD — vor Veröffentlichung bestätigen]**
-- Betreiber: **[Rechtlicher Name der Person oder des Unternehmens, das KnitPeek betreibt]**
-- Kontakt: **[E-Mail-Adresse des Supports]**
-
-> **Vor der Veröffentlichung:** Betreiberangaben, Kontaktdaten und Datum des Inkrafttretens ergänzen. Prüfen, ob die folgenden Bestimmungen zum veröffentlichten Produkt passen, einschließlich Werbung und kostenpflichtiger Funktionen, und diesen redaktionellen Hinweis entfernen.
+- Inkrafttreten: **4. November 2026**
+- Betreiber: **KnitPeek**
+- Kontakt: **knitpeek.cs@gmail.com**
 
 ## 1. Geltungsbereich und Zustimmung
 
-Diese Bedingungen regeln die Nutzung der knitpeek-Website und Webanwendung (der „Dienst“), die von **[Rechtlicher Name des Betreibers]** (dem „Betreiber“) unter `https://knitpeek.pages.dev` angeboten wird. Mit der Nutzung des Dienstes stimmen Sie diesen Bedingungen zu, soweit dies nach geltendem Recht zulässig ist.
+Diese Bedingungen regeln die Nutzung der knitpeek-Website und Webanwendung (der „Dienst“), die von **KnitPeek** (dem „Betreiber“) unter `https://knitpeek.pages.dev` angeboten wird. Mit der Nutzung des Dienstes stimmen Sie diesen Bedingungen zu, soweit dies nach geltendem Recht zulässig ist.
 
 ## 2. Beschreibung des Dienstes
 
@@ -51,7 +49,7 @@ Sie dürfen nicht:
 
 1. Importierte Dokumente, Projekte, Anmerkungen, Zähler, Timer und zugehörige Einträge werden in der Regel im Browserspeicher gespeichert, der dem **jeweiligen Gerät, Browser und Website-Ursprung** zugeordnet ist.
 2. Daten können durch das Löschen von Browser- oder Websitedaten, privates Surfen, Speichergrenzen, Geräteausfälle, Browserbeschränkungen oder einen Wechsel des Website-Ursprungs unzugänglich werden oder gelöscht werden.
-3. **Wichtiger Hinweis zum Umzug:** Ein Wechsel der Website-Adresse von einer `github.io`-Domain zu `knitpeek.pages.dev` überträgt vorhandene IndexedDB-Daten **nicht** automatisch. Prüfen Sie vor dem Adresswechsel oder dem Löschen der alten Websitedaten, ob benötigte Originaldateien und ausgegebene Berichte separat aufbewahrt sind.
+3. Lokale Daten sind an die Website-Adresse und das Browserprofil gebunden, in denen sie gespeichert wurden. Bei einer anderen Adresse, einem anderen Browser oder Profil werden sie möglicherweise nicht automatisch übertragen. Sichern Sie benötigte Originaldateien und exportierte Berichte, bevor Sie die Adresse ändern oder Websitedaten löschen.
 4. Bewahren Sie wichtige Originaldateien und ausgegebene Berichte an einem separaten sicheren Ort auf. Der Betreiber kann Einträge, die nur auf Ihrem Gerät vorhanden sind, weder aus der Ferne einsehen noch wiederherstellen.
 5. Soweit geltendes Recht nichts anderes bestimmt, kann der Betreiber nicht garantieren, dass alle durch Geräte- oder Browserbedingungen verlorenen Daten wiederhergestellt werden.
 
@@ -63,7 +61,7 @@ Sie dürfen nicht:
 
 ## 9. Externe Links und Dritte
 
-1. Eine URL oder ein QR-Code in einem importierten Muster kann zu einer externen Website führen.
+1. Wenn Sie eine URL oder einen QR-Code in einer Anleitung oder den Buy-Me-a-Coffee-Link auf dieser Website auswählen, wird möglicherweise eine Website eines Dritten geöffnet.
 2. Für Websites Dritter gelten deren eigene Nutzungs- und Datenschutzbedingungen, nicht diese Bedingungen.
 3. Prüfen Sie Ziel und Vertrauenswürdigkeit eines externen Links, bevor Sie ihn öffnen.
 
@@ -97,10 +95,10 @@ Unsere gesondert veröffentlichte **Datenschutzerklärung** erläutert lokale Sp
 
 ## 15. Kontakt
 
-- Betreiber: **[Rechtlicher Name des Betreibers]**
-- Support-E-Mail: **[E-Mail-Adresse]**
+- Betreiber: **KnitPeek**
+- Support-E-Mail: **knitpeek.cs@gmail.com**
 - Website: **https://knitpeek.pages.dev**
 
 ---
 
-**Gültig ab:** **[YYYY-MM-DD]**.
+**Gültig ab:** **4. November 2026**.
