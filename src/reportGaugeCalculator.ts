@@ -1,3 +1,6 @@
+import type { GaugeSide } from './reportFormatting'
+import { getGaugeSamples, withGaugeSamples } from './reportFormatting'
+
 export type GaugeCalculatorInput = {
   stitches: number
   rows: number
@@ -10,7 +13,10 @@ export type GaugeCalculatorResult = {
   rowsPer10Cm: number
 }
 
-export type GaugeCalculatorTarget = 'before' | 'after'
+export type GaugeCalculatorTarget = {
+  sampleIndex: number | null
+  side: GaugeSide
+}
 
 function roundGauge(value: number) {
   if (!Number.isFinite(value) || value > Number.MAX_VALUE / 100) return null
@@ -28,12 +34,29 @@ export function calculateGaugePer10Cm({ stitches, rows, widthCm, heightCm }: Gau
 }
 
 export function applyGaugeResultToFields(fields: Record<string, string>, target: GaugeCalculatorTarget, result: GaugeCalculatorResult) {
+  if (target.sampleIndex !== null) {
+    const samples = getGaugeSamples(fields)
+    const sample = samples[target.sampleIndex]
+    if (!sample) return fields
+    samples[target.sampleIndex] = {
+      ...sample,
+      [target.side]: {
+        stitches: String(result.stitchesPer10Cm),
+        rows: String(result.rowsPer10Cm),
+        width: '10',
+        height: '10',
+      },
+    }
+    return withGaugeSamples(fields, samples)
+  }
+
+  const side = target.side
   return {
     ...fields,
-    [`gauge.${target}Stitches`]: String(result.stitchesPer10Cm),
-    [`gauge.${target}Rows`]: String(result.rowsPer10Cm),
-    [`gauge.${target}Width`]: '10',
-    [`gauge.${target}Height`]: '10',
-    [`gauge.${target}Unit`]: 'cm',
+    [`gauge.${side}Stitches`]: String(result.stitchesPer10Cm),
+    [`gauge.${side}Rows`]: String(result.rowsPer10Cm),
+    [`gauge.${side}Width`]: '10',
+    [`gauge.${side}Height`]: '10',
+    [`gauge.${side}Unit`]: 'cm',
   }
 }

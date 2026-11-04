@@ -57,10 +57,13 @@ describe('Instagram report caption', () => {
     expect(caption.match(/간격 조정/g)).toHaveLength(1)
   })
 
-  it('prints saved gauge dimensions, measurement units, and the chosen needle notation', () => {
+  it('prints saved gauge dimensions, named and legacy gauge samples, and the chosen needle notation', () => {
     const report = {
       id: 'r', documentId: 'd', title: '가디건', createdAt: 1, updatedAt: 1,
-      fields: { 'gauge.pattern': '꽈배기', 'gauge.beforeStitches': '24', 'gauge.beforeRows': '16', 'gauge.beforeWidth': '8', 'gauge.beforeHeight': '5.5', 'gauge.beforeUnit': 'cm', 'gauge.afterStitches': '24', 'gauge.afterRows': '16', 'gauge.afterWidth': '9', 'gauge.afterHeight': '6', 'gauge.afterUnit': 'inch' },
+      fields: { 'gauge.pattern': '꽈배기', 'gauge.beforeStitches': '24', 'gauge.beforeRows': '16', 'gauge.beforeWidth': '8', 'gauge.beforeHeight': '5.5', 'gauge.beforeUnit': 'cm', 'gauge.afterStitches': '24', 'gauge.afterRows': '16', 'gauge.afterWidth': '9', 'gauge.afterHeight': '6', 'gauge.afterUnit': 'inch', 'gauge.samples': JSON.stringify([
+        { pattern: '레이스', before: { stitches: '21', rows: '30', width: '10', height: '14' }, after: { stitches: '20', rows: '28', width: '10', height: '13' } },
+        { before: {}, after: { stitches: 'invalid', rows: '', width: '0', height: '10' } },
+      ]) },
       representativePhoto: '', yarns: [],
       needles: [
         { id: 'us', section: '소매', type: '대바늘', size: '6', sizeUnit: 'US' as const, brand: '치아오구', cableLength: '', memo: '' },
@@ -79,7 +82,18 @@ describe('Instagram report caption', () => {
     expect(caption).toContain('꽈배기')
     expect(caption).toContain('8 × 5.5 cm')
     expect(caption).toContain('9 × 6 인치')
+    expect(caption).toContain('레이스 · 세탁 전 · 게이지 결과: 21코 · 21.43단 (10 × 10 cm)')
+    expect(caption).toContain('레이스 · 세탁 전: 21코 · 30단 / 10 × 14 cm')
+    expect(caption).toContain('레이스 · 세탁 후 · 게이지 결과: 20코 · 21.54단 (10 × 10 cm)')
+    expect(caption).toContain('게이지 3 · 세탁 후 · 게이지 결과: —코 · —단 (10 × 10 cm)')
     expect(caption).toContain('기장: 57 cm')
     expect(caption).toContain('소매길이: 22 인치')
+  })
+
+  it('uses an em dash for missing primary gauge values', () => {
+    const report = { id: 'r', documentId: 'd', title: '숄', createdAt: 1, updatedAt: 1, fields: {}, representativePhoto: '', yarns: [], needles: [], accessories: [], measurements: [], modifications: [], finishedPhotos: [], workPhotos: [] } satisfies KnittingReport
+    const caption = buildInstagramCaption(report, ['gauge'])
+
+    expect(caption).toContain('세탁 전 · 10 × 10 cm: —코 · —단 (10 × 10 cm)')
   })
 })

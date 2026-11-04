@@ -10,7 +10,7 @@ import InstagramCaptionDialog from './InstagramCaptionDialog'
 import { analyzeKnittingReportCandidates, collectReportPageTexts } from './knittingReportAnalysis'
 import ReportWorkTime from './ReportWorkTime'
 import type { DocumentWorkTimeTotals } from './DocumentWorkTimer'
-import { createGaugeSample, getGaugeMeasurement, getGaugePer10Cm, getGaugeSamples, withGaugeSamples, type GaugeSampleMeasurement, type GaugeSide } from './reportFormatting'
+import { createGaugeSample, getGaugeMeasurement, getGaugePer10Cm, getGaugeSamplePer10Cm, getGaugeSamples, withGaugeSamples, type GaugeSampleMeasurement, type GaugeSide } from './reportFormatting'
 import GaugeCalculatorDialog from './GaugeCalculatorDialog'
 import { applyGaugeResultToFields, type GaugeCalculatorResult, type GaugeCalculatorTarget } from './reportGaugeCalculator'
 import { applyMeasurementSelection, createDefaultMeasurements, findMeasurementPresetRow, isMeasurementPresetAdded, measurementPresetKeys, type MeasurementEntryDraft, type MeasurementPresetKey } from './reportMeasurementSelection'
@@ -905,13 +905,8 @@ export default function KnittingReport({ documentId, fileName, pageCount, totalW
     <button type="button" className="report-icon-button report-measurement-delete" aria-label={`${row.label} ${t('측정 항목 삭제')}`} onClick={() => removeRow('measurements', row.id)}><Trash2 size={15} /></button>
   </article>)}<button type="button" className="secondary-button report-add-button" onClick={() => setMeasurementDialogOpen(true)}><Plus size={15} />{t('치수 추가')}</button></div>
 
-  function gaugeField(id: string, label: string, kind: FieldKind = 'text', options?: string[], fallback = '') {
-    const value = values[id] ?? fallback
-    return <ReportField key={id + ':' + value} label={label} value={value} kind={kind} options={options} onChange={(nextValue) => update((current) => ({ ...current, fields: { ...current.fields, [id]: nextValue } }))} />
-  }
-
-  function applyGaugeCalculatorResult(side: GaugeCalculatorTarget, result: GaugeCalculatorResult) {
-    update((current) => ({ ...current, fields: applyGaugeResultToFields(current.fields, side, result) }))
+  function applyGaugeCalculatorResult(target: GaugeCalculatorTarget, result: GaugeCalculatorResult) {
+    update((current) => ({ ...current, fields: applyGaugeResultToFields(current.fields, target, result) }))
     setGaugeCalculatorOpen(false)
   }
 
@@ -923,11 +918,12 @@ export default function KnittingReport({ documentId, fileName, pageCount, totalW
     changeGaugeSamples((samples) => samples.map((sample, sampleIndex) => sampleIndex === index ? { ...sample, [side]: { ...sample[side], [fieldName]: value } } : sample))
   }
 
-  function gaugeSampleInput(sample: ReturnType<typeof getGaugeSamples>[number], index: number, side: GaugeSide, fieldName: keyof GaugeSampleMeasurement, label: string) {
-    const value = sample[side][fieldName]
-    const isSize = fieldName === 'width' || fieldName === 'height'
-    const ariaLabel = `${t('게이지')} ${formatNumber(index + 2)} ${t(side === 'before' ? '세탁 전' : '세탁 후')} ${t(label as LocaleKey)}`
-    return <label className="report-field" key={fieldName}>{t(label as LocaleKey)}<span className="report-gauge-sample-input"><input aria-label={ariaLabel} type="number" min="0" step={isSize ? 'any' : '1'} value={value} onChange={(event) => updateGaugeSample(index, side, fieldName, event.currentTarget.value)} />{isSize && <small>cm</small>}</span></label>
+  function updateGaugePattern(index: number, value: string) {
+    changeGaugeSamples((samples) => samples.map((sample, sampleIndex) => sampleIndex === index ? { ...sample, pattern: value } : sample))
+  }
+
+  function gaugeNumberInput(label: string, ariaLabel: string, value: string, onChange: (value: string) => void, isSize: boolean) {
+    return <label className="report-field" key={ariaLabel}>{t(label as LocaleKey)}<input aria-label={ariaLabel} type="number" min="0" step={isSize ? 'any' : '1'} inputMode={isSize ? 'decimal' : 'numeric'} value={value} onChange={(event) => onChange(event.currentTarget.value)} /></label>
   }
 
   function addGaugeSample() {
@@ -948,26 +944,59 @@ export default function KnittingReport({ documentId, fileName, pageCount, totalW
   }
 
   const gaugeSamples = getGaugeSamples(values)
+  const gaugeSides: { side: GaugeSide; label: '세탁 전' | '세탁 후' }[] = [{ side: 'before', label: '세탁 전' }, { side: 'after', label: '세탁 후' }]
+  function gaugeEntry(sampleIndex: number | null, sample?: ReturnType<typeof getGaugeSamples>[number]) {
+    const primary = sampleIndex === null
+    const fallbackName = primary ? t('기본 게이지') : t('게이지 {number}', { number: formatNumber(sampleIndex + 2) })
+    const pattern = primary ? values['gauge.pattern'] ?? '' : sample?.pattern ?? ''
+    const entryName = pattern.trim() || fallbackName
+    const updatePattern = (value: string) => primary
+      ? update((current) => ({ ...current, fields: { ...current.fields, 'gauge.pattern': value } }))
+      : updateGaugePattern(sampleIndex!, value)
+
+    return <section className="report-gauge-item" key={primary ? 'primary' : sampleIndex} aria-label={entryName}>
+      <div className="report-gauge-item-header"><strong>{fallbackName}</strong>{!primary && <button type="button" className="report-icon-button" aria-label={`${entryName} ${t('삭제')}`} disabled={switching || exporting} onClick={() => removeGaugeSample(sampleIndex!)}><Trash2 size={15} /></button>}</div>
+      <label className="report-field report-gauge-pattern">{t('무늬')}<input aria-label={`${entryName} ${t('무늬')}`} type="text" value={pattern} disabled={switching || exporting} onChange={(event) => updatePattern(event.currentTarget.value)} /></label>
+      <section className="report-gauge-results" aria-live="polite">
+        <h3 className="report-gauge-results-heading">{t('게이지 결과')}</h3>
+        <div className="report-gauge-results-sides">{gaugeSides.map(({ side, label }) => {
+          const summary = primary ? getGaugePer10Cm(values, side) : getGaugeSamplePer10Cm(sample!, side)
+          const stitchCount = summary.stitches === null ? '—' : `${formatNumber(summary.stitches)} ${t('코')}`
+          const rowCount = summary.rows === null ? '—' : `${formatNumber(summary.rows)} ${t('단')}`
+          return <div className="report-gauge-result-side" key={side}>
+            <h4>{t(label)}</h4>
+            <div className="report-gauge-result-row"><span>{t('10cm당 코 수')}</span><strong>{stitchCount}</strong></div>
+            <div className="report-gauge-result-row"><span>{t('10cm당 단 수')}</span><strong>{rowCount}</strong></div>
+          </div>
+        })}</div>
+      </section>
+      {gaugeSides.map(({ side, label }) => {
+        const primaryMeasurement = primary ? getGaugeMeasurement(values, side) : undefined
+        const measurement = primaryMeasurement ?? sample![side]
+        const unit = primaryMeasurement?.unit ?? 'cm'
+        const changeMeasurement = (fieldName: keyof GaugeSampleMeasurement, value: string) => primary
+          ? update((current) => ({ ...current, fields: { ...current.fields, [`gauge.${side}${fieldName[0].toUpperCase()}${fieldName.slice(1)}`]: value } }))
+          : updateGaugeSample(sampleIndex!, side, fieldName, value)
+        const inputName = (fieldName: keyof GaugeSampleMeasurement) => `${entryName} ${t(label)} ${t(fieldName === 'stitches' ? '코' : fieldName === 'rows' ? '단' : fieldName === 'width' ? '가로' : '세로')}`
+        return <div className="report-gauge-side" key={side}>
+          <div className="report-gauge-side-heading"><h3>{t(label)}</h3>{primary
+            ? <label className="report-gauge-unit-field report-field">{t('표기')}<select aria-label={`${entryName} ${t(label)} ${t('표기')}`} value={unit} disabled={switching || exporting} onChange={(event) => update((current) => ({ ...current, fields: { ...current.fields, [`gauge.${side}Unit`]: event.currentTarget.value } }))}><option value="cm">cm</option><option value="inch">{t('inch')}</option></select></label>
+            : <span className="report-gauge-unit-field">cm</span>}</div>
+          <div className="report-gauge-side-fields">
+            {(['stitches', 'rows', 'width', 'height'] as const).map((fieldName) => gaugeNumberInput(fieldName === 'stitches' ? '코' : fieldName === 'rows' ? '단' : fieldName === 'width' ? '가로' : '세로', inputName(fieldName), measurement[fieldName], (value) => changeMeasurement(fieldName, value), fieldName === 'width' || fieldName === 'height'))}
+          </div>
+        </div>
+      })}
+    </section>
+  }
+  const gaugeCalculatorOptions = [
+    { sampleIndex: null, label: values['gauge.pattern']?.trim() || t('기본 게이지') },
+    ...gaugeSamples.map((sample, index) => ({ sampleIndex: index, label: sample.pattern.trim() || t('게이지 {number}', { number: formatNumber(index + 2) }) })),
+  ]
   const gaugeEditor = <div className="report-gauge-editor">
-    <div className="report-gauge-summary">{([['before', '세탁 전'], ['after', '세탁 후']] as const).map(([side, label]) => {
-      const summary = getGaugePer10Cm(values, side)
-      return <div className="report-gauge-summary-row" key={side}><strong>{t(label)}</strong><span>{formatNumber(summary.stitches)}{t('코')} {formatNumber(summary.rows)}{t('단')}</span><small>10 × 10 cm</small></div>
-    })}</div>
+    {gaugeEntry(null)}
+    {gaugeSamples.map((sample, index) => gaugeEntry(index, sample))}
     <button type="button" className="report-add-action report-gauge-add" disabled={switching || exporting || gaugeSamples.length >= 50} onClick={addGaugeSample}><Plus size={16} />{t('게이지 추가')}</button>
-    <div className="report-gauge-columns">{([['before', '세탁 전'], ['after', '세탁 후']] as const).map(([side, label]) => {
-      const gauge = getGaugeMeasurement(values, side)
-      return <section key={side}><h3>{t(label)}</h3><div className="report-gauge-counts">
-        {gaugeField(`gauge.${side}Stitches`, '코', 'number')}{gaugeField(`gauge.${side}Rows`, '단', 'number')}
-      </div><div className="report-gauge-size">
-        {gaugeField(`gauge.${side}Width`, '가로', 'positiveDecimal', undefined, gauge.width)}{gaugeField(`gauge.${side}Height`, '세로', 'positiveDecimal', undefined, gauge.height)}{gaugeField(`gauge.${side}Unit`, '표기', 'select', ['cm', 'inch'], gauge.unit)}
-      </div></section>
-    })}</div>
-    {gaugeSamples.map((sample, index) => <article className="report-gauge-extra" key={index}>
-      <header><strong>{t('게이지')} {formatNumber(index + 2)}</strong><button type="button" className="report-icon-button" aria-label={`${t('게이지')} ${formatNumber(index + 2)} ${t('삭제')}`} onClick={() => removeGaugeSample(index)}><Trash2 size={15} /></button></header>
-      <div className="report-gauge-sample-columns">{([['before', '세탁 전'], ['after', '세탁 후']] as const).map(([side, label]) => <section key={side}><h3>{t(label)}</h3><div className="report-gauge-sample-fields">
-        {gaugeSampleInput(sample, index, side, 'stitches', '코')}{gaugeSampleInput(sample, index, side, 'rows', '단')}{gaugeSampleInput(sample, index, side, 'width', '가로')}{gaugeSampleInput(sample, index, side, 'height', '세로')}
-      </div></section>)}</div>
-    </article>)}
   </div>
 
   function detailContent(id: DetailId) {
@@ -1024,7 +1053,7 @@ export default function KnittingReport({ documentId, fileName, pageCount, totalW
         <div className="report-cover-fields">{field('pattern.name', '도안명')}{field('pattern.designer', '원작자')}{field('project.co', '시작일', 'date')}{field('project.fo', '완성일', 'date')}</div>
       </div><ReportWorkTime documentId={documentId} totalWorkTimeMs={documentWorkTime.totalWorkTimeMs} workTimeDays={documentWorkTime.workTimeDays} onAddWorkTime={addWorkTime} onTotalsChange={(total, days) => setDocumentWorkTime({ totalWorkTimeMs: total, workTimeDays: days })} /></section>
       <div className="report-form-main">
-        <section className="report-form-card"><header><h2>{t('게이지 · 완성 사이즈')}</h2><button type="button" className="report-add-action report-gauge-calculate-action" disabled={switching || exporting} onClick={() => setGaugeCalculatorOpen(true)}><Calculator size={16} />{t('계산하기')}</button></header>{gaugeEditor}</section>
+        <section className="report-form-card"><header><h2>{t('게이지')}</h2><button type="button" className="report-add-action report-gauge-calculate-action" disabled={switching || exporting} onClick={() => setGaugeCalculatorOpen(true)}><Calculator size={16} />{t('계산하기')}</button></header>{gaugeEditor}</section>
         <div className="report-yarn-needle-grid">
         <section ref={yarnListMotionRef} className="report-form-card"><header><h2>{t('실')}</h2><button type="button" className="report-add-action" onClick={() => update((current) => ({ ...current, yarns: [...current.yarns, makeYarn()] }))}><Plus size={18} />{t('실 추가')}</button></header>
           {report.yarns.length ? report.yarns.map((yarn, index) => <article className="report-yarn-card" data-layout-motion-key={yarn.id} key={yarn.id}><div className="report-entry-title"><strong>{t('사용 실 ')}{index + 1}</strong><button type="button" className="report-remove-action" aria-label={t('실 삭제')} onClick={() => removeRow('yarns', yarn.id)}><Trash2 size={16} /></button></div>{rowFields(yarn, 'yarns', [
@@ -1061,7 +1090,7 @@ export default function KnittingReport({ documentId, fileName, pageCount, totalW
     <footer className="report-bottom-actions"><button type="button" className="report-save-button" disabled={switching || exporting || processingPhotos} onClick={async () => { setSwitching(true); try { await flushPendingReport(); setSaveState('저장됨') } catch (cause) { setSaveState(cause instanceof Error ? translateMessage(cause.message) : t('저장하지 못했습니다.')) } finally { setSwitching(false) }}}>{t("저장")}</button><button type="button" className="report-caption-button" disabled={switching || processingPhotos || titleEditing} onClick={() => void openCaption()}><Clipboard size={17} />{t("IG 문구 복사")}</button></footer>
     {deleteConfirmOpen && <div className="modal-backdrop report-delete-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget && !switching) { setDeleteConfirmOpen(false); setDeleteError('') } }}><section className="modal-card report-delete-dialog" role="dialog" aria-modal="true" aria-labelledby="report-delete-title"><header className="modal-heading"><h2 id="report-delete-title">{t('보고서 삭제')}</h2><button type="button" className="icon-button" aria-label={t('닫기')} disabled={switching} onClick={() => { setDeleteConfirmOpen(false); setDeleteError('') }}><X size={19} /></button></header><div className="settings-copy"><p>{t('{title} 보고서와 소속 사진·기록을 삭제할까요? 연결된 PDF·프로젝트·다른 보고서는 유지됩니다.', { title: reportTitle })}</p>{deleteError && <p className="report-error" role="alert">{deleteError}</p>}<div className="modal-actions"><button type="button" className="secondary-button" disabled={switching} onClick={() => { setDeleteConfirmOpen(false); setDeleteError('') }}>{t('취소')}</button><button type="button" className="danger-button" disabled={switching} onClick={() => void confirmDeleteReport()}>{t('삭제')}</button></div></div></section></div>}
     {measurementDialogOpen && <MeasurementAddDialog existingMeasurements={report.measurements} onAdd={saveMeasurementSelection} onClose={() => setMeasurementDialogOpen(false)} />}
-    {gaugeCalculatorOpen && <GaugeCalculatorDialog onClose={() => setGaugeCalculatorOpen(false)} onApply={applyGaugeCalculatorResult} />}
+    {gaugeCalculatorOpen && <GaugeCalculatorDialog gaugeOptions={gaugeCalculatorOptions} onClose={() => setGaugeCalculatorOpen(false)} onApply={applyGaugeCalculatorResult} />}
     {undoDelete && <div className="report-undo-snackbar" role="status"><span>{undoDelete.label}</span><button type="button" onClick={undoLastDelete}>{t("실행 취소")}</button><button type="button" aria-label={t("알림 닫기")} onClick={() => { if (undoTimer.current !== undefined) window.clearTimeout(undoTimer.current); undoTimer.current = undefined; setUndoDelete(null) }}><X size={15} /></button></div>}
     {previewPhoto && <div className="report-photo-lightbox" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) setPreviewPhoto('') }}><section role="dialog" aria-modal="true" aria-label={t("사진 크게 보기")}><button type="button" aria-label={t("사진 닫기")} onClick={() => setPreviewPhoto('')}><X size={20} /></button><img src={previewPhoto} alt={t("보고서 사진")} /></section></div>}
     {captionOpen && <InstagramCaptionDialog report={report} onClose={() => setCaptionOpen(false)} onCopied={() => setSaveState('IG 문구가 복사됐어요.')} />}

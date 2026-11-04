@@ -2,18 +2,23 @@ import { useEffect, useRef, useState, type KeyboardEvent } from 'react'
 import { Check, Ruler, X } from 'lucide-react'
 import { formatNumber, t } from './locales'
 import { calculateGaugePer10Cm, type GaugeCalculatorResult, type GaugeCalculatorTarget } from './reportGaugeCalculator'
+import type { GaugeSide } from './reportFormatting'
+
+type GaugeOption = { sampleIndex: number | null; label: string }
 
 type Props = {
+  gaugeOptions: GaugeOption[]
   onClose: () => void
-  onApply: (side: GaugeCalculatorTarget, result: GaugeCalculatorResult) => void
+  onApply: (target: GaugeCalculatorTarget, result: GaugeCalculatorResult) => void
 }
 
-export default function GaugeCalculatorDialog({ onClose, onApply }: Props) {
+export default function GaugeCalculatorDialog({ gaugeOptions, onClose, onApply }: Props) {
   const [stitches, setStitches] = useState('10')
   const [rows, setRows] = useState('10')
   const [widthCm, setWidthCm] = useState('10')
   const [heightCm, setHeightCm] = useState('10')
-  const [side, setSide] = useState<GaugeCalculatorTarget>('before')
+  const [sampleIndex, setSampleIndex] = useState<number | null>(null)
+  const [side, setSide] = useState<GaugeSide>('before')
   const [result, setResult] = useState<GaugeCalculatorResult | null>(null)
   const [error, setError] = useState('')
   const dialogRef = useRef<HTMLElement>(null)
@@ -71,7 +76,7 @@ export default function GaugeCalculatorDialog({ onClose, onApply }: Props) {
 
   function apply() {
     if (!result) return
-    onApply(side, result)
+    onApply({ sampleIndex, side }, result)
   }
 
   return <div className="modal-backdrop gauge-calculator-backdrop" role="presentation" onPointerDown={(event) => { if (event.target === event.currentTarget) onClose() }}>
@@ -85,12 +90,19 @@ export default function GaugeCalculatorDialog({ onClose, onApply }: Props) {
       </header>
       <div className="gauge-calculator-layout">
         <section className="gauge-calculator-inputs" aria-label={t('게이지 계산기 입력')}>
-          <label className="report-field">{t('적용할 게이지')}
-            <select value={side} onChange={(event) => setSide(event.currentTarget.value as GaugeCalculatorTarget)}>
-              <option value="before">{t('세탁 전')}</option>
-              <option value="after">{t('세탁 후')}</option>
-            </select>
-          </label>
+          <div className="gauge-calculator-fields">
+            <label className="report-field">{t('적용할 게이지')}
+              <select value={sampleIndex === null ? 'primary' : String(sampleIndex)} onChange={(event) => setSampleIndex(event.currentTarget.value === 'primary' ? null : Number(event.currentTarget.value))}>
+                {gaugeOptions.map((option) => <option key={option.sampleIndex ?? 'primary'} value={option.sampleIndex === null ? 'primary' : String(option.sampleIndex)}>{option.label}</option>)}
+              </select>
+            </label>
+            <label className="report-field">{t('세탁 시점')}
+              <select value={side} onChange={(event) => setSide(event.currentTarget.value as GaugeSide)}>
+                <option value="before">{t('세탁 전')}</option>
+                <option value="after">{t('세탁 후')}</option>
+              </select>
+            </label>
+          </div>
           <div className="gauge-calculator-fields">
             <label className="report-field">{t('스와치 코 수')}
               <span className="gauge-calculator-input-wrap"><input ref={firstInputRef} type="number" min="1" step="1" inputMode="numeric" value={stitches} onChange={(event) => updateInput(setStitches, event.currentTarget.value)} /><small>{t('코')}</small></span>

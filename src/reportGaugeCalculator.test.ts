@@ -47,7 +47,7 @@ describe('calculateGaugePer10Cm', () => {
       'gauge.afterUnit': 'inch',
     }
 
-    expect(applyGaugeResultToFields(fields, 'before', { stitchesPer10Cm: 23.33, rowsPer10Cm: 12.5 })).toEqual({
+    expect(applyGaugeResultToFields(fields, { sampleIndex: null, side: 'before' }, { stitchesPer10Cm: 23.33, rowsPer10Cm: 12.5 })).toEqual({
       ...fields,
       'gauge.beforeStitches': '23.33',
       'gauge.beforeRows': '12.5',
@@ -55,5 +55,16 @@ describe('calculateGaugePer10Cm', () => {
       'gauge.beforeHeight': '10',
       'gauge.beforeUnit': 'cm',
     })
+  })
+
+  it('applies a result to one added gauge and preserves its pattern and other side', () => {
+    const fields = { 'gauge.samples': JSON.stringify([{ pattern: 'cable', before: { stitches: '20', rows: '20', width: '10', height: '10' }, after: { stitches: '18', rows: '22', width: '10', height: '10' } }]) }
+    const result = applyGaugeResultToFields(fields, { sampleIndex: 0, side: 'after' }, { stitchesPer10Cm: 21, rowsPer10Cm: 21.43 })
+    expect(JSON.parse(result['gauge.samples'])).toEqual([{ pattern: 'cable', before: { stitches: '20', rows: '20', width: '10', height: '10' }, after: { stitches: '21', rows: '21.43', width: '10', height: '10' } }])
+  })
+
+  it('leaves the report unchanged for an unknown added gauge', () => {
+    const fields = { 'gauge.samples': '[]' }
+    expect(applyGaugeResultToFields(fields, { sampleIndex: 2, side: 'before' }, { stitchesPer10Cm: 21, rowsPer10Cm: 21.43 })).toBe(fields)
   })
 })

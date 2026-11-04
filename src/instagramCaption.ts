@@ -1,6 +1,6 @@
 import type { KnittingReport } from './types'
 import { formatNumber, t, translateMessage } from './locales'
-import { formatNeedleSize, getGaugeMeasurement, getGaugePer10Cm, getGaugeSamples } from './reportFormatting'
+import { formatNeedleSize, getGaugeMeasurement, getGaugePer10Cm, getGaugeSamplePer10Cm, getGaugeSamples } from './reportFormatting'
 
 export type InstagramCaptionField = 'pattern' | 'size' | 'yarn' | 'usage' | 'needles' | 'modifications' | 'oneLine' | 'gauge' | 'measurements' | 'fit' | 'yarnMemo'
 
@@ -58,16 +58,21 @@ export function buildInstagramCaption(report: KnittingReport, selected: Instagra
       const size = gauge.width || gauge.height ? `${formatNumericText(gauge.width) || '—'} × ${formatNumericText(gauge.height) || '—'} ${gauge.unit === 'inch' ? t('inch') : 'cm'}` : ''
       return [counts, size].filter(Boolean).join(' / ')
     }
+    const formatGaugeCount = (value: number | null, unit: '코' | '단') => `${value === null ? '—' : formatNumber(value)}${t(unit)}`
     const summaryText = (side: 'before' | 'after') => {
       const gauge = getGaugePer10Cm(fields, side)
-      return `${formatNumber(gauge.stitches)}${t('코')} · ${formatNumber(gauge.rows)}${t('단')} (10 × 10 cm)`
+      return `${formatGaugeCount(gauge.stitches, '코')} · ${formatGaugeCount(gauge.rows, '단')} (10 × 10 cm)`
     }
-    const additionalGaugeText = getGaugeSamples(fields).flatMap((sample, index) => (['before', 'after'] as const).map((side) => {
+    const additionalGaugeText = getGaugeSamples(fields).flatMap((sample, index) => (['before', 'after'] as const).flatMap((side) => {
       const measurement = sample[side]
       const counts = [measurement.stitches && `${formatNumericText(measurement.stitches)}${t('코')}`, measurement.rows && `${formatNumericText(measurement.rows)}${t('단')}`].filter(Boolean).join(' · ')
       const size = measurement.width || measurement.height ? `${formatNumericText(measurement.width) || '—'} × ${formatNumericText(measurement.height) || '—'} cm` : ''
       const value = [counts, size].filter(Boolean).join(' / ')
-      return value ? `${t('게이지')} ${formatNumber(index + 2)} · ${t(side === 'before' ? '세탁 전' : '세탁 후')}: ${value}` : ''
+      const gaugeName = sample.pattern.trim() || t('게이지 {number}', { number: formatNumber(index + 2) })
+      const sideName = t(side === 'before' ? '세탁 전' : '세탁 후')
+      const summary = getGaugeSamplePer10Cm(sample, side)
+      const result = `${formatGaugeCount(summary.stitches, '코')} · ${formatGaugeCount(summary.rows, '단')} (10 × 10 cm)`
+      return [`${gaugeName} · ${sideName} · ${t('게이지 결과')}: ${result}`, value ? `${gaugeName} · ${sideName}: ${value}` : '']
     }))
     sections.push(line(t('Gauge'), [
       fields['gauge.pattern']?.trim() && `${t('무늬')}: ${fields['gauge.pattern'].trim()}`,
