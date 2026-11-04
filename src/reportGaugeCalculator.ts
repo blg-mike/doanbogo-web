@@ -1,0 +1,39 @@
+export type GaugeCalculatorInput = {
+  stitches: number
+  rows: number
+  widthCm: number
+  heightCm: number
+}
+
+export type GaugeCalculatorResult = {
+  stitchesPer10Cm: number
+  rowsPer10Cm: number
+}
+
+export type GaugeCalculatorTarget = 'before' | 'after'
+
+function roundGauge(value: number) {
+  if (!Number.isFinite(value) || value > Number.MAX_VALUE / 100) return null
+  return Number((Math.round((value + Number.EPSILON) * 100) / 100).toFixed(2))
+}
+
+export function calculateGaugePer10Cm({ stitches, rows, widthCm, heightCm }: GaugeCalculatorInput): GaugeCalculatorResult | null {
+  if (!Number.isInteger(stitches) || stitches <= 0 || !Number.isInteger(rows) || rows <= 0) return null
+  if (!Number.isFinite(widthCm) || widthCm <= 0 || !Number.isFinite(heightCm) || heightCm <= 0) return null
+
+  const stitchesPer10Cm = roundGauge(stitches * 10 / widthCm)
+  const rowsPer10Cm = roundGauge(rows * 10 / heightCm)
+  if (stitchesPer10Cm === null || rowsPer10Cm === null) return null
+  return { stitchesPer10Cm, rowsPer10Cm }
+}
+
+export function applyGaugeResultToFields(fields: Record<string, string>, target: GaugeCalculatorTarget, result: GaugeCalculatorResult) {
+  return {
+    ...fields,
+    [`gauge.${target}Stitches`]: String(result.stitchesPer10Cm),
+    [`gauge.${target}Rows`]: String(result.rowsPer10Cm),
+    [`gauge.${target}Width`]: '10',
+    [`gauge.${target}Height`]: '10',
+    [`gauge.${target}Unit`]: 'cm',
+  }
+}

@@ -1,6 +1,6 @@
 import { formatDate, formatNumber, t, translateMessage, type LocaleKey } from './locales/index'
 import { useCallback, useEffect, useRef, useState, type KeyboardEvent } from 'react'
-import { ArrowLeft, Check, CircleAlert, CircleCheck, ChevronDown, ChevronUp, Clipboard, Download, Ellipsis, GripVertical, ImagePlus, Info, LoaderCircle, Pencil, Plus, Save, Share2, Sparkles, Trash2, X } from 'lucide-react'
+import { ArrowLeft, Calculator, Check, CircleAlert, CircleCheck, ChevronDown, ChevronUp, Clipboard, Download, Ellipsis, GripVertical, ImagePlus, Info, LoaderCircle, Pencil, Plus, Save, Share2, Sparkles, Trash2, X } from 'lucide-react'
 import BrandLoading from './BrandLoading'
 import { deleteKnittingReport, getDocument, getKnittingReportById, getKnittingReports, getPageWorks, getViewer, saveKnittingReport, type KnittingReportSummary } from './storage'
 import type { CounterSnapshot, DocumentWorkTimeDay, KnittingReport, ReportAccessory, ReportMeasurement, ReportModification, ReportNeedle, ReportTimelinePhoto, ReportYarn } from './types'
@@ -11,6 +11,8 @@ import { analyzeKnittingReportCandidates, collectReportPageTexts } from './knitt
 import ReportWorkTime from './ReportWorkTime'
 import type { DocumentWorkTimeTotals } from './DocumentWorkTimer'
 import { getGaugeMeasurement } from './reportFormatting'
+import GaugeCalculatorDialog from './GaugeCalculatorDialog'
+import { applyGaugeResultToFields, type GaugeCalculatorResult, type GaugeCalculatorTarget } from './reportGaugeCalculator'
 import { applyMeasurementSelection, createDefaultMeasurements, findMeasurementPresetRow, isMeasurementPresetAdded, measurementPresetKeys, type MeasurementEntryDraft, type MeasurementPresetKey } from './reportMeasurementSelection'
 import { isValidReportDateValue, REPORT_DATE_MAX, REPORT_DATE_MIN } from './reportDates'
 import { useListLayoutMotion } from './useListLayoutMotion'
@@ -313,6 +315,7 @@ export default function KnittingReport({ documentId, fileName, pageCount, totalW
   const [captionOpen, setCaptionOpen] = useState(false)
   const [instagramOpen, setInstagramOpen] = useState(false)
   const [measurementDialogOpen, setMeasurementDialogOpen] = useState(false)
+  const [gaugeCalculatorOpen, setGaugeCalculatorOpen] = useState(false)
   const [titleEditing, setTitleEditing] = useState(false)
   const [titleDraft, setTitleDraft] = useState('')
   const [activeDetail, setActiveDetail] = useState<'project' | null>(null)
@@ -907,6 +910,11 @@ export default function KnittingReport({ documentId, fileName, pageCount, totalW
     return <ReportField key={id + ':' + value} label={label} value={value} kind={kind} options={options} onChange={(nextValue) => update((current) => ({ ...current, fields: { ...current.fields, [id]: nextValue } }))} />
   }
 
+  function applyGaugeCalculatorResult(side: GaugeCalculatorTarget, result: GaugeCalculatorResult) {
+    update((current) => ({ ...current, fields: applyGaugeResultToFields(current.fields, side, result) }))
+    setGaugeCalculatorOpen(false)
+  }
+
   const gaugeEditor = <div className="report-gauge-editor">
     {gaugeField('gauge.pattern', '무늬')}
     <div className="report-gauge-columns">{([['before', '세탁 전'], ['after', '세탁 후']] as const).map(([side, label]) => {
@@ -973,7 +981,7 @@ export default function KnittingReport({ documentId, fileName, pageCount, totalW
         <div className="report-cover-fields">{field('pattern.name', '도안명')}{field('pattern.designer', '원작자')}{field('project.co', '시작일', 'date')}{field('project.fo', '완성일', 'date')}</div>
       </div><ReportWorkTime documentId={documentId} totalWorkTimeMs={documentWorkTime.totalWorkTimeMs} workTimeDays={documentWorkTime.workTimeDays} onAddWorkTime={addWorkTime} onTotalsChange={(total, days) => setDocumentWorkTime({ totalWorkTimeMs: total, workTimeDays: days })} /></section>
       <div className="report-form-main">
-        <section className="report-form-card"><header><h2>{t('게이지 · 완성 사이즈')}</h2></header>{gaugeEditor}</section>
+        <section className="report-form-card"><header><h2>{t('게이지 · 완성 사이즈')}</h2><button type="button" className="report-add-action report-gauge-calculate-action" disabled={switching || exporting} onClick={() => setGaugeCalculatorOpen(true)}><Calculator size={16} />{t('계산하기')}</button></header>{gaugeEditor}</section>
         <div className="report-yarn-needle-grid">
         <section ref={yarnListMotionRef} className="report-form-card"><header><h2>{t('실')}</h2><button type="button" className="report-add-action" onClick={() => update((current) => ({ ...current, yarns: [...current.yarns, makeYarn()] }))}><Plus size={18} />{t('실 추가')}</button></header>
           {report.yarns.length ? report.yarns.map((yarn, index) => <article className="report-yarn-card" data-layout-motion-key={yarn.id} key={yarn.id}><div className="report-entry-title"><strong>{t('사용 실 ')}{index + 1}</strong><button type="button" className="report-remove-action" aria-label={t('실 삭제')} onClick={() => removeRow('yarns', yarn.id)}><Trash2 size={16} /></button></div>{rowFields(yarn, 'yarns', [
@@ -1010,6 +1018,7 @@ export default function KnittingReport({ documentId, fileName, pageCount, totalW
     <footer className="report-bottom-actions"><button type="button" className="report-save-button" disabled={switching || exporting || processingPhotos} onClick={async () => { setSwitching(true); try { await flushPendingReport(); setSaveState('저장됨') } catch (cause) { setSaveState(cause instanceof Error ? translateMessage(cause.message) : t('저장하지 못했습니다.')) } finally { setSwitching(false) }}}>{t("저장")}</button><button type="button" className="report-caption-button" disabled={switching || processingPhotos || titleEditing} onClick={() => void openCaption()}><Clipboard size={17} />{t("IG 문구 복사")}</button></footer>
     {deleteConfirmOpen && <div className="modal-backdrop report-delete-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget && !switching) { setDeleteConfirmOpen(false); setDeleteError('') } }}><section className="modal-card report-delete-dialog" role="dialog" aria-modal="true" aria-labelledby="report-delete-title"><header className="modal-heading"><h2 id="report-delete-title">{t('보고서 삭제')}</h2><button type="button" className="icon-button" aria-label={t('닫기')} disabled={switching} onClick={() => { setDeleteConfirmOpen(false); setDeleteError('') }}><X size={19} /></button></header><div className="settings-copy"><p>{t('{title} 보고서와 소속 사진·기록을 삭제할까요? 연결된 PDF·프로젝트·다른 보고서는 유지됩니다.', { title: reportTitle })}</p>{deleteError && <p className="report-error" role="alert">{deleteError}</p>}<div className="modal-actions"><button type="button" className="secondary-button" disabled={switching} onClick={() => { setDeleteConfirmOpen(false); setDeleteError('') }}>{t('취소')}</button><button type="button" className="danger-button" disabled={switching} onClick={() => void confirmDeleteReport()}>{t('삭제')}</button></div></div></section></div>}
     {measurementDialogOpen && <MeasurementAddDialog existingMeasurements={report.measurements} onAdd={saveMeasurementSelection} onClose={() => setMeasurementDialogOpen(false)} />}
+    {gaugeCalculatorOpen && <GaugeCalculatorDialog onClose={() => setGaugeCalculatorOpen(false)} onApply={applyGaugeCalculatorResult} />}
     {undoDelete && <div className="report-undo-snackbar" role="status"><span>{undoDelete.label}</span><button type="button" onClick={undoLastDelete}>{t("실행 취소")}</button><button type="button" aria-label={t("알림 닫기")} onClick={() => { if (undoTimer.current !== undefined) window.clearTimeout(undoTimer.current); undoTimer.current = undefined; setUndoDelete(null) }}><X size={15} /></button></div>}
     {previewPhoto && <div className="report-photo-lightbox" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) setPreviewPhoto('') }}><section role="dialog" aria-modal="true" aria-label={t("사진 크게 보기")}><button type="button" aria-label={t("사진 닫기")} onClick={() => setPreviewPhoto('')}><X size={20} /></button><img src={previewPhoto} alt={t("보고서 사진")} /></section></div>}
     {captionOpen && <InstagramCaptionDialog report={report} onClose={() => setCaptionOpen(false)} onCopied={() => setSaveState('IG 문구가 복사됐어요.')} />}

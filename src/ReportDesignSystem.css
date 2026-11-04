@@ -243,6 +243,45 @@
   body:has(.knitting-report-editor) .pwa-notice { bottom: calc(65px + max(18px, env(safe-area-inset-bottom))); }
 }
 
+.knitting-report-editor .report-gauge-calculate-action { min-height: 44px; display: inline-flex; align-items: center; gap: 7px; flex: 0 0 auto; }
+.knitting-report-editor .gauge-calculator-dialog { width: min(100%, 860px); max-height: min(90vh, 760px); max-height: min(90dvh, 760px); }
+.knitting-report-editor .gauge-calculator-header { align-items: flex-start; }
+.knitting-report-editor .gauge-calculator-header > div { min-width: 0; }
+.knitting-report-editor .gauge-calculator-header h2 { display: flex; align-items: center; gap: 8px; color: var(--color-text); font-size: 18px; }
+.knitting-report-editor .gauge-calculator-header h2 > svg { flex: 0 0 auto; color: var(--color-secondary); }
+.knitting-report-editor .gauge-calculator-header p { margin: 6px 0 0; color: var(--color-text-secondary); font-size: 13px; line-height: 1.5; }
+.knitting-report-editor .gauge-calculator-layout { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 24px; padding: 20px; }
+.knitting-report-editor .gauge-calculator-inputs { min-width: 0; display: grid; align-content: start; gap: 14px; }
+.knitting-report-editor .gauge-calculator-inputs .report-field { min-width: 0; display: grid; gap: 5px; color: var(--color-text-secondary); font-size: 13px; }
+.knitting-report-editor .gauge-calculator-fields { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.knitting-report-editor .gauge-calculator-input-wrap { position: relative; min-width: 0; display: flex; align-items: center; }
+.knitting-report-editor .gauge-calculator-input-wrap input,
+.knitting-report-editor .gauge-calculator-inputs select { width: 100%; min-width: 0; min-height: 44px; padding: 0 44px 0 12px; border: 1px solid var(--color-border); border-radius: 10px; color: var(--color-text); background: var(--color-surface); font-size: 14px; }
+.knitting-report-editor .gauge-calculator-inputs select { padding-right: 12px; }
+.knitting-report-editor .gauge-calculator-input-wrap small { position: absolute; right: 11px; color: var(--color-text-muted); font-size: 12px; pointer-events: none; }
+.knitting-report-editor .gauge-calculator-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.knitting-report-editor .gauge-calculator-actions > button,
+.knitting-report-editor .gauge-calculator-apply { min-height: 44px; }
+.knitting-report-editor .gauge-calculator-error { margin: -4px 0 0; color: var(--color-danger); font-size: 12px; line-height: 1.45; }
+.knitting-report-editor .gauge-calculator-result { min-width: 0; display: grid; align-content: start; gap: 10px; padding-left: 24px; border-left: 1px solid var(--color-divider); }
+.knitting-report-editor .gauge-calculator-result h3 { margin: 0; color: var(--color-text); font-size: 14px; font-weight: 600; }
+.knitting-report-editor .gauge-calculator-result > p { min-height: 44px; display: flex; align-items: center; justify-content: space-between; gap: 12px; margin: 0; padding: 8px 12px; border-bottom: 1px solid var(--color-divider); color: var(--color-text-secondary); font-size: 13px; }
+.knitting-report-editor .gauge-calculator-result > p strong { color: var(--color-primary); font-size: 20px; font-weight: 700; white-space: nowrap; }
+.knitting-report-editor .gauge-calculator-result > p strong small { color: var(--color-text-muted); font-size: 12px; font-weight: 500; }
+.knitting-report-editor .gauge-calculator-result > p.gauge-calculator-empty { justify-content: flex-start; color: var(--color-text-muted); font-size: 13px; }
+.knitting-report-editor .gauge-calculator-apply { justify-self: start; margin-top: 4px; }
+
+@media (max-width: 640px) {
+  .knitting-report-editor .gauge-calculator-layout { grid-template-columns: minmax(0, 1fr); gap: 18px; padding: 16px; }
+  .knitting-report-editor .gauge-calculator-result { padding: 16px 0 0; border-top: 1px solid var(--color-divider); border-left: 0; }
+  .knitting-report-editor .gauge-calculator-header { padding: 16px; }
+  .knitting-report-editor .gauge-calculator-header p { max-width: 38ch; }
+}
+
+@media (max-width: 380px) {
+  .knitting-report-editor .gauge-calculator-fields { grid-template-columns: minmax(0, 1fr); }
+}
+
 body:has(.knitting-report-editor) .pwa-notice { border-color: var(--color-border); border-radius: 16px; color: var(--color-text-secondary); background: var(--color-surface); box-shadow: none; }
 body:has(.knitting-report-editor) .pwa-notice-icon { color: var(--color-tertiary); background: var(--color-tertiary-soft); }
 body:has(.knitting-report-editor) .pwa-dismiss-button { width: 44px; height: 44px; border-radius: 10px; color: var(--color-secondary); }
