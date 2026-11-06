@@ -143,6 +143,5 @@ export const de: Record<string, string> = {
   "완성 실측": "Fertige Maße",
   "실 메모": "Garnnotiz",
   "사진 도안 만들기": "Fotoanleitung",
-  "광고 모집": "Hier werben",
   "배너 닫기": "Banner schließen",
 }

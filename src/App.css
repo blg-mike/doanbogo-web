@@ -122,8 +122,9 @@ html.viewer-viewport-locked .viewer-shell { height: 100dvh; min-height: 0; flex:
 .viewer-action.selected { border-color: var(--color-primary); color: var(--color-primary); background: var(--color-primary-soft); }
 .icon-button.light { border: 1px solid var(--color-border); background: #fff; }
 .pdf-work-area { position: relative; flex: 1; min-height: 0; display: flex; overflow: hidden; background: var(--color-viewer-background); }
-.viewer-ad-banner { box-sizing: border-box; height: 64px; min-height: 64px; flex: 0 0 64px; display: flex; align-items: center; justify-content: center; background-position: center 50%; background-size: cover; background-repeat: no-repeat; }
-.viewer-ad-banner-link { min-height: 44px; display: inline-flex; align-items: center; justify-content: center; padding: 0 20px; border-radius: 8px; color: #16452c; background: rgba(255,255,255,.86); box-shadow: 0 2px 8px rgba(22,69,44,.16); font-size: 14px; font-weight: 700; text-decoration: none; }
+.viewer-ad-banner { box-sizing: border-box; height: 25px; min-height: 25px; flex: 0 0 25px; display: flex; align-items: center; justify-content: center; background-position: center 50%; background-size: cover; background-repeat: no-repeat; }
+.viewer-ad-banner-link { min-height: 23px; display: inline-flex; align-items: center; justify-content: center; gap: 6px; padding: 0 10px; border-radius: 6px; color: #16452c; background: rgba(255,255,255,.86); box-shadow: 0 1px 4px rgba(22,69,44,.16); font-size: 10px; font-weight: 700; text-decoration: none; }
+.viewer-ad-banner-link .viewer-support-icon { width: 14px; height: 14px; }
 .viewer-ad-banner-link:hover { background: #fff; }
 .viewer-ad-banner-link:focus-visible { outline: 2px solid var(--color-focus-ring); outline-offset: 2px; }
 .pdf-document-area { position: relative; flex: 1 1 0; min-width: 0; min-height: 0; display: flex; overflow: hidden; background: var(--color-viewer-background); }

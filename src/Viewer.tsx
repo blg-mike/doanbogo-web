@@ -3178,7 +3178,7 @@ export default function Viewer() {
         </div>
       </header>
       {!reportMode && !focusView && viewerAdBannerVisible && <div className="viewer-ad-banner" style={{ backgroundImage: `url(${viewerAdBannerImage})` }}>
-        <a className="viewer-ad-banner-link" href="mailto:knitpeek.cs@gmail.com">{t('광고 모집')}</a>
+        <a className="viewer-ad-banner-link" href="https://buymeacoffee.com/knitpeek" target="_blank" rel="noopener noreferrer"><img className="viewer-support-icon" src={yarnGiftIcon} alt="" aria-hidden="true" /><span>{t('실 한 볼 선물하기')}</span></a>
       </div>}
       <section className={'pdf-work-area' + (reportMode ? ' report-work-area' : '')}>
         <div className={'pdf-document-area ' + (reportMode ? '' : snapshot.split ? (orientation === 'wide' ? 'split-wide' : 'split-tall') : 'single-pane')} ref={areaRef}>

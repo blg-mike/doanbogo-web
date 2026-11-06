@@ -143,6 +143,5 @@ export const fi: Record<string, string> = {
   "완성 실측": "Valmiin työn mitat",
   "실 메모": "Lankamuistiinpanot",
   "사진 도안 만들기": "Valokuvaohje",
-  "광고 모집": "Mainosta täällä",
   "배너 닫기": "Sulje mainosbanneri",
 }

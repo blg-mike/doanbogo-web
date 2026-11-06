@@ -143,6 +143,5 @@ export const da: Record<string, string> = {
   "완성 실측": "Færdige mål",
   "실 메모": "Garnnoter",
   "사진 도안 만들기": "Fotoopskrift",
-  "광고 모집": "Annoncér her",
   "배너 닫기": "Luk banner",
 }
