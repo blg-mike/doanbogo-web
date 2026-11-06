@@ -365,7 +365,7 @@ body:has(.knitting-report-editor) .pwa-dismiss-button:focus-visible { outline: 3
 .knitting-report-editor .report-form-card .report-field.wide { grid-column: 1 / -1; }
 .knitting-report-editor .report-date-input-wrap { min-width: 0; position: relative; display: block; }
 .knitting-report-editor .report-date-input-wrap > input { width: 100%; }
-.knitting-report-editor .report-date-placeholder { position: absolute; z-index: 1; inset: 0 34px 0 10px; display: flex; align-items: center; overflow: hidden; color: var(--color-text-muted); background: var(--color-surface); pointer-events: none; }
+.knitting-report-editor .report-date-placeholder { position: absolute; z-index: 1; inset: 0 34px 0 10px; display: flex; align-items: center; overflow: hidden; color: var(--color-text-muted); background: var(--color-surface); pointer-events: none; white-space: nowrap; }
 .knitting-report-editor .report-gauge-manual-value { box-sizing: border-box; width: 84px; min-width: 0; min-height: 44px; justify-self: end; padding: 2px 0; border: 0; border-bottom: 1px solid var(--color-divider); border-radius: 0; color: var(--color-primary); background: transparent; text-align: right; font-size: 13px; font-weight: 700; font-variant-numeric: tabular-nums; }
 .knitting-report-editor .report-gauge-manual-value:focus { outline: 2px solid var(--color-primary); outline-offset: 1px; }
 .knitting-report-editor .report-form-empty { margin: 0; color: var(--color-text-secondary); font-size: 14px; line-height: 1.55; }
