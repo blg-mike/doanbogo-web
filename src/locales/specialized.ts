@@ -680,3 +680,123 @@ Object.assign(specializedTranslations.de, chartToolTranslations.de)
 Object.assign(specializedTranslations.da, chartToolTranslations.da)
 Object.assign(specializedTranslations.nb, chartToolTranslations.nb)
 Object.assign(specializedTranslations.fi, chartToolTranslations.fi)
+
+const viewerTutorialTranslations: Record<'en' | 'ja' | 'de' | 'da' | 'nb' | 'fi', Partial<Record<LocaleKey, string>>> = {
+  en: {
+    '뷰어 사용법': 'Viewer help', '처음 사용하는 분을 위한 안내': 'A quick guide for first-time users', '뷰어 사용법을 알아볼까요?': 'Would you like a tour of the Viewer?',
+    '주요 버튼을 짚어 보며 화면에서 하는 일을 안내해 드릴게요. 도안이나 작업 내용은 바뀌지 않습니다.': 'I’ll point out the main controls and explain what they do. Your pattern and work data won’t change.',
+    '나중에': 'Later', '시작하기': 'Start', '건너뛰기': 'Skip', '건너뛰려면 Esc를 누르세요.': 'Press Esc to skip.', '{current}/{total}': '{current}/{total}',
+    '집중선 설정': 'Focus line settings',
+    '두 영역에서 서로 다른 페이지를 나란히 볼 수 있어요. 각 영역의 페이지와 확대 위치는 따로 움직이고, 가운데 경계로 너비를 조절해요.': 'View different pages side by side. Each pane has its own page and zoom position; drag the divider between them to resize the panes.',
+    '주변 도구를 접고 카운터와 타이머를 남겨 도안에 집중해요. 해제 버튼이나 Escape로 돌아올 수 있어요.': 'Collapse surrounding tools and keep the counter and timer visible while you focus on the pattern. Use the exit button or press Escape to return.',
+    '지금 뜨는 위치를 표시해요. 선을 끌어 위치를 옮기고, 짧게 누르면 메뉴가 열려요.': 'Mark your current row. Drag the line to move it; tap it briefly to open its menu.',
+    '마커와 스타일을 바꾸고 참고선을 추가하거나 선택한 선을 삭제할 수 있어요. 스타일에서 선의 색과 두께를 조절해요.': 'Change the marker and line style, add a reference line, or delete the selected line. Open Style to change the line color and thickness.',
+    '스타일에서 집중선을 켜면 현재 줄 주변이 밝게 보여요. 집중 강도와 띠 두께를 조절할 수 있어요.': 'Turn on the focus line in Style to brighten the rows around your current row. Adjust the focus strength and band thickness.',
+    '단수를 세고 보조 카운터를 관리해요. 카운터 이름을 누르면 설정이 열리고, − / +로 값을 바꿔요.': 'Count rows and manage auxiliary counters. Tap a counter name to open its settings, and use − / + to change its value.',
+    '재생을 눌러 작업시간을 재고, 일시정지하면 저장돼요. 시간을 누르면 날짜별 기록을 볼 수 있어요.': 'Press play to track your work time and pause to save it. Tap the time to view daily work records.',
+    '현재 영역의 도안을 시계 방향으로 90도 돌려요. 좁은 화면에서는 더보기 메뉴 안에 있어요.': 'Rotate the pattern in the active pane 90° clockwise. On narrow screens, find this in More.',
+    '게이지·실·바늘과 완성 기록을 정리해요. 뜨개보고서에서 내용을 작성하고 PDF나 공유 이미지로 남길 수 있어요.': 'Record gauge, yarn, needles, and finished-project details. Open Knitting Report to fill it in and save a PDF or shareable image.',
+    '도안 회전': 'Rotate pattern',
+  },
+  ja: {
+    '뷰어 사용법': 'ビューアの使い方', '처음 사용하는 분을 위한 안내': '初めて使う方向けのガイド', '뷰어 사용법을 알아볼까요?': 'ビューアの使い方を見てみますか？',
+    '주요 버튼을 짚어 보며 화면에서 하는 일을 안내해 드릴게요. 도안이나 작업 내용은 바뀌지 않습니다.': '主なボタンの場所と使い方をご案内します。編み図や作業内容は変更されません。',
+    '나중에': 'あとで', '시작하기': '開始', '건너뛰기': 'スキップ', '건너뛰려면 Esc를 누르세요.': 'Escキーでスキップできます。', '{current}/{total}': '{current}/{total}',
+    '집중선 설정': '集中線の設定',
+    '두 영역에서 서로 다른 페이지를 나란히 볼 수 있어요. 각 영역의 페이지와 확대 위치는 따로 움직이고, 가운데 경계로 너비를 조절해요.': '異なるページを並べて表示できます。各領域のページと拡大位置は別々に動き、中央の境界をドラッグして幅を調整します。',
+    '주변 도구를 접고 카운터와 타이머를 남겨 도안에 집중해요. 해제 버튼이나 Escape로 돌아올 수 있어요.': '周囲のツールをたたみ、カウンターとタイマーを残して編み図に集中できます。解除ボタンまたはEscapeキーで戻れます。',
+    '지금 뜨는 위치를 표시해요. 선을 끌어 위치를 옮기고, 짧게 누르면 메뉴가 열려요.': '今編んでいる段を示します。線をドラッグして移動し、短くタップするとメニューが開きます。',
+    '마커와 스타일을 바꾸고 참고선을 추가하거나 선택한 선을 삭제할 수 있어요. 스타일에서 선의 색과 두께를 조절해요.': 'マーカーやスタイルを変更し、補助線の追加や選択した線の削除ができます。スタイルで線の色と太さを調整します。',
+    '스타일에서 집중선을 켜면 현재 줄 주변이 밝게 보여요. 집중 강도와 띠 두께를 조절할 수 있어요.': 'スタイルで集中線をオンにすると、現在の段の周囲が明るくなります。集中度と帯の太さを調整できます。',
+    '단수를 세고 보조 카운터를 관리해요. 카운터 이름을 누르면 설정이 열리고, − / +로 값을 바꿔요.': '段数を数え、補助カウンターを管理します。カウンター名をタップして設定を開き、− / +で数を変更します。',
+    '재생을 눌러 작업시간을 재고, 일시정지하면 저장돼요. 시간을 누르면 날짜별 기록을 볼 수 있어요.': '再生を押して作業時間を計り、一時停止すると保存されます。時間をタップすると日別の記録を確認できます。',
+    '현재 영역의 도안을 시계 방향으로 90도 돌려요. 좁은 화면에서는 더보기 메뉴 안에 있어요.': '現在の領域の編み図を時計回りに90度回転します。画面が狭い場合は「その他」メニューにあります。',
+    '게이지·실·바늘과 완성 기록을 정리해요. 뜨개보고서에서 내용을 작성하고 PDF나 공유 이미지로 남길 수 있어요.': 'ゲージ・毛糸・針・完成記録をまとめます。編み物レポートを開いて入力し、PDFや共有画像として保存できます。',
+    '도안 회전': '編み図を回転',
+  },
+  de: {
+    '뷰어 사용법': 'Viewer-Hilfe', '처음 사용하는 분을 위한 안내': 'Kurze Einführung für neue Nutzer', '뷰어 사용법을 알아볼까요?': 'Möchtest du eine Einführung in den Viewer?',
+    '주요 버튼을 짚어 보며 화면에서 하는 일을 안내해 드릴게요. 도안이나 작업 내용은 바뀌지 않습니다.': 'Ich zeige dir die wichtigsten Schaltflächen und ihre Funktionen. Deine Anleitung und Arbeitsdaten bleiben unverändert.',
+    '나중에': 'Später', '시작하기': 'Starten', '건너뛰기': 'Überspringen', '건너뛰려면 Esc를 누르세요.': 'Zum Überspringen Esc drücken.', '{current}/{total}': '{current}/{total}',
+    '집중선 설정': 'Fokuslinie einstellen',
+    '두 영역에서 서로 다른 페이지를 나란히 볼 수 있어요. 각 영역의 페이지와 확대 위치는 따로 움직이고, 가운데 경계로 너비를 조절해요.': 'Zeige zwei verschiedene Seiten nebeneinander. Seite und Zoomposition lassen sich je Bereich getrennt bewegen; ziehe die Trennlinie, um die Breite anzupassen.',
+    '주변 도구를 접고 카운터와 타이머를 남겨 도안에 집중해요. 해제 버튼이나 Escape로 돌아올 수 있어요.': 'Klappe die Werkzeuge ein und behalte Zähler und Timer im Blick. Mit der Schaltfläche zum Beenden oder Esc kehrst du zurück.',
+    '지금 뜨는 위치를 표시해요. 선을 끌어 위치를 옮기고, 짧게 누르면 메뉴가 열려요.': 'Markiere die aktuelle Reihe. Ziehe die Linie an die gewünschte Stelle oder tippe kurz darauf, um das Menü zu öffnen.',
+    '마커와 스타일을 바꾸고 참고선을 추가하거나 선택한 선을 삭제할 수 있어요. 스타일에서 선의 색과 두께를 조절해요.': 'Ändere Markierung und Stil, füge eine Hilfslinie hinzu oder lösche die ausgewählte Linie. Unter Stil passt du Farbe und Stärke an.',
+    '스타일에서 집중선을 켜면 현재 줄 주변이 밝게 보여요. 집중 강도와 띠 두께를 조절할 수 있어요.': 'Aktiviere unter Stil die Fokuslinie, um die Reihen um deine aktuelle Reihe aufzuhellen. Passe Fokusstärke und Bandbreite an.',
+    '단수를 세고 보조 카운터를 관리해요. 카운터 이름을 누르면 설정이 열리고, − / +로 값을 바꿔요.': 'Zähle Reihen und verwalte Zusatz-Zähler. Tippe auf einen Zählernamen für die Einstellungen und ändere den Wert mit − / +.',
+    '재생을 눌러 작업시간을 재고, 일시정지하면 저장돼요. 시간을 누르면 날짜별 기록을 볼 수 있어요.': 'Starte die Zeiterfassung mit Wiedergabe und pausiere zum Speichern. Tippe auf die Zeit, um Tagesaufzeichnungen zu sehen.',
+    '현재 영역의 도안을 시계 방향으로 90도 돌려요. 좁은 화면에서는 더보기 메뉴 안에 있어요.': 'Drehe die Anleitung im aktiven Bereich um 90° im Uhrzeigersinn. Auf schmalen Bildschirmen findest du die Funktion unter Mehr.',
+    '게이지·실·바늘과 완성 기록을 정리해요. 뜨개보고서에서 내용을 작성하고 PDF나 공유 이미지로 남길 수 있어요.': 'Halte Maschenprobe, Garn, Nadeln und Fertigstellung fest. Öffne den Strickbericht und speichere ihn als PDF oder teilbares Bild.',
+    '도안 회전': 'Anleitung drehen',
+  },
+  da: {
+    '뷰어 사용법': 'Hjælp til Viewer', '처음 사용하는 분을 위한 안내': 'Kort introduktion til nye brugere', '뷰어 사용법을 알아볼까요?': 'Vil du have en rundvisning i Viewer?',
+    '주요 버튼을 짚어 보며 화면에서 하는 일을 안내해 드릴게요. 도안이나 작업 내용은 바뀌지 않습니다.': 'Jeg viser dig de vigtigste knapper og forklarer, hvad de gør. Dit mønster og dine arbejdsdata ændres ikke.',
+    '나중에': 'Senere', '시작하기': 'Start', '건너뛰기': 'Spring over', '건너뛰려면 Esc를 누르세요.': 'Tryk på Esc for at springe over.', '{current}/{total}': '{current}/{total}',
+    '집중선 설정': 'Indstillinger for fokuslinje',
+    '두 영역에서 서로 다른 페이지를 나란히 볼 수 있어요. 각 영역의 페이지와 확대 위치는 따로 움직이고, 가운데 경계로 너비를 조절해요.': 'Se forskellige sider ved siden af hinanden. Side og zoomposition styres separat i hvert område; træk i skillelinjen for at ændre bredden.',
+    '주변 도구를 접고 카운터와 타이머를 남겨 도안에 집중해요. 해제 버튼이나 Escape로 돌아올 수 있어요.': 'Fold værktøjerne sammen, og behold tæller og timer synlige, mens du fokuserer på mønsteret. Brug afslut-knappen eller Esc for at vende tilbage.',
+    '지금 뜨는 위치를 표시해요. 선을 끌어 위치를 옮기고, 짧게 누르면 메뉴가 열려요.': 'Markér den aktuelle pind. Træk linjen for at flytte den, eller tryk kort på den for at åbne menuen.',
+    '마커와 스타일을 바꾸고 참고선을 추가하거나 선택한 선을 삭제할 수 있어요. 스타일에서 선의 색과 두께를 조절해요.': 'Skift markør og stil, tilføj en hjælpelinje, eller slet den valgte linje. Under Stil kan du ændre farve og tykkelse.',
+    '스타일에서 집중선을 켜면 현재 줄 주변이 밝게 보여요. 집중 강도와 띠 두께를 조절할 수 있어요.': 'Slå fokuslinjen til under Stil for at gøre pindene omkring den aktuelle pind lysere. Justér fokusstyrke og båndbredde.',
+    '단수를 세고 보조 카운터를 관리해요. 카운터 이름을 누르면 설정이 열리고, − / +로 값을 바꿔요.': 'Tæl pinde og administrér hjælpetællere. Tryk på et tællernavn for at åbne indstillingerne, og brug − / + til at ændre værdien.',
+    '재생을 눌러 작업시간을 재고, 일시정지하면 저장돼요. 시간을 누르면 날짜별 기록을 볼 수 있어요.': 'Tryk på afspil for at måle arbejdstid, og sæt på pause for at gemme. Tryk på tiden for at se daglige registreringer.',
+    '현재 영역의 도안을 시계 방향으로 90도 돌려요. 좁은 화면에서는 더보기 메뉴 안에 있어요.': 'Drej mønsteret i det aktive område 90° med uret. På smalle skærme findes funktionen under Mere.',
+    '게이지·실·바늘과 완성 기록을 정리해요. 뜨개보고서에서 내용을 작성하고 PDF나 공유 이미지로 남길 수 있어요.': 'Saml oplysninger om strikkefasthed, garn, pinde og færdigt arbejde. Åbn Strikkerapport for at udfylde og gemme som PDF eller dele som billede.',
+    '도안 회전': 'Rotér mønster',
+  },
+  nb: {
+    '뷰어 사용법': 'Hjelp til Viewer', '처음 사용하는 분을 위한 안내': 'Kort veiledning for nye brukere', '뷰어 사용법을 알아볼까요?': 'Vil du ha en omvisning i Viewer?',
+    '주요 버튼을 짚어 보며 화면에서 하는 일을 안내해 드릴게요. 도안이나 작업 내용은 바뀌지 않습니다.': 'Jeg viser deg de viktigste knappene og forklarer hva de gjør. Mønsteret og arbeidsdataene dine endres ikke.',
+    '나중에': 'Senere', '시작하기': 'Start', '건너뛰기': 'Hopp over', '건너뛰려면 Esc를 누르세요.': 'Trykk Esc for å hoppe over.', '{current}/{total}': '{current}/{total}',
+    '집중선 설정': 'Innstillinger for fokuslinje',
+    '두 영역에서 서로 다른 페이지를 나란히 볼 수 있어요. 각 영역의 페이지와 확대 위치는 따로 움직이고, 가운데 경계로 너비를 조절해요.': 'Se ulike sider ved siden av hverandre. Side og zoomposisjon styres separat i hvert område; dra i skillet for å justere bredden.',
+    '주변 도구를 접고 카운터와 타이머를 남겨 도안에 집중해요. 해제 버튼이나 Escape로 돌아올 수 있어요.': 'Fold sammen verktøyene, og behold teller og tidtaker synlige mens du fokuserer på mønsteret. Bruk avslutt-knappen eller Esc for å gå tilbake.',
+    '지금 뜨는 위치를 표시해요. 선을 끌어 위치를 옮기고, 짧게 누르면 메뉴가 열려요.': 'Marker den gjeldende omgangen. Dra linjen for å flytte den, eller trykk kort på den for å åpne menyen.',
+    '마커와 스타일을 바꾸고 참고선을 추가하거나 선택한 선을 삭제할 수 있어요. 스타일에서 선의 색과 두께를 조절해요.': 'Endre markør og stil, legg til en hjelpelinje eller slett den valgte linjen. Under Stil kan du endre farge og tykkelse.',
+    '스타일에서 집중선을 켜면 현재 줄 주변이 밝게 보여요. 집중 강도와 띠 두께를 조절할 수 있어요.': 'Slå på fokuslinjen under Stil for å gjøre omgangene rundt den gjeldende omgangen lysere. Juster fokusstyrke og båndbredde.',
+    '단수를 세고 보조 카운터를 관리해요. 카운터 이름을 누르면 설정이 열리고, − / +로 값을 바꿔요.': 'Tell omganger og administrer hjelpetellere. Trykk på et tellernavn for å åpne innstillingene, og bruk − / + for å endre verdien.',
+    '재생을 눌러 작업시간을 재고, 일시정지하면 저장돼요. 시간을 누르면 날짜별 기록을 볼 수 있어요.': 'Trykk på spill av for å måle arbeidstid, og sett på pause for å lagre. Trykk på tiden for å se daglige registreringer.',
+    '현재 영역의 도안을 시계 방향으로 90도 돌려요. 좁은 화면에서는 더보기 메뉴 안에 있어요.': 'Roter mønsteret i det aktive området 90° med klokken. På smale skjermer finner du funksjonen under Mer.',
+    '게이지·실·바늘과 완성 기록을 정리해요. 뜨개보고서에서 내용을 작성하고 PDF나 공유 이미지로 남길 수 있어요.': 'Samle informasjon om strikkefasthet, garn, pinner og ferdig arbeid. Åpne Strikkerapport for å fylle den ut og lagre som PDF eller delbart bilde.',
+    '도안 회전': 'Roter mønster',
+  },
+  fi: {
+    '뷰어 사용법': 'Viewer-ohje', '처음 사용하는 분을 위한 안내': 'Pikaopas uusille käyttäjille', '뷰어 사용법을 알아볼까요?': 'Haluatko tutustua Vieweriin?',
+    '주요 버튼을 짚어 보며 화면에서 하는 일을 안내해 드릴게요. 도안이나 작업 내용은 바뀌지 않습니다.': 'Esittelen tärkeimmät painikkeet ja niiden toiminnot. Ohjeesi ja työtietosi eivät muutu.',
+    '나중에': 'Myöhemmin', '시작하기': 'Aloita', '건너뛰기': 'Ohita', '건너뛰려면 Esc를 누르세요.': 'Ohita painamalla Esc.', '{current}/{total}': '{current}/{total}',
+    '집중선 설정': 'Tarkennusviivan asetukset',
+    '두 영역에서 서로 다른 페이지를 나란히 볼 수 있어요. 각 영역의 페이지와 확대 위치는 따로 움직이고, 가운데 경계로 너비를 조절해요.': 'Näytä eri sivut vierekkäin. Kummallakin alueella on oma sivu ja zoomauskohta; muuta leveyttä vetämällä niiden välistä rajaa.',
+    '주변 도구를 접고 카운터와 타이머를 남겨 도안에 집중해요. 해제 버튼이나 Escape로 돌아올 수 있어요.': 'Piilota ympäröivät työkalut ja jätä laskuri ja ajastin näkyviin, jotta voit keskittyä ohjeeseen. Palaa takaisin poistumispainikkeella tai Esc-näppäimellä.',
+    '지금 뜨는 위치를 표시해요. 선을 끌어 위치를 옮기고, 짧게 누르면 메뉴가 열려요.': 'Merkitse nykyinen kerros. Siirrä viivaa vetämällä tai avaa valikko napauttamalla sitä lyhyesti.',
+    '마커와 스타일을 바꾸고 참고선을 추가하거나 선택한 선을 삭제할 수 있어요. 스타일에서 선의 색과 두께를 조절해요.': 'Muuta merkkiä ja tyyliä, lisää apuviiva tai poista valittu viiva. Säädä väriä ja paksuutta Tyyli-valikossa.',
+    '스타일에서 집중선을 켜면 현재 줄 주변이 밝게 보여요. 집중 강도와 띠 두께를 조절할 수 있어요.': 'Ota Tyyli-valikossa tarkennusviiva käyttöön, niin nykyisen kerroksen ympäristö kirkastuu. Säädä tarkennuksen voimakkuutta ja kaistan paksuutta.',
+    '단수를 세고 보조 카운터를 관리해요. 카운터 이름을 누르면 설정이 열리고, − / +로 값을 바꿔요.': 'Laske kerroksia ja hallitse apulaskureita. Avaa asetukset napauttamalla laskurin nimeä ja muuta arvoa − / +-painikkeilla.',
+    '재생을 눌러 작업시간을 재고, 일시정지하면 저장돼요. 시간을 누르면 날짜별 기록을 볼 수 있어요.': 'Mittaa työaikaa painamalla toistoa ja tallenna se keskeyttämällä. Näet päiväkohtaiset kirjaukset napauttamalla aikaa.',
+    '현재 영역의 도안을 시계 방향으로 90도 돌려요. 좁은 화면에서는 더보기 메뉴 안에 있어요.': 'Kierrä aktiivisen alueen ohjetta 90° myötäpäivään. Kapealla näytöllä toiminto löytyy Lisää-valikosta.',
+    '게이지·실·바늘과 완성 기록을 정리해요. 뜨개보고서에서 내용을 작성하고 PDF나 공유 이미지로 남길 수 있어요.': 'Kirjaa tiheys, langat, puikot ja työn valmistuminen. Avaa neuletyöraportti ja tallenna se PDF:nä tai jaettavana kuvana.',
+    '도안 회전': 'Kierrä ohjetta',
+  },
+}
+Object.assign(specializedTranslations.en, viewerTutorialTranslations.en)
+Object.assign(specializedTranslations.ja, viewerTutorialTranslations.ja)
+Object.assign(specializedTranslations.de, viewerTutorialTranslations.de)
+Object.assign(specializedTranslations.da, viewerTutorialTranslations.da)
+Object.assign(specializedTranslations.nb, viewerTutorialTranslations.nb)
+Object.assign(specializedTranslations.fi, viewerTutorialTranslations.fi)
+
+const gaugeResultTranslations: Record<'en' | 'ja' | 'de' | 'da' | 'nb' | 'fi', Partial<Record<LocaleKey, string>>> = {
+  en: { '코 줍기 비율': 'Pick-up Ratio', '{rows}단당 {stitches}코': '{stitches} sts / {rows} rows', '약 {value}': 'About {value}', '코·단 비율': 'Stitch-to-row ratio', '세탁 후 변화': 'Change after washing', '수축': 'shrinkage', '늘어남': 'growth', '변화 없음': 'no change', '수축률은 게이지 변화 기준의 환산값입니다.': 'Calculated from the change in gauge density.', '게이지 결과 이미지': 'Gauge result images', '게이지 결과 이미지 미리보기': 'Gauge result image preview' },
+  ja: { '코 줍기 비율': '拾い目の割合', '{rows}단당 {stitches}코': '{rows}段につき{stitches}目', '약 {value}': '約{value}', '코·단 비율': '目数と段数の比率', '세탁 후 변화': '洗濯後の変化', '수축': '縮み', '늘어남': '伸び', '변화 없음': '変化なし', '수축률은 게이지 변화 기준의 환산값입니다.': 'ゲージ密度の変化から換算した値です。', '게이지 결과 이미지': 'ゲージ結果画像', '게이지 결과 이미지 미리보기': 'ゲージ結果画像のプレビュー' },
+  de: { '코 줍기 비율': 'Maschenaufnahme-Verhältnis', '{rows}단당 {stitches}코': '{stitches} M / {rows} R', '약 {value}': 'Ca. {value}', '코·단 비율': 'Maschen-Reihen-Verhältnis', '세탁 후 변화': 'Änderung nach dem Waschen', '수축': 'Einlaufen', '늘어남': 'Dehnung', '변화 없음': 'keine Änderung', '수축률은 게이지 변화 기준의 환산값입니다.': 'Aus der Änderung der Maschenprobe berechnet.', '게이지 결과 이미지': 'Maschenproben-Ergebnisbilder', '게이지 결과 이미지 미리보기': 'Vorschau des Maschenproben-Ergebnisbilds' },
+  da: { '코 줍기 비율': 'Forhold for opsamling af masker', '{rows}단당 {stitches}코': '{stitches} m / {rows} p', '약 {value}': 'Ca. {value}', '코·단 비율': 'Maske-pind-forhold', '세탁 후 변화': 'Ændring efter vask', '수축': 'krympning', '늘어남': 'udvidelse', '변화 없음': 'ingen ændring', '수축률은 게이지 변화 기준의 환산값입니다.': 'Beregnet ud fra ændringen i strikkefasthed.', '게이지 결과 이미지': 'Billeder af strikkefasthed', '게이지 결과 이미지 미리보기': 'Forhåndsvisning af strikkefasthedsbillede' },
+  nb: { '코 줍기 비율': 'Forhold for å plukke opp masker', '{rows}단당 {stitches}코': '{stitches} m / {rows} p', '약 {value}': 'Ca. {value}', '코·단 비율': 'Maske-rad-forhold', '세탁 후 변화': 'Endring etter vask', '수축': 'krymping', '늘어남': 'utvidelse', '변화 없음': 'ingen endring', '수축률은 게이지 변화 기준의 환산값입니다.': 'Beregnet ut fra endringen i strikkefasthet.', '게이지 결과 이미지': 'Bilder av strikkefasthet', '게이지 결과 이미지 미리보기': 'Forhåndsvisning av strikkefasthetsbilde' },
+  fi: { '코 줍기 비율': 'Silmukoiden poimintasuhde', '{rows}단당 {stitches}코': '{stitches} s / {rows} krs', '약 {value}': 'Noin {value}', '코·단 비율': 'Silmukka-kerros-suhde', '세탁 후 변화': 'Muutos pesun jälkeen', '수축': 'kutistuminen', '늘어남': 'venyminen', '변화 없음': 'ei muutosta', '수축률은 게이지 변화 기준의 환산값입니다.': 'Laskettu neuletiheyden muutoksesta.', '게이지 결과 이미지': 'Neuletiheyden tuloskuvat', '게이지 결과 이미지 미리보기': 'Neuletiheyden tuloskuvan esikatselu' },
+}
+Object.assign(specializedTranslations.en, gaugeResultTranslations.en)
+Object.assign(specializedTranslations.ja, gaugeResultTranslations.ja)
+Object.assign(specializedTranslations.de, gaugeResultTranslations.de)
+Object.assign(specializedTranslations.da, gaugeResultTranslations.da)
+Object.assign(specializedTranslations.nb, gaugeResultTranslations.nb)
+Object.assign(specializedTranslations.fi, gaugeResultTranslations.fi)

@@ -861,7 +861,7 @@ html.viewer-viewport-locked .viewer-shell { height: 100dvh; min-height: 0; flex:
 .instagram-report-dialog { width: min(100%,1180px); max-height: 92vh; display: flex; flex-direction: column; padding: 20px; overflow: hidden; }
 .instagram-report-dialog > .modal-heading { flex: 0 0 auto; }
 .instagram-report-dialog > .modal-heading small { display: block; margin-top: 5px; color: #8e8793; font-size: 10px; }
-.instagram-report-content { min-height: 0; display: grid; grid-template-columns: minmax(260px,360px) minmax(0,1fr); gap: 15px; margin-top: 12px; }
+.instagram-report-content { min-height: 0; flex: 1 1 auto; display: grid; grid-template-columns: minmax(260px,360px) minmax(0,1fr); gap: 15px; margin-top: 12px; }
 .instagram-report-photo-list { min-height: 0; max-height: 65vh; overflow: auto; padding: 8px; border: 1px solid #eee8ed; border-radius: 10px; }
 .instagram-report-photo-choice { display: grid; grid-template-columns: 18px 58px minmax(0,1fr); align-items: center; gap: 8px; padding: 7px 3px; border-bottom: 1px solid #f1edef; cursor: pointer; }
 .instagram-report-photo-choice img { width: 58px; height: 50px; border-radius: 5px; object-fit: cover; background: #f2eff2; }
@@ -872,11 +872,13 @@ html.viewer-viewport-locked .viewer-shell { height: 100dvh; min-height: 0; flex:
 .instagram-report-final { margin-top: 12px; }
 .instagram-report-limit, .instagram-report-empty { display: block; margin: 9px 0 0; color: #938a98; font-size: 9px; line-height: 1.5; }
 .instagram-report-preview { min-height: 300px; max-height: 65vh; display: grid; place-items: center; overflow: auto; border-radius: 10px; background: #f3f0f3; }
+.instagram-report-preview.has-gauge-carousel { min-height: 0; grid-template-rows: minmax(0,1fr) auto; }
 .instagram-report-preview img { max-width: 100%; max-height: 65vh; object-fit: contain; box-shadow: 0 5px 18px rgba(27,35,51,.13); }
+.instagram-report-preview.has-gauge-carousel img { min-height: 0; max-height: calc(65vh - 54px); }
 .instagram-report-preview > div { display: grid; justify-items: center; gap: 8px; color: #827986; font-size: 20px; }
 .instagram-report-preview > div small { font-size: 10px; }
 .instagram-report-error { margin: 10px 0 0; color: #c04e5b; font-size: 11px; }
-.instagram-report-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 12px; }
+.instagram-report-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; margin-top: 12px; }
 .knitting-report-page-footer { display: flex; justify-content: space-between; gap: 10px; padding-top: 15px; color: #9c94a0; font-size: 9px; }
 
 .viewer-shell.report-mode > .viewer-header, .viewer-shell.report-mode > .viewer-footer { display: none; }
@@ -1036,8 +1038,9 @@ html.viewer-viewport-locked .viewer-shell { height: 100dvh; min-height: 0; flex:
   .report-entry-with-photo > .report-photo-field { min-height: 110px; }
   .report-entry-with-photo .report-fields { grid-template-columns: repeat(2,minmax(0,1fr)); }
   .instagram-report-dialog { max-height: 96vh; padding: 12px; }
-  .instagram-report-content { grid-template-columns: 1fr; grid-template-rows: minmax(180px,1fr) minmax(190px,1fr); }
-  .instagram-report-photo-list, .instagram-report-preview { max-height: 35vh; }
+  .instagram-report-content { grid-template-columns: 1fr; grid-template-rows: minmax(0,1fr) minmax(0,1fr); }
+  .instagram-report-photo-list, .instagram-report-preview { min-height: 0; max-height: 35vh; }
+  .instagram-report-preview.has-gauge-carousel img { max-height: calc(35vh - 54px); }
 }
 @media (max-width: 430px) {
   .knitting-report-toolbar .primary-button { min-height: 34px; padding: 0 9px; font-size: 9px; }

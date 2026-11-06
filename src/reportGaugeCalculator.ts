@@ -1,5 +1,5 @@
 import type { GaugeSide } from './reportFormatting'
-import { getGaugeSamples, withGaugeSamples } from './reportFormatting'
+import { getGaugeSamples, withGaugeSamples, type GaugeSampleMeasurement } from './reportFormatting'
 
 export type GaugeCalculatorInput = {
   stitches: number
@@ -58,5 +58,23 @@ export function applyGaugeResultToFields(fields: Record<string, string>, target:
     [`gauge.${side}Width`]: '10',
     [`gauge.${side}Height`]: '10',
     [`gauge.${side}Unit`]: 'cm',
+  }
+}
+
+export function applyGaugeMeasurementToFields(fields: Record<string, string>, target: GaugeCalculatorTarget, measurement: GaugeSampleMeasurement, unit: 'cm' | 'inch') {
+  if (target.sampleIndex !== null) {
+    const samples = getGaugeSamples(fields)
+    const sample = samples[target.sampleIndex]
+    if (!sample) return fields
+    samples[target.sampleIndex] = { ...sample, [target.side]: { ...measurement } }
+    return withGaugeSamples(fields, samples)
+  }
+  return {
+    ...fields,
+    [`gauge.${target.side}Stitches`]: measurement.stitches,
+    [`gauge.${target.side}Rows`]: measurement.rows,
+    [`gauge.${target.side}Width`]: measurement.width,
+    [`gauge.${target.side}Height`]: measurement.height,
+    [`gauge.${target.side}Unit`]: unit,
   }
 }

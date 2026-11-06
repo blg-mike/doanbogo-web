@@ -15,7 +15,7 @@ React·TypeScript·Vite·PDF.js·IndexedDB 기반이다. `App.tsx`는 시작·�
 | 필기 한도·텍스트 | `annotationLimits.ts`, `textNote.ts` |
 | 카운터·타이머 시작 연동 | `CounterPanel.tsx`, `smartCounter.ts`, `counterAlertText.ts`, `timerCounterLink.ts` |
 | 작업시간·기록 패널 | `DocumentWorkTimer.tsx`, `WorkTimeRecordPanel.tsx`, `ReportWorkTime.tsx`, `workTime.ts` |
-| 보고서·출력 | `KnittingReport.tsx`, `GaugeCalculatorDialog.tsx`, `reportGaugeCalculator.ts`, `StandaloneReportRoute.tsx`, `reportFormatting.ts`, `reportMeasurementSelection.ts`, `reportDates.ts`, `knittingReportPdf.ts`, `instagramCaption.ts`, `InstagramCaptionDialog.tsx`, `InstagramReportDialog.tsx` |
+| 보고서·출력 | `KnittingReport.tsx`, `GaugeCalculatorDialog.tsx`, `reportGaugeCalculator.ts`, `gaugeResults.ts`, `StandaloneReportRoute.tsx`, `reportFormatting.ts`, `reportMeasurementSelection.ts`, `reportDates.ts`, `knittingReportPdf.ts`, `instagramGaugeResultImage.ts`, `instagramCaption.ts`, `InstagramCaptionDialog.tsx`, `InstagramReportDialog.tsx` |
 | PDF·사진·URL·QR 인식 | `photoImages.ts`, `photoDocument.ts`, `pdfPageRenderQueue.ts`, `pdfRenderResources.ts`, `pdfRecognition.ts`, `pdfRecognitionVersion.ts`, `qr.ts`, `qrDecode.ts`·Worker, `qrTileGrid.ts` |
 | 타입·영속화·호환성 | `types.ts`, `storage.ts`, `backup.ts`, `viewerCounterState.ts` |
 | UI·다국어 | `designTokens.ts`, `index.css`, `App.css`, `AppDesignSystem.css`, `locales/` |
@@ -46,12 +46,13 @@ React·TypeScript·Vite·PDF.js·IndexedDB 기반이다. `App.tsx`는 시작·�
 - 터치 태블릿의 카운터 관리 팝업은 가용 영역에 맞춰 표시하고 기존 44px 핸들로 크기를 조절한다. 포인터 캡처·프레임 단위 반영을 쓰고 취소·뷰포트 변경은 시작 크기로 복구한다. 크기 선호는 버전 키 `knitpeek:viewer-tool-sizes:v1`에 브라우저 로컬 UI 설정으로 저장한다. Viewer 영역, visualViewport와 safe area 안에서 표시 위치·크기를 보정한다. 작업 타이머는 푸터에 표시하며 이전 위치·크기 저장값은 변경하지 않고 새 배치에 적용하지 않는다.
 - `thumbnailGroups`는 라벨 순서, `thumbnailRailOrder`는 최상위 페이지·그룹 위치다. 소속 변경과 순서를 함께 정리·저장한다. 푸터의 썸네일 접기·펴기 버튼은 그룹 추가 행 오른쪽에 두며, 접힌 동안에도 그룹 행을 남기고 썸네일 레일만 숨긴다.
 - 선택·팝오버·드래그 상태와 집중보기는 세션 UI 상태이며, 터치 태블릿 카운터 팝업 위치·크기만 브라우저 로컬 UI 설정이다. 집중보기는 카운터·타이머 푸터를 유지하고 페이지·배율·중심을 보존한다. 우측 상단 집중보기 해제 버튼이나 Escape로 돌아오며 Viewer 재진입 때 기본 UI로 시작한다. 저장 오류·필기 한도 안내는 숨기지 않는다.
+- 첫 Viewer 사용 안내는 로딩과 활성 페이지 작업 불러오기가 끝난 뒤 브라우저 preferences의 viewer.tutorial.v1을 확인해 한 번 표시한다. 완료·나중에·건너뛰기 상태만 저장하며 도움말 버튼으로 재실행할 수 있다. 안내는 실제 기능을 실행하지 않고 임시 미리보기만 표시한다. 끝나면 임시로 바꾼 메뉴·집중보기·썸네일·내부 스크롤을 복원하며 도안 작업 데이터는 변경하지 않는다.
 - Viewer 가용 너비 760px 이하에서는 썸네일 그룹 행과 페이지 도구 행을 나누며, 600px 이하 페이지 도구는 축소·확대 메뉴와 더보기 메뉴로 간소화한다. 썸네일 접기 버튼은 두 번째 행 오른쪽 끝에 두고 페이지 도구는 그 왼쪽에 둔다. 카운터 목록과 관리·타이머는 하단 푸터에 남으며 별도의 푸터 도구 접기 버튼은 제공하지 않는다. 실제 높이를 Canvas 계산에 반영하고 타이머 구성·실행 상태는 유지한다. 카운터 목록은 독립 가로 스크롤한다. CSS 동적 뷰포트 갱신과 safe area를 사용하며 저장 형식은 바꾸지 않는다.
 - dirty 페이지는 순차 저장하고 이동·종료·탭 전환 시 flush한다. 메인 카운터·연결 진행선은 `saveViewerAndPageWorks`로 함께 저장한다. 반복과 보조 직접 조작은 페이지 작업을 읽거나 변경하지 않고 카운터 스냅샷·이력만 저장한다.
 - 페이지 읽기는 문서·페이지·요청 ID별로 추적한다. 실패를 빈 작업으로 대체하지 않고 준비 전 편집을 차단한다. 저장 실패 시 기존 데이터와 재시도 상태를 유지한다.
 - IndexedDB 불가 시 임시 메모리 경로를 사용하며 브라우저 종료 시 작업이 사라질 수 있음을 알린다.
 - 내부 백업은 `.doanbogo` v16을 내보내고 v1~v16 입력을 지원한다. 구버전 Viewer의 타임랩 필드는 가져오지 않는다. 작업시간 합계·세션·일별 기록은 보존한다. 인식 캐시는 재생성 가능한 데이터다.
-- 보고서는 기존 선택 필드에 기본 게이지 전후 실측·단위와 바늘 브랜드·mm/us/uk/jp 표기를 저장한다. 게이지 계산 결과는 기본 또는 추가 무늬 게이지의 선택한 세탁 전·후 쪽에 코·단 수와 10cm×10cm, cm 단위로 적용한다. 기본 무늬는 `gauge.pattern`, 추가 무늬와 세탁 전·후 실측은 `fields['gauge.samples']` JSON 문자열로 저장한다. 무늬가 없는 기존 추가 게이지는 빈 무늬로 읽는다. 각 게이지는 무늬, 세탁 전·후 10cm 기준 코·단 결과, 코·단·가로·세로 실측으로 편집하고 공유·PDF에 포함한다. 기존 보고서 필드 맵·DB·백업 버전은 유지한다. 도안 정보·수정사항·부자재는 추가 정보 컨테이너 없이 본문에서 편집하고, `ReportYarn.memo`는 각 사용 실의 메모다. 제거된 사이즈 편집과 전체 실 메모의 기존 값은 이동·삭제하지 않고 공유·PDF 호환을 위해 보존한다. 수정사항 공유에는 구간·저장 메모·서로 다른 기존 변경 값을 쓰고, 변경/메모가 비면 원래 값을 대체 설명으로 쓴다. 시작·완성·작업 사진·수동 작업시간 날짜는 연도 0001~9999 범위의 완전한 `YYYY-MM-DD`만 저장한다. 공유 직전 보고서를 저장하며 실패 시 공유창을 열지 않는다. 공유 문구 생성에는 `#니트피크 #knitpeek`을 포함하고 데이터 타입·DB·백업 버전을 유지한다.
+- 보고서는 기본 게이지 측정값을 `gauge.before/after*` 선택 필드에, 추가 게이지와 실측을 `fields['gauge.samples']` JSON 문자열에 저장한다. 화면 결과는 10cm 환산 코·단 수, 코 줍기 비율, 코·단 비율과 세탁 전후 변화로 계산하고 측정값은 계산기에서 기존 단위로 편집한다. PDF와 게이지 결과 이미지는 같은 계산 결과를 사용하며 파생값은 저장하지 않는다. 보고서 보기에서는 Viewer 타이머 막대를 숨기고, 본문 누계 기록은 `ReportWorkTime`이 유지한다. DB·백업 형식은 변경하지 않는다. 도안 정보·수정사항·부자재는 추가 정보 컨테이너 없이 본문에서 편집하고, `ReportYarn.memo`는 각 사용 실의 메모다. 제거된 사이즈 편집과 전체 실 메모의 기존 값은 이동·삭제하지 않고 공유·PDF 호환을 위해 보존한다. 수정사항 공유에는 구간·저장 메모·서로 다른 기존 변경 값을 쓰고, 변경/메모가 비면 원래 값을 대체 설명으로 쓴다. 시작·완성·작업 사진·수동 작업시간 날짜는 연도 0001~9999 범위의 완전한 `YYYY-MM-DD`만 저장한다. 공유 직전 보고서를 저장하며 실패 시 공유창을 열지 않는다. 공유 문구 생성에는 `#니트피크 #knitpeek`을 포함하고 데이터 타입·DB·백업 버전을 유지한다.
 
 ## 시간·카운터
 - 측정은 시작 시각과 `Date.now()` 차이로 계산하고 화면 갱신은 타이머 내부에서 처리한다.

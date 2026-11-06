@@ -203,6 +203,9 @@
 .knitting-report-editor .instagram-report-photo-choice img { background: var(--color-surface-subtle); }
 .knitting-report-editor .instagram-report-preview { background: var(--color-surface-subtle); }
 .knitting-report-editor .instagram-report-preview > div { color: var(--color-text-secondary); }
+.knitting-report-editor .instagram-report-preview .instagram-gauge-image-pages { display: flex; align-items: center; justify-content: center; gap: 12px; margin: 0; color: var(--color-text-secondary); font-size: 13px; }
+.knitting-report-editor .instagram-gauge-image-pages button { width: 44px; min-width: 44px; height: 44px; display: grid; place-items: center; border: 0; border-radius: 9px; color: var(--color-primary); background: var(--color-primary-soft); }
+.knitting-report-editor .instagram-gauge-image-pages button:disabled { opacity: .45; }
 .knitting-report-editor .instagram-report-actions > button { min-height: 44px; border-radius: 10px; }
 .knitting-report-editor .instagram-caption-dialog > textarea { min-height: 260px; border-color: var(--color-border); border-radius: 10px; color: var(--color-text); }
 .knitting-report-editor .instagram-caption-count { color: var(--color-text-muted); }
@@ -368,22 +371,21 @@ body:has(.knitting-report-editor) .pwa-dismiss-button:focus-visible { outline: 3
 .knitting-report-editor .report-gauge-results { min-width: 0; display: grid; gap: 8px; padding: 12px 0; border-top: 1px solid var(--color-divider); border-bottom: 1px solid var(--color-divider); }
 .knitting-report-editor .report-gauge-results-heading { margin: 0; color: var(--color-text); font-size: 14px; font-weight: 600; }
 .knitting-report-editor .report-gauge-results-sides { min-width: 0; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
-.knitting-report-editor .report-gauge-result-side { min-width: 0; display: grid; align-content: start; gap: 4px; }
-.knitting-report-editor .report-gauge-result-side > h4 { margin: 0; color: var(--color-text-secondary); font-size: 13px; font-weight: 600; }
-.knitting-report-editor .report-gauge-result-row { min-width: 0; display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 8px; padding: 5px 0; }
-.knitting-report-editor .report-gauge-result-row > span { min-width: 0; color: var(--color-text-secondary); font-size: 13px; }
-.knitting-report-editor .report-gauge-result-row > strong { color: var(--color-primary); font-size: 14px; font-weight: 700; font-variant-numeric: tabular-nums; white-space: nowrap; }
-.knitting-report-editor .report-gauge-result-row > strong small { color: var(--color-text-muted); font-size: 12px; font-weight: 500; }
+.knitting-report-editor .report-gauge-result-side { min-width: 0; overflow: hidden; border: 1px solid var(--color-border); border-radius: 11px; background: var(--color-surface); }
+.knitting-report-editor .report-gauge-result-side.after { border-color: var(--color-border); }
+.knitting-report-editor .report-gauge-result-side > h4 { margin: 0; padding: 8px 12px; color: var(--color-text-secondary); background: var(--color-surface-subtle); font-size: 13px; font-weight: 600; }
+.knitting-report-editor .report-gauge-result-side.after > h4 { color: var(--color-primary); background: var(--color-primary-soft); }
+.knitting-report-editor .report-gauge-result-metrics { min-width: 0; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.knitting-report-editor .report-gauge-result-metric { min-width: 0; display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 6px; padding: 8px 10px; border-top: 1px solid var(--color-divider); }
+.knitting-report-editor .report-gauge-result-metric:nth-child(even) { border-left: 1px solid var(--color-divider); }
+.knitting-report-editor .report-gauge-result-metric > span { min-width: 0; color: var(--color-text-secondary); font-size: 12px; }
+.knitting-report-editor .report-gauge-result-metric > strong { color: var(--color-primary); font-size: 13px; font-weight: 700; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.knitting-report-editor .report-gauge-wash-change { min-width: 0; display: flex; flex-wrap: wrap; align-items: center; gap: 10px 16px; padding: 12px; border-radius: 10px; color: var(--color-text-secondary); background: var(--color-primary-soft); font-size: 13px; }
+.knitting-report-editor .report-gauge-wash-change > strong { color: var(--color-text); }
+.knitting-report-editor .report-gauge-wash-change b { margin-left: 5px; color: var(--color-primary); font-size: 14px; }
+.knitting-report-editor .report-gauge-wash-change small { margin-left: auto; color: var(--color-text-muted); font-size: 11px; }
 .knitting-report-editor .report-gauge-add { justify-self: start; margin-left: -9px; }
-.knitting-report-editor .report-gauge-side { min-width: 0; display: grid; gap: 6px; }
-.knitting-report-editor .report-gauge-side-heading { min-width: 0; min-height: 44px; display: flex; align-items: center; justify-content: space-between; gap: 8px; }
-.knitting-report-editor .report-gauge-side-heading h3,
 .knitting-report-editor .report-measurements-heading h3 { margin: 0; color: var(--color-text); font-size: 14px; }
-.knitting-report-editor .report-gauge-unit-field { min-width: 0; display: inline-flex; align-items: center; gap: 6px; color: var(--color-text-muted); font-size: 12px; }
-.knitting-report-editor .report-gauge-unit-field select { width: auto; min-width: 68px; min-height: 44px; }
-.knitting-report-editor .report-gauge-side-fields { min-width: 0; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; }
-.knitting-report-editor .report-gauge-side-fields > .report-field { min-width: 0; }
-.knitting-report-editor .report-gauge-side-fields input { box-sizing: border-box; width: 100%; min-width: 0; padding-inline: 7px; }
 .knitting-report-editor .report-measurements-heading { display: flex; align-items: baseline; gap: 8px; margin: 17px 0 10px; }
 .knitting-report-editor .report-measurements-heading small { color: var(--color-text-muted); font-size: 14px; }
 .knitting-report-editor .report-measurement-editor { min-width: 0; }
@@ -658,8 +660,6 @@ body:has(.knitting-report-editor) .pwa-dismiss-button:focus-visible { outline: 3
   .knitting-report-editor .report-measurement-choice-group { grid-template-columns: minmax(80px, .9fr) minmax(0, 1.8fr); gap: 8px; }
   .knitting-report-editor .report-measurement-choice-fields { grid-template-columns: minmax(0, 1fr) 68px; gap: 8px; }
   .knitting-report-editor .report-measurement-dialog-actions { min-height: 60px; padding: 12px 24px; }
-  .knitting-report-editor .report-gauge-side-fields { gap: 6px; }
-  .knitting-report-editor .report-gauge-side-fields input { padding-inline: 5px; }
   .knitting-report-editor .report-photo-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .knitting-report-editor .report-worktime-card { padding: 24px; }
   .report-worktime-backdrop { place-items: end center; padding: 0; }
@@ -851,8 +851,7 @@ body:has(.knitting-report-editor) .pwa-dismiss-button:focus-visible { outline: 3
 .knitting-report-editor .report-form-card > header { min-height: 36px; margin-bottom: 12px; }
 .knitting-report-editor .report-form-card h2,
 .knitting-report-editor .report-detail-subheading h3,
-.knitting-report-editor .report-subheading h3,
-.knitting-report-editor .report-gauge-side-heading h3 { font-size: 14px; font-weight: 600; letter-spacing: -.2px; }
+.knitting-report-editor .report-subheading h3 { font-size: 14px; font-weight: 600; letter-spacing: -.2px; }
 .knitting-report-editor .report-form-card > header p,
 .knitting-report-editor .report-form-card > header > small,
 .knitting-report-editor .report-field,
@@ -1015,9 +1014,8 @@ body:has(.knitting-report-editor) .pwa-dismiss-button:focus-visible { outline: 3
 
 @container report-section (max-width: 639px) {
   .knitting-report-editor .report-gauge-results-sides { grid-template-columns: minmax(0, 1fr); gap: 6px; }
-  .knitting-report-editor .report-gauge-side-fields { gap: 6px; }
-  .knitting-report-editor .report-gauge-side-fields > .report-field { font-size: 12px; }
-  .knitting-report-editor .report-gauge-side-fields input { padding-inline: 4px; }
+  .knitting-report-editor .report-gauge-result-metric { grid-template-columns: minmax(0, 1fr); align-content: start; gap: 3px; padding: 7px; }
+  .knitting-report-editor .report-gauge-wash-change small { width: 100%; margin-left: 0; }
 }
 
 @container report-section (min-width: 570px) {

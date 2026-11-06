@@ -2,8 +2,9 @@ import { makeRasterPdf } from './charts'
 import { formatDate, formatNumber, t, translateMessage } from './locales'
 import type { LocaleKey } from './locales'
 import type { DocumentWorkTimeDay, KnittingReport, ReportAccessory, ReportMeasurement, ReportModification, ReportNeedle, ReportYarn } from './types'
-import { formatNeedleSize, getGaugeMeasurement, getGaugePer10Cm, getGaugeSamplePer10Cm, getGaugeSamples } from './reportFormatting'
+import { formatNeedleSize, getGaugePer10Cm, getGaugeSamplePer10Cm, getGaugeSamples } from './reportFormatting'
 import { formatWorkTime, formatWorkTimeHoursMinutes } from './workTime'
+import { gaugeResult, gaugeWashChanges } from './gaugeResults'
 
 const PAGE_WIDTH = 1240
 const PAGE_HEIGHT = 1754
@@ -271,49 +272,47 @@ export async function exportKnittingReportPdf(report: KnittingReport, totalWorkT
     for (const [index, row] of printableAccessories.entries()) await drawCard(row.type || t('부자재') + ' ' + (index + 1), row.photo, accessoryFields.map(([key, label]) => [label, row[key]]))
   }
 
-  const formatGaugeSide = (side: 'before' | 'after') => {
-    const gauge = getGaugeMeasurement(values, side)
-    const counts = [gauge.stitches && formatNumericText(gauge.stitches) + t('코'), gauge.rows && formatNumericText(gauge.rows) + t('단')].filter(Boolean).join(' × ')
-    const size = gauge.width || gauge.height ? `${formatNumericText(gauge.width) || '—'} × ${formatNumericText(gauge.height) || '—'} ${gauge.unit === 'inch' ? t('inch') : 'cm'}` : ''
-    return [counts, size].filter(Boolean).join(' / ')
-  }
-  const formatGaugeSummary = (side: 'before' | 'after') => {
-    const gauge = getGaugePer10Cm(values, side)
-    const stitches = gauge.stitches === null ? '—' : formatNumber(gauge.stitches)
-    const rows = gauge.rows === null ? '—' : formatNumber(gauge.rows)
-    return `${stitches}${t('코')} × ${rows}${t('단')} (10 × 10 cm)`
-  }
-  const formatExtraGaugeSummary = (sample: ReturnType<typeof getGaugeSamples>[number], side: 'before' | 'after') => {
-    const gauge = getGaugeSamplePer10Cm(sample, side)
-    const stitches = gauge.stitches === null ? '—' : formatNumber(gauge.stitches)
-    const rows = gauge.rows === null ? '—' : formatNumber(gauge.rows)
-    return `${stitches}${t('코')} × ${rows}${t('단')} (10 × 10 cm)`
-  }
-  const formatExtraGaugeSide = (measurement: { stitches: string; rows: string; width: string; height: string }) => {
-    const counts = [measurement.stitches && formatNumericText(measurement.stitches) + t('코'), measurement.rows && formatNumericText(measurement.rows) + t('단')].filter(Boolean).join(' × ')
-    const size = measurement.width || measurement.height ? `${formatNumericText(measurement.width) || '—'} × ${formatNumericText(measurement.height) || '—'} cm` : ''
-    return [counts, size].filter(Boolean).join(' / ')
-  }
   const gaugeSamples = getGaugeSamples(values)
-  const gaugePairs: [string, string][] = [
-    ['측정 기준', values['gauge.unit']], ['무늬', values['gauge.pattern']], ['도안 게이지', [values['gauge.patternStitches'] && formatNumericText(values['gauge.patternStitches']) + t('코'), values['gauge.patternRows'] && formatNumericText(values['gauge.patternRows']) + t('단')].filter(Boolean).join(' × ')],
-    [`${t('세탁 전')} · 10 × 10 cm`, formatGaugeSummary('before')], [`${t('세탁 후')} · 10 × 10 cm`, formatGaugeSummary('after')],
-    [`${t('세탁 전')} ${t('게이지')}`, formatGaugeSide('before')],
-    [`${t('세탁 후')} ${t('게이지')}`, formatGaugeSide('after')],
-    ['손땀', values['gauge.tension'] ? t((['많이 널손', '널손', '보통', '쫀손', '많이 쫀손'][Number(values['gauge.tension']) - 1] ?? '보통') as LocaleKey) : ''], ['메모', values['gauge.memo']],
-    ...gaugeSamples.flatMap((sample, index) => {
-      const gaugeName = sample.pattern.trim() || t('게이지 {number}', { number: formatNumber(index + 2) })
-      return [
-        [`${gaugeName} · ${t('세탁 전')} · 10 × 10 cm`, formatExtraGaugeSummary(sample, 'before')],
-        [`${gaugeName} · ${t('세탁 후')} · 10 × 10 cm`, formatExtraGaugeSummary(sample, 'after')],
-        [`${gaugeName} · ${t('세탁 전')} ${t('게이지')}`, formatExtraGaugeSide(sample.before)],
-        [`${gaugeName} · ${t('세탁 후')} ${t('게이지')}`, formatExtraGaugeSide(sample.after)],
-      ] as [string, string][]
-    }),
-  ]
-  if (nonEmpty(gaugePairs)) {
+  function printableGaugeRows(before: ReturnType<typeof getGaugePer10Cm>, after: ReturnType<typeof getGaugePer10Cm>): [string, string][] {
+    const rows: [string, string][] = []
+    for (const [label, gauge] of [[t('세탁 전'), before], [t('세탁 후'), after]] as const) {
+      if (gauge.stitches === null && gauge.rows === null) continue
+      const derived = gaugeResult(gauge)
+      const stitches = gauge.stitches === null ? '—' : `${formatNumber(gauge.stitches)} ${t('코')}`
+      const rowCount = gauge.rows === null ? '—' : `${formatNumber(gauge.rows)} ${t('단')}`
+      const pickUp = derived.pickUp ? t('{rows}단당 {stitches}코', { rows: formatNumber(derived.pickUp.rows), stitches: formatNumber(derived.pickUp.stitches) }) : '—'
+      const formattedPickUp = derived.pickUp?.approximate ? t('약 {value}', { value: pickUp }) : pickUp
+      const stitchRow = derived.stitchRow === null ? '—' : `1 : ${formatNumber(derived.stitchRow, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+      rows.push([label, `${t('10cm당 코 수')} ${stitches} · ${t('10cm당 단 수')} ${rowCount} · ${t('코 줍기 비율')} ${formattedPickUp} · ${t('코·단 비율')} ${stitchRow}`])
+    }
+    const change = gaugeWashChanges(before, after)
+    const changeParts: string[] = []
+    if (change.width !== null) changeParts.push(`${t('가로')} ${formatNumber(Math.abs(change.width), { minimumFractionDigits: 1, maximumFractionDigits: 1 })}% ${t(change.width < 0 ? '수축' : change.width > 0 ? '늘어남' : '변화 없음')}`)
+    if (change.height !== null) changeParts.push(`${t('세로')} ${formatNumber(Math.abs(change.height), { minimumFractionDigits: 1, maximumFractionDigits: 1 })}% ${t(change.height < 0 ? '수축' : change.height > 0 ? '늘어남' : '변화 없음')}`)
+    if (changeParts.length) rows.push([t('세탁 후 변화'), `${changeParts.join(' · ')} · ${t('수축률은 게이지 변화 기준의 환산값입니다.')}`])
+    return rows
+  }
+  const baseBefore = getGaugePer10Cm(values, 'before')
+  const baseAfter = getGaugePer10Cm(values, 'after')
+  const gaugeResultCards = [{
+    name: values['gauge.pattern']?.trim() || t('기본 게이지'),
+    rows: printableGaugeRows(baseBefore, baseAfter),
+  }, ...gaugeSamples.map((sample, index) => ({
+    name: sample.pattern.trim() || t('게이지 {number}', { number: formatNumber(index + 2) }),
+    rows: printableGaugeRows(getGaugeSamplePer10Cm(sample, 'before'), getGaugeSamplePer10Cm(sample, 'after')),
+  }))].filter((gauge) => nonEmpty(gauge.rows))
+  function gaugeCardHeight(rows: [string, string][]) {
+    page.context.font = '20px "Noto Sans KR", sans-serif'
+    const rowsHeight = rows.reduce((height, [, value]) => height + wrapText(page.context, value, RIGHT - LEFT - 316).length * 36 + 5, 0)
+    return 43 + rowsHeight + 14
+  }
+  if (gaugeResultCards.length) {
+    ensure(76 + gaugeCardHeight(gaugeResultCards[0].rows))
     drawSection('05', '게이지 · 손땀')
-    await drawCard(t('게이지'), '', gaugePairs)
+    for (const gauge of gaugeResultCards) {
+      ensure(gaugeCardHeight(gauge.rows))
+      await drawCard(`${gauge.name} · ${t('게이지 결과')}`, '', gauge.rows)
+    }
   }
 
   const completedMeasures = report.measurements.filter((row) => row.finished.trim())

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { applyGaugeResultToFields, calculateGaugePer10Cm } from './reportGaugeCalculator'
+import { applyGaugeMeasurementToFields, applyGaugeResultToFields, calculateGaugePer10Cm } from './reportGaugeCalculator'
 
 describe('calculateGaugePer10Cm', () => {
   it('returns the same counts for a 10 by 10 cm swatch', () => {
@@ -66,5 +66,18 @@ describe('calculateGaugePer10Cm', () => {
   it('leaves the report unchanged for an unknown added gauge', () => {
     const fields = { 'gauge.samples': '[]' }
     expect(applyGaugeResultToFields(fields, { sampleIndex: 2, side: 'before' }, { stitchesPer10Cm: 21, rowsPer10Cm: 21.43 })).toBe(fields)
+  })
+
+  it('preserves the original input size and unit when applying the calculator', () => {
+    const fields = { 'gauge.beforeStitches': '20', 'gauge.beforeRows': '30', 'gauge.beforeWidth': '4', 'gauge.beforeHeight': '4', 'gauge.beforeUnit': 'inch' }
+    const measurement = { stitches: '21', rows: '28', width: '4.25', height: '4.1' }
+    expect(applyGaugeMeasurementToFields(fields, { sampleIndex: null, side: 'before' }, measurement, 'inch')).toEqual({
+      ...fields,
+      'gauge.beforeStitches': '21',
+      'gauge.beforeRows': '28',
+      'gauge.beforeWidth': '4.25',
+      'gauge.beforeHeight': '4.1',
+      'gauge.beforeUnit': 'inch',
+    })
   })
 })

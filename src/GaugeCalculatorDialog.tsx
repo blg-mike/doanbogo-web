@@ -3,22 +3,29 @@ import { Check, Ruler, X } from 'lucide-react'
 import { formatNumber, t } from './locales'
 import { calculateGaugePer10Cm, type GaugeCalculatorResult, type GaugeCalculatorTarget } from './reportGaugeCalculator'
 import type { GaugeSide } from './reportFormatting'
+import type { GaugeSampleMeasurement } from './reportFormatting'
 
 type GaugeOption = { sampleIndex: number | null; label: string }
+type GaugeInput = GaugeSampleMeasurement & { unit: 'cm' | 'inch' }
 
 type Props = {
   gaugeOptions: GaugeOption[]
+  gaugeInputs: Record<string, GaugeInput>
   onClose: () => void
-  onApply: (target: GaugeCalculatorTarget, result: GaugeCalculatorResult) => void
+  onApply: (target: GaugeCalculatorTarget, input: GaugeInput) => void
 }
 
-export default function GaugeCalculatorDialog({ gaugeOptions, onClose, onApply }: Props) {
-  const [stitches, setStitches] = useState('10')
-  const [rows, setRows] = useState('10')
-  const [widthCm, setWidthCm] = useState('10')
-  const [heightCm, setHeightCm] = useState('10')
+function inputKey(sampleIndex: number | null, side: GaugeSide) { return `${sampleIndex ?? 'primary'}:${side}` }
+
+export default function GaugeCalculatorDialog({ gaugeOptions, gaugeInputs, onClose, onApply }: Props) {
   const [sampleIndex, setSampleIndex] = useState<number | null>(null)
   const [side, setSide] = useState<GaugeSide>('before')
+  const initial = gaugeInputs[inputKey(null, 'before')]
+  const [stitches, setStitches] = useState(initial.stitches)
+  const [rows, setRows] = useState(initial.rows)
+  const [width, setWidth] = useState(initial.width)
+  const [height, setHeight] = useState(initial.height)
+  const [unit, setUnit] = useState(initial.unit)
   const [result, setResult] = useState<GaugeCalculatorResult | null>(null)
   const [error, setError] = useState('')
   const dialogRef = useRef<HTMLElement>(null)
@@ -58,12 +65,25 @@ export default function GaugeCalculatorDialog({ gaugeOptions, onClose, onApply }
     setError('')
   }
 
+  function selectTarget(nextSampleIndex: number | null, nextSide: GaugeSide) {
+    setSampleIndex(nextSampleIndex)
+    setSide(nextSide)
+    const input = gaugeInputs[inputKey(nextSampleIndex, nextSide)]
+    setStitches(input.stitches)
+    setRows(input.rows)
+    setWidth(input.width)
+    setHeight(input.height)
+    setUnit(input.unit)
+    setResult(null)
+    setError('')
+  }
+
   function calculate() {
     const calculated = calculateGaugePer10Cm({
       stitches: Number(stitches),
       rows: Number(rows),
-      widthCm: Number(widthCm),
-      heightCm: Number(heightCm),
+      widthCm: Number(width) * (unit === 'inch' ? 2.54 : 1),
+      heightCm: Number(height) * (unit === 'inch' ? 2.54 : 1),
     })
     if (!calculated) {
       setResult(null)
@@ -76,7 +96,7 @@ export default function GaugeCalculatorDialog({ gaugeOptions, onClose, onApply }
 
   function apply() {
     if (!result) return
-    onApply({ sampleIndex, side }, result)
+    onApply({ sampleIndex, side }, { stitches, rows, width, height, unit })
   }
 
   return <div className="modal-backdrop gauge-calculator-backdrop" role="presentation" onPointerDown={(event) => { if (event.target === event.currentTarget) onClose() }}>
@@ -92,12 +112,12 @@ export default function GaugeCalculatorDialog({ gaugeOptions, onClose, onApply }
         <section className="gauge-calculator-inputs" aria-label={t('게이지 계산기 입력')}>
           <div className="gauge-calculator-fields">
             <label className="report-field">{t('적용할 게이지')}
-              <select value={sampleIndex === null ? 'primary' : String(sampleIndex)} onChange={(event) => setSampleIndex(event.currentTarget.value === 'primary' ? null : Number(event.currentTarget.value))}>
+              <select value={sampleIndex === null ? 'primary' : String(sampleIndex)} onChange={(event) => selectTarget(event.currentTarget.value === 'primary' ? null : Number(event.currentTarget.value), side)}>
                 {gaugeOptions.map((option) => <option key={option.sampleIndex ?? 'primary'} value={option.sampleIndex === null ? 'primary' : String(option.sampleIndex)}>{option.label}</option>)}
               </select>
             </label>
             <label className="report-field">{t('세탁 시점')}
-              <select value={side} onChange={(event) => setSide(event.currentTarget.value as GaugeSide)}>
+              <select value={side} onChange={(event) => selectTarget(sampleIndex, event.currentTarget.value as GaugeSide)}>
                 <option value="before">{t('세탁 전')}</option>
                 <option value="after">{t('세탁 후')}</option>
               </select>
@@ -111,10 +131,10 @@ export default function GaugeCalculatorDialog({ gaugeOptions, onClose, onApply }
               <span className="gauge-calculator-input-wrap"><input type="number" min="1" step="1" inputMode="numeric" value={rows} onChange={(event) => updateInput(setRows, event.currentTarget.value)} /><small>{t('단')}</small></span>
             </label>
             <label className="report-field">{t('스와치 폭')}
-              <span className="gauge-calculator-input-wrap"><input type="number" min="0.01" step="any" inputMode="decimal" value={widthCm} onChange={(event) => updateInput(setWidthCm, event.currentTarget.value)} /><small>cm</small></span>
+              <span className="gauge-calculator-input-wrap"><input type="number" min="0.01" step="any" inputMode="decimal" value={width} onChange={(event) => updateInput(setWidth, event.currentTarget.value)} /><small>{unit === 'inch' ? t('inch') : 'cm'}</small></span>
             </label>
             <label className="report-field">{t('스와치 높이')}
-              <span className="gauge-calculator-input-wrap"><input type="number" min="0.01" step="any" inputMode="decimal" value={heightCm} onChange={(event) => updateInput(setHeightCm, event.currentTarget.value)} /><small>cm</small></span>
+              <span className="gauge-calculator-input-wrap"><input type="number" min="0.01" step="any" inputMode="decimal" value={height} onChange={(event) => updateInput(setHeight, event.currentTarget.value)} /><small>{unit === 'inch' ? t('inch') : 'cm'}</small></span>
             </label>
           </div>
           {error && <p className="gauge-calculator-error" role="alert">{error}</p>}
