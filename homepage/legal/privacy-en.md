@@ -2,7 +2,7 @@
 
 - Service: **KnitPeek** (Korean name: **니트피크**)
 - Website: **https://knitpeek.pages.dev**
-- Effective date: **November 4, 2026**
+- Effective date: **November 6, 2026**
 - Operator: **KnitPeek**
 - Privacy inquiries: **knitpeek.cs@gmail.com**
 
@@ -19,6 +19,7 @@ The core features do not require an account. PDF and photo patterns, projects, a
 | Locally stored project data | Imported PDFs and photos, project names and tags, cover images, annotations, progress lines, charts, counter/timer records, reports, and notes | Display, editing, restoration, and export in browser storage. Imported files and work records are not uploaded to a KnitPeek-operated server |
 | Local preferences | Language choice, viewer settings, project state, and related preferences | Remember your settings on your device. Browser language settings may be read to choose an initial interface language |
 | Website access information (hosting provider) | Visitor IP address, requested URL, request time, browser/device and traffic-routing information | Cloudflare Pages may process this information to deliver and secure the website. See the [Cloudflare Privacy Policy](https://www.cloudflare.com/privacypolicy/). |
+| Cloudflare Web Analytics measurements | Page paths and referring sources, browser/device categories, page views and visits, and page-load performance metrics | A Cloudflare Web Analytics beacon runs in the browser to measure website usage and performance. Cloudflare states that Web Analytics does not collect or use visitors' personal data. [Cloudflare Web Analytics](https://developers.cloudflare.com/web-analytics/about/) |
 | Support inquiries | Email address, message, and any information you include | Respond to inquiries, process requests, and address related complaints |
 
 **Important:** A pattern or note stored only on your device may contain personal information, but that does not mean the Operator receives or has access to its contents. Information you independently export or share may be handled by the destination you select.
@@ -27,7 +28,7 @@ The core features do not require an account. PDF and photo patterns, projects, a
 
 1. **Local project data:** Remains in the relevant device/browser storage until you delete it or the browser/device removes it. It is not a separate database of user files maintained by the Operator.
 2. **Local preferences:** May remain in browser storage until deleted or reset.
-3. **Cloudflare Pages request information:** Cloudflare may process IP addresses, traffic-routing information, system configuration, and related request data. Cloudflare's processing and retention practices are described in its [Privacy Policy](https://www.cloudflare.com/privacypolicy/); KnitPeek does not set the provider's log-retention period.
+3. **Cloudflare Pages and Web Analytics information:** Cloudflare may process IP addresses, traffic-routing information, system configuration, and related request data. Web Analytics measurements are also handled and retained under Cloudflare's policies; KnitPeek does not set their retention period. See the [Cloudflare Privacy Policy](https://www.cloudflare.com/privacypolicy/).
 4. **Support inquiries:** An email address and message you voluntarily send are kept only as long as needed to respond and handle related matters, then deleted unless retention is required by law.
 
 ## 3A. Legal bases where European privacy law applies
@@ -37,7 +38,7 @@ Where European privacy law applies, handling an email inquiry is based on a lega
 ## 4. Disclosures, service providers, and international processing
 
 1. KnitPeek does not transmit imported PDF/photo patterns or locally stored work records to a KnitPeek-operated server or sell that content to advertisers or other third parties.
-2. **Website hosting:** The site is delivered through Cloudflare Pages. To route and protect website requests, Cloudflare may process IP addresses, traffic-routing information, system configuration, and related request data. See the [Cloudflare Privacy Policy](https://www.cloudflare.com/privacypolicy/).
+2. **Website hosting and analytics:** The site is delivered through Cloudflare Pages. The Cloudflare Web Analytics script measures page views, visits, referring sources, and performance, and sends those measurements to Cloudflare. See the [Cloudflare Privacy Policy](https://www.cloudflare.com/privacypolicy/) and [Web Analytics information](https://developers.cloudflare.com/web-analytics/about/).
 3. Patterns and work records stored only in your browser are not sent to KnitPeek. Hosting-provider request processing is separate from the contents of your local files.
 
 4. If the Operator introduces new personal-data recipients, processors, or international transfers, it will make the disclosures and obtain any consents required by applicable law.
@@ -45,7 +46,7 @@ Where European privacy law applies, handling an email inquiry is based on a lega
 ## 5. Cookies, browser storage, and similar technologies
 
 1. KnitPeek uses **browser storage such as IndexedDB** to remember projects and settings on your device. Browser storage is not, by itself, a mechanism for uploading those contents to a server.
-2. KnitPeek currently does not use third-party tracking cookies or scripts for advertising or analytics. Language and service preferences are kept in browser storage.
+2. KnitPeek does not use advertising tracking cookies. It uses the cookie-free Cloudflare Web Analytics script to measure site visits and performance. Cloudflare states that Web Analytics does not collect or use visitors' personal data. Language and service preferences are kept in browser storage.
 3. You may clear or restrict cookies and site data through your browser. Clearing site data can also remove stored patterns and work records. First check that the original files and report outputs you need are stored separately.
 4. Local data is tied to the website address and browser profile where it was saved. It is not automatically shared with or transferred to another address, browser, or profile. Keep a separate copy of needed files before clearing site data.
 
@@ -85,6 +86,6 @@ The Operator may update this Policy when its services or data practices change. 
 
 ## 12. Effective date
 
-This Policy is effective from **November 4, 2026**.
+This Policy is effective from **November 6, 2026**.
 
 ---

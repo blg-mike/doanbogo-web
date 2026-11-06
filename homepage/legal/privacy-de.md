@@ -2,7 +2,7 @@
 
 - Dienst: **KnitPeek** (koreanischer Name: **니트피크**)
 - Website: **https://knitpeek.pages.dev**
-- Inkrafttreten: **4. November 2026**
+- Inkrafttreten: **6. November 2026**
 - Verantwortlicher / Betreiber: **KnitPeek**
 - Datenschutzanfragen: **knitpeek.cs@gmail.com**
 
@@ -19,6 +19,7 @@ Die Kernfunktionen erfordern kein Benutzerkonto. Importierte PDF- und Fotomuster
 | Lokal gespeicherte Projektdaten | Importierte PDFs und Fotos, Projektnamen und Tags, Titelbilder, Anmerkungen, Fortschrittslinien, Diagramme, Zähler- und Timerdaten, Berichte und Notizen | Anzeigen, Bearbeiten, Wiederherstellen und Exportieren im Browserspeicher. Importierte Dateien und Arbeitsaufzeichnungen werden nicht auf einen von KnitPeek betriebenen Server hochgeladen |
 | Lokale Einstellungen | Sprachauswahl, Viewereinstellungen, Projektstatus und ähnliche Einstellungen | Einstellungen auf Ihrem Gerät speichern. Die Browsersprache kann zur Auswahl der anfänglichen Oberflächensprache verwendet werden |
 | Website-Zugriffsdaten (Hostinganbieter) | IP-Adresse, angeforderte URL und Zeitpunkt, Browser-/Geräte- und Routingdaten | Cloudflare Pages kann diese Daten zur Bereitstellung und Absicherung der Website verarbeiten. Einzelheiten enthält die [Cloudflare-Datenschutzerklärung](https://www.cloudflare.com/privacypolicy/). |
+| Messdaten von Cloudflare Web Analytics | Seitenpfade und Verweisquellen, Browser-/Gerätekategorien, Seitenaufrufe/Besuche und Ladeleistungskennzahlen | Ein Cloudflare-Web-Analytics-Beacon läuft im Browser, um Website-Nutzung und Leistung zu messen. Cloudflare erklärt, dass Web Analytics keine personenbezogenen Daten der Besucher erhebt oder nutzt. [Cloudflare Web Analytics](https://developers.cloudflare.com/web-analytics/about/) |
 | Supportanfragen | E-Mail-Adresse, Nachricht und von Ihnen übermittelte Angaben | Beantwortung von Anfragen, Bearbeitung von Anliegen und damit verbundenen Beschwerden |
 
 **Wichtig:** Ein nur auf Ihrem Gerät gespeichertes Muster oder eine Notiz kann personenbezogene Angaben enthalten. Daraus folgt nicht, dass der Betreiber deren Inhalt erhält oder darauf zugreifen kann. Informationen, die Sie selbst exportieren oder teilen, können beim von Ihnen gewählten Ziel verarbeitet werden.
@@ -27,7 +28,7 @@ Die Kernfunktionen erfordern kein Benutzerkonto. Importierte PDF- und Fotomuster
 
 1. **Lokale Projektdaten:** Sie können im Speicher des betreffenden Geräts und Browsers verbleiben, bis Sie sie löschen oder der Browser beziehungsweise das Gerät die Speicherung beendet. Der Betreiber führt dafür keine separate Datenbank mit Benutzerdateien.
 2. **Lokale Einstellungen:** Sie können bis zum Löschen oder Zurücksetzen im jeweiligen Browserspeicher verbleiben.
-3. **Anfragedaten von Cloudflare Pages:** Cloudflare kann IP-Adressen, Routingdaten, Systemkonfigurationen und damit verbundene Anfragedaten verarbeiten. Die Verarbeitungs- und Speicherpraxis ist in der [Cloudflare-Datenschutzerklärung](https://www.cloudflare.com/privacypolicy/) beschrieben; KnitPeek legt die Speicherfrist der Hostingprotokolle nicht fest.
+3. **Cloudflare Pages- und Web-Analytics-Daten:** Cloudflare kann IP-Adressen, Routingdaten, Systemkonfigurationen und damit verbundene Anfragedaten verarbeiten. Web-Analytics-Messdaten werden ebenfalls nach den Richtlinien von Cloudflare verarbeitet und gespeichert; KnitPeek legt deren Speicherdauer nicht fest. Einzelheiten enthält die [Cloudflare-Datenschutzerklärung](https://www.cloudflare.com/privacypolicy/).
 4. **Supportanfragen:** Eine E-Mail-Adresse und Nachricht, die Sie freiwillig senden, werden nur so lange gespeichert, wie es für die Antwort und damit verbundene Anliegen erforderlich ist, und danach gelöscht, sofern keine gesetzliche Aufbewahrungspflicht besteht.
 
 ## 3A. Rechtsgrundlagen bei Anwendung europäischen Datenschutzrechts
@@ -37,7 +38,7 @@ Soweit europäisches Datenschutzrecht gilt, stützt sich die Beantwortung einer 
 ## 4. Offenlegung, Dienstleister und internationale Verarbeitung
 
 1. KnitPeek überträgt importierte PDF-/Fotomuster und lokal gespeicherte Arbeitsaufzeichnungen nicht an einen von KnitPeek betriebenen Server und verkauft diese Inhalte nicht an Werbetreibende oder andere Dritte.
-2. **Website-Hosting:** Die Website wird über Cloudflare Pages bereitgestellt. Zur Weiterleitung und Absicherung von Anfragen kann Cloudflare IP-Adressen, Routingdaten, Systemkonfigurationen und zugehörige Anfragedaten verarbeiten. Weitere Informationen enthält die [Cloudflare-Datenschutzerklärung](https://www.cloudflare.com/privacypolicy/).
+2. **Website-Hosting und Analyse:** Die Website wird über Cloudflare Pages bereitgestellt. Das Cloudflare-Web-Analytics-Skript misst Seitenaufrufe, Besuche, Verweisquellen und Leistungsdaten und übermittelt diese Messwerte an Cloudflare. Weitere Informationen enthalten die [Cloudflare-Datenschutzerklärung](https://www.cloudflare.com/privacypolicy/) und [Web Analytics](https://developers.cloudflare.com/web-analytics/about/).
 3. Muster und Arbeitsaufzeichnungen, die nur in Ihrem Browser gespeichert sind, werden nicht an KnitPeek gesendet. Die Verarbeitung von Hostinganfragen ist von den Inhalten Ihrer lokalen Dateien getrennt.
 
 4. Führt der Betreiber neue Empfänger, Auftragsverarbeiter oder internationale Übermittlungen personenbezogener Daten ein, informiert er nach geltendem Recht und holt erforderliche Einwilligungen ein.
@@ -45,7 +46,7 @@ Soweit europäisches Datenschutzrecht gilt, stützt sich die Beantwortung einer 
 ## 5. Cookies, Browserspeicher und ähnliche Technologien
 
 1. KnitPeek verwendet **Browserspeicher wie IndexedDB**, um Projekte und Einstellungen auf Ihrem Gerät zu speichern. Browserspeicher lädt diese Inhalte nicht von sich aus auf einen Server hoch.
-2. KnitPeek verwendet derzeit keine Drittanbieter-Tracking-Cookies oder -Skripte für Werbung oder Analysen. Sprache und Diensteinstellungen werden im Browserspeicher abgelegt.
+2. KnitPeek verwendet keine Tracking-Cookies für Werbung. Zur Messung der Website-Nutzung und Leistung wird das cookiefreie Cloudflare-Web-Analytics-Skript verwendet. Cloudflare erklärt, dass Web Analytics keine personenbezogenen Daten der Besucher erhebt oder nutzt. Sprache und Diensteinstellungen werden im Browserspeicher abgelegt.
 3. Sie können Cookies und Websitedaten in den Browsereinstellungen löschen oder einschränken. Dabei können gespeicherte Muster und Arbeitsdaten verloren gehen. Prüfen Sie vorher, ob benötigte Originaldateien und ausgegebene Berichte separat aufbewahrt sind.
 4. Lokale Daten sind an die Website-Adresse und das Browserprofil gebunden, in denen sie gespeichert wurden. Sie werden nicht automatisch mit einer anderen Adresse, einem anderen Browser oder Profil geteilt oder übertragen. Sichern Sie benötigte Dateien, bevor Sie Websitedaten löschen.
 
@@ -85,6 +86,6 @@ Der Betreiber kann diese Erklärung ändern, wenn sich der Dienst oder die Daten
 
 ## 12. Inkrafttreten
 
-Diese Datenschutzerklärung gilt ab **4. November 2026**.
+Diese Datenschutzerklärung gilt ab **6. November 2026**.
 
 ---

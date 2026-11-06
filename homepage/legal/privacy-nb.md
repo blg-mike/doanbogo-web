@@ -2,7 +2,7 @@
 
 - Tjeneste: **KnitPeek** (koreansk navn: **니트피크**)
 - Nettsted: **https://knitpeek.pages.dev**
-- Ikrafttredelsesdato: **4. november 2026**
+- Ikrafttredelsesdato: **6. november 2026**
 - Behandlingsansvarlig / operatør: **KnitPeek**
 - Personvernhenvendelser: **knitpeek.cs@gmail.com**
 
@@ -19,6 +19,7 @@ Kjernefunksjonene krever ingen konto. PDF- og fotooppskrifter, prosjekter og arb
 | Lokalt lagrede prosjektdata | Importerte PDF-er og bilder, prosjektnavn og tagger, forsidebilder, merknader, fremdriftslinjer, diagrammer, teller- og tidsoppføringer, rapporter og notater | Vise, redigere, gjenopprette og eksportere i nettleserlager. Importerte filer og arbeidsopplysninger lastes ikke opp til en server som KnitPeek driver |
 | Lokale innstillinger | Språkvalg, visningsinnstillinger, prosjektstatus og lignende | Huske innstillingene på enheten din. Nettleserens språkinnstilling kan brukes til å velge grensesnittspråk ved første visning |
 | Tilgangsinformasjon for nettstedet (vertsleverandør) | Besøkendes IP-adresse, forespurt URL og tidspunkt, nettleser-/enhets- og trafikkrutinginformasjon | Cloudflare Pages kan behandle disse opplysningene for å levere og sikre nettstedet. Se [Cloudflares personvernerklæring](https://www.cloudflare.com/privacypolicy/). |
+| Måledata fra Cloudflare Web Analytics | Sidestier og henvisningskilder, nettleser-/enhetskategorier, sidevisninger/besøk og ytelsesmålinger for sideinnlasting | Cloudflare Web Analytics-beaconen kjører i nettleseren for å måle bruk av nettstedet og ytelse. Cloudflare opplyser at Web Analytics ikke samler inn eller bruker personopplysninger om besøkende. [Cloudflare Web Analytics](https://developers.cloudflare.com/web-analytics/about/) |
 | Supporthenvendelser | E-postadresse, melding og opplysninger du sender | Svare på henvendelser, behandle forespørsler og håndtere relaterte klager |
 
 **Viktig:** En oppskrift eller et notat som bare er lagret på enheten din, kan inneholde personopplysninger. Det betyr ikke at Operatøren mottar eller har tilgang til innholdet. Opplysninger du selv eksporterer eller deler, kan behandles av mottakeren du velger.
@@ -27,7 +28,7 @@ Kjernefunksjonene krever ingen konto. PDF- og fotooppskrifter, prosjekter og arb
 
 1. **Lokale prosjektdata:** Kan bli liggende i lagringen til den aktuelle enheten og nettleseren til du sletter dem, eller nettleseren/enheten slutter å lagre dem. Operatøren fører ikke en egen database med brukerfiler.
 2. **Lokale innstillinger:** Kan bli liggende i nettleserlageret til de slettes eller tilbakestilles.
-3. **Forespørselsinformasjon fra Cloudflare Pages:** Cloudflare kan behandle IP-adresser, trafikkruting, systemkonfigurasjon og relaterte forespørselsdata. Behandling og lagring er beskrevet i [Cloudflares personvernerklæring](https://www.cloudflare.com/privacypolicy/); KnitPeek fastsetter ikke vertsleverandørens lagringstid for logger.
+3. **Informasjon fra Cloudflare Pages og Web Analytics:** Cloudflare kan behandle IP-adresser, trafikkruting, systemkonfigurasjon og relaterte forespørselsdata. Måledata fra Web Analytics behandles og lagres også etter Cloudflares retningslinjer; KnitPeek fastsetter ikke lagringstiden. Se [Cloudflares personvernerklæring](https://www.cloudflare.com/privacypolicy/).
 4. **Supporthenvendelser:** E-postadresse og melding du frivillig sender, oppbevares bare så lenge det er nødvendig for å svare og følge opp, og slettes deretter med mindre loven krever oppbevaring.
 
 ## 3A. Rettslig grunnlag der europeisk personvernlov gjelder
@@ -37,7 +38,7 @@ Der europeisk personvernlov gjelder, behandles en e-posthenvendelse på et retts
 ## 4. Utlevering, tjenesteleverandører og behandling i andre land
 
 1. KnitPeek sender ikke importerte PDF-/fotooppskrifter eller lokalt lagrede arbeidsopplysninger til en server som KnitPeek driver, og selger ikke innholdet til annonsører eller andre tredjeparter.
-2. **Nettstedshosting:** Nettstedet leveres via Cloudflare Pages. For å rute og beskytte forespørsler kan Cloudflare behandle IP-adresser, trafikkruting, systemkonfigurasjon og relaterte forespørselsdata. Se [Cloudflares personvernerklæring](https://www.cloudflare.com/privacypolicy/).
+2. **Nettstedshosting og analyse:** Nettstedet leveres via Cloudflare Pages. Cloudflare Web Analytics-skriptet måler sidevisninger, besøk, henvisningskilder og ytelse og sender målingene til Cloudflare. Se [Cloudflares personvernerklæring](https://www.cloudflare.com/privacypolicy/) og [Web Analytics](https://developers.cloudflare.com/web-analytics/about/).
 3. Oppskrifter og arbeidsopplysninger som bare er lagret i nettleseren, sendes ikke til KnitPeek. Vertsleverandørens forespørselsbehandling er atskilt fra innholdet i de lokale filene dine.
 
 4. Hvis Operatøren innfører nye mottakere, databehandlere eller overføringer til andre land, gis informasjonen og innhentes samtykkene som gjeldende lov krever.
@@ -45,7 +46,7 @@ Der europeisk personvernlov gjelder, behandles en e-posthenvendelse på et retts
 ## 5. Informasjonskapsler, nettleserlager og lignende teknologi
 
 1. KnitPeek bruker **nettleserlager som IndexedDB** for å huske prosjekter og innstillinger på enheten. Nettleserlager er ikke i seg selv en mekanisme for å laste opp innhold til en server.
-2. KnitPeek bruker for tiden ikke tredjeparts sporingsinformasjonskapsler eller skript for annonsering eller analyse. Språk og tjenesteinnstillinger lagres i nettleseren.
+2. KnitPeek bruker ikke sporingsinformasjonskapsler for annonsering. For å måle bruk av nettstedet og ytelse bruker KnitPeek det informasjonskapselløse Cloudflare Web Analytics-skriptet. Cloudflare opplyser at Web Analytics ikke samler inn eller bruker personopplysninger om besøkende. Språk og tjenesteinnstillinger lagres i nettleseren.
 3. Du kan slette eller begrense informasjonskapsler og nettstedsdata i nettleseren. Dette kan også fjerne lagrede oppskrifter og arbeidsdata. Kontroller først at nødvendige originalfiler og eksporterte rapporter er oppbevart separat.
 4. Lokale data er knyttet til nettadressen og nettleserprofilen der de ble lagret. De deles eller overføres ikke automatisk til en annen adresse, nettleser eller profil. Ta vare på nødvendige filer separat før du sletter nettstedsdata.
 
@@ -85,6 +86,6 @@ Operatøren kan endre erklæringen hvis Tjenesten eller behandlingen av opplysni
 
 ## 12. Ikrafttredelse
 
-Denne personvernerklæringen gjelder fra **4. november 2026**.
+Denne personvernerklæringen gjelder fra **6. november 2026**.
 
 ---

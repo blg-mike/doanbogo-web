@@ -2,7 +2,7 @@
 
 - Palvelu: **KnitPeek** (koreaksi **니트피크**)
 - Verkkosivusto: **https://knitpeek.pages.dev**
-- Voimaantulopäivä: **4. marraskuuta 2026**
+- Voimaantulopäivä: **6. marraskuuta 2026**
 - Rekisterinpitäjä / ylläpitäjä: **KnitPeek**
 - Tietosuoja-asioiden yhteydenotot: **knitpeek.cs@gmail.com**
 
@@ -19,6 +19,7 @@ Perustoiminnot eivät edellytä käyttäjätiliä. Tuodut PDF- ja valokuvaohjeet
 | Paikallisesti tallennetut projektitiedot | Tuodut PDF-tiedostot ja valokuvat, projektien nimet ja tunnisteet, kansikuvat, merkinnät, etenemisviivat, kaaviot, laskuri- ja ajastintiedot, raportit ja muistiinpanot | Katselu, muokkaus, palautus ja vienti selaintallennuksessa. Tuotuja tiedostoja ja työtietoja ei ladata KnitPeekin ylläpitämälle palvelimelle |
 | Paikalliset asetukset | Kielivalinta, katselimen asetukset, projektin tila ja vastaavat | Asetusten muistaminen laitteellasi. Selaimen kieliasetusta voidaan käyttää käyttöliittymän aloituskielen valintaan |
 | Verkkosivuston käyttötiedot (hosting-palvelu) | Kävijän IP-osoite, pyydetty URL ja aika, selain-/laite- sekä liikenteen reititystiedot | Cloudflare Pages voi käsitellä näitä tietoja sivuston toimittamiseksi ja suojaamiseksi. Lisätietoja on [Cloudflaren tietosuojakäytännössä](https://www.cloudflare.com/privacypolicy/). |
+| Cloudflare Web Analytics -mittaustiedot | Sivupolut ja viittauslähteet, selaimen/laitteen luokat, sivunäkymät/käynnit ja sivun latautumisen suorituskykymittarit | Cloudflare Web Analytics -beacon toimii selaimessa verkkosivuston käytön ja suorituskyvyn mittaamiseksi. Cloudflaren mukaan Web Analytics ei kerää eikä käytä kävijöiden henkilötietoja. [Cloudflare Web Analytics](https://developers.cloudflare.com/web-analytics/about/) |
 | Tukipyynnöt | Sähköpostiosoite, viesti ja lähettämäsi tiedot | Vastata yhteydenottoihin, käsitellä pyyntöjä ja niihin liittyviä valituksia |
 
 **Tärkeää:** Vain laitteellesi tallennettu ohje tai muistiinpano voi sisältää henkilötietoja, mutta se ei tarkoita, että Ylläpitäjä vastaanottaa tai voi nähdä niiden sisällön. Itse viemäsi tai jakamasi tietoja voi käsitellä valitsemasi vastaanottaja.
@@ -27,7 +28,7 @@ Perustoiminnot eivät edellytä käyttäjätiliä. Tuodut PDF- ja valokuvaohjeet
 
 1. **Paikalliset projektitiedot:** Tiedot voivat säilyä kyseisen laitteen ja selaimen tallennustilassa, kunnes poistat ne tai selain/laite lopettaa niiden säilyttämisen. Ylläpitäjällä ei ole erillistä käyttäjätiedostojen tietokantaa.
 2. **Paikalliset asetukset:** Tiedot voivat säilyä selaimen tallennustilassa, kunnes ne poistetaan tai nollataan.
-3. **Cloudflare Pagesin pyyntötiedot:** Cloudflare voi käsitellä IP-osoitteita, liikenteen reititystietoja, järjestelmäkokoonpanoa ja niihin liittyviä pyyntötietoja. Käsittely ja säilytys kuvataan [Cloudflaren tietosuojakäytännössä](https://www.cloudflare.com/privacypolicy/); KnitPeek ei määritä hosting-palvelun lokien säilytysaikaa.
+3. **Cloudflare Pagesin ja Web Analyticsin tiedot:** Cloudflare voi käsitellä IP-osoitteita, liikenteen reititystietoja, järjestelmäkokoonpanoa ja niihin liittyviä pyyntötietoja. Web Analytics -mittaustietoja käsitellään ja säilytetään myös Cloudflaren käytäntöjen mukaisesti; KnitPeek ei määritä niiden säilytysaikaa. Katso [Cloudflaren tietosuojakäytäntö](https://www.cloudflare.com/privacypolicy/).
 4. **Tukipyynnöt:** Vapaaehtoisesti lähettämäsi sähköpostiosoite ja viesti säilytetään vain niin kauan kuin vastaaminen ja asian käsittely edellyttävät, minkä jälkeen ne poistetaan, ellei laki edellytä säilyttämistä.
 
 ## 3A. Oikeusperusteet Euroopan tietosuojalainsäädännön soveltuessa
@@ -37,7 +38,7 @@ Kun eurooppalaista tietosuojalainsäädäntöä sovelletaan, sähköpostikyselyy
 ## 4. Luovutukset, palveluntarjoajat ja kansainvälinen käsittely
 
 1. KnitPeek ei lähetä tuotuja PDF- tai valokuvaohjeita eikä paikallisesti tallennettuja työtietoja KnitPeekin palvelimelle tai myy niitä mainostajille tai muille kolmansille osapuolille.
-2. **Verkkosivuston hosting:** Sivusto toimitetaan Cloudflare Pagesin kautta. Pyyntöjen reitittämiseksi ja suojaamiseksi Cloudflare voi käsitellä IP-osoitteita, liikenteen reititystietoja, järjestelmäkokoonpanoa ja niihin liittyviä pyyntötietoja. Katso [Cloudflaren tietosuojakäytäntö](https://www.cloudflare.com/privacypolicy/).
+2. **Verkkosivuston hosting ja analytiikka:** Sivusto toimitetaan Cloudflare Pagesin kautta. Cloudflare Web Analytics -skripti mittaa sivunäkymiä, käyntejä, viittauslähteitä ja suorituskykyä sekä lähettää mittaustiedot Cloudflarelle. Katso [Cloudflaren tietosuojakäytäntö](https://www.cloudflare.com/privacypolicy/) ja [Web Analytics](https://developers.cloudflare.com/web-analytics/about/).
 3. Vain selaimeesi tallennettuja ohjeita ja työtietoja ei lähetetä KnitPeekille. Hosting-palvelun pyyntöjen käsittely on eri asia kuin paikallisten tiedostojesi sisältö.
 
 4. Jos Ylläpitäjä ottaa käyttöön uusia henkilötietojen vastaanottajia, käsittelijöitä tai kansainvälisiä siirtoja, se antaa sovellettavan lain edellyttämät tiedot ja pyytää tarvittavat suostumukset.
@@ -45,7 +46,7 @@ Kun eurooppalaista tietosuojalainsäädäntöä sovelletaan, sähköpostikyselyy
 ## 5. Evästeet, selaintallennus ja vastaavat tekniikat
 
 1. KnitPeek käyttää **selaintallennusta, kuten IndexedDB:tä**, projektien ja asetusten muistamiseen laitteellasi. Selaintallennus ei itsessään siirrä sisältöjä palvelimelle.
-2. KnitPeek ei tällä hetkellä käytä kolmannen osapuolen seurantaevästeitä tai seurantaskriptejä mainontaan tai analytiikkaan. Kielivalinta ja palvelun asetukset tallennetaan selaimeen.
+2. KnitPeek ei käytä mainonnan seurantaevästeitä. Verkkosivuston käytön ja suorituskyvyn mittaamiseen käytetään evästeetöntä Cloudflare Web Analytics -skriptiä. Cloudflaren mukaan Web Analytics ei kerää eikä käytä kävijöiden henkilötietoja. Kielivalinta ja palvelun asetukset tallennetaan selaimeen.
 3. Voit poistaa tai rajoittaa evästeitä ja sivustotietoja selaimen asetuksissa. Tämä voi myös poistaa tallennetut ohjeet ja työtiedot. Varmista ensin, että tarvittavat alkuperäistiedostot ja viedyt raportit on säilytetty erikseen.
 4. Paikalliset tiedot liittyvät verkkosivuston osoitteeseen ja selainprofiiliin, johon ne tallennettiin. Niitä ei jaeta tai siirretä automaattisesti toiseen osoitteeseen, selaimeen tai profiiliin. Tallenna tarvittavat tiedostot erikseen ennen sivustotietojen poistamista.
 
@@ -85,6 +86,6 @@ Ylläpitäjä voi päivittää tätä käytäntöä, jos Palvelu tai tietojen k�
 
 ## 12. Voimaantulo
 
-Tämä tietosuojakäytäntö on voimassa **4. marraskuuta 2026** alkaen.
+Tämä tietosuojakäytäntö on voimassa **6. marraskuuta 2026** alkaen.
 
 ---

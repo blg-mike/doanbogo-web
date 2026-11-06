@@ -18,6 +18,11 @@ if (manifest.start_url !== '/app/' || manifest.scope !== '/app/' || !appHtml.inc
 for (const path of appHtml.matchAll(/(?:src|href)="(\/app\/[^"]+)"/g)) await access(resolve(site, path[1].slice('/'.length)))
 for (const icon of manifest.icons) await access(resolve(app, icon.src))
 await access(resolve(app, 'sw.js'))
+const analyticsSnippet = `<!-- Cloudflare Web Analytics --><script type='module' src='https://static.cloudflareinsights.com/beacon.min.js' data-cf-beacon='{"token": "d2e427151c4b4346877074b9e67d3c93"}'></script><!-- End Cloudflare Web Analytics -->`
+await Promise.all([
+  writeFile(resolve(site, 'index.html'), homepage.replace('</body>', `  ${analyticsSnippet}\n</body>`), 'utf8'),
+  writeFile(resolve(app, 'index.html'), appHtml.replace('</body>', `  ${analyticsSnippet}\n</body>`), 'utf8'),
+])
 await writeFile(resolve(root, 'site/_headers'), `/*
   Cache-Control: no-cache
 
