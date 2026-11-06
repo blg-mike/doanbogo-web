@@ -39,16 +39,18 @@ Kun eurooppalaista tietosuojalainsäädäntöä sovelletaan, sähköpostikyselyy
 
 1. KnitPeek ei lähetä tuotuja PDF- tai valokuvaohjeita eikä paikallisesti tallennettuja työtietoja KnitPeekin palvelimelle tai myy niitä mainostajille tai muille kolmansille osapuolille.
 2. **Verkkosivuston hosting ja analytiikka:** Sivusto toimitetaan Cloudflare Pagesin kautta. Cloudflare Web Analytics -skripti mittaa sivunäkymiä, käyntejä, viittauslähteitä ja suorituskykyä sekä lähettää mittaustiedot Cloudflarelle. Katso [Cloudflaren tietosuojakäytäntö](https://www.cloudflare.com/privacypolicy/) ja [Web Analytics](https://developers.cloudflare.com/web-analytics/about/).
-3. Vain selaimeesi tallennettuja ohjeita ja työtietoja ei lähetetä KnitPeekille. Hosting-palvelun pyyntöjen käsittely on eri asia kuin paikallisten tiedostojesi sisältö.
+3. **Google Analytics 4 (GA4):** Kun annat suostumuksesi analytiikkaan, Google käsittelee käyntejä, näyttöjä ja toimintoja koskevia mittaustietoja kohdan 5 mukaisesti. Tunnistetta ei ladata ennen suostumusta. Lisätietoja käsiteltävistä tiedoista ja valinnan muuttamisesta on kohdassa 5 ja [Googlen tietosuojakäytännössä](https://policies.google.com/privacy).
+4. Vain selaimeesi tallennettuja ohjeita ja työtietoja ei lähetetä KnitPeekille. Hosting-palvelun pyyntöjen käsittely on eri asia kuin paikallisten tiedostojesi sisältö.
 
-4. Jos Ylläpitäjä ottaa käyttöön uusia henkilötietojen vastaanottajia, käsittelijöitä tai kansainvälisiä siirtoja, se antaa sovellettavan lain edellyttämät tiedot ja pyytää tarvittavat suostumukset.
+5. Jos Ylläpitäjä ottaa käyttöön uusia henkilötietojen vastaanottajia, käsittelijöitä tai kansainvälisiä siirtoja, se antaa sovellettavan lain edellyttämät tiedot ja pyytää tarvittavat suostumukset.
 
 ## 5. Evästeet, selaintallennus ja vastaavat tekniikat
 
 1. KnitPeek käyttää **selaintallennusta, kuten IndexedDB:tä**, projektien ja asetusten muistamiseen laitteellasi. Selaintallennus ei itsessään siirrä sisältöjä palvelimelle.
-2. KnitPeek ei käytä mainonnan seurantaevästeitä. Verkkosivuston käytön ja suorituskyvyn mittaamiseen käytetään evästeetöntä Cloudflare Web Analytics -skriptiä. Cloudflaren mukaan Web Analytics ei kerää eikä käytä kävijöiden henkilötietoja. Kielivalinta ja palvelun asetukset tallennetaan selaimeen.
-3. Voit poistaa tai rajoittaa evästeitä ja sivustotietoja selaimen asetuksissa. Tämä voi myös poistaa tallennetut ohjeet ja työtiedot. Varmista ensin, että tarvittavat alkuperäistiedostot ja viedyt raportit on säilytetty erikseen.
-4. Paikalliset tiedot liittyvät verkkosivuston osoitteeseen ja selainprofiiliin, johon ne tallennettiin. Niitä ei jaeta tai siirretä automaattisesti toiseen osoitteeseen, selaimeen tai profiiliin. Tallenna tarvittavat tiedostot erikseen ennen sivustotietojen poistamista.
+2. KnitPeek käyttää evästeetöntä Cloudflare Web Analytics -skriptiä käyntien ja suorituskyvyn mittaamiseen. Cloudflaren mukaan Web Analytics ei kerää eikä käytä kävijöiden henkilötietoja.
+3. Google Analytics 4 (GA4) ladataan vasta, kun annat suostumuksen analytiikkaan. GA4 käsittelee viittaavien verkkotunnusten ja UTM-kampanjoiden arvoja, kiinteitä sivupolkuja ja näyttötyyppejä, osio- ja toimintotapahtumia, selain-/laitetietoja sekä GA:n mittausevästeitä. Tiedostonimiä, ohjeiden tai raporttien sisältöä, hakutermejä, projekti-/asiakirjatunnisteita tai syötettyjä mittoja ei lähetetä. Valinta säilytetään selaimessa kuusi kuukautta, ja voit muuttaa sitä etusivun tai sovelluksen analytiikka-asetuksissa. Jos estät tai peruutat suostumuksen, GA:n keruu päättyy. Lue lisää [Googlen tietosuojakäytännöstä](https://policies.google.com/privacy).
+4. Kielivalinta ja palvelun asetukset tallennetaan selaimeen. Voit poistaa tai rajoittaa evästeitä ja sivustotietoja selaimen asetuksissa. Tämä voi myös poistaa tallennetut ohjeet ja työtiedot. Varmista ensin, että tarvittavat alkuperäistiedostot ja viedyt raportit on säilytetty erikseen.
+5. Paikalliset tiedot liittyvät verkkosivuston osoitteeseen ja selainprofiiliin, johon ne tallennettiin. Niitä ei jaeta tai siirretä automaattisesti toiseen osoitteeseen, selaimeen tai profiiliin. Tallenna tarvittavat tiedostot erikseen ennen sivustotietojen poistamista.
 
 ## 6. Vienti, jakaminen ja ulkoiset sivustot
 

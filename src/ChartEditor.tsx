@@ -9,6 +9,7 @@ import { DESIGN_SYSTEM_COLORS } from './designTokens'
 import type { ChartDocument, ChartLayer, CrochetSymbolId, CrochetSymbolObject } from './types'
 import { AnimatedNumber } from './AnimatedNumber'
 import { useDismissiblePopover } from './useDismissiblePopover'
+import { trackAnalytics } from './analytics'
 import './Chart.css'
 
 type GridTool = 'paint' | 'erase' | 'fill' | 'select' | 'pan'
@@ -41,6 +42,7 @@ export default function ChartEditor() {
   const [chart, setChart] = useState<ChartDocument | null>(null)
   const [missing, setMissing] = useState(false)
   const chartRef = useRef<ChartDocument | null>(null)
+  const chartFeatureTrackedRef = useRef('')
   const [past, setPast] = useState<ChartDocument[]>([])
   const [future, setFuture] = useState<ChartDocument[]>([])
   const pastRef = useRef<ChartDocument[]>([])
@@ -93,6 +95,10 @@ export default function ChartEditor() {
 
   useEffect(() => {
     if (!chart || chart.id !== id) return
+    if (chartFeatureTrackedRef.current !== id) {
+      chartFeatureTrackedRef.current = id
+      trackAnalytics('feature_used', { feature_name: 'chart', action: 'open' })
+    }
     setSaveStatus('saving')
     const timeout = window.setTimeout(() => {
       void saveChart(chart).then((saved) => {

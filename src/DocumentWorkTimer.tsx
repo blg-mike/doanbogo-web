@@ -340,7 +340,7 @@ export default function DocumentWorkTimer({ documentId, initialTotalWorkTimeMs, 
   }
 
   if (!portalTarget) return null
-  const toggleButton = <button type="button" className="viewer-work-timer-toggle" aria-label={error ? t('저장 재시도') : running ? t('일시정지') : t('재생')} title={error ? t('저장 재시도') : running ? t('일시정지') : t('재생')} disabled={saving} onClick={() => void toggle()}>
+  const toggleButton = <button type="button" className="viewer-work-timer-toggle" data-analytics-feature="timer" data-analytics-action={running ? 'pause' : 'start'} aria-label={error ? t('저장 재시도') : running ? t('일시정지') : t('재생')} title={error ? t('저장 재시도') : running ? t('일시정지') : t('재생')} disabled={saving} onClick={() => void toggle()}>
       {running ? <Pause size={17} /> : <Play size={17} />}
     </button>
   const elapsedSeconds = Math.floor(elapsedMs / 1000)

@@ -186,6 +186,9 @@ html[lang="fi"] .hero h1 { font-size: clamp(34px, 8.4cqi, 58px); }
 .footer-nav strong { margin-bottom: 8px; font-size: 14px; }
 .footer-language { display: flex; min-width: 0; flex-direction: column; align-items: flex-end; gap: 12px; }
 .footer-start { display: inline-flex; min-height: 44px; align-items: center; color: var(--color-primary); font-size: 14px; font-weight: 600; }
+.footer-analytics-settings { min-height: 44px; padding: 0; border: 0; color: var(--color-text-secondary); background: transparent; font: inherit; font-size: 13px; cursor: pointer; }
+.footer-analytics-settings:hover { color: var(--color-primary); text-decoration: underline; text-underline-offset: 4px; }
+.footer-analytics-settings:focus-visible { outline: 2px solid var(--color-primary); outline-offset: 3px; }
 .footer-bottom { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 8px 24px; padding-block: 20px calc(20px + env(safe-area-inset-bottom, 0px)); border-top: 1px solid var(--color-divider); color: var(--color-text-secondary); font-size: 13px; }
 .footer-contact { min-height: 24px; color: inherit; }
 .noscript-note { padding: 20px; color: var(--color-text-secondary); text-align: center; }

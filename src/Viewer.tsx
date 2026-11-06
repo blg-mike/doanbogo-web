@@ -1,4 +1,5 @@
 import { formatNumber, t, translateMessage } from './locales/index'
+import { trackAnalytics } from './analytics'
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type DragEvent as ReactDragEvent, type FormEvent as ReactFormEvent, type MouseEvent as ReactMouseEvent, type PointerEvent as ReactPointerEvent, type ReactNode, type UIEvent as ReactUIEvent } from 'react'
 import type { PDFDocumentProxy } from 'pdfjs-dist'
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
@@ -330,6 +331,7 @@ export default function Viewer() {
   const dragRef = useRef<{ pointerId: number; orientation: 'wide' | 'tall'; rect: DOMRect } | null>(null)
   const [documentName, setDocumentName] = useState('')
   const [documentKind, setDocumentKind] = useState<'pdf' | 'photos'>('pdf')
+  const viewerOpenTrackedRef = useRef('')
   const [documentWorkTimeMs, setDocumentWorkTimeMs] = useState(0)
   const [todayWorkDate, setTodayWorkDate] = useState('')
   const [todayWorkTimeMs, setTodayWorkTimeMs] = useState(0)
@@ -443,6 +445,11 @@ export default function Viewer() {
   const [pdf, setPdf] = useState<PDFDocumentProxy | null>(null)
   const [snapshot, setSnapshot] = useState<ViewerSnapshot | null>(null)
   const [loadedId, setLoadedId] = useState('')
+  useEffect(() => {
+    if (reportMode || loadedId !== id || !pdf || viewerOpenTrackedRef.current === id) return
+    viewerOpenTrackedRef.current = id
+    trackAnalytics('viewer_opened', { document_type: documentKind })
+  }, [id, loadedId, pdf, documentKind, reportMode])
   const [savedCounterSession, setSavedCounterSession] = useState(() => createCounterSession(id))
   const counterSession = savedCounterSession.documentId === id ? savedCounterSession : createCounterSession(id)
   const counterPanelVisible = counterSession.visible
@@ -3358,20 +3365,20 @@ export default function Viewer() {
           <div className="viewer-controlbar-main">
             <div className="viewer-tools" role="group" aria-label={t('필기 도구')}>
               <button type="button" className={'viewer-tool tool-toggle ' + (tool === 'pan' ? 'active' : '')} aria-label={t('이동 도구')} title={t('이동')} aria-pressed={tool === 'pan'} onClick={() => { closeMiniBarOnPdfActionRef.current = true; selectViewerTool('pan') }}><MousePointer2 size={17} /><span>{t('이동')}</span></button>
-              <button type="button" className={'viewer-tool tool-toggle ' + (tool === 'pen' ? 'active' : '')} aria-label={t('펜')} title={t('펜')} aria-pressed={tool === 'pen'} onClick={() => { closeMiniBarOnPdfActionRef.current = false; selectViewerTool('pen'); setMiniBarSettingsOpen(true) }}><Pencil size={17} /><span>{t('펜')}</span></button>
-              <button type="button" className={'viewer-tool tool-toggle ' + (tool === 'highlight' ? 'active' : '')} aria-label={t('형광펜')} title={t('형광펜')} aria-pressed={tool === 'highlight'} onClick={() => { closeMiniBarOnPdfActionRef.current = false; selectViewerTool('highlight'); setMiniBarSettingsOpen(true) }}><Highlighter size={17} /><span>{t('형광펜')}</span></button>
-              <button type="button" className={'viewer-tool tool-toggle ' + (tool === 'eraser' ? 'active' : '')} aria-label={t('지우개')} title={t('지우개')} aria-pressed={tool === 'eraser'} onClick={() => { closeMiniBarOnPdfActionRef.current = false; selectViewerTool('eraser') }}><Eraser size={17} /><span>{t('지우개')}</span></button>
-              <button type="button" className={'viewer-tool tool-toggle ' + (tool === 'text' ? 'active' : '')} aria-label={t('텍스트')} title={t('텍스트')} aria-pressed={tool === 'text'} onClick={() => { closeMiniBarOnPdfActionRef.current = false; selectViewerTool('text') }}><Type size={17} /><span>{t('텍스트')}</span></button>
-              <button type="button" className={'viewer-tool tool-toggle ' + (tool === 'selection' ? 'active' : '')} aria-label={t('구간 선택')} title={t('구간 선택 설명')} aria-pressed={tool === 'selection'} onClick={() => { closeMiniBarOnPdfActionRef.current = false; setMiniBarSettingsOpen(false); selectViewerTool('selection') }}><LassoSelect size={17} /><span>{t('구간 선택')}</span></button>
-              <button type="button" className={'viewer-tool tool-toggle region-highlight-tool ' + (tool === 'region-highlight' ? 'active' : '')} aria-label={t('구간 강조')} title={t('구간 강조')} aria-pressed={tool === 'region-highlight'} onClick={() => { closeMiniBarOnPdfActionRef.current = false; setMiniBarSettingsOpen(false); selectViewerTool('region-highlight') }}><Square size={17} /><span>{t('구간 강조')}</span></button>
-              {colorworkEnabled && <button type="button" className="viewer-tool chart-tool" aria-label={t('컬러워크 설정')} title={t('차트 크기와 뜨개 게이지 설정')} disabled={!pageWorks[activePage] || Boolean(colorworkRequest)} onClick={() => setColorworkDialog(true)}><Grid3X3 size={17} /><span>{t('컬러워크')}</span>{activeColorworkGrid && <small>{activeColorworkGrid.columns}×{activeColorworkGrid.rows}</small>}</button>}
+              <button type="button" data-analytics-feature="annotation" data-analytics-action="pen" className={'viewer-tool tool-toggle ' + (tool === 'pen' ? 'active' : '')} aria-label={t('펜')} title={t('펜')} aria-pressed={tool === 'pen'} onClick={() => { closeMiniBarOnPdfActionRef.current = false; selectViewerTool('pen'); setMiniBarSettingsOpen(true) }}><Pencil size={17} /><span>{t('펜')}</span></button>
+              <button type="button" data-analytics-feature="annotation" data-analytics-action="highlight" className={'viewer-tool tool-toggle ' + (tool === 'highlight' ? 'active' : '')} aria-label={t('형광펜')} title={t('형광펜')} aria-pressed={tool === 'highlight'} onClick={() => { closeMiniBarOnPdfActionRef.current = false; selectViewerTool('highlight'); setMiniBarSettingsOpen(true) }}><Highlighter size={17} /><span>{t('형광펜')}</span></button>
+              <button type="button" data-analytics-feature="annotation" data-analytics-action="erase" className={'viewer-tool tool-toggle ' + (tool === 'eraser' ? 'active' : '')} aria-label={t('지우개')} title={t('지우개')} aria-pressed={tool === 'eraser'} onClick={() => { closeMiniBarOnPdfActionRef.current = false; selectViewerTool('eraser') }}><Eraser size={17} /><span>{t('지우개')}</span></button>
+              <button type="button" data-analytics-feature="annotation" data-analytics-action="text" className={'viewer-tool tool-toggle ' + (tool === 'text' ? 'active' : '')} aria-label={t('텍스트')} title={t('텍스트')} aria-pressed={tool === 'text'} onClick={() => { closeMiniBarOnPdfActionRef.current = false; selectViewerTool('text') }}><Type size={17} /><span>{t('텍스트')}</span></button>
+              <button type="button" data-analytics-feature="annotation" data-analytics-action="select_region" className={'viewer-tool tool-toggle ' + (tool === 'selection' ? 'active' : '')} aria-label={t('구간 선택')} title={t('구간 선택 설명')} aria-pressed={tool === 'selection'} onClick={() => { closeMiniBarOnPdfActionRef.current = false; setMiniBarSettingsOpen(false); selectViewerTool('selection') }}><LassoSelect size={17} /><span>{t('구간 선택')}</span></button>
+              <button type="button" data-analytics-feature="annotation" data-analytics-action="highlight_region" className={'viewer-tool tool-toggle region-highlight-tool ' + (tool === 'region-highlight' ? 'active' : '')} aria-label={t('구간 강조')} title={t('구간 강조')} aria-pressed={tool === 'region-highlight'} onClick={() => { closeMiniBarOnPdfActionRef.current = false; setMiniBarSettingsOpen(false); selectViewerTool('region-highlight') }}><Square size={17} /><span>{t('구간 강조')}</span></button>
+              {colorworkEnabled && <button type="button" data-analytics-feature="chart" data-analytics-action="open" className="viewer-tool chart-tool" aria-label={t('컬러워크 설정')} title={t('차트 크기와 뜨개 게이지 설정')} disabled={!pageWorks[activePage] || Boolean(colorworkRequest)} onClick={() => setColorworkDialog(true)}><Grid3X3 size={17} /><span>{t('컬러워크')}</span>{activeColorworkGrid && <small>{activeColorworkGrid.columns}×{activeColorworkGrid.rows}</small>}</button>}
               {activeColorworkGrid && <>
                 <button type="button" className="viewer-tool compact-tool" aria-label={activeColorworkGrid.visible ? t('컬러워크 숨기기') : t('컬러워크 보이기')} title={activeColorworkGrid.visible ? t('컬러워크 숨기기') : t('컬러워크 보이기')} aria-pressed={activeColorworkGrid.visible} onClick={toggleColorworkVisibility}>{activeColorworkGrid.visible ? <Eye size={16} /> : <EyeOff size={16} />}</button>
                 <button type="button" className={'viewer-tool compact-tool ' + (colorworkEraser ? 'active' : '')} aria-label={colorworkEraser ? t('컬러워크 지우개 끄기') : t('컬러워크 지우개')} title={colorworkEraser ? t('지우개 끄기') : t('색칠한 칸 지우기')} aria-pressed={colorworkEraser} onClick={() => setColorworkEraser((current) => !current)}><Eraser size={16} /></button>
               </>}
               {!activeColorworkGrid?.visible && <>
                 <span className="control-separator" aria-hidden="true" />
-                <button type="button" data-viewer-tutorial-target="progress-tool" className="viewer-tool progress-toggle-tool" aria-label={!activeHasPrimaryGuide ? t('진행선 표시') : progressSettings.horizontal.visible ? t('진행선 숨기기') : t('진행선 표시')} title={!activeHasPrimaryGuide ? t('진행선 표시') : progressSettings.horizontal.visible ? t('진행선 숨기기') : t('진행선 표시')} aria-pressed={activeHasPrimaryGuide && progressSettings.horizontal.visible} disabled={!pageWorks[activePage]} onClick={toggleProgressLines}>{progressSettings.horizontal.visible ? <ScanLine size={17} /> : <EyeClosed size={17} />}<span>{t('진행선')}</span></button>
+                <button type="button" data-analytics-feature="progress_line" data-analytics-action="toggle" data-viewer-tutorial-target="progress-tool" className="viewer-tool progress-toggle-tool" aria-label={!activeHasPrimaryGuide ? t('진행선 표시') : progressSettings.horizontal.visible ? t('진행선 숨기기') : t('진행선 표시')} title={!activeHasPrimaryGuide ? t('진행선 표시') : progressSettings.horizontal.visible ? t('진행선 숨기기') : t('진행선 표시')} aria-pressed={activeHasPrimaryGuide && progressSettings.horizontal.visible} disabled={!pageWorks[activePage]} onClick={toggleProgressLines}>{progressSettings.horizontal.visible ? <ScanLine size={17} /> : <EyeClosed size={17} />}<span>{t('진행선')}</span></button>
               </>}
               {(activeAnnotationStyle || activeColorworkGrid) && <button ref={miniBarSettingsTriggerRef} type="button" className={'viewer-tool compact-tool ' + (miniBarSettingsOpen ? 'active' : '')} aria-label={t('도구 설정')} title={t('도구 설정')} aria-expanded={miniBarSettingsOpen} onClick={() => setMiniBarSettingsOpen((open) => !open)}><Settings2 size={17} /></button>}
             </div>

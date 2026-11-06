@@ -19,9 +19,15 @@ for (const path of appHtml.matchAll(/(?:src|href)="(\/app\/[^"]+)"/g)) await acc
 for (const icon of manifest.icons) await access(resolve(app, icon.src))
 await access(resolve(app, 'sw.js'))
 const analyticsSnippet = `<!-- Cloudflare Web Analytics --><script type='module' src='https://static.cloudflareinsights.com/beacon.min.js' data-cf-beacon='{"token": "d2e427151c4b4346877074b9e67d3c93"}'></script><!-- End Cloudflare Web Analytics -->`
+const gaMeasurementId = process.env.VITE_GA_MEASUREMENT_ID ?? ''
+if (gaMeasurementId && !/^G-[A-Z0-9]+$/.test(gaMeasurementId)) throw new Error('VITE_GA_MEASUREMENT_ID must be a GA4 measurement ID.')
+if (gaMeasurementId) await access(resolve(app, 'analytics.js'))
+const gaSnippet = gaMeasurementId
+  ? `<script>window.KNITPEEK_GA_MEASUREMENT_ID=${JSON.stringify(gaMeasurementId)}</script><script defer src="/app/analytics.js"></script>`
+  : ''
 await Promise.all([
-  writeFile(resolve(site, 'index.html'), homepage.replace('</body>', `  ${analyticsSnippet}\n</body>`), 'utf8'),
-  writeFile(resolve(app, 'index.html'), appHtml.replace('</body>', `  ${analyticsSnippet}\n</body>`), 'utf8'),
+  writeFile(resolve(site, 'index.html'), homepage.replace('</head>', `  ${gaSnippet}\n</head>`).replace('</body>', `  ${analyticsSnippet}\n</body>`), 'utf8'),
+  writeFile(resolve(app, 'index.html'), appHtml.replace('</head>', `  ${gaSnippet}\n</head>`).replace('</body>', `  ${analyticsSnippet}\n</body>`), 'utf8'),
 ])
 await writeFile(resolve(root, 'site/_headers'), `/*
   Cache-Control: no-cache

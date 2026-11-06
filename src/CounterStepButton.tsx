@@ -30,7 +30,7 @@ export function CounterStepButton({ children, label, title, disabled, className,
     window.clearTimeout(clearClickTimerRef.current)
   }, [])
 
-  return <button type="button" className={className} aria-label={label} title={title ?? label} disabled={disabled}
+  return <button type="button" className={className} data-analytics-feature="counter" data-analytics-action="step" aria-label={label} title={title ?? label} disabled={disabled}
     onPointerDown={(event) => {
       if (disabled || event.pointerType === 'mouse' && event.button !== 0) return
       clearTimers()

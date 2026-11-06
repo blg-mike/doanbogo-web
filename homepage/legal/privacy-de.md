@@ -39,16 +39,18 @@ Soweit europäisches Datenschutzrecht gilt, stützt sich die Beantwortung einer 
 
 1. KnitPeek überträgt importierte PDF-/Fotomuster und lokal gespeicherte Arbeitsaufzeichnungen nicht an einen von KnitPeek betriebenen Server und verkauft diese Inhalte nicht an Werbetreibende oder andere Dritte.
 2. **Website-Hosting und Analyse:** Die Website wird über Cloudflare Pages bereitgestellt. Das Cloudflare-Web-Analytics-Skript misst Seitenaufrufe, Besuche, Verweisquellen und Leistungsdaten und übermittelt diese Messwerte an Cloudflare. Weitere Informationen enthalten die [Cloudflare-Datenschutzerklärung](https://www.cloudflare.com/privacypolicy/) und [Web Analytics](https://developers.cloudflare.com/web-analytics/about/).
-3. Muster und Arbeitsaufzeichnungen, die nur in Ihrem Browser gespeichert sind, werden nicht an KnitPeek gesendet. Die Verarbeitung von Hostinganfragen ist von den Inhalten Ihrer lokalen Dateien getrennt.
+3. **Google Analytics 4 (GA4):** Wenn Sie der Analyse zustimmen, verarbeitet Google die in Abschnitt 5 beschriebenen Messdaten zu Besuchen, Bildschirmen und Funktionen. Das Tag wird vor Ihrer Zustimmung nicht geladen. Angaben zu den Daten und zur Änderung Ihrer Auswahl finden Sie in Abschnitt 5 und in der [Datenschutzerklärung von Google](https://policies.google.com/privacy).
+4. Muster und Arbeitsaufzeichnungen, die nur in Ihrem Browser gespeichert sind, werden nicht an KnitPeek gesendet. Die Verarbeitung von Hostinganfragen ist von den Inhalten Ihrer lokalen Dateien getrennt.
 
-4. Führt der Betreiber neue Empfänger, Auftragsverarbeiter oder internationale Übermittlungen personenbezogener Daten ein, informiert er nach geltendem Recht und holt erforderliche Einwilligungen ein.
+5. Führt der Betreiber neue Empfänger, Auftragsverarbeiter oder internationale Übermittlungen personenbezogener Daten ein, informiert er nach geltendem Recht und holt erforderliche Einwilligungen ein.
 
 ## 5. Cookies, Browserspeicher und ähnliche Technologien
 
 1. KnitPeek verwendet **Browserspeicher wie IndexedDB**, um Projekte und Einstellungen auf Ihrem Gerät zu speichern. Browserspeicher lädt diese Inhalte nicht von sich aus auf einen Server hoch.
-2. KnitPeek verwendet keine Tracking-Cookies für Werbung. Zur Messung der Website-Nutzung und Leistung wird das cookiefreie Cloudflare-Web-Analytics-Skript verwendet. Cloudflare erklärt, dass Web Analytics keine personenbezogenen Daten der Besucher erhebt oder nutzt. Sprache und Diensteinstellungen werden im Browserspeicher abgelegt.
-3. Sie können Cookies und Websitedaten in den Browsereinstellungen löschen oder einschränken. Dabei können gespeicherte Muster und Arbeitsdaten verloren gehen. Prüfen Sie vorher, ob benötigte Originaldateien und ausgegebene Berichte separat aufbewahrt sind.
-4. Lokale Daten sind an die Website-Adresse und das Browserprofil gebunden, in denen sie gespeichert wurden. Sie werden nicht automatisch mit einer anderen Adresse, einem anderen Browser oder Profil geteilt oder übertragen. Sichern Sie benötigte Dateien, bevor Sie Websitedaten löschen.
+2. KnitPeek verwendet das cookiefreie Cloudflare-Web-Analytics-Skript, um Besuche und Leistung zu messen. Cloudflare erklärt, dass Web Analytics keine personenbezogenen Daten der Besucher erhebt oder nutzt.
+3. Google Analytics 4 (GA4) wird erst geladen, nachdem Sie der Analyse zugestimmt haben. GA4 verarbeitet Verweisdomains und UTM-Kampagnenwerte, feste Seitenpfade und Bildschirmtypen, Abschnitts- und Funktionsereignisse, Browser-/Geräteinformationen sowie GA-Mess-Cookies. Dateinamen, Muster- oder Berichtsinhalte, Suchbegriffe, Projekt-/Dokument-IDs und eingegebene Maße werden nicht übermittelt. Ihre Auswahl wird sechs Monate im Browser gespeichert und kann jederzeit über die Analyse-Einstellungen auf der Homepage oder in der App geändert werden. Bei Ablehnung oder Widerruf endet die GA-Erfassung. Weitere Informationen finden Sie in der [Datenschutzerklärung von Google](https://policies.google.com/privacy).
+4. Sprache und Diensteinstellungen werden im Browserspeicher abgelegt. Sie können Cookies und Websitedaten in den Browsereinstellungen löschen oder einschränken. Dabei können gespeicherte Muster und Arbeitsdaten verloren gehen. Prüfen Sie vorher, ob benötigte Originaldateien und ausgegebene Berichte separat aufbewahrt sind.
+5. Lokale Daten sind an die Website-Adresse und das Browserprofil gebunden, in denen sie gespeichert wurden. Sie werden nicht automatisch mit einer anderen Adresse, einem anderen Browser oder Profil geteilt oder übertragen. Sichern Sie benötigte Dateien, bevor Sie Websitedaten löschen.
 
 ## 6. Export, Teilen und externe Websites
 

@@ -39,16 +39,18 @@ Der europeisk personvernlov gjelder, behandles en e-posthenvendelse på et retts
 
 1. KnitPeek sender ikke importerte PDF-/fotooppskrifter eller lokalt lagrede arbeidsopplysninger til en server som KnitPeek driver, og selger ikke innholdet til annonsører eller andre tredjeparter.
 2. **Nettstedshosting og analyse:** Nettstedet leveres via Cloudflare Pages. Cloudflare Web Analytics-skriptet måler sidevisninger, besøk, henvisningskilder og ytelse og sender målingene til Cloudflare. Se [Cloudflares personvernerklæring](https://www.cloudflare.com/privacypolicy/) og [Web Analytics](https://developers.cloudflare.com/web-analytics/about/).
-3. Oppskrifter og arbeidsopplysninger som bare er lagret i nettleseren, sendes ikke til KnitPeek. Vertsleverandørens forespørselsbehandling er atskilt fra innholdet i de lokale filene dine.
+3. **Google Analytics 4 (GA4):** Når du samtykker til analyse, behandler Google målinger av besøk, skjermer og funksjoner som beskrevet i punkt 5. Taggen lastes ikke før du samtykker. Se punkt 5 og [Googles personvernregler](https://policies.google.com/privacy) for informasjon om dataene og hvordan du endrer valget ditt.
+4. Oppskrifter og arbeidsopplysninger som bare er lagret i nettleseren, sendes ikke til KnitPeek. Vertsleverandørens forespørselsbehandling er atskilt fra innholdet i de lokale filene dine.
 
-4. Hvis Operatøren innfører nye mottakere, databehandlere eller overføringer til andre land, gis informasjonen og innhentes samtykkene som gjeldende lov krever.
+5. Hvis Operatøren innfører nye mottakere, databehandlere eller overføringer til andre land, gis informasjonen og innhentes samtykkene som gjeldende lov krever.
 
 ## 5. Informasjonskapsler, nettleserlager og lignende teknologi
 
 1. KnitPeek bruker **nettleserlager som IndexedDB** for å huske prosjekter og innstillinger på enheten. Nettleserlager er ikke i seg selv en mekanisme for å laste opp innhold til en server.
-2. KnitPeek bruker ikke sporingsinformasjonskapsler for annonsering. For å måle bruk av nettstedet og ytelse bruker KnitPeek det informasjonskapselløse Cloudflare Web Analytics-skriptet. Cloudflare opplyser at Web Analytics ikke samler inn eller bruker personopplysninger om besøkende. Språk og tjenesteinnstillinger lagres i nettleseren.
-3. Du kan slette eller begrense informasjonskapsler og nettstedsdata i nettleseren. Dette kan også fjerne lagrede oppskrifter og arbeidsdata. Kontroller først at nødvendige originalfiler og eksporterte rapporter er oppbevart separat.
-4. Lokale data er knyttet til nettadressen og nettleserprofilen der de ble lagret. De deles eller overføres ikke automatisk til en annen adresse, nettleser eller profil. Ta vare på nødvendige filer separat før du sletter nettstedsdata.
+2. KnitPeek bruker det informasjonskapselløse Cloudflare Web Analytics-skriptet til å måle besøk og ytelse. Cloudflare opplyser at Web Analytics ikke samler inn eller bruker personopplysninger om besøkende.
+3. Google Analytics 4 (GA4) lastes først etter at du har samtykket til analyse. GA4 behandler henvisningsdomener og UTM-kampanjeverdier, faste sidestier og skjermtyper, seksjons- og funksjonshendelser, nettleser-/enhetsinformasjon og GA-måleinformasjonskapsler. Filnavn, mønster- eller rapportinnhold, søkeord, prosjekt-/dokument-ID-er og innskrevne mål sendes ikke. Valget ditt lagres i nettleseren i seks måneder og kan endres når som helst via Analyseinnstillinger på hjemmesiden eller i appen. GA-innsamlingen stopper hvis du avslår eller trekker tilbake samtykket. Se [Googles personvernregler](https://policies.google.com/privacy).
+4. Språk og tjenesteinnstillinger lagres i nettleseren. Du kan slette eller begrense informasjonskapsler og nettstedsdata i nettleseren. Dette kan også fjerne lagrede oppskrifter og arbeidsdata. Kontroller først at nødvendige originalfiler og eksporterte rapporter er oppbevart separat.
+5. Lokale data er knyttet til nettadressen og nettleserprofilen der de ble lagret. De deles eller overføres ikke automatisk til en annen adresse, nettleser eller profil. Ta vare på nødvendige filer separat før du sletter nettstedsdata.
 
 ## 6. Eksport, deling og eksterne nettsteder
 

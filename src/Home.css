@@ -13,6 +13,11 @@
 .app-sidebar-coffee { width: 100%; box-sizing: border-box; justify-content: flex-start; }
 .app-sidebar-coffee:hover, .app-mobile-coffee:hover { background: var(--color-primary-soft); }
 .app-sidebar-coffee:focus-visible, .app-mobile-coffee:focus-visible { outline: 2px solid var(--color-primary); outline-offset: 2px; }
+.app-sidebar-analytics, .app-mobile-analytics { min-height: 44px; border: 0; padding: 0 12px; color: var(--color-text-muted); background: transparent; font: inherit; font-size: 12px; text-align: left; cursor: pointer; }
+.app-sidebar-analytics { justify-self: start; }
+.app-sidebar-analytics:hover, .app-mobile-analytics:hover { color: var(--color-primary); text-decoration: underline; text-underline-offset: 3px; }
+.app-sidebar-analytics:focus-visible, .app-mobile-analytics:focus-visible { outline: 2px solid var(--color-primary); outline-offset: 2px; }
+.app-mobile-analytics { display: none; }
 .app-mobile-nav { display: none; }
 .home-eyebrow { margin: 0 0 5px; color: var(--color-text-muted); font-size: 14px; font-weight: 700; letter-spacing: .16em; }
 .home-section-heading { min-height: 42px; display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 11px; }
@@ -97,6 +102,8 @@
   .app-sidebar-footer { width: 100%; justify-items: center; }
   .app-sidebar-coffee { width: 44px; padding: 0; justify-content: center; }
   .app-sidebar-coffee .app-support-label { display: none; }
+  .app-sidebar-analytics { width: 44px; padding: 0; overflow: hidden; font-size: 0; }
+  .app-sidebar-analytics::before { content: '⚙'; color: var(--color-text-muted); font-size: 18px; }
   .app-sidebar-language { position: relative; width: 44px; height: 44px; justify-content: center; padding: 0; border-color: transparent; background: transparent; }
   .app-sidebar-language select { position: absolute; inset: 0; width: 44px; height: 44px; opacity: 0; cursor: pointer; }
   .app-page-main { margin-left: 68px; }
@@ -109,6 +116,7 @@
   .app-mobile-nav a { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; color: var(--color-text-secondary); text-decoration: none; font-size: 14px; }
   .app-mobile-nav a.active { color: var(--color-primary); font-weight: 600; }
   .app-mobile-nav .app-mobile-coffee { grid-column: 1 / -1; justify-self: center; flex-direction: row; max-width: calc(100vw - 32px); color: var(--color-primary); font-size: 12px; }
+  .app-mobile-nav .app-mobile-analytics { display: inline-flex; grid-column: 1 / -1; justify-self: center; align-items: center; }
   .home-report-card { min-height: 68px; grid-template-columns: 54px minmax(0,1fr); gap: 8px; padding: 5px; }
   .home-report-info strong { font-size: 16px; }
   .home-report-info b { font-size: 14px; }

@@ -13,6 +13,7 @@ import type { DocumentWorkTimeTotals } from './DocumentWorkTimer'
 import { createGaugeSample, getGaugeMeasurement, getGaugePer10Cm, getGaugeSamplePer10Cm, getGaugeSamples, withGaugeSamples, type GaugeSide } from './reportFormatting'
 import GaugeCalculatorDialog from './GaugeCalculatorDialog'
 import { applyGaugeMeasurementToFields, type GaugeCalculatorTarget } from './reportGaugeCalculator'
+import { trackAnalytics } from './analytics'
 import { gaugeResult, gaugeWashChanges } from './gaugeResults'
 import { applyMeasurementSelection, createDefaultMeasurements, findMeasurementPresetRow, getMeasurementPresetKey, isMeasurementPresetAdded, measurementPresetKeys, type MeasurementEntryDraft, type MeasurementPresetKey } from './reportMeasurementSelection'
 import { isValidReportDateValue, REPORT_DATE_MAX, REPORT_DATE_MIN } from './reportDates'
@@ -345,6 +346,7 @@ export default function KnittingReport({ documentId, fileName, pageCount, totalW
   const accessoryListMotionRef = useListLayoutMotion<HTMLDivElement>(report?.accessories.map((item) => item.id) ?? [], reportMotionResetKey, report !== null)
   const onReportChangeRef = useRef(onReportChange)
   onReportChangeRef.current = onReportChange
+  const reportFeatureTrackedRef = useRef('')
   const closeMoreMenu = useCallback((restoreTrigger = false, outsideTarget?: EventTarget | null) => {
     if (!moreOpen) return
     moveFocusFromClosingMenu(moreMenuRef.current, moreTriggerRef.current, outsideTarget, restoreTrigger)
@@ -418,6 +420,7 @@ export default function KnittingReport({ documentId, fileName, pageCount, totalW
       let createdOnOpen = false
       if (!currentReports.length) {
         const created = await saveKnittingReport(createKnittingReport(documentId, fileName))
+        trackAnalytics('report_created')
         currentReports = [created]
         createdOnOpen = true
       }
@@ -426,6 +429,11 @@ export default function KnittingReport({ documentId, fileName, pageCount, totalW
       setReports(currentReports.map(summarizeReport))
       reportRef.current = current
       setReport(current)
+      const featureKey = `${documentId}:${current.id}`
+      if (reportFeatureTrackedRef.current !== featureKey) {
+        reportFeatureTrackedRef.current = featureKey
+        trackAnalytics('feature_used', { feature_name: 'report', action: 'open' })
+      }
       setSaveState('저장됨')
       if (reportId !== current.id) onReportChangeRef.current?.(current.id)
       if (createdOnOpen) void analyzeNowRef.current(current)
@@ -483,6 +491,7 @@ export default function KnittingReport({ documentId, fileName, pageCount, totalW
     try {
       await flushPendingReport()
       const next = await saveKnittingReport(createKnittingReport(documentId, fileName, `${t('새 보고서')} ${formatNumber(reports.length + 1)}`))
+      trackAnalytics('report_created')
       reportRef.current = next
       setReport(next)
       setReports((items) => [...items, summarizeReport(next)])
@@ -811,6 +820,7 @@ export default function KnittingReport({ documentId, fileName, pageCount, totalW
       setReport(saved)
       setReports((items) => items.map((item) => item.id === saved.id ? summarizeReport(saved) : item))
       await exportKnittingReportPdf(saved, documentWorkTime.totalWorkTimeMs, documentWorkTime.workTimeDays)
+      trackAnalytics('report_export_completed', { format: 'pdf' })
       setSaveState('저장됨')
     } catch (error) {
       setSaveState(error instanceof Error ? translateMessage(error.message) : t('PDF를 만들지 못했습니다.'))
@@ -914,6 +924,8 @@ export default function KnittingReport({ documentId, fileName, pageCount, totalW
 
   function applyGaugeCalculatorResult(target: GaugeCalculatorTarget, input: { stitches: string; rows: string; width: string; height: string; unit: 'cm' | 'inch' }) {
     update((current) => ({ ...current, fields: applyGaugeMeasurementToFields(current.fields, target, input, input.unit) }))
+    trackAnalytics('gauge_calculation_applied', { gauge_target: target.sampleIndex === null ? 'primary' : 'additional', wash_stage: target.side === 'before' ? 'before' : 'after' })
+    trackAnalytics('feature_used', { feature_name: 'gauge_calculator', action: 'apply' })
     setGaugeCalculatorOpen(false)
   }
 

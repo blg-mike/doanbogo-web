@@ -12,6 +12,7 @@ import AppNavigation from './AppNavigation'
 import { AnimatedNumber } from './AnimatedNumber'
 import { useListLayoutMotion } from './useListLayoutMotion'
 import './Chart.css'
+import { trackAnalytics } from './analytics'
 
 const sortLabels: Record<SortMode, LocaleKey> = { recent: '최근 실행순', name: '이름순', upload: '업로드순' }
 const photoPreparationErrorKeys: Record<PhotoPreparationErrorCode, LocaleKey> = {
@@ -20,6 +21,9 @@ const photoPreparationErrorKeys: Record<PhotoPreparationErrorCode, LocaleKey> = 
   unreadable: '사진 파일을 읽지 못했습니다. 파일 권한을 확인하고 다시 선택해 주세요.',
   decode: '사진 내용을 해독하지 못했습니다. JPG 또는 PNG로 다시 저장해 주세요.',
   convert: '사진을 JPEG로 변환하지 못했습니다. 다른 사진으로 다시 시도해 주세요.',
+}
+const photoAnalyticsErrorCodes: Record<PhotoPreparationErrorCode, string> = {
+  empty: 'empty_input', unsupported: 'unsupported_image', unreadable: 'file_read', decode: 'image_decode', convert: 'image_convert',
 }
 
 function formatSize(bytes: number) {
@@ -213,7 +217,9 @@ export default function Workspace() {
         }
       }
       await refresh()
+      if (added) trackAnalytics('import_completed', { file_type: 'pdf' })
       if (failures.length) {
+        trackAnalytics('import_failed', { file_type: 'pdf', error_code: 'invalid_or_storage' })
         const summary = added ? t('{count}개 추가 완료. ', { count: formatNumber(added) }) : ''
         setNotice(summary + failures[0] + (failures.length > 1 ? t(' 외 {count}개 파일을 추가하지 못했습니다.', { count: formatNumber(failures.length - 1) }) : ''))
       } else {
@@ -221,6 +227,7 @@ export default function Workspace() {
       }
     } catch (error) {
       await refresh()
+      trackAnalytics('import_failed', { file_type: 'pdf', error_code: isQuotaError(error) ? 'storage_quota' : 'import_failed' })
       if (isQuotaError(error)) setNotice(t('브라우저 저장 한도를 초과했습니다. 일부 자료를 삭제하거나 다른 브라우저에서 다시 시도해 주세요.'))
       else setNotice(error instanceof Error ? translateMessage(error.message) : t('PDF를 추가하지 못했습니다.'))
     } finally {
@@ -291,6 +298,7 @@ export default function Workspace() {
       else if (selected?.kind === 'photos') {
         await appendPhotoPages(selected.id, prepared)
       } else throw new Error('사진 폴더를 찾을 수 없습니다.')
+      trackAnalytics('import_completed', { file_type: 'photos' })
       await refresh()
       setDialog(null)
       setSelected(null)
@@ -298,6 +306,7 @@ export default function Workspace() {
       setPhotoFailedId(null)
       setNotice(photoMode === 'new' ? t('사진 도안 폴더를 추가했습니다.') : t('사진 페이지를 추가했습니다.'))
     } catch (error) {
+      trackAnalytics('import_failed', { file_type: 'photos', error_code: error instanceof PhotoPreparationError ? photoAnalyticsErrorCodes[error.code] : isQuotaError(error) ? 'storage_quota' : 'save_failed' })
       if (error instanceof PhotoPreparationError && currentPhoto) {
         setPhotoFailedId(currentPhoto.id)
         setPhotoError(t('사진 "{name}" 처리 실패: {reason}', { name: currentPhoto.file.name, reason: t(photoPreparationErrorKeys[error.code]) }))
@@ -375,6 +384,7 @@ export default function Workspace() {
     const file = new File([document.pdf], document.fileName, { type: 'application/pdf' })
     if (navigator.canShare?.({ files: [file] }) && navigator.share) {
       await navigator.share({ files: [file], title: document.fileName })
+      trackAnalytics('share', { method: 'native', content_type: 'pattern_file' })
       return
     }
     const url = URL.createObjectURL(document.pdf)

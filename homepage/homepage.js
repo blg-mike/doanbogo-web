@@ -89,13 +89,13 @@ const messages = {
 }
 
 const homepageCopyOverrides = {
-  ko: { coffeeLink: '실 한 볼 선물하기', contactEmailLabel: '문의' },
-  en: { coffeeLink: 'Gift a Ball of Yarn', contactEmailLabel: 'Contact' },
-  ja: { coffeeLink: '毛糸を1玉プレゼント', contactEmailLabel: 'お問い合わせ' },
-  de: { coffeeLink: 'Ein Knäuel Garn schenken', contactEmailLabel: 'Kontakt' },
-  da: { coffeeLink: 'Giv et nøgle garn i gave', contactEmailLabel: 'Kontakt' },
-  nb: { coffeeLink: 'Gi et garnnøste i gave', contactEmailLabel: 'Kontakt' },
-  fi: { coffeeLink: 'Lahjoita lankakerä', contactEmailLabel: 'Yhteystiedot' },
+  ko: { coffeeLink: '실 한 볼 선물하기', contactEmailLabel: '문의', analyticsSettings: '분석 설정' },
+  en: { coffeeLink: 'Gift a Ball of Yarn', contactEmailLabel: 'Contact', analyticsSettings: 'Analytics settings' },
+  ja: { coffeeLink: '毛糸を1玉プレゼント', contactEmailLabel: 'お問い合わせ', analyticsSettings: '分析設定' },
+  de: { coffeeLink: 'Ein Knäuel Garn schenken', contactEmailLabel: 'Kontakt', analyticsSettings: 'Analyse-Einstellungen' },
+  da: { coffeeLink: 'Giv et nøgle garn i gave', contactEmailLabel: 'Kontakt', analyticsSettings: 'Analyseindstillinger' },
+  nb: { coffeeLink: 'Gi et garnnøste i gave', contactEmailLabel: 'Kontakt', analyticsSettings: 'Analyseinnstillinger' },
+  fi: { coffeeLink: 'Lahjoita lankakerä', contactEmailLabel: 'Yhteystiedot', analyticsSettings: 'Analytiikka-asetukset' },
 }
 for (const [locale, dictionary] of Object.entries(messages)) {
   Object.assign(dictionary, window.pageMessages[locale], homepageCopyOverrides[locale])

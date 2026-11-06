@@ -2,6 +2,7 @@ import { t, translateMessage, useLocale, type LocaleKey } from './locales/index'
 import { useMemo, useState } from 'react'
 import { ArrowLeft, Check, Clipboard, X } from 'lucide-react'
 import type { KnittingReport } from './types'
+import { trackAnalytics } from './analytics'
 import { AnimatedNumber } from './AnimatedNumber'
 import { buildInstagramCaption, optionalCaptionFields, recommendedCaptionFields, type InstagramCaptionField } from './instagramCaption'
 
@@ -45,6 +46,7 @@ export default function InstagramCaptionDialog({ report, onClose, onCopied }: Pr
         textarea.remove()
         if (!copied) throw new Error(t('문구를 선택해 직접 복사해 주세요.'))
       }
+      trackAnalytics('share', { method: 'clipboard', content_type: 'report_caption' })
       onCopied()
       onClose()
     } catch (cause) {

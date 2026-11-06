@@ -39,16 +39,18 @@ Hvor europæisk databeskyttelseslovgivning gælder, behandles en e-mailhenvendel
 
 1. KnitPeek overfører ikke importerede PDF-/fotomønstre eller lokalt gemte arbejdsoplysninger til en KnitPeek-server og sælger ikke indholdet til annoncører eller andre tredjeparter.
 2. **Webstedshosting og analyse:** Webstedet leveres via Cloudflare Pages. Cloudflare Web Analytics-scriptet måler sidevisninger, besøg, henvisningskilder og ydeevne og sender målingerne til Cloudflare. Se [Cloudflares privatlivspolitik](https://www.cloudflare.com/privacypolicy/) og [Web Analytics](https://developers.cloudflare.com/web-analytics/about/).
-3. Mønstre og arbejdsoplysninger, der kun er gemt i din browser, sendes ikke til KnitPeek. Hostingudbyderens behandling af anmodninger er adskilt fra indholdet af dine lokale filer.
+3. **Google Analytics 4 (GA4):** Når du giver samtykke til analyse, behandler Google de målinger af besøg, skærmbilleder og funktioner, der er beskrevet i afsnit 5. Tagget indlæses ikke før dit samtykke. Se afsnit 5 og [Googles privatlivspolitik](https://policies.google.com/privacy) for oplysninger om dataene og ændring af dit valg.
+4. Mønstre og arbejdsoplysninger, der kun er gemt i din browser, sendes ikke til KnitPeek. Hostingudbyderens behandling af anmodninger er adskilt fra indholdet af dine lokale filer.
 
-4. Hvis Operatøren indfører nye modtagere, databehandlere eller internationale overførsler af personoplysninger, gives de oplysninger og indhentes de samtykker, som gældende lov kræver.
+5. Hvis Operatøren indfører nye modtagere, databehandlere eller internationale overførsler af personoplysninger, gives de oplysninger og indhentes de samtykker, som gældende lov kræver.
 
 ## 5. Cookies, browserlager og lignende teknologier
 
 1. KnitPeek bruger **browserlager som IndexedDB** til at huske projekter og indstillinger på din enhed. Browserlager uploader ikke i sig selv indhold til en server.
-2. KnitPeek bruger ikke sporingscookies til annoncering. Til måling af brug af webstedet og ydeevne bruger KnitPeek det cookiefri Cloudflare Web Analytics-script. Cloudflare oplyser, at Web Analytics ikke indsamler eller bruger besøgendes personoplysninger. Sprog og tjenesteindstillinger gemmes i browserlageret.
-3. Du kan slette eller begrænse cookies og webstedsdata i browserens indstillinger. Det kan også fjerne gemte opskrifter og arbejdsdata. Kontrollér først, at nødvendige originalfiler og eksporterede rapporter er opbevaret separat.
-4. Lokale data er knyttet til webadressen og browserprofilen, hvor de blev gemt. De deles eller overføres ikke automatisk til en anden adresse, browser eller profil. Gem nødvendige filer særskilt, før du sletter webstedsdata.
+2. KnitPeek bruger det cookiefri Cloudflare Web Analytics-script til at måle besøg og ydeevne. Cloudflare oplyser, at Web Analytics ikke indsamler eller bruger besøgendes personoplysninger.
+3. Google Analytics 4 (GA4) indlæses først, når du giver samtykke til analyse. GA4 behandler henvisningsdomæner og UTM-kampagneværdier, faste sidestier og skærmtyper, sektions- og funktionshændelser, browser-/enhedsoplysninger og GA-målecookies. Filnavne, mønster- eller rapportindhold, søgetermer, projekt-/dokument-id'er og indtastede mål sendes ikke. Dit valg gemmes i browseren i seks måneder og kan ændres via Analyseindstillinger på hjemmesiden eller i appen. GA-indsamlingen stopper, hvis du afviser eller trækker samtykket tilbage. Se [Googles privatlivspolitik](https://policies.google.com/privacy).
+4. Sprog og tjenesteindstillinger gemmes i browserlageret. Du kan slette eller begrænse cookies og webstedsdata i browserens indstillinger. Det kan også fjerne gemte opskrifter og arbejdsdata. Kontrollér først, at nødvendige originalfiler og eksporterede rapporter er opbevaret separat.
+5. Lokale data er knyttet til webadressen og browserprofilen, hvor de blev gemt. De deles eller overføres ikke automatisk til en anden adresse, browser eller profil. Gem nødvendige filer særskilt, før du sletter webstedsdata.
 
 ## 6. Eksport, deling og eksterne websteder
 

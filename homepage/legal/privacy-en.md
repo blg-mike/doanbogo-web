@@ -39,16 +39,18 @@ Where European privacy law applies, handling an email inquiry is based on a lega
 
 1. KnitPeek does not transmit imported PDF/photo patterns or locally stored work records to a KnitPeek-operated server or sell that content to advertisers or other third parties.
 2. **Website hosting and analytics:** The site is delivered through Cloudflare Pages. The Cloudflare Web Analytics script measures page views, visits, referring sources, and performance, and sends those measurements to Cloudflare. See the [Cloudflare Privacy Policy](https://www.cloudflare.com/privacypolicy/) and [Web Analytics information](https://developers.cloudflare.com/web-analytics/about/).
-3. Patterns and work records stored only in your browser are not sent to KnitPeek. Hosting-provider request processing is separate from the contents of your local files.
+3. **Google Analytics 4 (GA4):** When you consent to analytics, Google processes the visit, screen, and feature measurements described in Section 5. The tag does not load before consent. See Section 5 and [Google's Privacy Policy](https://policies.google.com/privacy) for the data involved and how to change your choice.
+4. Patterns and work records stored only in your browser are not sent to KnitPeek. Hosting-provider request processing is separate from the contents of your local files.
 
-4. If the Operator introduces new personal-data recipients, processors, or international transfers, it will make the disclosures and obtain any consents required by applicable law.
+5. If the Operator introduces new personal-data recipients, processors, or international transfers, it will make the disclosures and obtain any consents required by applicable law.
 
 ## 5. Cookies, browser storage, and similar technologies
 
 1. KnitPeek uses **browser storage such as IndexedDB** to remember projects and settings on your device. Browser storage is not, by itself, a mechanism for uploading those contents to a server.
-2. KnitPeek does not use advertising tracking cookies. It uses the cookie-free Cloudflare Web Analytics script to measure site visits and performance. Cloudflare states that Web Analytics does not collect or use visitors' personal data. Language and service preferences are kept in browser storage.
-3. You may clear or restrict cookies and site data through your browser. Clearing site data can also remove stored patterns and work records. First check that the original files and report outputs you need are stored separately.
-4. Local data is tied to the website address and browser profile where it was saved. It is not automatically shared with or transferred to another address, browser, or profile. Keep a separate copy of needed files before clearing site data.
+2. KnitPeek uses the cookie-free Cloudflare Web Analytics script to measure site visits and performance. Cloudflare states that Web Analytics does not collect or use visitors' personal data.
+3. Google Analytics 4 (GA4) loads only after you consent to analytics. It processes referral domains and UTM campaign values, fixed page paths and screen types, section and feature events, browser/device information, and GA measurement cookies. It does not receive file names, pattern or report content, search terms, project/document identifiers, or entered measurements. Your analytics choice is stored in this browser for six months and can be changed at any time through Analytics settings on the homepage or in the app. GA collection stops when you decline or withdraw consent. See [Google's Privacy Policy](https://policies.google.com/privacy) for information about Google's processing.
+4. Language and service preferences are kept in browser storage. You may clear or restrict cookies and site data through your browser. Clearing site data can also remove stored patterns and work records. First check that the original files and report outputs you need are stored separately.
+5. Local data is tied to the website address and browser profile where it was saved. It is not automatically shared with or transferred to another address, browser, or profile. Keep a separate copy of needed files before clearing site data.
 
 ## 6. Exports, sharing, and external websites
 

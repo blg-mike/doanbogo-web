@@ -3,6 +3,8 @@ import type { LocaleKey } from './locales/index'
 import { NavLink } from 'react-router-dom'
 import { FileText, FolderOpen } from 'lucide-react'
 import WorkspaceLanguageSelect from './WorkspaceLanguageSelect'
+import { useLocale } from './locales'
+import { openAnalyticsSettings } from './analytics'
 import yyLogo from './assets/yy-logo.png'
 import yarnGiftIcon from './assets/yarn-gift-icon.png'
 
@@ -17,6 +19,13 @@ const homepageHref = import.meta.env.MODE === 'portable'
   ? './homepage.html'
   : import.meta.env.DEV ? '/homepage/' : '/'
 
+const analyticsSettingsLabels: Record<string, string> = { ko: '분석 설정', en: 'Analytics settings', ja: '分析設定', de: 'Analyse-Einstellungen', da: 'Analyseindstillinger', nb: 'Analyseinnstillinger', fi: 'Analytiikka-asetukset' }
+
+function AnalyticsSettingsButton({ className }: { className: string }) {
+  const locale = useLocale()
+  return <button className={className} type="button" data-analytics-settings hidden onClick={openAnalyticsSettings}>{analyticsSettingsLabels[locale]}</button>
+}
+
 function CoffeeSupportLink({ className }: { className: string }) {
   const label = t('실 한 볼 선물하기')
   return <a className={className} href="https://buymeacoffee.com/knitpeek" target="_blank" rel="noopener noreferrer" aria-label={label} title={label}>
@@ -30,12 +39,13 @@ export default function AppNavigation({ active }: { active: AppSection }) {
     <aside className="app-sidebar" aria-label={t("주 메뉴")}>
       <a href={homepageHref} className="app-sidebar-brand" aria-label={t("도안보고 홈")}><img src={yyLogo} alt="" /><strong>{t("도안보고")}</strong></a>
       <nav>{links.map(({ to, label, icon: Icon, section }) => <NavLink key={to} to={to} className={active === section ? 'active' : ''}><Icon size={18} /><span>{t(label)}</span></NavLink>)}</nav>
-      <div className="app-sidebar-footer"><small>{t("나의 뜨개 작업을")}<br />{t("한곳에서 관리해요.")}</small><WorkspaceLanguageSelect className="app-sidebar-language" /><CoffeeSupportLink className="app-sidebar-coffee" /></div>
+      <div className="app-sidebar-footer"><small>{t("나의 뜨개 작업을")}<br />{t("한곳에서 관리해요.")}</small><WorkspaceLanguageSelect className="app-sidebar-language" /><CoffeeSupportLink className="app-sidebar-coffee" /><AnalyticsSettingsButton className="app-sidebar-analytics" /></div>
     </aside>
     <nav className="app-mobile-nav" aria-label={t("주 메뉴")}>
       {links.map(({ to, label, icon: Icon, section }) => <NavLink key={to} to={to} className={active === section ? 'active' : ''}><Icon size={19} /><span>{t(label)}</span></NavLink>)}
       <div className="app-mobile-language"><WorkspaceLanguageSelect /></div>
       <CoffeeSupportLink className="app-mobile-coffee" />
+      <AnalyticsSettingsButton className="app-mobile-analytics" />
     </nav>
   </>
 }
