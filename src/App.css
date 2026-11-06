@@ -1915,16 +1915,17 @@ html.viewer-viewport-locked .viewer-shell { height: 100dvh; min-height: 0; flex:
   .viewer-shell:not(.report-mode) .viewer-back { width: 44px; min-width: 44px; height: 44px; justify-content: center; gap: 0; padding: 0; }
   .viewer-shell:not(.report-mode) .viewer-back svg { width: 20px; height: 20px; }
   .viewer-shell:not(.report-mode) .viewer-back span { display: none; }
-  .viewer-shell:not(.report-mode) .viewer-title { min-width: 0; flex: 1 1 auto; justify-content: flex-start; gap: 0; }
-  .viewer-shell:not(.report-mode) .viewer-title-name { min-width: 0; flex: 1 1 auto; justify-content: flex-start; gap: 0; }
-  .viewer-shell:not(.report-mode) .viewer-title-name-button { flex: 1 1 auto; text-align: left; }
-  .viewer-shell:not(.report-mode) .viewer-title-name-button strong { max-width: 100%; font-size: 14px; font-weight: 600; }
+  .viewer-shell:not(.report-mode) .viewer-title { min-width: 0; flex: 1 1 auto; justify-content: flex-start; gap: 0; overflow: hidden; }
+  .viewer-shell:not(.report-mode) .viewer-title-name { min-width: 0; flex: 1 1 auto; justify-content: flex-start; gap: 0; overflow: hidden; }
+  .viewer-shell:not(.report-mode) .viewer-title-name-button { width: 0; flex: 1 1 0; text-align: left; }
+  .viewer-shell:not(.report-mode) .viewer-title-name-button strong { width: 100%; max-width: 100%; overflow: hidden; font-size: 14px; font-weight: 600; text-overflow: ellipsis; white-space: nowrap; }
   .viewer-shell:not(.report-mode) .viewer-title-edit { display: none; }
   .viewer-shell:not(.report-mode) .viewer-header-actions { flex: 0 0 auto; gap: 4px; }
   .viewer-shell:not(.report-mode) .viewer-header-support-link { width: 44px; min-width: 44px; height: 44px; justify-content: center; padding: 0; }
   .viewer-shell:not(.report-mode) .viewer-header-support-link span { display: none; }
   .viewer-shell:not(.report-mode) .viewer-header-history { gap: 0; }
   .viewer-shell:not(.report-mode) .viewer-header-history button:nth-child(2) { display: none; }
+  .viewer-shell:not(.report-mode) .viewer-focus-toggle { display: none; }
   .viewer-shell:not(.report-mode) .viewer-split-toggle { width: 44px; min-width: 44px; justify-content: center; padding: 0; }
   .viewer-shell:not(.report-mode) .viewer-split-toggle span { display: none; }
   .viewer-shell:not(.report-mode) .viewer-header-icon-action { width: 44px; min-width: 44px; height: 44px; }
@@ -1967,6 +1968,10 @@ html.viewer-viewport-locked .viewer-shell { height: 100dvh; min-height: 0; flex:
   .viewer-shell.focus-view { --viewer-header-height: 0px; --viewer-thumbnail-strip-height: 0px; --viewer-thumbnail-feedback-height: 0px; --viewer-footer-controls-height: 0px; }
   .viewer-shell.focus-view .viewer-focus-restore { width: 44px; min-width: 44px; height: 44px; padding: 0; }
   .viewer-shell.focus-view .viewer-focus-restore span { display: none; }
+}
+
+@media (max-width: 360px) {
+  .viewer-shell:not(.report-mode) .viewer-split-toggle { display: none; }
 }
 
 .counter-panel-view-title { margin: 0 0 2px; color: var(--color-text); font-size: 16px; }
