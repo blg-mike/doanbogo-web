@@ -1917,8 +1917,8 @@ html.viewer-viewport-locked .viewer-shell { height: 100dvh; min-height: 0; flex:
   .viewer-shell:not(.report-mode) .viewer-back span { display: none; }
   .viewer-shell:not(.report-mode) .viewer-title { min-width: 0; flex: 1 1 auto; justify-content: flex-start; gap: 0; overflow: hidden; }
   .viewer-shell:not(.report-mode) .viewer-title-name { min-width: 0; flex: 1 1 auto; justify-content: flex-start; gap: 0; overflow: hidden; }
-  .viewer-shell:not(.report-mode) .viewer-title-name-button { width: 0; flex: 1 1 0; text-align: left; }
-  .viewer-shell:not(.report-mode) .viewer-title-name-button strong { width: 100%; max-width: 100%; overflow: hidden; font-size: 14px; font-weight: 600; text-overflow: ellipsis; white-space: nowrap; }
+  .viewer-shell:not(.report-mode) .viewer-title-name-button { width: 100%; flex: 1 1 auto; text-align: left; }
+  .viewer-shell:not(.report-mode) .viewer-title-name-button strong { width: 100%; max-width: 100%; min-width: 0; overflow: hidden; font-size: 14px; font-weight: 600; text-overflow: ellipsis; white-space: nowrap; }
   .viewer-shell:not(.report-mode) .viewer-title-edit { display: none; }
   .viewer-shell:not(.report-mode) .viewer-header-actions { flex: 0 0 auto; gap: 4px; }
   .viewer-shell:not(.report-mode) .viewer-header-support-link { width: 44px; min-width: 44px; height: 44px; justify-content: center; padding: 0; }
