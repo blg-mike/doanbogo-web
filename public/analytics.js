@@ -238,7 +238,7 @@
       const target = event.target instanceof Element ? event.target : null
       const feature = target?.closest('[data-analytics-feature]')
       if (feature) track('feature_used', { feature_name: feature.getAttribute('data-analytics-feature'), action: feature.getAttribute('data-analytics-action') || 'activate' })
-    })
+    }, true)
     document.addEventListener('change', (event) => {
       const target = event.target
       if (target instanceof HTMLSelectElement && target.closest('.language-picker, .workspace-language-select')) {
