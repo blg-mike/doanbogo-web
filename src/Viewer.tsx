@@ -3156,6 +3156,7 @@ export default function Viewer() {
         <div className="viewer-title"><div className="viewer-title-name"><button type="button" className="viewer-title-name-button" title={displayDocumentName} onClick={() => { setRenameDraft(displayDocumentName); setRenameError(''); setRenameDialog(true) }}><strong>{displayDocumentName}</strong></button><button type="button" className="viewer-title-edit" aria-label={t("이름 변경")} title={t("이름 변경")} onClick={() => { setRenameDraft(displayDocumentName); setRenameError(''); setRenameDialog(true) }}><Pencil size={14} /></button></div>{reportMode && <span>{t('뜨개보고서')}</span>}</div>
         <div className="viewer-header-actions">
           {!reportMode && <>
+            <a className="viewer-header-support-link" href="https://buymeacoffee.com/knitpeek" target="_blank" rel="noopener noreferrer" aria-label={t('실 한 볼 선물하기')} title={t('실 한 볼 선물하기')}><img className="viewer-support-icon" src={yarnGiftIcon} alt="" aria-hidden="true" /><span>{t('실 한 볼 선물하기')}</span></a>
             <div className="viewer-header-history" role="group" aria-label={t('실행 취소') + ' / ' + t('다시 실행')}>
               <button type="button" className="viewer-action viewer-header-icon-action" aria-label={t('실행 취소')} title={t('실행 취소')} disabled={!canUndo} onClick={() => undoRedo('undo')}><Undo2 size={18} /></button>
               <button type="button" className="viewer-action viewer-header-icon-action" aria-label={t('다시 실행')} title={t('다시 실행')} disabled={!canRedo} onClick={() => undoRedo('redo')}><Redo2 size={18} /></button>
@@ -3178,7 +3179,7 @@ export default function Viewer() {
         </div>
       </header>
       {!reportMode && !focusView && viewerAdBannerVisible && <div className="viewer-ad-banner" style={{ backgroundImage: `url(${viewerAdBannerImage})` }}>
-        <a className="viewer-ad-banner-link" href="https://buymeacoffee.com/knitpeek" target="_blank" rel="noopener noreferrer"><img className="viewer-support-icon" src={yarnGiftIcon} alt="" aria-hidden="true" /><span>{t('실 한 볼 선물하기')}</span></a>
+        <a className="viewer-ad-banner-link" href="mailto:knitpeek.cs@gmail.com" aria-label={t('브랜드 소개하기')} title={t('브랜드 소개하기')}>{t('브랜드 소개하기')}</a>
       </div>}
       <section className={'pdf-work-area' + (reportMode ? ' report-work-area' : '')}>
         <div className={'pdf-document-area ' + (reportMode ? '' : snapshot.split ? (orientation === 'wide' ? 'split-wide' : 'split-tall') : 'single-pane')} ref={areaRef}>
