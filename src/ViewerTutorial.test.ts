@@ -28,11 +28,11 @@ describe('viewer tutorial', () => {
     expect(placement.top + 280).toBeLessThanOrEqual(628)
   })
 
-  it('covers the nine planned Viewer features', () => {
-    expect(viewerTutorialSteps).toHaveLength(9)
+  it('covers the planned Viewer features, including page groups', () => {
+    expect(viewerTutorialSteps).toHaveLength(10)
     expect(viewerTutorialSteps.map(([, , target]) => target)).toEqual([
       'split', 'focus', 'progress-tool', 'progress-tool', 'progress-tool',
-      'counter-manage', 'timer', 'rotate', 'report',
+      'counter-manage', 'timer', 'rotate', 'page-groups', 'report',
     ])
   })
 })

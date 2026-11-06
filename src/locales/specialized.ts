@@ -696,6 +696,8 @@ const viewerTutorialTranslations: Record<'en' | 'ja' | 'de' | 'da' | 'nb' | 'fi'
     '재생을 눌러 작업시간을 재고, 일시정지하면 저장돼요. 시간을 누르면 날짜별 기록을 볼 수 있어요.': 'Press play to track your work time and pause to save it. Tap the time to view daily work records.',
     '현재 영역의 도안을 시계 방향으로 90도 돌려요. 좁은 화면에서는 더보기 메뉴 안에 있어요.': 'Rotate the pattern in the active pane 90° clockwise. On narrow screens, find this in More.',
     '게이지·실·바늘과 완성 기록을 정리해요. 뜨개보고서에서 내용을 작성하고 PDF나 공유 이미지로 남길 수 있어요.': 'Record gauge, yarn, needles, and finished-project details. Open Knitting Report to fill it in and save a PDF or shareable image.',
+    '페이지 그룹': 'Page groups',
+    '그룹 추가 버튼으로 빈 그룹을 만들거나, 여러 페이지를 선택한 뒤 나타나는 +를 눌러 묶어요. 그룹 설정에서 이름과 순서를 관리하고, 그룹 카드를 눌러 접거나 펼쳐요.': 'Use Add group to create an empty group, or select several pages and press the + that appears to group them. Open group settings to rename or reorder a group, and tap its card to collapse or expand it.',
     '도안 회전': 'Rotate pattern',
   },
   ja: {
@@ -712,6 +714,8 @@ const viewerTutorialTranslations: Record<'en' | 'ja' | 'de' | 'da' | 'nb' | 'fi'
     '재생을 눌러 작업시간을 재고, 일시정지하면 저장돼요. 시간을 누르면 날짜별 기록을 볼 수 있어요.': '再生を押して作業時間を計り、一時停止すると保存されます。時間をタップすると日別の記録を確認できます。',
     '현재 영역의 도안을 시계 방향으로 90도 돌려요. 좁은 화면에서는 더보기 메뉴 안에 있어요.': '現在の領域の編み図を時計回りに90度回転します。画面が狭い場合は「その他」メニューにあります。',
     '게이지·실·바늘과 완성 기록을 정리해요. 뜨개보고서에서 내용을 작성하고 PDF나 공유 이미지로 남길 수 있어요.': 'ゲージ・毛糸・針・完成記録をまとめます。編み物レポートを開いて入力し、PDFや共有画像として保存できます。',
+    '페이지 그룹': 'ページグループ',
+    '그룹 추가 버튼으로 빈 그룹을 만들거나, 여러 페이지를 선택한 뒤 나타나는 +를 눌러 묶어요. 그룹 설정에서 이름과 순서를 관리하고, 그룹 카드를 눌러 접거나 펼쳐요.': '「グループを追加」で空のグループを作るか、複数のページを選んで表示される＋を押すとまとめられます。グループ設定で名前や順序を変更し、カードをタップして折りたたみ・展開できます。',
     '도안 회전': '編み図を回転',
   },
   de: {
@@ -728,6 +732,8 @@ const viewerTutorialTranslations: Record<'en' | 'ja' | 'de' | 'da' | 'nb' | 'fi'
     '재생을 눌러 작업시간을 재고, 일시정지하면 저장돼요. 시간을 누르면 날짜별 기록을 볼 수 있어요.': 'Starte die Zeiterfassung mit Wiedergabe und pausiere zum Speichern. Tippe auf die Zeit, um Tagesaufzeichnungen zu sehen.',
     '현재 영역의 도안을 시계 방향으로 90도 돌려요. 좁은 화면에서는 더보기 메뉴 안에 있어요.': 'Drehe die Anleitung im aktiven Bereich um 90° im Uhrzeigersinn. Auf schmalen Bildschirmen findest du die Funktion unter Mehr.',
     '게이지·실·바늘과 완성 기록을 정리해요. 뜨개보고서에서 내용을 작성하고 PDF나 공유 이미지로 남길 수 있어요.': 'Halte Maschenprobe, Garn, Nadeln und Fertigstellung fest. Öffne den Strickbericht und speichere ihn als PDF oder teilbares Bild.',
+    '페이지 그룹': 'Seitengruppen',
+    '그룹 추가 버튼으로 빈 그룹을 만들거나, 여러 페이지를 선택한 뒤 나타나는 +를 눌러 묶어요. 그룹 설정에서 이름과 순서를 관리하고, 그룹 카드를 눌러 접거나 펼쳐요.': 'Mit „Gruppe hinzufügen“ erstellst du eine leere Gruppe. Oder wähle mehrere Seiten aus und tippe auf das eingeblendete +, um sie zu gruppieren. In den Gruppeneinstellungen kannst du Namen und Reihenfolge ändern; tippe auf die Karte, um die Gruppe ein- oder auszuklappen.',
     '도안 회전': 'Anleitung drehen',
   },
   da: {
@@ -744,6 +750,8 @@ const viewerTutorialTranslations: Record<'en' | 'ja' | 'de' | 'da' | 'nb' | 'fi'
     '재생을 눌러 작업시간을 재고, 일시정지하면 저장돼요. 시간을 누르면 날짜별 기록을 볼 수 있어요.': 'Tryk på afspil for at måle arbejdstid, og sæt på pause for at gemme. Tryk på tiden for at se daglige registreringer.',
     '현재 영역의 도안을 시계 방향으로 90도 돌려요. 좁은 화면에서는 더보기 메뉴 안에 있어요.': 'Drej mønsteret i det aktive område 90° med uret. På smalle skærme findes funktionen under Mere.',
     '게이지·실·바늘과 완성 기록을 정리해요. 뜨개보고서에서 내용을 작성하고 PDF나 공유 이미지로 남길 수 있어요.': 'Saml oplysninger om strikkefasthed, garn, pinde og færdigt arbejde. Åbn Strikkerapport for at udfylde og gemme som PDF eller dele som billede.',
+    '페이지 그룹': 'Sidegrupper',
+    '그룹 추가 버튼으로 빈 그룹을 만들거나, 여러 페이지를 선택한 뒤 나타나는 +를 눌러 묶어요. 그룹 설정에서 이름과 순서를 관리하고, 그룹 카드를 눌러 접거나 펼쳐요.': 'Brug Tilføj gruppe til at oprette en tom gruppe, eller vælg flere sider og tryk på det +, der vises, for at samle dem. Åbn gruppeindstillingerne for at ændre navn og rækkefølge, og tryk på kortet for at folde gruppen sammen eller ud.',
     '도안 회전': 'Rotér mønster',
   },
   nb: {
@@ -760,6 +768,8 @@ const viewerTutorialTranslations: Record<'en' | 'ja' | 'de' | 'da' | 'nb' | 'fi'
     '재생을 눌러 작업시간을 재고, 일시정지하면 저장돼요. 시간을 누르면 날짜별 기록을 볼 수 있어요.': 'Trykk på spill av for å måle arbeidstid, og sett på pause for å lagre. Trykk på tiden for å se daglige registreringer.',
     '현재 영역의 도안을 시계 방향으로 90도 돌려요. 좁은 화면에서는 더보기 메뉴 안에 있어요.': 'Roter mønsteret i det aktive området 90° med klokken. På smale skjermer finner du funksjonen under Mer.',
     '게이지·실·바늘과 완성 기록을 정리해요. 뜨개보고서에서 내용을 작성하고 PDF나 공유 이미지로 남길 수 있어요.': 'Samle informasjon om strikkefasthet, garn, pinner og ferdig arbeid. Åpne Strikkerapport for å fylle den ut og lagre som PDF eller delbart bilde.',
+    '페이지 그룹': 'Sidegrupper',
+    '그룹 추가 버튼으로 빈 그룹을 만들거나, 여러 페이지를 선택한 뒤 나타나는 +를 눌러 묶어요. 그룹 설정에서 이름과 순서를 관리하고, 그룹 카드를 눌러 접거나 펼쳐요.': 'Bruk Legg til gruppe for å opprette en tom gruppe, eller velg flere sider og trykk på + som vises, for å gruppere dem. Åpne gruppeinnstillingene for å endre navn og rekkefølge, og trykk på kortet for å slå gruppen sammen eller ut.',
     '도안 회전': 'Roter mønster',
   },
   fi: {
@@ -776,6 +786,8 @@ const viewerTutorialTranslations: Record<'en' | 'ja' | 'de' | 'da' | 'nb' | 'fi'
     '재생을 눌러 작업시간을 재고, 일시정지하면 저장돼요. 시간을 누르면 날짜별 기록을 볼 수 있어요.': 'Mittaa työaikaa painamalla toistoa ja tallenna se keskeyttämällä. Näet päiväkohtaiset kirjaukset napauttamalla aikaa.',
     '현재 영역의 도안을 시계 방향으로 90도 돌려요. 좁은 화면에서는 더보기 메뉴 안에 있어요.': 'Kierrä aktiivisen alueen ohjetta 90° myötäpäivään. Kapealla näytöllä toiminto löytyy Lisää-valikosta.',
     '게이지·실·바늘과 완성 기록을 정리해요. 뜨개보고서에서 내용을 작성하고 PDF나 공유 이미지로 남길 수 있어요.': 'Kirjaa tiheys, langat, puikot ja työn valmistuminen. Avaa neuletyöraportti ja tallenna se PDF:nä tai jaettavana kuvana.',
+    '페이지 그룹': 'Sivuryhmät',
+    '그룹 추가 버튼으로 빈 그룹을 만들거나, 여러 페이지를 선택한 뒤 나타나는 +를 눌러 묶어요. 그룹 설정에서 이름과 순서를 관리하고, 그룹 카드를 눌러 접거나 펼쳐요.': 'Luo tyhjä ryhmä painamalla Lisää ryhmä tai valitse useita sivuja ja ryhmitä ne näkyviin tulevalla +-painikkeella. Muokkaa nimeä ja järjestystä ryhmän asetuksissa ja supista tai laajenna ryhmä napauttamalla sen korttia.',
     '도안 회전': 'Kierrä ohjetta',
   },
 }

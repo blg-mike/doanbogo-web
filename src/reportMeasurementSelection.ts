@@ -11,6 +11,11 @@ function presetLabels(key: MeasurementPresetKey) {
   return new Set([key, ...(aliases[key] ?? [])].flatMap(getLocaleMessageVariants).map((label) => label.trim()))
 }
 
+export function getMeasurementPresetKey(label: string) {
+  const normalized = label.trim()
+  return measurementPresetKeys.find((key) => presetLabels(key).has(normalized))
+}
+
 export function findMeasurementPresetRow(measurements: ReportMeasurement[], key: MeasurementPresetKey) {
   const labels = presetLabels(key)
   return measurements.find((row) => labels.has(row.label.trim()))

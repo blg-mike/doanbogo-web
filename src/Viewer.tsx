@@ -42,6 +42,7 @@ import { normalizeWorkTimeDays } from './workTime'
 import { nearestZoomLevel, stepZoomLevel, ZOOM_LEVELS } from './viewerInteraction'
 import { PDF_RECOGNITION_VERSION } from './pdfRecognitionVersion'
 import ViewerTutorial from './ViewerTutorial'
+import { viewerTutorialSteps } from './ViewerTutorialUtils'
 
 type Size = { width: number; height: number }
 type WorkAction = { before?: PageWorkRecord; after?: PageWorkRecord; cellChanges?: ColorworkCellChange[] }
@@ -1191,7 +1192,7 @@ export default function Viewer() {
   const moveViewerTutorial = useCallback((offset: -1 | 1) => {
     const current = viewerTutorialStateRef.current
     if (current?.mode !== 'steps') return
-    const nextStep = Math.min(8, Math.max(0, current.step + offset))
+    const nextStep = Math.min(viewerTutorialSteps.length - 1, Math.max(0, current.step + offset))
     const nextTutorial = { mode: 'steps' as const, step: nextStep }
     const narrow = window.matchMedia('(max-width: 600px)').matches
     viewerTutorialStateRef.current = nextTutorial
@@ -3237,7 +3238,7 @@ export default function Viewer() {
         {!focusView && <>
         <div className="thumbnail-group-section">
           <div className="thumbnail-group-picker">
-            <button type="button" className="thumbnail-group-add" disabled={thumbnailGroupSaving} onClick={() => openThumbnailGroupDialog()}><Plus size={15} /><span>{t('그룹 추가')}</span></button>
+            <button type="button" className="thumbnail-group-add" data-viewer-tutorial-target="page-groups" disabled={thumbnailGroupSaving} onClick={() => openThumbnailGroupDialog()}><Plus size={15} /><span>{t('그룹 추가')}</span></button>
             <div className="thumbnail-group-list" ref={thumbnailGroupListRef} aria-label={t('썸네일 그룹')}>
             {thumbnailGroups.map((group) => <button
               type="button"

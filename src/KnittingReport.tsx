@@ -1,4 +1,4 @@
-import { formatDate, formatNumber, t, translateMessage, type LocaleKey } from './locales/index'
+import { formatDate, formatNumber, getLocale, t, translateMessage, type LocaleKey } from './locales/index'
 import { useCallback, useEffect, useRef, useState, type KeyboardEvent } from 'react'
 import { ArrowLeft, Calculator, Check, CircleAlert, CircleCheck, ChevronDown, ChevronUp, Clipboard, Download, Ellipsis, GripVertical, ImagePlus, Info, LoaderCircle, Pencil, Plus, Save, Share2, Sparkles, Trash2, X } from 'lucide-react'
 import BrandLoading from './BrandLoading'
@@ -14,7 +14,7 @@ import { createGaugeSample, getGaugeMeasurement, getGaugePer10Cm, getGaugeSample
 import GaugeCalculatorDialog from './GaugeCalculatorDialog'
 import { applyGaugeMeasurementToFields, type GaugeCalculatorTarget } from './reportGaugeCalculator'
 import { gaugeResult, gaugeWashChanges } from './gaugeResults'
-import { applyMeasurementSelection, createDefaultMeasurements, findMeasurementPresetRow, isMeasurementPresetAdded, measurementPresetKeys, type MeasurementEntryDraft, type MeasurementPresetKey } from './reportMeasurementSelection'
+import { applyMeasurementSelection, createDefaultMeasurements, findMeasurementPresetRow, getMeasurementPresetKey, isMeasurementPresetAdded, measurementPresetKeys, type MeasurementEntryDraft, type MeasurementPresetKey } from './reportMeasurementSelection'
 import { isValidReportDateValue, REPORT_DATE_MAX, REPORT_DATE_MIN } from './reportDates'
 import { useListLayoutMotion } from './useListLayoutMotion'
 import { moveFocusFromClosingMenu, useMenuExit } from './useMenuExit'
@@ -123,6 +123,7 @@ function ReportField({ label, value, onChange, kind = 'text', options, wide = fa
       event.currentTarget.blur()
     }
   }
+  const input = <input className={kind === 'date' ? 'report-date-input' : undefined} lang={kind === 'date' ? getLocale() : undefined} type={kind === 'number' ? 'text' : kind === 'positiveDecimal' ? 'number' : kind} inputMode={kind === 'number' || kind === 'positiveDecimal' ? 'decimal' : undefined} min={kind === 'positiveDecimal' ? '0' : kind === 'date' ? REPORT_DATE_MIN : undefined} max={kind === 'date' ? REPORT_DATE_MAX : undefined} step={kind === 'positiveDecimal' ? 'any' : undefined} value={draft} onChange={(event) => setDraft(event.currentTarget.value)} onBlur={(event) => commit(event.currentTarget)} onKeyDown={editKeys} />
   return <label className={'report-field' + (wide ? ' wide' : '')}>{t(label as LocaleKey)}
     {kind === 'select' ? <select value={value} onChange={(event) => onChange(event.currentTarget.value)}><option value="">{t(emptyLabel as LocaleKey)}</option>{options?.map((option) => <option key={option} value={option}>{t(option as LocaleKey)}</option>)}</select> :
       kind === 'tags' ? <span className="report-tag-options">{options?.map((option) => {
@@ -130,21 +131,26 @@ function ReportField({ label, value, onChange, kind = 'text', options, wide = fa
         return <button key={option} type="button" className={selected ? 'selected' : ''} onClick={() => onChange(selected ? value.split(',').map((item) => item.trim()).filter((item) => item !== option).join(', ') : [...value.split(',').map((item) => item.trim()).filter(Boolean), option].join(', '))}>{t(option as LocaleKey)}</button>
       })}</span> :
       kind === 'multiline' ? <textarea value={draft} onChange={(event) => setDraft(event.currentTarget.value)} onBlur={() => commit()} onKeyDown={editKeys} rows={3} /> :
-        <input type={kind === 'number' ? 'text' : kind === 'positiveDecimal' ? 'number' : kind} inputMode={kind === 'number' || kind === 'positiveDecimal' ? 'decimal' : undefined} min={kind === 'positiveDecimal' ? '0' : kind === 'date' ? REPORT_DATE_MIN : undefined} max={kind === 'date' ? REPORT_DATE_MAX : undefined} step={kind === 'positiveDecimal' ? 'any' : undefined} value={draft} onChange={(event) => setDraft(event.currentTarget.value)} onBlur={(event) => commit(event.currentTarget)} onKeyDown={editKeys} />}
+        kind === 'date' ? <span className="report-date-input-wrap">{input}{!draft && <span className="report-date-placeholder" aria-hidden="true">{t('날짜 입력 형식')}</span>}</span> : input}
   </label>
 }
 
-function MeasurementLabelInput({ label, onCommit }: { label: string; onCommit: (value: string) => void }) {
-  const [draft, setDraft] = useState(label)
+function localizedMeasurementLabel(label: string) {
+  const presetKey = getMeasurementPresetKey(label)
+  return presetKey ? t(presetKey) : label
+}
+
+function MeasurementLabelInput({ label, displayLabel = label, onCommit }: { label: string; displayLabel?: string; onCommit: (value: string) => void }) {
+  const [draft, setDraft] = useState(displayLabel)
   const [editing, setEditing] = useState(false)
-  const originalLabel = useRef(label)
+  const originalLabel = useRef(displayLabel)
   const cancelled = useRef(false)
-  if (editing) return <input className="report-measurement-label-input" aria-label={`${label} ${t('측정 항목')}`} placeholder={t('측정 항목')} autoFocus value={draft}
+  if (editing) return <input className="report-measurement-label-input" aria-label={`${displayLabel} ${t('측정 항목')}`} placeholder={t('측정 항목')} autoFocus value={draft}
     onChange={(event) => setDraft(event.currentTarget.value)}
     onBlur={() => {
       setEditing(false)
       const next = draft.trim()
-      if (cancelled.current || !next) setDraft(originalLabel.current)
+      if (cancelled.current || !next) setDraft(displayLabel)
       else if (next !== originalLabel.current) onCommit(next)
     }}
     onKeyDown={(event) => {
@@ -159,7 +165,7 @@ function MeasurementLabelInput({ label, onCommit }: { label: string; onCommit: (
         event.currentTarget.blur()
       }
     }} />
-  return <div className="report-measurement-label-display"><span>{label || t('측정 항목')}</span><button type="button" className="report-measurement-rename" aria-label={`${label} ${t('항목명 수정')}`} onClick={() => { originalLabel.current = label; cancelled.current = false; setDraft(label); setEditing(true) }}><Pencil size={15} /></button></div>
+  return <div className="report-measurement-label-display"><span>{displayLabel || t('측정 항목')}</span><button type="button" className="report-measurement-rename" aria-label={`${displayLabel} ${t('항목명 수정')}`} onClick={() => { originalLabel.current = displayLabel; cancelled.current = false; setDraft(displayLabel); setEditing(true) }}><Pencil size={15} /></button></div>
 }
 
 type CustomMeasurementDraft = MeasurementEntryDraft & { id: string }
@@ -900,10 +906,10 @@ export default function KnittingReport({ documentId, fileName, pageCount, totalW
     setMeasurementDialogOpen(false)
   }
   const measurementEditor = <div ref={measurementListMotionRef} className="report-measurement-editor">{report.measurements.length === 0 && <p className="report-measurement-empty">{t('완성한 작품의 치수를 기록해 보세요.')}</p>}{report.measurements.map((row) => <article className="report-measurement-edit-row" data-layout-motion-key={row.id} key={row.id}>
-    <MeasurementLabelInput label={row.label} onCommit={(label) => updateRow('measurements', row.id, { label })} />
-    <input className="report-measurement-value" aria-label={`${row.label} ${t('완성 치수')}`} placeholder={t("완성")} value={row.finished} onChange={(event) => updateRow('measurements', row.id, { finished: event.currentTarget.value })} />
+    <MeasurementLabelInput label={row.label} displayLabel={localizedMeasurementLabel(row.label)} onCommit={(label) => updateRow('measurements', row.id, { label })} />
+    <input className="report-measurement-value" aria-label={`${localizedMeasurementLabel(row.label)} ${t('완성 치수')}`} placeholder={t("완성")} value={row.finished} onChange={(event) => updateRow('measurements', row.id, { finished: event.currentTarget.value })} />
     <select className="report-measurement-unit" aria-label={`${row.label} ${t('치수 단위')}`} value={row.unit ?? 'cm'} onChange={(event) => updateRow('measurements', row.id, { unit: event.currentTarget.value as 'cm' | 'inch' })}><option value="cm">cm</option><option value="inch">{t('inch')}</option></select>
-    <button type="button" className="report-icon-button report-measurement-delete" aria-label={`${row.label} ${t('측정 항목 삭제')}`} onClick={() => removeRow('measurements', row.id)}><Trash2 size={15} /></button>
+    <button type="button" className="report-icon-button report-measurement-delete" aria-label={`${localizedMeasurementLabel(row.label)} ${t('측정 항목 삭제')}`} onClick={() => removeRow('measurements', row.id)}><Trash2 size={15} /></button>
   </article>)}<button type="button" className="secondary-button report-add-button" onClick={() => setMeasurementDialogOpen(true)}><Plus size={15} />{t('치수 추가')}</button></div>
 
   function applyGaugeCalculatorResult(target: GaugeCalculatorTarget, input: { stitches: string; rows: string; width: string; height: string; unit: 'cm' | 'inch' }) {
@@ -917,6 +923,23 @@ export default function KnittingReport({ documentId, fileName, pageCount, totalW
 
   function updateGaugePattern(index: number, value: string) {
     changeGaugeSamples((samples) => samples.map((sample, sampleIndex) => sampleIndex === index ? { ...sample, pattern: value } : sample))
+  }
+
+  function updateGaugeSamplePer10Cm(index: number, side: GaugeSide, metric: 'stitches' | 'rows', value: string) {
+    changeGaugeSamples((samples) => samples.map((sample, sampleIndex) => {
+      if (sampleIndex !== index) return sample
+      const current = sample[side]
+      const normalized = getGaugeSamplePer10Cm(sample, side)
+      return {
+        ...sample,
+        [side]: {
+          stitches: metric === 'stitches' ? value : normalized.stitches === null ? current.stitches : String(normalized.stitches),
+          rows: metric === 'rows' ? value : normalized.rows === null ? current.rows : String(normalized.rows),
+          width: '10',
+          height: '10',
+        },
+      }
+    }))
   }
 
   function addGaugeSample() {
@@ -941,10 +964,6 @@ export default function KnittingReport({ documentId, fileName, pageCount, totalW
   for (const side of ['before', 'after'] as const) {
     const measurement = getGaugeMeasurement(values, side)
     gaugeCalculatorInputs[`primary:${side}`] = { stitches: measurement.stitches || '10', rows: measurement.rows || '10', width: measurement.width || '10', height: measurement.height || '10', unit: measurement.unit === 'inch' ? 'inch' : 'cm' }
-    gaugeSamples.forEach((sample, index) => {
-      const input = sample[side]
-      gaugeCalculatorInputs[`${index}:${side}`] = { stitches: input.stitches || '10', rows: input.rows || '10', width: input.width || '10', height: input.height || '10', unit: 'cm' }
-    })
   }
   function gaugeEntry(sampleIndex: number | null, sample?: ReturnType<typeof getGaugeSamples>[number]) {
     const primary = sampleIndex === null
@@ -969,11 +988,17 @@ export default function KnittingReport({ documentId, fileName, pageCount, totalW
           const pickUp = result.pickUp ? t('{rows}단당 {stitches}코', { rows: formatNumber(result.pickUp.rows), stitches: formatNumber(result.pickUp.stitches) }) : '—'
           const pickUpValue = result.pickUp?.approximate ? t('약 {value}', { value: pickUp }) : pickUp
           const stitchRow = result.stitchRow === null ? '—' : `1 : ${formatNumber(result.stitchRow, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+          const manualMetric = (metric: 'stitches' | 'rows', value: number | null) => {
+            const sampleMeasurement = sample![side]
+            const dimension = metric === 'stitches' ? sampleMeasurement.width : sampleMeasurement.height
+            const inputValue = dimension === '10' ? sampleMeasurement[metric] : value ?? ''
+            return <input className="report-gauge-manual-value" type="number" min="0.01" step="any" inputMode="decimal" aria-label={`${entryName} ${t(label)} ${t(metric === 'stitches' ? '10cm당 코 수' : '10cm당 단 수')}`} placeholder="—" value={inputValue} disabled={switching || exporting} onChange={(event) => updateGaugeSamplePer10Cm(sampleIndex!, side, metric, event.currentTarget.value)} />
+          }
           return <section className={'report-gauge-result-side ' + side} key={side}>
             <h4>{t(label)}</h4>
             <div className="report-gauge-result-metrics">
-              <div className="report-gauge-result-metric"><span>{t('10cm당 코 수')}</span><strong>{stitches}</strong></div>
-              <div className="report-gauge-result-metric"><span>{t('10cm당 단 수')}</span><strong>{rows}</strong></div>
+              <div className="report-gauge-result-metric"><span>{t('10cm당 코 수')}</span>{primary ? <strong>{stitches}</strong> : manualMetric('stitches', summary.stitches)}</div>
+              <div className="report-gauge-result-metric"><span>{t('10cm당 단 수')}</span>{primary ? <strong>{rows}</strong> : manualMetric('rows', summary.rows)}</div>
               <div className="report-gauge-result-metric"><span>{t('코 줍기 비율')}</span><strong>{pickUpValue}</strong></div>
               <div className="report-gauge-result-metric"><span>{t('코·단 비율')}</span><strong>{stitchRow}</strong></div>
             </div>
@@ -994,10 +1019,7 @@ export default function KnittingReport({ documentId, fileName, pageCount, totalW
       })()}
     </section>
   }
-  const gaugeCalculatorOptions = [
-    { sampleIndex: null, label: values['gauge.pattern']?.trim() || t('기본 게이지') },
-    ...gaugeSamples.map((sample, index) => ({ sampleIndex: index, label: sample.pattern.trim() || t('게이지 {number}', { number: formatNumber(index + 2) }) })),
-  ]
+  const gaugeCalculatorOptions = [{ sampleIndex: null, label: values['gauge.pattern']?.trim() || t('기본 게이지') }]
   const gaugeEditor = <div className="report-gauge-editor">
     {gaugeEntry(null)}
     {gaugeSamples.map((sample, index) => gaugeEntry(index, sample))}
