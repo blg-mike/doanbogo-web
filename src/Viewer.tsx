@@ -10,6 +10,7 @@ import { AnimatedNumber } from './AnimatedNumber'
 import yyLogo from './assets/yy-logo.png'
 import yarnGiftIcon from './assets/yarn-gift-icon.png'
 import viewerToolsIcon from './assets/viewer-tools-icon.png'
+import viewerAdBannerImage from './assets/knitpeek-ad-banner.webp'
 import { cancelThumbnailRenders, PdfPage, PdfThumbnail, setThumbnailRenderingPaused, waitForThumbnailQueueIdle } from './PdfPage'
 import { getDocument, getPageRecognition, getPageWork, getPageWorks, getPages, getPreference, getViewer, markOpened, renameDocument, savePageWork, savePreference, saveViewer, saveViewerAndPageWorks, setPageFlag } from './storage'
 import { pdfPageRenderQueue } from './pdfPageRenderQueue'
@@ -270,6 +271,9 @@ export default function Viewer() {
   const [searchParams, setSearchParams] = useSearchParams()
   const tabletResourcePolicy = getViewerResourcePolicy().tablet
   const reportMode = searchParams.get('report') === '1'
+  const [dismissedAdBanner, setDismissedAdBanner] = useState<{ documentId: string; dismissed: boolean }>(() => ({ documentId: id, dismissed: false }))
+  if (dismissedAdBanner.documentId !== id) setDismissedAdBanner({ documentId: id, dismissed: false })
+  const viewerAdBannerVisible = !dismissedAdBanner.dismissed
   useEffect(() => {
     if (reportMode) return
     const roots = [document.documentElement, document.body]
@@ -445,6 +449,7 @@ export default function Viewer() {
   const [pdf, setPdf] = useState<PDFDocumentProxy | null>(null)
   const [snapshot, setSnapshot] = useState<ViewerSnapshot | null>(null)
   const [loadedId, setLoadedId] = useState('')
+  const canDismissAdBanner = !reportMode && !focusView && !snapshot?.split && viewerAdBannerVisible
   useEffect(() => {
     if (reportMode || loadedId !== id || !pdf || viewerOpenTrackedRef.current === id) return
     viewerOpenTrackedRef.current = id
@@ -2698,6 +2703,7 @@ export default function Viewer() {
         }
         if (!active) mutateSnapshot((current) => ({ ...current, activePane: paneId }))
       }}
+      onDismissAdBanner={canDismissAdBanner ? () => setDismissedAdBanner({ documentId: id, dismissed: true }) : undefined}
       onWorkChange={setPageWork}
       onAnnotationSelectionMove={applyAnnotationSelectionMove}
       onChartRowsApply={applyChartRowsWork}
@@ -3171,6 +3177,9 @@ export default function Viewer() {
           {reportMode && <button className="viewer-action" onClick={() => setSearchParams({})}><ArrowLeft size={16} /><span>{t("도안으로 돌아가기")}</span></button>}
         </div>
       </header>
+      {!reportMode && !focusView && viewerAdBannerVisible && <div className="viewer-ad-banner" style={{ backgroundImage: `url(${viewerAdBannerImage})` }}>
+        <a className="viewer-ad-banner-link" href="mailto:knitpeek.cs@gmail.com">{t('광고 모집')}</a>
+      </div>}
       <section className={'pdf-work-area' + (reportMode ? ' report-work-area' : '')}>
         <div className={'pdf-document-area ' + (reportMode ? '' : snapshot.split ? (orientation === 'wide' ? 'split-wide' : 'split-tall') : 'single-pane')} ref={areaRef}>
         {reportMode ? <KnittingReport documentId={id} fileName={documentName} pageCount={pdf.numPages} totalWorkTimeMs={documentWorkTimeMs} workTimeDays={documentWorkTimeDays} onAddWorkTime={addViewerWorkTime} onBack={() => setSearchParams({})} /> : snapshot.split ? <>

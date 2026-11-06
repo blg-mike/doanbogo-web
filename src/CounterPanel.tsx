@@ -3,7 +3,7 @@ import { useCallback, useEffect, useLayoutEffect, useRef, useState, type CSSProp
 import { createPortal } from 'react-dom'
 import { ArrowDownUp, Bell, Check, ChevronDown, ChevronLeft, ChevronUp, Copy, GripVertical, Hash, Minus, MoreHorizontal, MoveDiagonal, Pin, PinOff, Plus, Repeat, Repeat2, RotateCcw, Settings, Trash2, Vibrate, Volume2, X } from 'lucide-react'
 import type { CounterKind, CounterSnapshot, CounterTimerLinkMode, ViewerSnapshot } from './types'
-import { MAX_COUNTER_ROW, MAX_COUNTERS_PER_TYPE, counterAlertState, createCounter, duplicateCounterSnapshot, maxCountersForType, repeatCounterProgress, repeatCounterStepBlock, taskSchedule } from './smartCounter'
+import { MAX_COUNTER_ROW, MAX_COUNTERS_PER_TYPE, counterAlertState, createCounter, duplicateCounterSnapshot, maxCountersForType, repeatCounterProgress, repeatCounterStepBlock, setPatternCounterStartRow, taskSchedule } from './smartCounter'
 import { repeatCounterBlockLabel } from './counterAlertText'
 import { ColorPresetButtons } from './ColorPresetButtons'
 import { ANNOTATION_COLOR_PRESETS } from './designTokens'
@@ -94,6 +94,15 @@ function CounterEditor({ counter, counters, isNew = false, portal = true, inline
   function setAndSave<K extends keyof CounterSnapshot>(key: K, value: CounterSnapshot[K]) {
     set(key, value)
     if (!isNew) void saveDraft(false)
+  }
+
+  function setPatternStartRow(startRow: number) {
+    const next = setPatternCounterStartRow(draftRef.current, startRow)
+    draftRef.current = next
+    dirtyRef.current = true
+    setDraft(next)
+    retryDeleteRef.current = false
+    setError('')
   }
 
   function buildNext(updatedDraft: CounterSnapshot) {
@@ -245,7 +254,7 @@ function CounterEditor({ counter, counters, isNew = false, portal = true, inline
         </>}
         {draft.kind === 'pattern' && <>
           <label className="counter-settings-field">{t("반복 단수")}<input required type="number" min="1" max={MAX_COUNTER_ROW} value={draft.repeatLength ?? 1} onChange={(event) => set('repeatLength', Number(event.currentTarget.value))} /></label>
-          <label className="counter-settings-field">{t("첫 무늬단")}<input required type="number" min="1" max={MAX_COUNTER_ROW} value={draft.startRow ?? 1} onChange={(event) => set('startRow', Number(event.currentTarget.value))} /></label>
+          <label className="counter-settings-field">{t("첫 무늬단")}<input required type="number" min="1" max={MAX_COUNTER_ROW} value={draft.startRow ?? 1} onChange={(event) => setPatternStartRow(Number(event.currentTarget.value))} /></label>
           <div className="counter-settings-checks"><label><input type="checkbox" checked={draft.patternAlertEnabled !== false} onChange={(event) => setAndSave('patternAlertEnabled', event.currentTarget.checked)} />{t("무늬단에서 알려주기")}</label><label><input type="checkbox" checked={draft.patternPreviewEnabled === true} onChange={(event) => setAndSave('patternPreviewEnabled', event.currentTarget.checked)} />{t("1단 전에 미리 알리기")}</label></div>
           <button type="button" className="secondary-button counter-advanced-toggle" aria-expanded={advanced} onClick={() => setAdvanced((open) => !open)}>{advanced ? t('추가 설정 접기') : t('추가 설정 펼치기')}{advanced ? <ChevronUp size={15} /> : <ChevronDown size={15} />}</button>
           {advanced && <>

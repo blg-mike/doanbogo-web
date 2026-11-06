@@ -359,6 +359,14 @@ export function nextPatternRow(counter: CounterSnapshot) {
   return (counter.patternRow ?? 1) % (counter.repeatLength ?? 1) + 1
 }
 
+export function setPatternCounterStartRow(counter: CounterSnapshot, startRow: number) {
+  if (counter.kind !== 'pattern') return counter
+  const currentRow = counter.currentRow ?? 1
+  const repeatLength = counter.repeatLength ?? 1
+  const patternRow = currentRow < startRow ? 1 : ((currentRow - startRow) % repeatLength) + 1
+  return { ...counter, startRow, patternRow, value: patternRow }
+}
+
 export function patternRowAfterCompletion(counter: CounterSnapshot, completedRow: number) {
   if (counter.kind !== 'pattern') return 1
   const nextRow = completedRow + 1

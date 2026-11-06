@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { advanceLinkedCounters, counterAlertState, counterSideForRow, createCounter, createDefaultCounters, duplicateCounterSnapshot, findCounterRewindCheckpoint, guidePositionForRow, isCounterSnapshots, isCurrentCounterSnapshots, isLegacyCounterSnapshots, maxCountersForType, nextPatternAlertRow, normalizeCounterSnapshots, patternRowAfterCompletion, progressGuideForCounter, reanchorProgressGuideForCounter, repeatCounterProgress, repeatCounterStepBlock, restoreCounterGroup, setCounterGroupRow, shouldPlayCounterTaskSound, stepAuxiliaryCounter, stepRepeatCounter, taskSchedule, type RepeatCounterStepBlockReason } from './smartCounter'
+import { advanceLinkedCounters, counterAlertState, counterSideForRow, createCounter, createDefaultCounters, duplicateCounterSnapshot, findCounterRewindCheckpoint, guidePositionForRow, isCounterSnapshots, isCurrentCounterSnapshots, isLegacyCounterSnapshots, maxCountersForType, nextPatternAlertRow, normalizeCounterSnapshots, patternRowAfterCompletion, progressGuideForCounter, reanchorProgressGuideForCounter, repeatCounterProgress, repeatCounterStepBlock, restoreCounterGroup, setCounterGroupRow, setPatternCounterStartRow, shouldPlayCounterTaskSound, stepAuxiliaryCounter, stepRepeatCounter, taskSchedule, type RepeatCounterStepBlockReason } from './smartCounter'
 import type { CounterSnapshot, ProgressGuide } from './types'
 
 describe('counter model', () => {
@@ -330,6 +330,25 @@ describe('counter model', () => {
     expect(counterSideForRow({ ...base, goalRow: null, firstSide: 'ws' }, 1)).toBe('ws')
     expect(counterSideForRow({ ...base, knittingMode: 'round', firstSide: 'ws', goalFinalSide: 'ws' }, 35)).toBe('rs')
     expect([6, 14, 22, 30].map((row) => nextPatternAlertRow(pattern, row))).toEqual([6, 14, 22, 30])
+  })
+
+  it('rephases the displayed pattern row when the first pattern row changes after progress', () => {
+    const base = { ...createCounter('simple'), id: 'base', value: 60, unit: 'row' as const }
+    const pattern = { ...createCounter('pattern'), id: 'pattern', linkedToId: 'base', currentRow: 60, patternRow: 3, value: 3, startRow: 2, repeatLength: 8 }
+    const stalePattern = { ...pattern, startRow: 4 }
+    expect(stalePattern.patternRow).toBe(3)
+    expect(counterAlertState([base, stalePattern], 'base').alerts).toMatchObject([{ counterId: 'pattern' }])
+
+    const updatedPattern = setPatternCounterStartRow(stalePattern, 4)
+
+    expect(updatedPattern).toMatchObject({ currentRow: 60, startRow: 4, patternRow: 1, value: 1 })
+    expect(counterAlertState([base, updatedPattern], 'base').alerts).toEqual([
+      { counterId: 'pattern', message: '무늬 카운터 · 무늬 반복 단이에요.' },
+    ])
+
+    const beforeStart = setPatternCounterStartRow({ ...pattern, currentRow: 3, patternRow: 3 }, 4)
+    expect(beforeStart.patternRow).toBe(1)
+    expect(counterAlertState([{ ...base, value: 3 }, beforeStart], 'base').alerts).toEqual([])
   })
 
   it('defaults saved counters to flat and preserves a valid round mode', () => {

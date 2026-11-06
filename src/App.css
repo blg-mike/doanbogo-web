@@ -122,6 +122,10 @@ html.viewer-viewport-locked .viewer-shell { height: 100dvh; min-height: 0; flex:
 .viewer-action.selected { border-color: var(--color-primary); color: var(--color-primary); background: var(--color-primary-soft); }
 .icon-button.light { border: 1px solid var(--color-border); background: #fff; }
 .pdf-work-area { position: relative; flex: 1; min-height: 0; display: flex; overflow: hidden; background: var(--color-viewer-background); }
+.viewer-ad-banner { box-sizing: border-box; height: 64px; min-height: 64px; flex: 0 0 64px; display: flex; align-items: center; justify-content: center; background-position: center 50%; background-size: cover; background-repeat: no-repeat; }
+.viewer-ad-banner-link { min-height: 44px; display: inline-flex; align-items: center; justify-content: center; padding: 0 20px; border-radius: 8px; color: #16452c; background: rgba(255,255,255,.86); box-shadow: 0 2px 8px rgba(22,69,44,.16); font-size: 14px; font-weight: 700; text-decoration: none; }
+.viewer-ad-banner-link:hover { background: #fff; }
+.viewer-ad-banner-link:focus-visible { outline: 2px solid var(--color-focus-ring); outline-offset: 2px; }
 .pdf-document-area { position: relative; flex: 1 1 0; min-width: 0; min-height: 0; display: flex; overflow: hidden; background: var(--color-viewer-background); }
 .pdf-document-area.single-pane { padding: 0; }
 .pdf-document-area.split-wide { flex-direction: row; }
@@ -293,6 +297,7 @@ html.viewer-viewport-locked .viewer-shell { height: 100dvh; min-height: 0; flex:
 .pdf-recognition-retry { position: absolute; z-index: 15; top: 36px; left: 50%; display: flex; align-items: center; gap: 10px; max-width: calc(100% - 20px); padding: 5px 8px 5px 11px; border: 1px solid var(--color-border); border-radius: 8px; color: var(--color-text); background: var(--color-surface); box-shadow: 0 3px 12px rgba(27,35,51,.12); font-size: 11px; transform: translateX(-50%); }
 .pdf-recognition-retry button { flex: 0 0 auto; min-width: 44px; min-height: 44px; padding: 4px 8px; border: 1px solid var(--color-primary); border-radius: 6px; color: var(--color-primary); background: var(--color-surface); font: inherit; cursor: pointer; white-space: nowrap; }
 .pane-label { height: 25px; display: flex; align-items: center; justify-content: center; flex: 0 0 25px; color: #969eaa; background: #fff; font-size: 9px; }
+.pane-label[role="button"]:focus-visible { outline: 2px solid var(--color-focus-ring); outline-offset: -2px; }
 .is-active .pane-label { color: var(--color-primary); background: var(--color-primary-soft); font-weight: 600; }
 .pdf-scroll-area { position: relative; flex: 1; min-width: 0; min-height: 0; overflow: auto; overscroll-behavior: contain; touch-action: none; cursor: grab; }
 .pdf-scroll-area.is-fit-zoom { scrollbar-width: none; }

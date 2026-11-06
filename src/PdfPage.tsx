@@ -435,7 +435,7 @@ function isPageSwipeExcludedTarget(target: EventTarget | null) {
   return Boolean(target.closest('a, button, input, textarea, select, [contenteditable="true"], [role="dialog"], [role="toolbar"], .page-note, [data-region-highlight-id], [data-region-highlight-handle], .page-colorwork-panel, .progress-line-overlay, .progress-line-menu, .region-highlight-popover, .chart-row-selection-preview, .split-divider'))
 }
 
-export function PdfPage({ pdf, page, paneId, pane, paneGestureOwnerRef, pageSwipeDoubleClickSuppressionRef, splitView, rotation, active, tool, lineSettings, counters, mainCounterId, annotationStyle, work, colorworkEnabled, workReady, canCreateLimitedAnnotation, pageWorkLoadError, onRetryPageWork, recognitionError, onRetryRecognition, colorworkBrushColor, colorworkBrushOpacity, colorworkEraser, createColorworkRequest, pageLinks, qrLinks, textStylePortalTarget, onPageRendered, onActivate, onNavigatePage, onWorkChange, onAnnotationSelectionMove, onChartRowsApply, onZoom, onCenter, onColorworkRequestHandled, onTextToolConsumed, onRegionHighlightToolConsumed }: {
+export function PdfPage({ pdf, page, paneId, pane, paneGestureOwnerRef, pageSwipeDoubleClickSuppressionRef, splitView, rotation, active, tool, lineSettings, counters, mainCounterId, annotationStyle, work, colorworkEnabled, workReady, canCreateLimitedAnnotation, pageWorkLoadError, onRetryPageWork, recognitionError, onRetryRecognition, onDismissAdBanner, colorworkBrushColor, colorworkBrushOpacity, colorworkEraser, createColorworkRequest, pageLinks, qrLinks, textStylePortalTarget, onPageRendered, onActivate, onNavigatePage, onWorkChange, onAnnotationSelectionMove, onChartRowsApply, onZoom, onCenter, onColorworkRequestHandled, onTextToolConsumed, onRegionHighlightToolConsumed }: {
   pdf: PDFDocumentProxy
   page: number
   paneId: PaneId
@@ -458,6 +458,7 @@ export function PdfPage({ pdf, page, paneId, pane, paneGestureOwnerRef, pageSwip
   onRetryPageWork?: () => void
   recognitionError?: boolean
   onRetryRecognition?: () => void
+  onDismissAdBanner?: () => void
   colorworkBrushColor: string
   colorworkBrushOpacity: number
   colorworkEraser: boolean
@@ -2859,7 +2860,12 @@ export function PdfPage({ pdf, page, paneId, pane, paneGestureOwnerRef, pageSwip
   return (
     <>
     <div className={'pdf-pane ' + (active ? 'is-active' : '')}>
-      <div className="pane-label">{active ? t('현재 작업 영역') : t('보조 영역')}</div>
+      <div className="pane-label" role={onDismissAdBanner ? 'button' : undefined} tabIndex={onDismissAdBanner ? 0 : undefined} aria-label={onDismissAdBanner ? `${t('현재 작업 영역')}, ${t('배너 닫기')}` : undefined} onClick={onDismissAdBanner} onKeyDown={onDismissAdBanner ? (event) => {
+        if (event.key === 'Enter' || event.key === ' ') {
+          event.preventDefault()
+          onDismissAdBanner()
+        }
+      } : undefined}>{active ? t('현재 작업 영역') : t('보조 영역')}</div>
       {recognitionError && <div className="pdf-recognition-retry" role="status"><span>{t('페이지 링크를 인식하지 못했습니다. 다시 시도해 주세요.')}</span><button type="button" onClick={onRetryRecognition}>{t('다시 시도')}</button></div>}
       {strokeError && <div className="ink-save-error" role="alert"><span>{t("필기를 반영하지 못했습니다.")}</span><button type="button" onClick={retryStrokeSave}>{t("다시 시도")}</button></div>}
       {annotationSelectionSaveError && <div className="ink-save-error" role="alert"><span>{t('선택한 내용을 저장하지 못했습니다. 다시 이동해 주세요.')}</span><button type="button" disabled={annotationSelectionSaving} onClick={() => { void retryAnnotationSelectionMove() }}>{t('다시 시도')}</button></div>}

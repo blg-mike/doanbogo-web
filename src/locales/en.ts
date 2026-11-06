@@ -143,4 +143,6 @@ export const en: Record<string, string> = {
   "완성 실측": "Finished measurements",
   "실 메모": "Yarn notes",
   "사진 도안 만들기": "Photo pattern",
+  "광고 모집": "Advertise with us",
+  "배너 닫기": "Close banner",
 }

@@ -143,4 +143,6 @@ export const nb: Record<string, string> = {
   "완성 실측": "Ferdige mål",
   "실 메모": "Garnnotat",
   "사진 도안 만들기": "Fotooppskrift",
+  "광고 모집": "Annonser her",
+  "배너 닫기": "Lukk banner",
 }
