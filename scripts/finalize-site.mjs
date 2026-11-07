@@ -5,7 +5,7 @@ import { fileURLToPath } from 'node:url'
 const root = resolve(fileURLToPath(new URL('..', import.meta.url)))
 const site = resolve(root, 'site')
 const app = resolve(site, 'app')
-for (const filename of ['google33404f39a80451a4.html', 'robots.txt', 'sitemap.xml']) {
+for (const filename of ['google33404f39a80451a4.html', 'naver1f644b8cc6ed553b658077693132e8fb.html', 'robots.txt', 'sitemap.xml']) {
   await copyFile(resolve(root, 'public', filename), resolve(site, filename))
 }
 const [homepage, appHtml, manifest] = await Promise.all([
@@ -19,6 +19,7 @@ if (manifest.start_url !== '/app/' || manifest.scope !== '/app/' || !appHtml.inc
 for (const path of appHtml.matchAll(/(?:src|href)="(\/app\/[^"]+)"/g)) await access(resolve(site, path[1].slice('/'.length)))
 for (const icon of manifest.icons) await access(resolve(app, icon.src))
 await access(resolve(app, 'sw.js'))
+await access(resolve(site, 'naver1f644b8cc6ed553b658077693132e8fb.html'))
 const analyticsSnippet = `<!-- Cloudflare Web Analytics --><script type='module' src='https://static.cloudflareinsights.com/beacon.min.js' data-cf-beacon='{"token": "d2e427151c4b4346877074b9e67d3c93"}'></script><!-- End Cloudflare Web Analytics -->`
 const gaMeasurementId = process.env.VITE_GA_MEASUREMENT_ID ?? ''
 if (gaMeasurementId && !/^G-[A-Z0-9]+$/.test(gaMeasurementId)) throw new Error('VITE_GA_MEASUREMENT_ID must be a GA4 measurement ID.')
