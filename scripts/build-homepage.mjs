@@ -9,11 +9,12 @@ const options = new Map()
 for (let index = 2; index < process.argv.length; index += 2) {
   const key = process.argv[index]
   const value = process.argv[index + 1]
-  if (!['--output', '--app-url'].includes(key) || !value) throw new Error(`Invalid build-homepage option: ${key}`)
+  if (!['--output', '--app-url', '--canonical-url'].includes(key) || !value) throw new Error(`Invalid build-homepage option: ${key}`)
   options.set(key, value)
 }
 const outputPath = resolve(root, options.get('--output') || 'portable/homepage.html')
 const appUrl = options.get('--app-url') || './index.html'
+const canonicalUrl = options.get('--canonical-url') || ''
 const [template, stylesheet, pages, behavior, logo, viewer, favicon, yarnGiftIcon, generatedIcons, pretendard] = await Promise.all([
   readFile(templatePath, 'utf8'),
   readFile(resolve(root, 'homepage/homepage.css'), 'utf8'),
@@ -61,6 +62,7 @@ let html = template
   .replace('@@LEGAL_DOCUMENTS@@', legalDocuments.join('\n'))
 for (const [placeholder, value] of replacements) html = html.replaceAll(placeholder, value)
 html = html.replaceAll('@@APP_URL@@', appUrl).replaceAll('./index.html', appUrl)
+html = html.replace(/^[\t ]*<link rel="canonical" href="@@CANONICAL_URL@@">\r?\n/m, canonicalUrl ? `    <link rel="canonical" href="${canonicalUrl}">\n` : '')
 
 if (/@@[A-Z_]+@@|(?:src|href)="\.\/(?:homepage|pages)\.(?:css|js)"|generated-icons\.png/.test(html)) {
   throw new Error('The homepage still has an external asset reference or unresolved asset placeholder.')

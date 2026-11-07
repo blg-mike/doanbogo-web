@@ -14,6 +14,7 @@ const [homepage, appHtml, manifest] = await Promise.all([
   readFile(resolve(app, 'manifest.webmanifest'), 'utf8').then(JSON.parse),
 ])
 if (!homepage.includes('name="knitpeek-app-url" content="/app/"') || !homepage.includes('location.replace(appUrl + window.location.hash)')) throw new Error('Homepage app route is not configured for /app/.')
+if (!homepage.includes('<link rel="canonical" href="https://knitpeek.pages.dev/">')) throw new Error('Cloudflare homepage canonical URL is missing.')
 if (manifest.start_url !== '/app/' || manifest.scope !== '/app/' || !appHtml.includes('/app/manifest.webmanifest')) throw new Error('The app PWA manifest is not scoped to /app/.')
 for (const path of appHtml.matchAll(/(?:src|href)="(\/app\/[^"]+)"/g)) await access(resolve(site, path[1].slice('/'.length)))
 for (const icon of manifest.icons) await access(resolve(app, icon.src))
