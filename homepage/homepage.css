@@ -195,7 +195,7 @@ html[lang="fi"] .hero h1 { font-size: clamp(34px, 8.4cqi, 58px); }
 .info-page { min-height: 60vh; padding-block: 36px 88px; }
 .page-back { display: inline-flex; min-height: 44px; align-items: center; margin-bottom: 36px; color: var(--color-primary); font-size: 15px; font-weight: 600; }
 .info-page-head { max-width: 820px; margin-bottom: 44px; }
-.info-page-head h1 { margin: 0 0 18px; font-size: clamp(36px, 5vw, 54px); line-height: 1.2; }
+.info-page-head .info-page-title { margin: 0 0 18px; font-size: clamp(36px, 5vw, 54px); line-height: 1.2; }
 .info-page-lead { max-width: 760px; margin: 0; color: var(--color-text-secondary); font-size: 18px; line-height: 1.8; }
 .info-card-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; }
 .info-card { min-width: 0; padding: 24px; border: 1px solid var(--color-border); border-radius: 8px; background: var(--color-surface); }
@@ -316,7 +316,7 @@ html[lang="fi"] .hero h1 { font-size: clamp(34px, 8.4cqi, 58px); }
   .info-page { padding-block: 24px 56px; }
   .page-back { margin-bottom: 24px; }
   .info-page-head { margin-bottom: 30px; }
-  .info-page-head h1 { font-size: 36px; }
+  .info-page-head .info-page-title { font-size: 36px; }
   .info-page-lead { font-size: 16px; }
   .info-card-grid { grid-template-columns: minmax(0, 1fr); gap: 10px; }
   .info-card { padding: 20px; }

@@ -40,6 +40,9 @@ const embeddedStylesheet = stylesheet.replace(
 if (embeddedStylesheet === stylesheet) throw new Error('The generated icon sprite reference was not found in the homepage stylesheet.')
 if (embeddedStylesheet.includes('@@PRETENDARD_FONT@@')) throw new Error('The local Pretendard font reference was not embedded in the homepage stylesheet.')
 
+const knittingHands = await readFile(resolve(root, 'homepage/assets/knitting-hands.webp'))
+const ogImageUrl = canonicalUrl ? new URL('og-image.webp', canonicalUrl).href : `data:image/webp;base64,${knittingHands.toString('base64')}`
+
 const craftImages = await Promise.all([
   ['KNITTING_HANDS', 'knitting-hands.webp'],
   ['PATTERN_PHOTO', 'pattern-and-knitting.webp'],
@@ -49,6 +52,7 @@ const craftImages = await Promise.all([
 
 const replacements = [
   ...craftImages,
+  ['@@OG_IMAGE@@', ogImageUrl],
   ['@@LOGO@@', `data:image/png;base64,${logo.toString('base64')}`],
   ['@@VIEWER_IMAGE@@', `data:image/png;base64,${viewer.toString('base64')}`],
   ['@@FAVICON@@', `data:image/png;base64,${favicon.toString('base64')}`],
@@ -63,6 +67,7 @@ let html = template
 for (const [placeholder, value] of replacements) html = html.replaceAll(placeholder, value)
 html = html.replaceAll('@@APP_URL@@', appUrl).replaceAll('./index.html', appUrl)
 html = html.replace(/^[\t ]*<link rel="canonical" href="@@CANONICAL_URL@@">\r?\n/m, canonicalUrl ? `    <link rel="canonical" href="${canonicalUrl}">\n` : '')
+html = html.replace(/^[\t ]*<meta property="og:url" content="@@CANONICAL_URL@@">\r?\n/m, canonicalUrl ? `    <meta property="og:url" content="${canonicalUrl}">\n` : '')
 
 if (/@@[A-Z_]+@@|(?:src|href)="\.\/(?:homepage|pages)\.(?:css|js)"|generated-icons\.png/.test(html)) {
   throw new Error('The homepage still has an external asset reference or unresolved asset placeholder.')
@@ -70,4 +75,5 @@ if (/@@[A-Z_]+@@|(?:src|href)="\.\/(?:homepage|pages)\.(?:css|js)"|generated-ico
 
 await mkdir(dirname(outputPath), { recursive: true })
 await writeFile(outputPath, html, 'utf8')
+if (canonicalUrl) await writeFile(resolve(dirname(outputPath), 'og-image.webp'), knittingHands)
 console.log(`Created ${relative(root, outputPath)} (${(Buffer.byteLength(html) / 1024).toFixed(1)} KiB)`)

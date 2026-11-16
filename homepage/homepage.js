@@ -3,9 +3,9 @@ if (window.location.hash.startsWith('#/')) window.location.replace(appUrl + wind
 
 const messages = {
   ko: {
-    pageTitle: '니트피크 | 뜨개 도안을 보며 이어서 뜨기',
+    pageTitle: '니트피크 (KnitPeek) | 뜨개 도안을 보며 이어서 뜨기',
     brandName: '니트피크',
-    description: '니트피크에서 PDF 뜨개도안을 열고, 진행선과 단수 카운터로 지금 뜨는 위치를 기록하세요. 작업 내용은 내 브라우저에 저장됩니다.',
+    description: '니트피크(KnitPeek)에서 PDF 뜨개도안을 열고, 진행선과 단수 카운터로 지금 뜨는 위치를 기록하세요. 작업 내용은 내 브라우저에 저장됩니다.',
     skip: '본문으로 건너뛰기', navFeatures: '기능', navFaq: '자주 묻는 질문', languageLabel: '언어 선택', languageAuto: '기기 언어', menuOpen: '메뉴 열기', menuClose: '메뉴 닫기', start: '지금 시작하기',
     heroKicker: 'PDF 뜨개도안 작업 도구', heroTitleLine1: '도안은 편하게,', heroTitleLine2: '뜨개는 더 즐겁게.', heroBody: 'PDF 도안을 보며 지금 뜨는 단을 표시하세요. 진행선과 단수 카운터, 메모까지 한곳에 모아두고 다음에도 이어서 뜰 수 있어요.', startNow: '니트피크 시작하기', seeFeatures: '기능 살펴보기', trialNote: '계정 없이 브라우저에서 바로 시작할 수 있어요.', viewerAlt: '니트피크 PDF 뷰어에서 실제 뜨개 차트와 진행선, 페이지 도구를 확인하는 화면', figureNote: '니트피크 PDF 뷰어 · 직접 만든 뜨개 차트로 촬영',
 
