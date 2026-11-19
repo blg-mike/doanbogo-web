@@ -6,6 +6,7 @@
     <meta name="theme-color" content="#FFFFFF">
     <meta name="knitpeek-app-url" content="./index.html">
     <meta name="google-site-verification" content="-CjLPkQtMjnuMbIr_GKfDybFrYebfekCRzWcCxG0qZ0">
+    <meta name="robots" content="index, follow">
     <meta name="description" content="니트피크(KnitPeek)에서 PDF 뜨개도안을 열고, 진행선과 단수 카운터로 지금 뜨는 위치를 기록하세요. 작업 내용은 내 브라우저에 저장됩니다.">
     <meta property="og:type" content="website">
     <meta property="og:site_name" content="니트피크 (KnitPeek)">
@@ -237,7 +238,7 @@ html[lang="fi"] .hero h1 { font-size: clamp(34px, 8.4cqi, 58px); }
 .info-faq-list .faq-item p { padding-left: 4px; }
 .legal-page { max-width: 900px; }
 .legal-content { max-width: 760px; color: var(--color-text); font-size: 16px; line-height: 1.85; overflow-wrap: anywhere; }
-.legal-content h1 { margin: 0 0 24px; font-size: 30px; line-height: 1.35; }
+.legal-content .legal-doc-title { margin: 0 0 24px; font-size: 30px; line-height: 1.35; }
 .legal-content h2 { margin: 40px 0 12px; font-size: 22px; line-height: 1.45; }
 .legal-content h3 { margin: 28px 0 10px; font-size: 18px; line-height: 1.5; }
 .legal-content p, .legal-content ul, .legal-content ol, .legal-content blockquote { margin: 0 0 18px; }
@@ -346,7 +347,7 @@ html[lang="fi"] .hero h1 { font-size: clamp(34px, 8.4cqi, 58px); }
   .info-page-links { margin-top: 30px; }
   .info-page-links .button { flex: 1 1 150px; }
   .legal-content { font-size: 16px; }
-  .legal-content h1 { font-size: 26px; }
+  .legal-content .legal-doc-title { font-size: 26px; }
   .legal-content h2 { font-size: 20px; }
 }
 @media (max-width: 600px) {
@@ -383,6 +384,9 @@ html[lang="fi"] .hero h1 { font-size: clamp(34px, 8.4cqi, 58px); }
     <title>니트피크 (KnitPeek) | 뜨개 도안을 보며 이어서 뜨기</title>
     <script type="application/ld+json">
       {"@context":"https://schema.org","@type":"SoftwareApplication","name":"니트피크","alternateName":"KnitPeek","description":"니트피크(KnitPeek)는 PDF와 사진 뜨개도안을 보면서 진행 위치, 단수, 메모와 프로젝트를 관리하는 브라우저 도구입니다.","applicationCategory":"UtilitiesApplication","operatingSystem":"Web browser"}
+    </script>
+    <script type="application/ld+json">
+      {"@context":"https://schema.org","@type":"FAQPage","mainEntity":[{"@type":"Question","name":"어떤 뜨개도안을 사용할 수 있나요?","acceptedAnswer":{"@type":"Answer","text":"PDF 도안을 열 수 있고, 종이 도안은 사진 도안 폴더로 만들 수 있어요."}},{"@type":"Question","name":"도안과 작업 내용은 어디에 저장되나요?","acceptedAnswer":{"@type":"Answer","text":"도안과 작업 데이터는 브라우저 로컬 저장소에 저장됩니다. 자동 기기 간 동기화는 제공하지 않으므로, 기기를 옮길 때는 작업 파일을 내보내어 백업하고 가져오세요."}},{"@type":"Question","name":"회원가입이나 로그인이 필요한가요?","acceptedAnswer":{"@type":"Answer","text":"현재 앱에는 가입·로그인 절차가 없습니다. 브라우저에서 앱을 열어 도안을 추가하면 바로 시작할 수 있어요."}},{"@type":"Question","name":"태블릿과 휴대폰에서도 쓸 수 있나요?","acceptedAnswer":{"@type":"Answer","text":"모바일·태블릿 화면에 맞춰 배치되는 웹 앱입니다. 브라우저에서 열어 현재 기기에 맞는 화면으로 사용할 수 있습니다."}}]}
     </script>
   </head>
   <body>
@@ -590,7 +594,7 @@ html[lang="fi"] .hero h1 { font-size: clamp(34px, 8.4cqi, 58px); }
       </section>
     </main>
 
-    <div class="legal-template-bank" hidden><template id="legal-terms-ko"><h1>니트피크 이용약관</h1>
+    <div class="legal-template-bank" hidden><template id="legal-terms-ko"><h2 class="legal-doc-title">니트피크 이용약관</h2>
 <ul><li>서비스명: <strong>니트피크</strong> (KnitPeek)</li><li>웹사이트: <strong>https://knitpeek.pages.dev</strong></li><li>시행일: <strong>2026-11-04</strong></li><li>운영자: <strong>니트피크</strong></li><li>문의: <strong>knitpeek.cs@gmail.com</strong></li></ul>
 <h2>제1조 (목적)</h2>
 <p>이 약관은 <strong>니트피크</strong>(이하 “운영자”)가 <code>https://knitpeek.pages.dev</code>에서 제공하는 니트피크 서비스(이하 “서비스”)의 이용 조건, 운영자와 이용자의 권리·의무 및 책임 사항을 규정합니다.</p>
@@ -625,7 +629,7 @@ html[lang="fi"] .hero h1 { font-size: clamp(34px, 8.4cqi, 58px); }
 <ul><li>운영자: <strong>니트피크</strong></li><li>고객지원 이메일: <strong>knitpeek.cs@gmail.com</strong></li><li>웹사이트: <strong>https://knitpeek.pages.dev</strong></li></ul>
 <hr>
 <p><strong>부칙</strong>: 이 약관은 <strong>2026-11-04</strong>부터 시행합니다.</p></template>
-<template id="legal-terms-en"><h1>KnitPeek Terms of Service</h1>
+<template id="legal-terms-en"><h2 class="legal-doc-title">KnitPeek Terms of Service</h2>
 <ul><li>Service: <strong>KnitPeek</strong> (Korean name: <strong>니트피크</strong>)</li><li>Website: <strong>https://knitpeek.pages.dev</strong></li><li>Effective date: <strong>November 4, 2026</strong></li><li>Operator: <strong>KnitPeek</strong></li><li>Contact: <strong>knitpeek.cs@gmail.com</strong></li></ul>
 <h2>1. Scope and acceptance</h2>
 <p>These Terms govern use of the KnitPeek website and web application (the “Service”), operated by <strong>KnitPeek</strong> (the “Operator”) at <code>https://knitpeek.pages.dev</code>. By using the Service, you agree to these Terms to the extent permitted by applicable law.</p>
@@ -660,7 +664,7 @@ html[lang="fi"] .hero h1 { font-size: clamp(34px, 8.4cqi, 58px); }
 <ul><li>Operator: <strong>KnitPeek</strong></li><li>Support email: <strong>knitpeek.cs@gmail.com</strong></li><li>Website: <strong>https://knitpeek.pages.dev</strong></li></ul>
 <hr>
 <p><strong>Effective as of:</strong> <strong>November 4, 2026</strong>.</p></template>
-<template id="legal-terms-ja"><h1>KnitPeek 利用規約</h1>
+<template id="legal-terms-ja"><h2 class="legal-doc-title">KnitPeek 利用規約</h2>
 <ul><li>サービス名: <strong>KnitPeek</strong>（韓国語名: <strong>니트피크</strong>）</li><li>ウェブサイト: <strong>https://knitpeek.pages.dev</strong></li><li>施行日: <strong>2026年11月4日</strong></li><li>運営者: <strong>KnitPeek</strong></li><li>お問い合わせ: <strong>knitpeek.cs@gmail.com</strong></li></ul>
 <h2>1. 適用範囲と同意</h2>
 <p>本規約は、<strong>KnitPeek</strong>（以下「運営者」）が <code>https://knitpeek.pages.dev</code> で提供する KnitPeek のウェブサイトおよびウェブアプリケーション（以下「本サービス」）の利用を定めるものです。適用法令で認められる範囲において、本サービスを利用することにより、本規約に同意したものとします。</p>
@@ -695,7 +699,7 @@ html[lang="fi"] .hero h1 { font-size: clamp(34px, 8.4cqi, 58px); }
 <ul><li>運営者: <strong>KnitPeek</strong></li><li>サポートメール: <strong>knitpeek.cs@gmail.com</strong></li><li>ウェブサイト: <strong>https://knitpeek.pages.dev</strong></li></ul>
 <hr>
 <p><strong>施行日:</strong> <strong>2026年11月4日</strong>。</p></template>
-<template id="legal-terms-de"><h1>KnitPeek Nutzungsbedingungen</h1>
+<template id="legal-terms-de"><h2 class="legal-doc-title">KnitPeek Nutzungsbedingungen</h2>
 <ul><li>Dienst: <strong>KnitPeek</strong> (koreanischer Name: <strong>니트피크</strong>)</li><li>Website: <strong>https://knitpeek.pages.dev</strong></li><li>Inkrafttreten: <strong>4. November 2026</strong></li><li>Betreiber: <strong>KnitPeek</strong></li><li>Kontakt: <strong>knitpeek.cs@gmail.com</strong></li></ul>
 <h2>1. Geltungsbereich und Zustimmung</h2>
 <p>Diese Bedingungen regeln die Nutzung der knitpeek-Website und Webanwendung (der „Dienst“), die von <strong>KnitPeek</strong> (dem „Betreiber“) unter <code>https://knitpeek.pages.dev</code> angeboten wird. Mit der Nutzung des Dienstes stimmen Sie diesen Bedingungen zu, soweit dies nach geltendem Recht zulässig ist.</p>
@@ -730,7 +734,7 @@ html[lang="fi"] .hero h1 { font-size: clamp(34px, 8.4cqi, 58px); }
 <ul><li>Betreiber: <strong>KnitPeek</strong></li><li>Support-E-Mail: <strong>knitpeek.cs@gmail.com</strong></li><li>Website: <strong>https://knitpeek.pages.dev</strong></li></ul>
 <hr>
 <p><strong>Gültig ab:</strong> <strong>4. November 2026</strong>.</p></template>
-<template id="legal-terms-da"><h1>KnitPeek Servicevilkår</h1>
+<template id="legal-terms-da"><h2 class="legal-doc-title">KnitPeek Servicevilkår</h2>
 <ul><li>Tjeneste: <strong>KnitPeek</strong> (koreansk navn: <strong>니트피크</strong>)</li><li>Websted: <strong>https://knitpeek.pages.dev</strong></li><li>Ikrafttrædelsesdato: <strong>4. november 2026</strong></li><li>Operatør: <strong>KnitPeek</strong></li><li>Kontakt: <strong>knitpeek.cs@gmail.com</strong></li></ul>
 <h2>1. Omfang og accept</h2>
 <p>Disse vilkår gælder for brugen af knitpeeks websted og webapplikation (”Tjenesten”), som drives af <strong>KnitPeek</strong> (”Operatøren”) på <code>https://knitpeek.pages.dev</code>. Ved at bruge Tjenesten accepterer du disse vilkår i det omfang, gældende lovgivning tillader det.</p>
@@ -765,7 +769,7 @@ html[lang="fi"] .hero h1 { font-size: clamp(34px, 8.4cqi, 58px); }
 <ul><li>Operatør: <strong>KnitPeek</strong></li><li>Support-e-mail: <strong>knitpeek.cs@gmail.com</strong></li><li>Websted: <strong>https://knitpeek.pages.dev</strong></li></ul>
 <hr>
 <p><strong>Gældende fra:</strong> <strong>4. november 2026</strong>.</p></template>
-<template id="legal-terms-nb"><h1>KnitPeek Vilkår for bruk</h1>
+<template id="legal-terms-nb"><h2 class="legal-doc-title">KnitPeek Vilkår for bruk</h2>
 <ul><li>Tjeneste: <strong>KnitPeek</strong> (koreansk navn: <strong>니트피크</strong>)</li><li>Nettsted: <strong>https://knitpeek.pages.dev</strong></li><li>Ikrafttredelsesdato: <strong>4. november 2026</strong></li><li>Operatør: <strong>KnitPeek</strong></li><li>Kontakt: <strong>knitpeek.cs@gmail.com</strong></li></ul>
 <h2>1. Omfang og godkjenning</h2>
 <p>Disse vilkårene regulerer bruken av knitpeeks nettsted og nettapplikasjon («Tjenesten»), som drives av <strong>KnitPeek</strong> («Operatøren») på <code>https://knitpeek.pages.dev</code>. Når du bruker Tjenesten, godtar du vilkårene i den grad gjeldende lov tillater det.</p>
@@ -800,7 +804,7 @@ html[lang="fi"] .hero h1 { font-size: clamp(34px, 8.4cqi, 58px); }
 <ul><li>Operatør: <strong>KnitPeek</strong></li><li>E-post til brukerstøtte: <strong>knitpeek.cs@gmail.com</strong></li><li>Nettsted: <strong>https://knitpeek.pages.dev</strong></li></ul>
 <hr>
 <p><strong>Gjelder fra:</strong> <strong>4. november 2026</strong>.</p></template>
-<template id="legal-terms-fi"><h1>KnitPeek Käyttöehdot</h1>
+<template id="legal-terms-fi"><h2 class="legal-doc-title">KnitPeek Käyttöehdot</h2>
 <ul><li>Palvelu: <strong>KnitPeek</strong> (koreaksi <strong>니트피크</strong>)</li><li>Verkkosivusto: <strong>https://knitpeek.pages.dev</strong></li><li>Voimaantulopäivä: <strong>4. marraskuuta 2026</strong></li><li>Ylläpitäjä: <strong>KnitPeek</strong></li><li>Yhteys: <strong>knitpeek.cs@gmail.com</strong></li></ul>
 <h2>1. Soveltamisala ja hyväksyminen</h2>
 <p>Nämä ehdot koskevat knitpeekiä verkkosivustona ja verkkosovelluksena (”Palvelu”), jota <strong>KnitPeek</strong> (”Ylläpitäjä”) tarjoaa osoitteessa <code>https://knitpeek.pages.dev</code>. Käyttämällä Palvelua hyväksyt nämä ehdot sovellettavan lain sallimissa rajoissa.</p>
@@ -835,7 +839,7 @@ html[lang="fi"] .hero h1 { font-size: clamp(34px, 8.4cqi, 58px); }
 <ul><li>Ylläpitäjä: <strong>KnitPeek</strong></li><li>Asiakastuen sähköposti: <strong>knitpeek.cs@gmail.com</strong></li><li>Verkkosivusto: <strong>https://knitpeek.pages.dev</strong></li></ul>
 <hr>
 <p><strong>Voimassa alkaen:</strong> <strong>4. marraskuuta 2026</strong>.</p></template>
-<template id="legal-privacy-ko"><h1>니트피크 개인정보 처리방침</h1>
+<template id="legal-privacy-ko"><h2 class="legal-doc-title">니트피크 개인정보 처리방침</h2>
 <ul><li>서비스명: <strong>니트피크</strong> (KnitPeek)</li><li>웹사이트: <strong>https://knitpeek.pages.dev</strong></li><li>시행일: <strong>2026-11-06</strong></li><li>개인정보 처리자(운영자): <strong>니트피크</strong></li><li>개인정보 관련 문의: <strong>knitpeek.cs@gmail.com</strong></li></ul>
 <h2>1. 기본 원칙</h2>
 <p><strong>니트피크</strong>(이하 “운영자”)는 니트피크 서비스 이용자의 개인정보를 중요하게 생각하며 관련 법령을 준수합니다. 니트피크는 뜨개 도안의 열람과 개인 작업 기록을 위한 <strong>로컬 우선(Local-first)</strong> 웹 애플리케이션입니다.</p>
@@ -867,7 +871,7 @@ html[lang="fi"] .hero h1 { font-size: clamp(34px, 8.4cqi, 58px); }
 <h2>12. 시행일</h2>
 <p>이 개인정보 처리방침은 <strong>2026-11-06</strong>부터 적용됩니다.</p>
 <hr></template>
-<template id="legal-privacy-en"><h1>KnitPeek Privacy Policy</h1>
+<template id="legal-privacy-en"><h2 class="legal-doc-title">KnitPeek Privacy Policy</h2>
 <ul><li>Service: <strong>KnitPeek</strong> (Korean name: <strong>니트피크</strong>)</li><li>Website: <strong>https://knitpeek.pages.dev</strong></li><li>Effective date: <strong>November 6, 2026</strong></li><li>Operator: <strong>KnitPeek</strong></li><li>Privacy inquiries: <strong>knitpeek.cs@gmail.com</strong></li></ul>
 <h2>1. Overview</h2>
 <p><strong>KnitPeek</strong> (the “Operator”) respects your privacy and aims to comply with applicable data-protection laws. KnitPeek is a <strong>local-first</strong> web application for viewing knitting patterns and keeping personal project records.</p>
@@ -899,7 +903,7 @@ html[lang="fi"] .hero h1 { font-size: clamp(34px, 8.4cqi, 58px); }
 <h2>12. Effective date</h2>
 <p>This Policy is effective from <strong>November 6, 2026</strong>.</p>
 <hr></template>
-<template id="legal-privacy-ja"><h1>KnitPeek プライバシーポリシー</h1>
+<template id="legal-privacy-ja"><h2 class="legal-doc-title">KnitPeek プライバシーポリシー</h2>
 <ul><li>サービス名: <strong>KnitPeek</strong>（韓国語名: <strong>니트피크</strong>）</li><li>ウェブサイト: <strong>https://knitpeek.pages.dev</strong></li><li>施行日: <strong>2026年11月6日</strong></li><li>運営者: <strong>KnitPeek</strong></li><li>個人情報に関するお問い合わせ: <strong>knitpeek.cs@gmail.com</strong></li></ul>
 <h2>1. 概要</h2>
 <p><strong>KnitPeek</strong>（以下「運営者」）はプライバシーを尊重し、適用されるデータ保護法令の遵守に努めます。KnitPeek は編み図を閲覧し、個人のプロジェクト記録を管理する<strong>ローカル優先</strong>のウェブアプリケーションです。</p>
@@ -931,7 +935,7 @@ html[lang="fi"] .hero h1 { font-size: clamp(34px, 8.4cqi, 58px); }
 <h2>12. 施行日</h2>
 <p>本プライバシーポリシーは <strong>2026年11月6日</strong> から適用されます。</p>
 <hr></template>
-<template id="legal-privacy-de"><h1>KnitPeek Datenschutzerklärung</h1>
+<template id="legal-privacy-de"><h2 class="legal-doc-title">KnitPeek Datenschutzerklärung</h2>
 <ul><li>Dienst: <strong>KnitPeek</strong> (koreanischer Name: <strong>니트피크</strong>)</li><li>Website: <strong>https://knitpeek.pages.dev</strong></li><li>Inkrafttreten: <strong>6. November 2026</strong></li><li>Verantwortlicher / Betreiber: <strong>KnitPeek</strong></li><li>Datenschutzanfragen: <strong>knitpeek.cs@gmail.com</strong></li></ul>
 <h2>1. Überblick</h2>
 <p><strong>KnitPeek</strong> (der „Betreiber“) respektiert Ihre Privatsphäre und bemüht sich, geltendes Datenschutzrecht einzuhalten. KnitPeek ist eine <strong>Local-first</strong>-Webanwendung zum Anzeigen von Strickmustern und zum Führen persönlicher Projektaufzeichnungen.</p>
@@ -963,7 +967,7 @@ html[lang="fi"] .hero h1 { font-size: clamp(34px, 8.4cqi, 58px); }
 <h2>12. Inkrafttreten</h2>
 <p>Diese Datenschutzerklärung gilt ab <strong>6. November 2026</strong>.</p>
 <hr></template>
-<template id="legal-privacy-da"><h1>KnitPeek Privatlivspolitik</h1>
+<template id="legal-privacy-da"><h2 class="legal-doc-title">KnitPeek Privatlivspolitik</h2>
 <ul><li>Tjeneste: <strong>KnitPeek</strong> (koreansk navn: <strong>니트피크</strong>)</li><li>Websted: <strong>https://knitpeek.pages.dev</strong></li><li>Ikrafttrædelsesdato: <strong>6. november 2026</strong></li><li>Dataansvarlig / operatør: <strong>KnitPeek</strong></li><li>Henvendelser om persondata: <strong>knitpeek.cs@gmail.com</strong></li></ul>
 <h2>1. Overblik</h2>
 <p><strong>KnitPeek</strong> (”Operatøren”) respekterer dit privatliv og bestræber sig på at overholde gældende databeskyttelseslovgivning. KnitPeek er en <strong>local-first</strong> webapplikation til visning af strikkeopskrifter og opbevaring af personlige projektoplysninger.</p>
@@ -995,7 +999,7 @@ html[lang="fi"] .hero h1 { font-size: clamp(34px, 8.4cqi, 58px); }
 <h2>12. Ikrafttrædelse</h2>
 <p>Denne privatlivspolitik gælder fra <strong>6. november 2026</strong>.</p>
 <hr></template>
-<template id="legal-privacy-nb"><h1>KnitPeek Personvernerklæring</h1>
+<template id="legal-privacy-nb"><h2 class="legal-doc-title">KnitPeek Personvernerklæring</h2>
 <ul><li>Tjeneste: <strong>KnitPeek</strong> (koreansk navn: <strong>니트피크</strong>)</li><li>Nettsted: <strong>https://knitpeek.pages.dev</strong></li><li>Ikrafttredelsesdato: <strong>6. november 2026</strong></li><li>Behandlingsansvarlig / operatør: <strong>KnitPeek</strong></li><li>Personvernhenvendelser: <strong>knitpeek.cs@gmail.com</strong></li></ul>
 <h2>1. Oversikt</h2>
 <p><strong>KnitPeek</strong> («Operatøren») respekterer personvernet ditt og arbeider for å følge gjeldende personvernlovgivning. KnitPeek er en <strong>local-first</strong> nettapplikasjon for visning av strikkeoppskrifter og personlige prosjektopplysninger.</p>
@@ -1027,7 +1031,7 @@ html[lang="fi"] .hero h1 { font-size: clamp(34px, 8.4cqi, 58px); }
 <h2>12. Ikrafttredelse</h2>
 <p>Denne personvernerklæringen gjelder fra <strong>6. november 2026</strong>.</p>
 <hr></template>
-<template id="legal-privacy-fi"><h1>KnitPeek Tietosuojakäytäntö</h1>
+<template id="legal-privacy-fi"><h2 class="legal-doc-title">KnitPeek Tietosuojakäytäntö</h2>
 <ul><li>Palvelu: <strong>KnitPeek</strong> (koreaksi <strong>니트피크</strong>)</li><li>Verkkosivusto: <strong>https://knitpeek.pages.dev</strong></li><li>Voimaantulopäivä: <strong>6. marraskuuta 2026</strong></li><li>Rekisterinpitäjä / ylläpitäjä: <strong>KnitPeek</strong></li><li>Tietosuoja-asioiden yhteydenotot: <strong>knitpeek.cs@gmail.com</strong></li></ul>
 <h2>1. Yleiskatsaus</h2>
 <p><strong>KnitPeek</strong> (”Ylläpitäjä”) kunnioittaa yksityisyyttäsi ja pyrkii noudattamaan sovellettavia tietosuojalakeja. KnitPeek on <strong>local-first</strong>-verkkosovellus neuleohjeiden katseluun ja henkilökohtaisten projektitietojen tallentamiseen.</p>

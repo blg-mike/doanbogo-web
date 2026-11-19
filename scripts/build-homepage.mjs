@@ -31,7 +31,8 @@ const legalLocales = ['ko', 'en', 'ja', 'de', 'da', 'nb', 'fi']
 const legalTypes = ['terms', 'privacy']
 const legalDocuments = await Promise.all(legalTypes.flatMap((type) => legalLocales.map(async (locale) => {
   const markdown = await readFile(resolve(root, 'homepage/legal', `${type}-${locale}.md`), 'utf8')
-  return `<template id="legal-${type}-${locale}">${renderMarkdown(markdown)}</template>`
+  const rendered = renderMarkdown(markdown).replace(/<h1>/g, '<h2 class="legal-doc-title">').replace(/<\/h1>/g, '</h2>')
+  return `<template id="legal-${type}-${locale}">${rendered}</template>`
 })))
 const embeddedStylesheet = stylesheet.replace(
   'url("./assets/generated-icons.png")',
