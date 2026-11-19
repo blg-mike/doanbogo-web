@@ -28,6 +28,6 @@ npm run build:portable
 - [검증 목록](docs/WEB_MIGRATION_CHECKLIST.md) · [실행·전달](docs/WEB_MIGRATION_PHASE_PLAN.md) · [홈페이지](HOMEPAGE_PORTABLE.md)
 
 ## 공개 웹·Android
-[니트피크](https://blg-mike.github.io/doanbogo-web/) · [저장소](https://github.com/blg-mike/doanbogo-web).
+[니트피크 (KnitPeek)](https://knitpeek.pages.dev/) · [GitHub Pages](https://blg-mike.github.io/doanbogo-web/) · [저장소](https://github.com/blg-mike/doanbogo-web).
 main push는 검사·일반 빌드 후 Pages를 자동 배포한다. 실제 서비스 상태는 별도 확인한다.
 Android 테스트 앱은 형제 폴더 `doanbogo-app`에서 웹 portable을 다시 빌드해 내장한다. 기존 APK가 최신 웹을 자동 반영하지 않는다.
