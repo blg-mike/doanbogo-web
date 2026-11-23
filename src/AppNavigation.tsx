@@ -1,18 +1,19 @@
 import { t } from './locales/index'
 import type { LocaleKey } from './locales/index'
 import { NavLink } from 'react-router-dom'
-import { FileText, FolderOpen } from 'lucide-react'
+import { Ruler, FileText, FolderOpen } from 'lucide-react'
 import WorkspaceLanguageSelect from './WorkspaceLanguageSelect'
 import { useLocale } from './locales'
 import { openAnalyticsSettings } from './analytics'
 import yyLogo from './assets/yy-logo.png'
 import yarnGiftIcon from './assets/yarn-gift-icon.png'
 
-export type AppSection = 'projects' | 'reports'
+export type AppSection = 'projects' | 'reports' | 'gaugebook'
 
-const links: { to: string; label: LocaleKey; icon: typeof FolderOpen; section: AppSection }[] = [
+const links: { to: string; label: LocaleKey | '게이지북'; icon: typeof FolderOpen; section: AppSection }[] = [
   { to: '/projects', label: '프로젝트', icon: FolderOpen, section: 'projects' },
   { to: '/reports', label: '보고서', icon: FileText, section: 'reports' },
+  { to: '/gaugebook', label: '게이지북', icon: Ruler, section: 'gaugebook' },
 ] as const
 
 const homepageHref = import.meta.env.MODE === 'portable'
@@ -35,14 +36,16 @@ function CoffeeSupportLink({ className }: { className: string }) {
 }
 
 export default function AppNavigation({ active }: { active: AppSection }) {
+  const locale = useLocale()
+  const gaugeLabel = {ko:'게이지북',en:'Gaugebook',ja:'ゲージ記録',de:'Maschenproben',da:'Strikkeprøver',nb:'Strikkeprøver',fi:'Mallitilkut'}[locale]
   return <>
     <aside className="app-sidebar" aria-label={t("주 메뉴")}>
       <a href={homepageHref} className="app-sidebar-brand" aria-label={t("도안보고 홈")}><img src={yyLogo} alt="" /><strong>{t("도안보고")}</strong></a>
-      <nav>{links.map(({ to, label, icon: Icon, section }) => <NavLink key={to} to={to} className={active === section ? 'active' : ''}><Icon size={18} /><span>{t(label)}</span></NavLink>)}</nav>
+      <nav>{links.filter(({ section }) => import.meta.env.MODE !== 'portable' || section !== 'gaugebook').map(({ to, label, icon: Icon, section }) => <NavLink key={to} to={to} className={active === section ? 'active' : ''}><Icon size={18} /><span>{label === '게이지북' ? gaugeLabel : t(label)}</span></NavLink>)}</nav>
       <div className="app-sidebar-footer"><small>{t("나의 뜨개 작업을")}<br />{t("한곳에서 관리해요.")}</small><WorkspaceLanguageSelect className="app-sidebar-language" /><CoffeeSupportLink className="app-sidebar-coffee" /><AnalyticsSettingsButton className="app-sidebar-analytics" /></div>
     </aside>
     <nav className="app-mobile-nav" aria-label={t("주 메뉴")}>
-      {links.map(({ to, label, icon: Icon, section }) => <NavLink key={to} to={to} className={active === section ? 'active' : ''}><Icon size={19} /><span>{t(label)}</span></NavLink>)}
+      {links.filter(({ section }) => import.meta.env.MODE !== 'portable' || section !== 'gaugebook').map(({ to, label, icon: Icon, section }) => <NavLink key={to} to={to} className={active === section ? 'active' : ''}><Icon size={19} /><span>{label === '게이지북' ? gaugeLabel : t(label)}</span></NavLink>)}
       <div className="app-mobile-language"><WorkspaceLanguageSelect /></div>
       <CoffeeSupportLink className="app-mobile-coffee" />
       <AnalyticsSettingsButton className="app-mobile-analytics" />
