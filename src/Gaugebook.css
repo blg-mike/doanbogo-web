@@ -1,0 +1,50 @@
+.gaugebook {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  & .welcome-row { gap: 12px; }
+  & .document-count { flex: none; }
+  & .gauge-toolbar-actions, & .row, & .actions, & .photoStrip { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; }
+  & .gauge-toolbar-actions { margin-left: auto; }
+  & .spread { justify-content: space-between; }
+  & .card { position: relative; min-width: 0; }
+  & .document-card { display: flex; text-decoration: none; color: inherit; }
+  & .document-card:not(.list-card) { flex-direction: column; }
+  & .cover, & .placeholder { display: block; width: 100%; aspect-ratio: 4 / 3; object-fit: cover; background: var(--color-primary-soft); }
+  & .placeholder { display: grid; place-items: center; color: var(--color-text-muted); }
+  & .pick { position: absolute; top: 8px; right: 8px; }
+  & .picked { outline: 2px solid var(--color-primary); }
+  & .pageHead { margin-bottom: 20px; }
+  & .pageHead h1 { margin: 8px 0 0; font-size: var(--font-title); }
+  & .back, & .muted, & dt { color: var(--color-text-secondary); }
+  & .layout, & .fields, & .compare { display: grid; gap: 16px; }
+  & .layout { grid-template-columns: minmax(0, .8fr) minmax(0, 1.2fr); align-items: start; }
+  & .fields { grid-template-columns: repeat(2, minmax(0,1fr)); }
+  & .compare { grid-template-columns: repeat(var(--cols), minmax(0,1fr)); }
+  & .field { display: grid; gap: 4px; min-width: 0; }
+  & .field :is(input, select, textarea) { width: 100%; min-width: 0; min-height: 44px; padding: 8px 12px; background: var(--color-surface); border: 1px solid var(--color-divider); border-radius: 10px; font: inherit; color: inherit; }
+  & .panel, & .filterbox { padding: 16px 0; border-bottom: 1px solid var(--color-divider); }
+  & .panel h2, & .compare h3 { font-size: var(--font-section); }
+  & .sep { margin: 16px 0; border-top: 1px solid var(--color-divider); }
+  & .result { margin-top: 12px; padding: 12px; background: var(--color-primary-soft); border-radius: 10px; }
+  & .result strong { font-size: var(--font-title); }
+  & .result summary { cursor: pointer; }
+  & .photoStrip figure { margin: 0; width: 104px; }
+  & .photoStrip img { width: 84px; height: 66px; object-fit: cover; }
+  & .savebar { display: flex; justify-content: end; padding: 12px 0; }
+  & dl { margin: 0; }
+  & dt { margin-top: 8px; }
+  & dd { margin: 0; }
+  & dialog { position: fixed; margin: auto; padding: 40px 12px 12px; width: fit-content; max-width: 90vw; }
+  & dialog::backdrop { background: rgb(15 23 42 / 50%); }
+  & .close { position: absolute; top: 0; right: 0; }
+  & .lightbox { max-width: 100%; max-height: 72vh; object-fit: contain; }
+  & #toast:not(:empty) { position: fixed; left: 50%; bottom: 160px; z-index: 51; transform: translateX(-50%); padding: 10px 16px; border-radius: 10px; background: var(--color-primary-soft); color: var(--color-primary-pressed); }
+}
+@media (max-width: 650px) {
+  .gaugebook {
+    & .gauge-toolbar-actions { margin-left: 0; }
+    & .layout, & .fields { grid-template-columns: minmax(0,1fr); }
+    & .compare { grid-template-columns: repeat(2, minmax(0,1fr)); }
+    & .field :is(input, select, textarea) { font-size: 16px; }
+  }
+}

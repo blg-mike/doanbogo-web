@@ -105,4 +105,4 @@ React·TypeScript·Vite·PDF.js·IndexedDB 기반이다. `App.tsx`는 시작·�
 - `assets/knitpeek/build-info.json`과 `preview-artifacts/*.apk.json`의 웹 revision·dirty 여부·SHA-256·ABI가 APK 내용의 기준이다. 최신 웹 기능·브랜드가 기존 APK에 자동 적용된다고 판단하지 않는다.
 - 앱별 세부 규칙은 `doanbogo-app/AGENTS.md`를 따른다.
 
-게이지북은 보고서 다음 웹 메뉴인 `#/gaugebook`에서 동일 출처의 정적 화면을 연다. 스와치와 사진은 브라우저 IndexedDB의 `knitpeek-gaugebook` 데이터베이스에 저장된다.
+게이지북은 보고서 다음 웹 메뉴인 `#/gaugebook`에서 보고서와 같은 앱 셸과 목록 스타일을 사용한다. 스와치와 사진은 브라우저 IndexedDB의 `knitpeek-gaugebook` 데이터베이스에 저장된다.

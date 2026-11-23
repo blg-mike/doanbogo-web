@@ -1,6 +1,6 @@
 import { Suspense, lazy, useEffect } from 'react'
 import { HashRouter, Navigate, Route, Routes, useParams } from 'react-router-dom'
-import AppNavigation from './AppNavigation'
+import GaugebookPage from './GaugebookPage'
 import BrandLoading from './BrandLoading'
 import PwaUpdatePrompt from './PwaUpdatePrompt'
 import './App.css'
@@ -83,7 +83,7 @@ export default function App() {
         <Route path="/projects" element={<Suspense fallback={<BrandLoading kind="app" requestId="projects-module" layout="screen" />}><Workspace /></Suspense>} />
         <Route path="/projects/new" element={<Suspense fallback={<BrandLoading kind="app" requestId="new-project-module" layout="screen" />}><NewProject /></Suspense>} />
         <Route path="/projects/:kind/:id" element={<Suspense fallback={<BrandLoading kind="app" requestId="project-detail-module" layout="screen" />}><ProjectDetail /></Suspense>} />
-        {import.meta.env.MODE !== 'portable' && <Route path="/gaugebook" element={<div className="workspace-app-frame"><AppNavigation active="gaugebook" /><main className="workspace-shell gaugebook-shell"><iframe title="Gaugebook" src={import.meta.env.BASE_URL + 'gaugebook/'} /></main></div>} />}
+        {import.meta.env.MODE !== 'portable' && <Route path="/gaugebook/*" element={<GaugebookPage />} />}
         <Route path="/reports" element={<Suspense fallback={<BrandLoading kind="report" requestId="reports-module" layout="screen" />}><ReportsPage /></Suspense>} />
         <Route path="/report/:documentId/:reportId" element={<Suspense fallback={<BrandLoading kind="report" requestId="report-module" layout="screen" />}><StandaloneReportRoute /></Suspense>} />
         <Route path="/viewer/:id" element={<ViewerRoute />} />

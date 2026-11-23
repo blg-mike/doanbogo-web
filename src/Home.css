@@ -260,7 +260,3 @@
   .view-toggle button { transition: none; }
   .project-detail-edit .detail-save-button[data-state="saved"] svg { animation: none; }
 }
-
-.workspace-shell.gaugebook-shell { padding: 0; width: 100%; max-width: none; }
-.gaugebook-shell iframe { display: block; border: 0; width: 100%; height: 100dvh; }
-@media(max-width: 768px) { .gaugebook-shell iframe { height: calc(100dvh - 160px - env(safe-area-inset-bottom)); } }
