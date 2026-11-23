@@ -1712,7 +1712,10 @@ export function PdfPage({ pdf, page, paneId, pane, paneGestureOwnerRef, pageSwip
       event.stopPropagation()
       return
     }
-    if (tool === 'pan' && !active) pageSwipeActivationOnlyPointerRef.current = event.pointerId
+    const canSwipe = pane.zoom <= 1 && onNavigatePage && event.isPrimary
+      && (event.pointerType === 'touch' || (event.pointerType === 'mouse' && event.button === 0))
+      && !isPageSwipeExcludedTarget(event.target)
+    if (tool === 'pan' && !active && !canSwipe) pageSwipeActivationOnlyPointerRef.current = event.pointerId
     onActivate()
   }
 
@@ -1731,7 +1734,6 @@ export function PdfPage({ pdf, page, paneId, pane, paneGestureOwnerRef, pageSwip
       }
       return
     }
-    if (tool === 'pan' && !active) return
     const target = event.target
     if (!(target instanceof Element) || !target.closest('.page-note')) {
       setSelectedNoteId(null)
@@ -1788,7 +1790,7 @@ export function PdfPage({ pdf, page, paneId, pane, paneGestureOwnerRef, pageSwip
     if (href) linkGesturesRef.current.set(event.pointerId, { href, startX: event.clientX, startY: event.clientY, moved: false, pinched: false })
     event.currentTarget.setPointerCapture(event.pointerId)
     pointers.current.set(event.pointerId, { x: event.clientX, y: event.clientY })
-    if (firstPointer && event.isPrimary && active && pane.zoom <= 1 && onNavigatePage && (event.pointerType === 'touch' || event.pointerType === 'mouse') && !isPageSwipeExcludedTarget(target)) {
+    if (firstPointer && event.isPrimary && pane.zoom <= 1 && onNavigatePage && (event.pointerType === 'touch' || event.pointerType === 'mouse') && !isPageSwipeExcludedTarget(target)) {
       pageSwipeGestureRef.current = { pointerId: event.pointerId, startX: event.clientX, startY: event.clientY, startedAt: performance.now(), scrollLeft: area.scrollLeft, scrollTop: area.scrollTop }
     } else {
       pageSwipeGestureRef.current = null
@@ -1892,7 +1894,7 @@ export function PdfPage({ pdf, page, paneId, pane, paneGestureOwnerRef, pageSwip
     pointers.current.set(event.pointerId, { x: event.clientX, y: event.clientY })
     const pageSwipe = pageSwipeGestureRef.current
     pageSwipeGestureRef.current = null
-    if (tool === 'pan' && active && pane.zoom <= 1 && onNavigatePage && current?.kind === 'pan' && current.pointerId === event.pointerId && pointers.current.size === 1 && pageSwipe?.pointerId === event.pointerId) {
+    if (tool === 'pan' && pane.zoom <= 1 && onNavigatePage && current?.kind === 'pan' && current.pointerId === event.pointerId && pointers.current.size === 1 && pageSwipe?.pointerId === event.pointerId) {
       const direction = classifyPageSwipe(event.clientX - pageSwipe.startX, event.clientY - pageSwipe.startY, performance.now() - pageSwipe.startedAt)
       if (direction !== null) {
         if (area) {
@@ -2112,7 +2114,7 @@ export function PdfPage({ pdf, page, paneId, pane, paneGestureOwnerRef, pageSwip
 
   useLayoutEffect(() => {
     pageSwipeGestureRef.current = null
-  }, [active, tool, paneId, page, pane.zoom])
+  }, [tool, paneId, page, pane.zoom])
 
   function doubleTap(event: React.MouseEvent<HTMLDivElement>) {
     if (performance.now() <= pageSwipeDoubleClickSuppressionRef.current) {

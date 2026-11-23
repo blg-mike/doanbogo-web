@@ -841,6 +841,9 @@
 .viewer-shell:not(.report-mode) .viewer-footer-work-timer .viewer-work-timer { gap: 2px; }
 .viewer-shell:not(.report-mode) .viewer-footer-work-timer .viewer-work-timer-elapsed { width: 80px; min-width: 80px; height: 44px; flex: 0 0 80px; padding: 0 2px; color: var(--color-text-secondary); font-size: 13px; font-weight: 500; font-variant-numeric: tabular-nums; }
 .viewer-shell:not(.report-mode) .viewer-footer-work-timer .viewer-work-timer-toggle { width: 44px; min-width: 44px; height: 44px; flex: 0 0 44px; border: 0; border-radius: 50%; }
+@media (max-width: 360px) {
+  .viewer-shell:not(.report-mode) .viewer-footer-work-timer .viewer-work-timer-elapsed { width: 64px; min-width: 64px; flex-basis: 64px; }
+}
 
 /* Stageshow control and disclosure motion */
 .number-counter-panel .counter-kind-choice > i { transition: border-color var(--motion-ui) ease; }

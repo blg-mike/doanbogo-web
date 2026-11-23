@@ -21,7 +21,7 @@ export function classifyPageSwipe(deltaX: number, deltaY: number, durationMs: nu
   if (!Number.isFinite(deltaX) || !Number.isFinite(deltaY) || !Number.isFinite(durationMs)) return null
   if (durationMs < 0 || durationMs > PAGE_SWIPE_MAX_DURATION || Math.abs(deltaX) < PAGE_SWIPE_MIN_DISTANCE) return null
   if (Math.abs(deltaX) < PAGE_SWIPE_AXIS_RATIO * Math.abs(deltaY)) return null
-  return deltaX > 0 ? 1 : -1
+  return deltaX > 0 ? -1 : 1
 }
 
 export function stepZoomLevel(zoom: number, direction: -1 | 1) {

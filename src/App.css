@@ -586,7 +586,7 @@ html.viewer-viewport-locked .viewer-shell { height: 100dvh; min-height: 0; flex:
 .viewer-footer-primary-controls, .viewer-footer-zoom-controls, .viewer-footer-page-navigation { display: flex; align-items: center; }
 .viewer-footer-primary-controls { gap: 2px; }
 .viewer-footer-zoom-controls { gap: 2px; }
-.viewer-footer-page-navigation { gap: 2px; }
+.viewer-footer-page-navigation { width: auto; flex: 0 0 auto; gap: 2px; }
 .viewer-footer-zoom { min-width: 42px; color: var(--color-text-secondary); text-align: center; font-size: 11px; font-variant-numeric: tabular-nums; white-space: nowrap; }
 .thumbnail-accordion-button { width: 44px; height: 44px; display: grid; flex: 0 0 44px; place-items: center; padding: 0; border: 1px solid var(--color-border); border-radius: 9px; color: var(--color-text-secondary); background: var(--color-surface); cursor: pointer; }
 .thumbnail-accordion-button:hover { border-color: var(--color-primary); color: var(--color-primary); background: var(--color-primary-soft); }
@@ -1751,7 +1751,7 @@ html.viewer-viewport-locked .viewer-shell { height: 100dvh; min-height: 0; flex:
 @media (max-width: 760px) {
   .viewer-shell { --viewer-footer-controls-height: calc(96px + env(safe-area-inset-bottom, 0px)); }
   .viewer-footer-controls { flex-direction: column; align-items: stretch; justify-content: center; gap: 0; padding: 2px 4px max(2px, env(safe-area-inset-bottom, 0px)); }
-  .viewer-footer-primary-controls, .viewer-footer-page-navigation { width: 100%; height: 44px; justify-content: flex-end; }
+  .viewer-footer-primary-controls { width: 100%; height: 44px; justify-content: flex-end; }
   .viewer-footer-primary-controls, .viewer-footer-zoom-controls { gap: 2px; }
 }
 
@@ -1932,9 +1932,8 @@ html.viewer-viewport-locked .viewer-shell { height: 100dvh; min-height: 0; flex:
   .viewer-shell:not(.report-mode) .viewer-header-more { width: 44px; min-width: 44px; height: 44px; display: inline-flex; justify-content: center; padding: 0; }
   .viewer-shell:not(.report-mode) .viewer-footer-controls { display: none; }
   .viewer-shell:not(.report-mode) .viewer-footer-mobile-controls { height: var(--viewer-footer-controls-height); display: flex; align-items: center; gap: 4px; box-sizing: border-box; padding: 0 8px env(safe-area-inset-bottom, 0px); border-top: 1px solid var(--color-divider); background: var(--color-surface); }
-  .viewer-shell:not(.report-mode) .viewer-footer-mobile-controls > .viewer-page-control-button, .viewer-shell:not(.report-mode) .viewer-footer-mobile-controls .viewer-mobile-menu-anchor > button { width: 44px; height: 44px; min-width: 44px; flex: 0 0 44px; }
+  .viewer-shell:not(.report-mode) .viewer-footer-mobile-controls .viewer-mobile-menu-anchor > button { width: 44px; height: 44px; min-width: 44px; flex: 0 0 44px; }
   .viewer-shell:not(.report-mode) .viewer-footer-mobile-controls .viewer-mobile-zoom-trigger { width: 64px; min-width: 64px; flex: 0 0 64px; }
-  .viewer-shell:not(.report-mode) .viewer-footer-mobile-controls .viewer-footer-page-count { min-width: 0; flex: 1 1 auto; font-size: 12px; }
   .viewer-mobile-zoom-trigger { width: 64px; min-width: 64px; height: 44px; display: grid; place-items: center; padding: 0 4px; border: 1px solid var(--color-border); border-radius: 9px; color: var(--color-text-secondary); background: var(--color-surface); font: inherit; font-size: 12px; font-variant-numeric: tabular-nums; cursor: pointer; }
   .viewer-mobile-zoom-trigger:hover, .viewer-mobile-zoom-trigger[aria-expanded="true"] { color: var(--color-primary); background: var(--color-primary-soft); }
   .viewer-mobile-menu-anchor { flex: 0 0 auto; }
@@ -2141,7 +2140,7 @@ html.viewer-viewport-locked .viewer-shell { height: 100dvh; min-height: 0; flex:
   .viewer-shell:not(.report-mode) .viewer-footer-work-timer .viewer-work-timer-toggle svg { width: 18px; height: 18px; }
   .viewer-shell:not(.report-mode) .viewer-footer-work-timer .viewer-work-timer-elapsed { width: 72px; min-width: 72px; flex-basis: 72px; padding-inline: 1px; font-size: 11px; }
   .viewer-shell:not(.report-mode) .thumbnail-group-controls .viewer-footer-mobile-controls { width: 100%; min-width: 0; height: 44px; display: flex; flex: 1 1 auto; align-items: center; gap: 4px; box-sizing: border-box; overflow: visible; padding: 0; border: 0; background: transparent; }
-  .viewer-shell:not(.report-mode) .thumbnail-group-controls .viewer-footer-mobile-controls .viewer-footer-page-count { min-width: 32px; flex: 1 1 auto; }
+  .viewer-shell:not(.report-mode) .viewer-footer-page-count { min-width: 48px; }
   .viewer-shell:not(.report-mode) .thumbnail-group-controls .viewer-footer-mobile-controls .viewer-mobile-menu-anchor { flex: 0 0 auto; }
   .viewer-shell:not(.report-mode) .thumbnail-group-controls .viewer-footer-mobile-controls .viewer-mobile-zoom-trigger { width: 56px; min-width: 56px; flex-basis: 56px; }
   .viewer-shell.focus-view { --viewer-footer-controls-height: var(--viewer-footer-work-tools-height); }
@@ -2193,6 +2192,5 @@ html.viewer-viewport-locked .viewer-shell { height: 100dvh; min-height: 0; flex:
 
 @media (max-width: 600px) {
   .viewer-shell:not(.report-mode) .thumbnail-group-controls .viewer-footer-controls { display: none; }
-  .viewer-shell:not(.report-mode) .thumbnail-group-controls .viewer-footer-mobile-controls > .viewer-page-control-button,
   .viewer-shell:not(.report-mode) .thumbnail-group-controls .viewer-footer-mobile-controls .viewer-mobile-menu-anchor > button { width: 44px; height: 44px; min-width: 44px; flex: 0 0 44px; }
 }

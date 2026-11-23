@@ -2069,15 +2069,20 @@ export default function Viewer() {
     setPageWork(nextWork, true, false)
   }
 
-  function selectThumbnail(page: number) {
+  function selectThumbnail(page: number, paneId?: PaneId) {
     if (!snapshot) return
     if (reportMode) setSearchParams({})
-    mutateSnapshot((current) => ({ ...current, activePane: current.activePane, [current.activePane]: { ...current[current.activePane], page } }), true)
+    mutateSnapshot((current) => {
+      const targetPane = paneId ?? current.activePane
+      return { ...current, activePane: targetPane, [targetPane]: { ...current[targetPane], page } }
+    }, true)
   }
 
-  function navigateVisiblePage(direction: -1 | 1) {
-    const nextPage = visiblePageNumbers[activeVisiblePageIndex + direction]
-    if (nextPage !== undefined) selectThumbnail(nextPage)
+  function navigateVisiblePage(direction: -1 | 1, paneId = snapshot?.activePane) {
+    if (!snapshot || !paneId) return
+    const pageIndex = visiblePageNumbers.indexOf(snapshot[paneId].page)
+    const nextPage = visiblePageNumbers[pageIndex + direction]
+    if (nextPage !== undefined) selectThumbnail(nextPage, paneId)
   }
 
   function updateThumbnailRange(gesture: ThumbnailTouchGesture) {
@@ -2716,7 +2721,7 @@ export default function Viewer() {
       qrLinks={qrLinksByPage[pane.page]}
       textStylePortalTarget={textStylePortalTarget}
       onPageRendered={onPageRendered}
-      onNavigatePage={active ? navigateVisiblePage : undefined}
+      onNavigatePage={(direction) => navigateVisiblePage(direction, paneId)}
     />
   }
 
@@ -3246,6 +3251,11 @@ export default function Viewer() {
           <div className="viewer-footer-work-secondary">
             <button ref={counterPanelFocusRef} type="button" data-viewer-tutorial-target="counter-manage" className="viewer-footer-work-manage" aria-label={t('카운터 관리')} title={t('카운터 관리')} aria-pressed={counterPanelVisible} disabled={counterSettingsSaving} onClick={(event) => { counterPanelFocusRef.current = event.currentTarget; setSavedCounterSession({ documentId: id, visible: !counterPanelVisible }) }}><Settings2 size={18} />{counterAlertPending && <i className="counter-notification-dot" aria-hidden="true" />}</button>
             <div className="viewer-footer-work-timer" data-viewer-tutorial-target="timer" role="group" aria-label={t('작업 타이머')}><div className="viewer-timer-portal-host" ref={setTimerPortalHost} /></div>
+            <div className="viewer-footer-page-navigation" role="group" aria-label={t('페이지')}>
+              <button type="button" className="viewer-page-control-button" aria-label={t('이전')} title={t('이전')} disabled={activeVisiblePageIndex <= 0} onClick={() => navigateVisiblePage(-1)}><ChevronLeft size={18} /></button>
+              <span className="viewer-footer-page-count" title={t('페이지') + ' ' + activePage + ' / ' + pdf.numPages}><AnimatedNumber value={activePage} format={formatNumber} resetKey={id} /> / {formatNumber(pdf.numPages)}</span>
+              <button type="button" className="viewer-page-control-button" aria-label={t('다음')} title={t('다음')} disabled={activeVisiblePageIndex < 0 || activeVisiblePageIndex >= visiblePageNumbers.length - 1} onClick={() => navigateVisiblePage(1)}><ChevronRight size={18} /></button>
+            </div>
           </div>
         </div>}
         </div>
@@ -3294,16 +3304,8 @@ export default function Viewer() {
                 <button type="button" data-viewer-tutorial-target="rotate" className="viewer-page-control-button" aria-label={t('시계 방향 90도 회전')} title={t('90도 회전 · 현재 {angle}도', { angle: activeRotation })} disabled={!pageWorks[activePage]} onClick={() => rotatePage(snapshot.activePane, activePage)}><svg width="24" height="24" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M5 16a8 8 0 1 1 14-6" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"/><path d="m16 8 3.2 2.3L20 6.5" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/><text x="11" y="20" fill="currentColor" fontSize="8" fontWeight="700" fontFamily="sans-serif">90°</text></svg></button>
                 <button type="button" className={'viewer-page-control-button viewer-footer-bookmark' + (isBookmarked ? ' selected' : '')} aria-label={isBookmarked ? t('북마크 해제') : t('북마크')} title={isBookmarked ? t('북마크 해제') : t('북마크')} aria-pressed={isBookmarked} onClick={() => void toggleBookmark()}><Bookmark size={17} fill={isBookmarked ? 'currentColor' : 'none'} /></button>
               </div>
-              <div className="viewer-footer-page-navigation" role="group" aria-label={t('페이지')}>
-                <button type="button" className="viewer-page-control-button" aria-label={t('이전')} title={t('이전')} disabled={activeVisiblePageIndex <= 0} onClick={() => navigateVisiblePage(-1)}><ChevronLeft size={18} /></button>
-                <span className="viewer-footer-page-count" title={t('페이지') + ' ' + activePage + ' / ' + pdf.numPages}><AnimatedNumber value={activePage} format={formatNumber} resetKey={id} /> / {formatNumber(pdf.numPages)}</span>
-                <button type="button" className="viewer-page-control-button" aria-label={t('다음')} title={t('다음')} disabled={activeVisiblePageIndex < 0 || activeVisiblePageIndex >= visiblePageNumbers.length - 1} onClick={() => navigateVisiblePage(1)}><ChevronRight size={18} /></button>
-              </div>
             </div>
             <div className="viewer-footer-mobile-controls">
-              <button type="button" className="viewer-page-control-button" aria-label={t('이전')} title={t('이전')} disabled={activeVisiblePageIndex <= 0} onClick={() => navigateVisiblePage(-1)}><ChevronLeft size={20} /></button>
-              <span className="viewer-footer-page-count" title={t('페이지') + ' ' + activePage + ' / ' + pdf.numPages}><AnimatedNumber value={activePage} format={formatNumber} resetKey={id} /> / {formatNumber(pdf.numPages)}</span>
-              <button type="button" className="viewer-page-control-button" aria-label={t('다음')} title={t('다음')} disabled={activeVisiblePageIndex < 0 || activeVisiblePageIndex >= visiblePageNumbers.length - 1} onClick={() => navigateVisiblePage(1)}><ChevronRight size={20} /></button>
               <div className="viewer-mobile-menu-anchor">
                 <button ref={zoomMenuTriggerRef} type="button" className="viewer-mobile-zoom-trigger" aria-haspopup="menu" aria-expanded={zoomMenuOpen} aria-label={t('확대 배율 {zoom}%', { zoom: Math.round(activeZoom * 100) })} title={t('확대 배율 {zoom}%', { zoom: Math.round(activeZoom * 100) })} onClick={() => setZoomMenuOpen((open) => !open)}><AnimatedNumber value={Math.round(activeZoom * 100)} format={(value) => `${formatNumber(value)}%`} resetKey={`${id}-${snapshot.activePane}`} aria-hidden="true" /></button>
                 {zoomMenuOpen && <div ref={zoomMenuPanelRef} className="viewer-compact-menu viewer-zoom-menu" role="menu" aria-label={t('확대 배율 {zoom}%', { zoom: Math.round(activeZoom * 100) })}>

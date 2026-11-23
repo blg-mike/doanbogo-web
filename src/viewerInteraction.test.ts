@@ -18,9 +18,9 @@ describe('PDF viewer input helpers', () => {
   })
 
   it('classifies horizontal page swipes with the configured distance, angle and duration thresholds', () => {
-    expect(classifyPageSwipe(64, 0, 0)).toBe(1)
-    expect(classifyPageSwipe(-64, 0, 1000)).toBe(-1)
-    expect(classifyPageSwipe(96, 64, 400)).toBe(1)
+    expect(classifyPageSwipe(64, 0, 0)).toBe(-1)
+    expect(classifyPageSwipe(-64, 0, 1000)).toBe(1)
+    expect(classifyPageSwipe(96, 64, 400)).toBe(-1)
     expect(classifyPageSwipe(95, 64, 400)).toBeNull()
     expect(classifyPageSwipe(63, 0, 400)).toBeNull()
     expect(classifyPageSwipe(100, 0, 1001)).toBeNull()
